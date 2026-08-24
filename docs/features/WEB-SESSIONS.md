@@ -1,6 +1,6 @@
 # Web sessions
 
-Status: inherited and under audit
+Status: account isolation verified; service audit active
 
 ## Purpose
 
@@ -22,6 +22,16 @@ This rule also applies to temporary badge probes.
 
 Tests must create two accounts on the same origin.
 The tests must prove that both sessions stay separate after a relaunch.
+
+The automated application test writes a different cookie to each account store.
+It rebuilds the data-store manager and reads both values again.
+It then clears the first value and confirms that the second value remains.
+
+The compatibility fixture uses local storage for the manual process test.
+This test confirms that the values remain separate after `Command-Q` and a new launch.
+
+The manual test passed on 2026-08-24.
+Two services on the fixture origin kept different marker values after Atoll quit and started again.
 
 ## Public WebKit policy
 

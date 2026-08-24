@@ -1,5 +1,8 @@
 const fixtureLog = document.querySelector("#fixture-log");
 const markerKey = "atoll-compatibility-marker";
+const sessionAccountLabel = new URLSearchParams(window.location.search).get("account")
+  ?.trim()
+  .slice(0, 40) || "Unlabeled account";
 let unreadCount = 0;
 let serviceWorkerRegistration = null;
 let activeStream = null;
@@ -22,6 +25,16 @@ function log(message) {
 
 function setStatus(id, value) {
   control(id).textContent = value;
+}
+
+function refreshSessionMarker() {
+  const value = localStorage.getItem(markerKey);
+  control("session-marker").value = value || "";
+  setStatus(
+    "session-marker-status",
+    value === null ? "No marker is stored." : "A stored marker is present."
+  );
+  return value;
 }
 
 async function requestNotificationPermission() {
@@ -305,6 +318,8 @@ function prepareDiagnosticReport() {
     cameraStatus: control("camera-status").textContent,
     microphoneStatus: control("microphone-status").textContent,
     loopbackStatus: control("call-status").textContent,
+    sessionAccountLabel,
+    sessionMarkerPresent: localStorage.getItem(markerKey) !== null,
     mediaTracks,
     peerConnectionStates: peerConnections.map((connection) => connection.connectionState),
     events: fixtureEvents,
@@ -323,18 +338,18 @@ control("prepare-diagnostics").addEventListener("click", () => {
 control("save-marker").addEventListener("click", () => {
   const value = control("session-marker").value.trim();
   localStorage.setItem(markerKey, value);
+  refreshSessionMarker();
   log("Saved the session marker.");
 });
 
 control("read-marker").addEventListener("click", () => {
-  const value = localStorage.getItem(markerKey);
-  control("session-marker").value = value || "";
+  const value = refreshSessionMarker();
   log(value === null ? "No session marker is stored." : "Read the session marker.");
 });
 
 control("clear-marker").addEventListener("click", () => {
   localStorage.removeItem(markerKey);
-  control("session-marker").value = "";
+  refreshSessionMarker();
   log("Cleared the session marker.");
 });
 
@@ -349,5 +364,7 @@ window.addEventListener("message", (event) => {
 });
 
 window.addEventListener("beforeunload", stopMedia);
+control("session-account-label").textContent = sessionAccountLabel;
+refreshSessionMarker();
 registerServiceWorker();
 log("Fixture ready.");

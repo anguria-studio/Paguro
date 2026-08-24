@@ -108,6 +108,7 @@
         Store a different value in two Atoll service accounts. Restart Atoll and confirm
         that each account retains only its own value.
       </p>
+      <p>Fixture account: <strong id="session-account-label">Unlabeled account</strong></p>
       <div class="controls">
         <label for="session-marker">Marker</label>
         <input id="session-marker" type="text" maxlength="80" autocomplete="off">
@@ -115,6 +116,11 @@
         <button id="read-marker" type="button">Read marker</button>
         <button id="clear-marker" type="button">Clear marker</button>
       </div>
+      <p id="session-marker-status" class="note" role="status">No marker is stored.</p>
+      <p class="note">
+        Add <code>?account=A</code> and <code>?account=B</code> to the two service URLs.
+        The query values label the pages, but both pages still use the same web origin.
+      </p>
     </section>
 
     <section>
