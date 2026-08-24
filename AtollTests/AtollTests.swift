@@ -1723,6 +1723,11 @@ final class AtollTests: XCTestCase {
             landedHost: "workspace.slack.com",
             openerHost: "app.slack.com"
         ))
+        XCTAssertTrue(WebViewCoordinator.shouldCloseAuthPopup(
+            openedAtAuthHost: true,
+            landedHost: "outlook.cloud.microsoft",
+            openerHost: "outlook.cloud.microsoft"
+        ))
     }
 
     func testAuthPopupStaysOpenAtTheIdentityProvider() {
