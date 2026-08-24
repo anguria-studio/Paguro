@@ -1782,6 +1782,74 @@ final class AtollTests: XCTestCase {
         XCTAssertFalse(WebViewCoordinator.belongsToService("notion.so", serviceHost: "mail.google.com"))
     }
 
+    // MARK: - Compatibility fixture boundary
+
+    func testCompatibilityFixtureNeedsItsExactLaunchArgument() {
+        XCTAssertFalse(CompatibilityFixture.isEnabled(arguments: []))
+        XCTAssertFalse(CompatibilityFixture.isEnabled(arguments: ["--atoll-compatibility"]))
+        XCTAssertTrue(CompatibilityFixture.isEnabled(arguments: [CompatibilityFixture.launchArgument]))
+    }
+
+    func testCompatibilityFixtureTrustsOnlyLoopbackServerCertificates() {
+        let arguments = [CompatibilityFixture.launchArgument]
+        XCTAssertTrue(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "localhost",
+            port: 8443,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust,
+            arguments: arguments
+        ))
+        XCTAssertTrue(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "127.0.0.1",
+            port: 8444,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust,
+            arguments: arguments
+        ))
+        XCTAssertFalse(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "example.com",
+            port: 8443,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust,
+            arguments: arguments
+        ))
+        XCTAssertFalse(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "localhost",
+            port: 8443,
+            authenticationMethod: NSURLAuthenticationMethodHTTPBasic,
+            arguments: arguments
+        ))
+        XCTAssertFalse(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "localhost",
+            port: 8443,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust,
+            arguments: []
+        ))
+        XCTAssertFalse(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "localhost",
+            port: 9443,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust,
+            arguments: arguments
+        ))
+    }
+
+    func testCompatibilityFixtureRecognizesOnlyItsProcessFailureRoute() {
+        let arguments = [CompatibilityFixture.launchArgument]
+        XCTAssertTrue(CompatibilityFixture.isProcessFailureURL(
+            URL(string: "atoll-fixture://web-content-process-failure")!,
+            arguments: arguments
+        ))
+        XCTAssertFalse(CompatibilityFixture.isProcessFailureURL(
+            URL(string: "atoll-fixture://another-command")!,
+            arguments: arguments
+        ))
+        XCTAssertFalse(CompatibilityFixture.isProcessFailureURL(
+            URL(string: "atoll-fixture://web-content-process-failure/path")!,
+            arguments: arguments
+        ))
+        XCTAssertFalse(CompatibilityFixture.isProcessFailureURL(
+            URL(string: "atoll-fixture://web-content-process-failure")!,
+            arguments: []
+        ))
+    }
+
     func testBelongsToServiceIgnoresWWWAndCase() {
         XCTAssertTrue(WebViewCoordinator.belongsToService("www.notion.so", serviceHost: "notion.so"))
         XCTAssertTrue(WebViewCoordinator.belongsToService("APP.SLACK.COM", serviceHost: "app.slack.com"))

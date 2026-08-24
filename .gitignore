@@ -11,6 +11,10 @@ DerivedData/
 .build/
 Packages/
 
+# Python fixture checks
+__pycache__/
+*.pyc
+
 # macOS
 .DS_Store
 *.swp
@@ -39,3 +43,6 @@ Packages/
 /.project/
 /.vale.local.ini
 /.vale-ste.local.yml
+
+# Local Apple signing identity
+/Configuration/LocalSigning.xcconfig

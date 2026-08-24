@@ -1,6 +1,7 @@
 import Foundation
 import WebKit
 import AppKit
+import os
 
 @MainActor
 final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
@@ -144,6 +145,16 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
             return .cancel
         }
 
+        #if DEBUG
+        // The fixture cannot terminate a WebContent process through a public
+        // API. This route calls the same recovery handler after the navigation
+        // decision completes. Release builds do not contain this route.
+        if CompatibilityFixture.isProcessFailureURL(url) {
+            scheduleFixtureProcessFailure(for: webView)
+            return .cancel
+        }
+        #endif
+
         // 1. Non-web schemes (mailto:, tel:, sms:, facetime:, maps:, etc.)
         //    Hand off to the system handler so Mail/Phone/Messages opens,
         //    instead of letting WebKit fail with an unsupported-URL error.
@@ -218,6 +229,36 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         //    createWebViewWith) loads in place.
         return .allow
     }
+
+    func webView(
+        _ webView: WKWebView,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @MainActor (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        let space = challenge.protectionSpace
+        #if DEBUG
+        if let trust = space.serverTrust,
+           CompatibilityFixture.allowsUntrustedServerCertificate(
+               host: space.host,
+               port: space.port,
+               authenticationMethod: space.authenticationMethod
+           ) {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+            return
+        }
+        #endif
+        completionHandler(.performDefaultHandling, nil)
+    }
+
+    #if DEBUG
+    private func scheduleFixtureProcessFailure(for webView: WKWebView) {
+        Task { @MainActor [weak self, weak webView] in
+            await Task.yield()
+            guard let self, let webView else { return }
+            self.webViewWebContentProcessDidTerminate(webView)
+        }
+    }
+    #endif
 
     func webView(
         _ webView: WKWebView,
@@ -713,11 +754,16 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         // silent, so "did the method get called at all?" is the first question).
         AppLogger.webView.info("Media capture request (type \(type.rawValue), mainFrame \(frame.isMainFrame))")
         guard let id = instanceID, let provider = mediaCapturePolicyProvider else {
+            AppLogger.webView.info("Media capture decision: denied because no service policy provider is available")
             decisionHandler(.deny)
             return
         }
         Task { @MainActor in
-            decisionHandler(await provider(id, type, frame))
+            let decision = await provider(id, type, frame)
+            AppLogger.webView.info(
+                "Media capture decision type=\(type.rawValue, privacy: .public) mainFrame=\(frame.isMainFrame, privacy: .public) decision=\(decision.rawValue, privacy: .public)"
+            )
+            decisionHandler(decision)
         }
     }
 

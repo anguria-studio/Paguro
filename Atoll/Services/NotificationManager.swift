@@ -1,6 +1,7 @@
 import Foundation
 import WebKit
 import UserNotifications
+import os
 
 @MainActor
 @Observable
@@ -213,6 +214,14 @@ final class NotificationManager {
             if let title = result as? String {
                 let count = Self.extractBadgeCount(from: title)
                 guard count > 0 || resetToZero else { return }
+                #if DEBUG
+                let previousCount = badgeManager.rawCount(for: instanceID)
+                if CompatibilityFixture.isEnabled(), count != previousCount {
+                    AppLogger.badges.info(
+                        "Fixture title badge changed previous=\(previousCount, privacy: .public) next=\(count, privacy: .public) resetAllowed=\(resetToZero, privacy: .public)"
+                    )
+                }
+                #endif
                 badgeManager.updateBadge(for: instanceID, count: count, isMuted: isMuted, showBadge: showBadge)
             }
         } catch {
@@ -300,27 +309,27 @@ final class NotificationManager {
 
     // MARK: - Notifications
 
-    /// Requests notification authorization from macOS. Call this AFTER the app
-    /// has finished launching (from the root view's `.task`) — never from
-    /// `App.init`/`AppState.init`. Requesting during launch, before the app's
-    /// scene exists, can fail with "Notifications are not allowed for this
-    /// application" and leave the app unregistered, so no banner ever appears.
-    /// Idempotent: macOS ignores repeat calls once the choice has been made.
+    /// Requests notification authorization from macOS after launch.
+    /// Repeat calls return the stored system decision.
     func requestAuthorization() {
         Task {
             let center = UNUserNotificationCenter.current()
+            let initialStatus = await center.notificationSettings().authorizationStatus
+            AppLogger.notifications.info(
+                "Notification authorization request started: status=\(initialStatus.rawValue)"
+            )
             do {
                 let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
                 let status = await center.notificationSettings().authorizationStatus
                 AppLogger.notifications.info(
-                    "Notification authorization: granted=\(granted), status=\(status.rawValue)")
+                    "Notification authorization completed: granted=\(granted), status=\(status.rawValue)"
+                )
             } catch {
-                // Not fatal, but never silent: swallowing this is what makes "no
-                // banners ever appear" undiagnosable. The common cause is the app
-                // failing to register at all (see the note above), which surfaces
-                // only here.
+                let nsError = error as NSError
+                let status = await center.notificationSettings().authorizationStatus
                 AppLogger.notifications.error(
-                    "Notification authorization failed: \(error.localizedDescription)")
+                    "Notification authorization failed: domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public) status=\(status.rawValue, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+                )
             }
         }
     }
@@ -381,10 +390,17 @@ private final class NotificationCenterDelegate: NSObject, UNUserNotificationCent
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        let traceID = String(notification.request.identifier.prefix(8)).lowercased()
         // Suppress all banners and sounds while Do Not Disturb is active.
         if isDoNotDisturb() {
+            AppLogger.notifications.info(
+                "Notification trace \(traceID, privacy: .public): foreground presentation suppressed by DND"
+            )
             completionHandler([])
         } else {
+            AppLogger.notifications.info(
+                "Notification trace \(traceID, privacy: .public): foreground presentation requested banner+sound"
+            )
             completionHandler([.banner, .sound])
         }
     }

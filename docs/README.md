@@ -13,6 +13,7 @@ Major features have separate documents:
 - [Notification system](features/NOTIFICATIONS.md)
 - [Island and notch support](features/ISLAND.md)
 - [Web sessions](features/WEB-SESSIONS.md)
+- [Compatibility fixture](features/COMPATIBILITY.md)
 - [Distribution](features/DISTRIBUTION.md)
 
 Update a document in the same change that changes its subject.

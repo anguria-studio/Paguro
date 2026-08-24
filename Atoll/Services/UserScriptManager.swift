@@ -1,5 +1,6 @@
 import WebKit
 import UserNotifications
+import os
 
 struct NotificationPayload: Codable {
     let title: String
@@ -470,6 +471,8 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
         didReceive message: WKScriptMessage
     ) {
         guard message.name == "atollNotification" else { return }
+        let requestID = UUID().uuidString
+        let traceID = String(requestID.prefix(8)).lowercased()
 
         // Only accept notifications from the service's own origin — the main
         // frame, or a same-origin subframe. The interception script runs in all
@@ -478,7 +481,10 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
         // notification with attacker-controlled title/body attributed to the
         // trusted service (spoofing / phishing).
         let frame = message.frameInfo
-        if !frame.isMainFrame {
+        let frameKind: String
+        if frame.isMainFrame {
+            frameKind = "main"
+        } else {
             // Compare the full origin (scheme + host + port), not just the host:
             // a same-host subframe on a different scheme/port is a different
             // origin and must not post a notification attributed to the service.
@@ -486,35 +492,66 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
             guard let mainURL = message.webView?.url,
                   let mainScheme = mainURL.scheme?.lowercased(),
                   let mainHost = mainURL.host,
-                  !origin.host.isEmpty,
-                  origin.protocol.lowercased() == mainScheme,
-                  origin.host == mainHost
-            else { return }
+                  !origin.host.isEmpty
+            else {
+                AppLogger.notifications.warning(
+                    "Notification trace \(traceID, privacy: .public): rejected frame; main origin unavailable"
+                )
+                return
+            }
             // WKSecurityOrigin reports 0 for the scheme's default port; URL
             // reports nil. Normalize both before comparing.
             let defaultPort = mainScheme == "https" ? 443 : 80
             let originPort = origin.port == 0 ? defaultPort : origin.port
             let mainPort = mainURL.port ?? defaultPort
-            guard originPort == mainPort else { return }
+            let schemeMatches = origin.protocol.lowercased() == mainScheme
+            let hostMatches = origin.host == mainHost
+            let portMatches = originPort == mainPort
+            guard schemeMatches, hostMatches, portMatches else {
+                AppLogger.notifications.warning(
+                    "Notification trace \(traceID, privacy: .public): rejected cross-origin frame schemeMatch=\(schemeMatches, privacy: .public) hostMatch=\(hostMatches, privacy: .public) portMatch=\(portMatches, privacy: .public)"
+                )
+                return
+            }
+            frameKind = "same-origin"
         }
+
+        AppLogger.notifications.info(
+            "Notification trace \(traceID, privacy: .public): bridge accepted frame=\(frameKind, privacy: .public)"
+        )
 
         guard let jsonString = message.body as? String,
               let data = jsonString.data(using: .utf8)
-        else { return }
+        else {
+            AppLogger.notifications.warning(
+                "Notification trace \(traceID, privacy: .public): rejected non-string payload"
+            )
+            return
+        }
 
         let payload: NotificationPayload
         do {
             payload = try JSONDecoder().decode(NotificationPayload.self, from: data)
         } catch {
-            AppLogger.notifications.error("Failed to decode notification payload: \(error.localizedDescription)")
+            AppLogger.notifications.error(
+                "Notification trace \(traceID, privacy: .public): payload decode failed: \(error.localizedDescription, privacy: .public)"
+            )
             return
         }
 
+        let isMuted = isMutedCheck(serviceID)
+        let notifyOS = notifyOSCheck(serviceID)
+        let doNotDisturb = isDoNotDisturbCheck()
         guard NotificationManager.shouldPostOSNotification(
-            isMuted: isMutedCheck(serviceID),
-            notifyOS: notifyOSCheck(serviceID),
-            doNotDisturb: isDoNotDisturbCheck()
-        ) else { return }
+            isMuted: isMuted,
+            notifyOS: notifyOS,
+            doNotDisturb: doNotDisturb
+        ) else {
+            AppLogger.notifications.info(
+                "Notification trace \(traceID, privacy: .public): suppressed by policy muted=\(isMuted, privacy: .public) notifyOS=\(notifyOS, privacy: .public) dnd=\(doNotDisturb, privacy: .public)"
+            )
+            return
+        }
 
         let content = UNMutableNotificationContent()
         content.title = payload.title
@@ -523,13 +560,29 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: requestID,
             content: content,
             trigger: nil
         )
-        UNUserNotificationCenter.current().add(request) { error in
+        let center = UNUserNotificationCenter.current()
+        #if DEBUG
+        if CompatibilityFixture.isEnabled() {
+            center.getNotificationSettings { settings in
+                AppLogger.notifications.info(
+                    "Notification trace \(traceID, privacy: .public): center settings authorization=\(settings.authorizationStatus.rawValue, privacy: .public) alerts=\(settings.alertSetting.rawValue, privacy: .public) sounds=\(settings.soundSetting.rawValue, privacy: .public)"
+                )
+            }
+        }
+        #endif
+        center.add(request) { error in
             if let error {
-                AppLogger.notifications.error("Failed to post notification: \(error.localizedDescription)")
+                AppLogger.notifications.error(
+                    "Notification trace \(traceID, privacy: .public): center add failed: \(error.localizedDescription, privacy: .public)"
+                )
+            } else {
+                AppLogger.notifications.info(
+                    "Notification trace \(traceID, privacy: .public): center accepted request"
+                )
             }
         }
     }
@@ -592,4 +645,3 @@ enum ServiceCSSDefaults {
     .msg-overlay-list-bubble, .msg-overlay { display: none !important; }
     """
 }
-

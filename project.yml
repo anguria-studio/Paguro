@@ -9,6 +9,11 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
 
+configs:
+  Debug: debug
+  Compatibility: debug
+  Release: release
+
 packages:
   AtollCore:
     path: Core
@@ -17,6 +22,9 @@ targets:
   Atoll:
     type: application
     platform: macOS
+    configFiles:
+      Debug: Configuration/AtollDebug.xcconfig
+      Compatibility: Configuration/AtollDebug.xcconfig
     sources:
       - path: Atoll
         excludes:
@@ -55,6 +63,8 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll.debug
+        Compatibility:
+          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll.compatibility
     scheme:
       testTargets:
         - AtollTests
@@ -62,6 +72,9 @@ targets:
   AtollTests:
     type: bundle.unit-test
     platform: macOS
+    configFiles:
+      Debug: Configuration/AtollDebug.xcconfig
+      Compatibility: Configuration/AtollDebug.xcconfig
     sources:
       - path: AtollTests
     dependencies:
@@ -75,3 +88,17 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         MACOSX_DEPLOYMENT_TARGET: "26.0"
         GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Atoll Compatibility:
+    build:
+      targets:
+        Atoll: all
+    run:
+      config: Compatibility
+      commandLineArguments:
+        "--atoll-compatibility-fixture": true
+    test:
+      config: Debug
+      targets:
+        - AtollTests

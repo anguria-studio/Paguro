@@ -175,6 +175,8 @@ UI tests will use launch arguments and simulated screen geometry.
 A local web fixture will test notifications, frames, downloads, and media requests.
 Live service tests will use a documented compatibility matrix.
 
+See [Compatibility fixture](features/COMPATIBILITY.md).
+
 ## Change rule
 
 Update this document when a module boundary or dependency direction changes.

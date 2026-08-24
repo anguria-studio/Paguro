@@ -62,6 +62,7 @@ Use these commands for a full local check:
 ```sh
 xcodegen generate
 swift test --package-path Core
+scripts/test_compatibility_fixture.sh
 xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug test
 scripts/lint_docs.sh
 ```

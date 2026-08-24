@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atoll compatibility fixture</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Local test service</p>
+    <h1>Atoll compatibility fixture</h1>
+    <p>
+      Use these controls inside Atoll. Each control exercises a public WebKit path.
+      The fixture does not use an external network service.
+    </p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Notifications and unread state</h2>
+      <div class="controls">
+        <button id="page-notification" type="button">Page notification</button>
+        <button id="worker-notification" type="button">Service worker notification</button>
+        <button id="delayed-notification" type="button">Notification after 10 seconds</button>
+        <button id="increment-badge" type="button">Increment title badge</button>
+        <button id="reset-badge" type="button">Reset title badge</button>
+      </div>
+      <p class="note">
+        Notification controls test alert delivery. They do not change unread state.
+        Use the title badge controls to test the service and Dock badges.
+      </p>
+      <p class="note">
+        The service worker control tests a call made by the page through its registration.
+        It does not emulate a push event that runs only inside a worker.
+      </p>
+    </section>
+
+    <section>
+      <h2>Frames</h2>
+      <div class="frame-grid">
+        <div>
+          <h3>Same origin</h3>
+          <iframe title="Same-origin notification frame" src="/same-origin.html"></iframe>
+        </div>
+        <div>
+          <h3>Cross origin</h3>
+          <iframe
+            title="Cross-origin notification frame"
+            src="{{SECONDARY_ORIGIN}}/cross-origin.html"
+          ></iframe>
+        </div>
+      </div>
+      <p class="note">
+        Atoll can accept the same-origin frame event. It must reject the cross-origin event.
+      </p>
+    </section>
+
+    <section>
+      <h2>Windows and files</h2>
+      <div class="controls">
+        <button id="open-popup" type="button">Open test pop-up</button>
+        <a id="download-file" class="button-link" href="/download" download>Download test file</a>
+      </div>
+      <form id="upload-form">
+        <label for="upload-input">Select a file to upload</label>
+        <input id="upload-input" name="file" type="file" required>
+        <button type="submit">Upload selected file</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Camera, microphone, and WebRTC</h2>
+      <div class="controls">
+        <button id="start-camera" type="button">Start camera</button>
+        <button id="start-microphone" type="button">Start microphone</button>
+        <button id="start-call" type="button">Start loopback call</button>
+        <button id="stop-media" type="button">Stop media</button>
+      </div>
+      <dl class="status-grid">
+        <div>
+          <dt>Camera</dt>
+          <dd id="camera-status">Inactive</dd>
+        </div>
+        <div>
+          <dt>Microphone</dt>
+          <dd id="microphone-status">Inactive</dd>
+          <meter id="microphone-level" min="0" max="1" value="0">0</meter>
+        </div>
+        <div>
+          <dt>Loopback call</dt>
+          <dd id="call-status">Inactive</dd>
+        </div>
+      </dl>
+      <video id="local-video" autoplay muted playsinline></video>
+      <audio id="remote-audio" autoplay></audio>
+      <p class="note">
+        Start microphone and speak. The level meter must move. Start loopback call to
+        send the microphone through two local WebRTC peers. Use headphones to prevent feedback.
+        Stop media ends all capture and closes both peers.
+      </p>
+    </section>
+
+    <section>
+      <h2>Session marker</h2>
+      <p>
+        Store a different value in two Atoll service accounts. Restart Atoll and confirm
+        that each account retains only its own value.
+      </p>
+      <div class="controls">
+        <label for="session-marker">Marker</label>
+        <input id="session-marker" type="text" maxlength="80" autocomplete="off">
+        <button id="save-marker" type="button">Save marker</button>
+        <button id="read-marker" type="button">Read marker</button>
+        <button id="clear-marker" type="button">Clear marker</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Recovery</h2>
+      <button id="simulate-process-failure" type="button">Simulate WebKit process failure</button>
+      <p class="note">
+        This route calls Atoll's recovery handler in a Debug build. It does not terminate
+        a real WebKit process or use a private API.
+      </p>
+    </section>
+
+    <section aria-live="polite">
+      <h2>Fixture log</h2>
+      <ol id="fixture-log" class="log"></ol>
+    </section>
+
+    <section>
+      <h2>Diagnostic report</h2>
+      <button id="prepare-diagnostics" type="button">Prepare diagnostic report</button>
+      <p class="note">
+        Select the report and press Command-C. The report contains fixture state and events.
+        It does not contain page content, cookies, or the session marker.
+      </p>
+      <textarea id="diagnostic-output" rows="16" readonly aria-label="Diagnostic report"></textarea>
+    </section>
+  </main>
+</body>
+</html>

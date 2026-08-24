@@ -62,6 +62,7 @@ xcodebuild \
 - [Notification system](docs/features/NOTIFICATIONS.md)
 - [Island and notch support](docs/features/ISLAND.md)
 - [Web sessions](docs/features/WEB-SESSIONS.md)
+- [Compatibility fixture](docs/features/COMPATIBILITY.md)
 - [Distribution](docs/features/DISTRIBUTION.md)
 
 ## Project links

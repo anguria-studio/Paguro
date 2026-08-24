@@ -12,7 +12,23 @@ This step helps contributors avoid duplicate work.
 2. Install XcodeGen.
 3. Run `xcodegen generate` in the repository root.
 4. Run `swift test --package-path Core`.
-5. Run the Atoll scheme tests in Xcode.
+5. Run `scripts/test_compatibility_fixture.sh`.
+6. Run the Atoll scheme tests in Xcode.
+
+## Sign a local Debug build
+
+An ad-hoc signed app can run most Atoll tests.
+macOS does not allow that app to request notification authorization.
+Use an Apple Development identity for notification and permission tests.
+
+1. Copy `Configuration/LocalSigning.xcconfig.example` to
+   `Configuration/LocalSigning.xcconfig`.
+2. Replace `YOUR_TEAM_ID` with your Apple Developer Team ID.
+3. Run `xcodegen generate`.
+4. Build Atoll again.
+
+Git ignores `LocalSigning.xcconfig`.
+Do not commit a personal team value.
 
 ## Make a change
 

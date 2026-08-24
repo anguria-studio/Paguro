@@ -1,0 +1,3 @@
+// The local file gives Debug builds a stable Apple signing identity.
+// Git ignores the local file so each contributor can use a different team.
+#include? "LocalSigning.xcconfig"
