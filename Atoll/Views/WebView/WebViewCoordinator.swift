@@ -227,6 +227,18 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         // 5. Everything else (same-service navigation, cross-domain in-frame
         //    OAuth round-trips, and programmatic new-window requests handled by
         //    createWebViewWith) loads in place.
+        #if DEBUG
+        // A live service test needs the navigation boundary, but it must not
+        // record a path, query, account name, or page title. The host and broad
+        // context show whether sign-in stayed in the service or its popup.
+        if navigationAction.targetFrame?.isMainFrame ?? true {
+            let context = webView === popupWebView ? "popup" : "service"
+            let host = url.host ?? "no-host"
+            AppLogger.webView.info(
+                "Allowed main-frame navigation: context=\(context, privacy: .public) host=\(host, privacy: .public) type=\(navigationAction.navigationType.rawValue)"
+            )
+        }
+        #endif
         return .allow
     }
 
@@ -275,9 +287,25 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Only the service's main web view carries a badge — ignore OAuth
-        // popups (the coordinator is their navigation delegate too).
-        guard webView !== popupWebView, let instanceID else { return }
+        // Some providers finish sign-in by navigating the popup to the service
+        // instead of calling window.close(). Gmail does this after password
+        // sign-in. Close a known authentication popup after it returns to the
+        // opener's service, then reload the opener with the shared session.
+        if webView === popupWebView {
+            if Self.shouldCloseAuthPopup(
+                openedAtAuthHost: popupOpenedAtAuthHost,
+                landedHost: webView.url?.host,
+                openerHost: openerWebView?.url?.host ?? fallbackURL?.host
+            ) {
+                AppLogger.webView.info("Authentication popup returned to the service; closing it")
+                reloadOpenerAfterPopup(selfClosed: false)
+                cleanupPopup()
+            }
+            return
+        }
+
+        // Only the service's main web view carries a badge.
+        guard let instanceID else { return }
         if errorPageLoadInFlight {
             errorPageLoadInFlight = false
         } else {
@@ -636,6 +664,20 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     /// the service on its signed-out page until the user hits reload, once.
     nonisolated static func shouldReloadOpener(selfClosed: Bool, openedAtAuthHost: Bool) -> Bool {
         selfClosed || openedAtAuthHost
+    }
+
+    /// Whether a completed authentication popup should close automatically.
+    ///
+    /// A known authentication start is required. Without this signal, an
+    /// ordinary popup that returns to the service could close before the user
+    /// finishes with it. The landing host must belong to the opener's service.
+    nonisolated static func shouldCloseAuthPopup(
+        openedAtAuthHost: Bool,
+        landedHost: String?,
+        openerHost: String?
+    ) -> Bool {
+        guard openedAtAuthHost, let landedHost, let openerHost else { return false }
+        return belongsToService(landedHost, serviceHost: openerHost)
     }
 
     /// Reloads the service that opened the popup, when the rule above says to.

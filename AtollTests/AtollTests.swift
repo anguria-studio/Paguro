@@ -1712,6 +1712,35 @@ final class AtollTests: XCTestCase {
         XCTAssertFalse(WebViewCoordinator.isAuthHost("example.com"))
     }
 
+    func testAuthPopupClosesAfterItReturnsToTheService() {
+        XCTAssertTrue(WebViewCoordinator.shouldCloseAuthPopup(
+            openedAtAuthHost: true,
+            landedHost: "mail.google.com",
+            openerHost: "mail.google.com"
+        ))
+        XCTAssertTrue(WebViewCoordinator.shouldCloseAuthPopup(
+            openedAtAuthHost: true,
+            landedHost: "workspace.slack.com",
+            openerHost: "app.slack.com"
+        ))
+    }
+
+    func testAuthPopupStaysOpenAtTheIdentityProvider() {
+        XCTAssertFalse(WebViewCoordinator.shouldCloseAuthPopup(
+            openedAtAuthHost: true,
+            landedHost: "accounts.google.com",
+            openerHost: "mail.google.com"
+        ))
+    }
+
+    func testOrdinaryPopupDoesNotCloseWhenItReturnsToTheService() {
+        XCTAssertFalse(WebViewCoordinator.shouldCloseAuthPopup(
+            openedAtAuthHost: false,
+            landedHost: "workspace.slack.com",
+            openerHost: "app.slack.com"
+        ))
+    }
+
     // MARK: - New-window requests (shouldLoadNewWindowInPlace)
 
     func testClickedSameServiceLinkLoadsInPlace() {
