@@ -1,0 +1,23 @@
+name: Documentation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - atoll/main
+
+permissions:
+  contents: read
+
+jobs:
+  vale:
+    name: Vale
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vale-cli/vale-action@v3
+        with:
+          files: '["README.md","CONTRIBUTING.md","AGENTS.md","THIRD_PARTY_NOTICES.md","docs"]'
+          fail_level: error
+          filter_mode: nofilter

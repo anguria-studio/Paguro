@@ -1,0 +1,7 @@
+extends: existence
+message: "Use active voice when the actor is important."
+level: suggestion
+scope: sentence
+ignorecase: true
+tokens:
+  - "\\b(?:am|are|is|was|were|be|been|being)\\s+(?:[A-Za-z]+\\s+){0,2}[A-Za-z]+(?:ed|en)\\b"

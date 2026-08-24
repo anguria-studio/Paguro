@@ -1,0 +1,3078 @@
+import SwiftUI
+import SwiftData
+import WebKit
+import LocalAuthentication
+
+/// How `AppState` ended up with its `ModelContainer` at launch — drives the
+/// recovery banner. See `AppState.loadContainer`.
+enum StoreLoadOutcome: Equatable {
+    /// The on-disk store opened normally. No banner.
+    case openedClean
+    /// The store was unusable (open failed, or migrated to empty while the user
+    /// had data) and Atoll automatically restored the newest usable
+    /// pre-migration snapshot. Informational, dismissible banner.
+    case restoredFromSnapshot(version: String?, takenAt: Date?)
+    /// The store was unusable and no restore succeeded, so Atoll is running on
+    /// a throwaway in-memory store. Persistent "changes won't be saved" banner;
+    /// the on-disk file and snapshots are left untouched for manual recovery.
+    case inMemoryFallback(reason: String)
+}
+
+@MainActor
+@Observable
+final class AppState {
+    let modelContainer: ModelContainer
+    let webViewPool: WebViewPool
+    let contentBlocker: ContentBlockerManager
+    let dataStoreManager: DataStoreManager
+    let userScriptManager: UserScriptManager
+    let badgeManager: BadgeManager
+
+    /// Navigation state (back/forward/loading) for the active service's web view,
+    /// shared so the top tab bar can host the nav buttons.
+    let webViewState = WebViewState()
+    let notificationManager: NotificationManager
+    let transientBadgeFetcher: TransientBadgeFetcher
+    let networkMonitor: NetworkMonitor
+
+    var selectedSpaceID: UUID?
+    var selectedServiceID: UUID?
+    var showAddService = false
+    var showQuickSwitcher = false
+
+    /// True once launch-time preference loading has finished. Gates the DND
+    /// `didSet`s below so they don't push the effective DND (which touches the
+    /// AppKit dock tile) while `loadAppPreferences` is still assigning them
+    /// during init — the same early-AppKit race that code defers a runloop tick.
+    @ObservationIgnored private var isLaunchComplete = false
+
+    /// Manual Do Not Disturb toggle. `didSet` re-pushes the effective DND so any
+    /// writer (menu command, Settings) keeps the badge/dock/notification gate in
+    /// sync without having to remember to call `refreshEffectiveDoNotDisturb()`.
+    var doNotDisturb = false {
+        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
+    }
+    /// Drives the Find-in-Page overlay in WebContentView. Toggled by Cmd-F.
+    var findInPageVisible = false
+
+    /// The head of the camera/microphone permission-prompt queue, or nil when no
+    /// prompt is showing. Drives the alert in ContentView. Only ever set on the
+    /// main actor; answered via `answerMediaRequest(allow:)`.
+    private(set) var pendingMediaRequest: MediaPermissionRequest?
+
+    /// A pending "always appear active?" offer, shown once right after the user
+    /// adds a presence-sensitive service (Teams). Drives an alert in ContentView;
+    /// nil when nothing is offered. Answered via `answerPresencePrompt(_:enable:)`.
+    private(set) var presencePrompt: PresencePrompt?
+
+    /// UI-facing shape of the presence offer: the service to act on and its label.
+    struct PresencePrompt: Identifiable, Equatable {
+        let id: UUID           // the service instance id
+        let serviceLabel: String
+    }
+
+    /// The public, UI-facing shape of a pending capture prompt (no continuation).
+    struct MediaPermissionRequest: Identifiable, Equatable {
+        let id: UUID
+        let serviceLabel: String
+        /// The requesting origin's host when it differs from the service's own site
+        /// (a cross-domain page inside the service's web view). nil means the
+        /// request came from the service's own origin.
+        let originHost: String?
+        /// The device(s) actually being asked about (kind-involved and currently
+        /// `.ask`), so the prompt copy names only what's in question — never more.
+        let camAsked: Bool
+        let micAsked: Bool
+
+        var kindLabel: String {
+            switch (camAsked, micAsked) {
+            case (true, true): return "camera and microphone"
+            case (false, true): return "microphone"
+            case (true, false): return "camera"
+            case (false, false): return "camera or microphone"  // not reached: a prompt always asks something
+            }
+        }
+
+        /// Prompt title, naming the real requester: the origin host for a
+        /// cross-domain request, otherwise the service.
+        var title: String {
+            "Allow \(originHost ?? serviceLabel) to use your \(kindLabel)?"
+        }
+
+        /// Prompt body. A cross-domain request says which service opened the
+        /// origin, so the user isn't misled about who is asking.
+        var message: String {
+            if let originHost {
+                return "\(originHost), opened by \(serviceLabel), wants to use your \(kindLabel)."
+            }
+            return "\(serviceLabel) wants to use your \(kindLabel). Change this anytime in the service's settings."
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    }
+
+    /// Queue entry: the public request (which carries the asked-field flags used
+    /// for both the prompt copy and persistence) plus its awaiting continuation.
+    private struct PendingMediaEntry {
+        let request: MediaPermissionRequest
+        let serviceID: UUID
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+    @ObservationIgnored private var mediaQueue: [PendingMediaEntry] = []
+
+    /// Bumped when a service's web view is rebuilt for an edit that only takes
+    /// effect at creation time (custom CSS). WebContentView observes this and
+    /// re-fetches the active service's web view so the change shows at once.
+    var webViewRebuildToken = 0
+
+    /// Atoll-wide default page zoom, applied to services without an explicit
+    /// per-service zoom. Loaded from AppPreferences at launch.
+    var defaultZoom: Double = 1.0
+
+    /// Where the spaces/services rails sit. Loaded from AppPreferences at
+    /// launch; the Settings picker writes both this and the persisted value.
+    var railLayout: RailLayout = .sidebar
+
+    /// App-level appearance override, loaded from AppPreferences.
+    var appearanceMode: AppearanceMode = .system
+
+    /// The color scheme to force on the app, or nil to follow the system.
+    var appearanceColorScheme: ColorScheme? {
+        switch appearanceMode {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+
+    /// The effective Light/Dark the app is showing right now, resolving `.system`
+    /// against the current macOS appearance. Drives Dark Reader theming. Reads
+    /// AppKit for the `.system` case, so call it on the main actor after launch,
+    /// not during AppState.init.
+    var isEffectiveAppearanceDark: Bool {
+        switch appearanceMode {
+        case .dark: return true
+        case .light: return false
+        case .system:
+            return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        }
+    }
+
+    /// Last effective dark state pushed to the web-view pool, so appearance
+    /// notifications that don't actually change Light/Dark are ignored.
+    private var lastKnownAppearanceDark: Bool?
+
+    /// Tokens for the NSWorkspace sleep/wake observers, removed in `deinit`.
+    /// AppState is a process-lifetime singleton, so this is hygiene rather than a
+    /// live leak, but keeping registration and teardown symmetric avoids a
+    /// dangling observer if that ever changes. Not observed UI state, so
+    /// `@ObservationIgnored`; `nonisolated(unsafe)` so the nonisolated deinit can
+    /// read it — it's only mutated during main-actor setup and read once at
+    /// teardown, so there's no real concurrency exposure.
+    @ObservationIgnored nonisolated(unsafe) private var systemObserverTokens: [NSObjectProtocol] = []
+
+    /// Tokens for `DistributedNotificationCenter` observers (screen-lock,
+    /// appearance-change), removed in `deinit` for the same symmetry as the
+    /// workspace tokens above.
+    @ObservationIgnored nonisolated(unsafe) private var distributedObserverTokens: [NSObjectProtocol] = []
+
+    /// Tokens registered on `NotificationCenter.default`, unregistered in
+    /// `deinit`. Kept apart from `systemObserverTokens`, which belongs to
+    /// `NSWorkspace.shared.notificationCenter`.
+    @ObservationIgnored nonisolated(unsafe) private var defaultCenterTokens: [NSObjectProtocol] = []
+
+    /// Data-store identifiers a `cleanUpOrphanedDataStores` invocation is
+    /// currently processing, so overlapping calls don't both run the backoff loop
+    /// and issue `WKWebsiteDataStore.remove(...)` for the same store at once.
+    /// Main-actor only.
+    @ObservationIgnored private var dataStoresBeingRemoved: Set<UUID> = []
+
+    /// Scheduled "quiet hours" Do Not Disturb, loaded from AppPreferences.
+    /// `doNotDisturb` above stays the manual toggle; the effective DND that
+    /// gates badges and notifications is `doNotDisturb || scheduledDNDActive`.
+    var scheduledDNDEnabled = false {
+        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
+    }
+    var dndStartMinutes = 22 * 60 {
+        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
+    }
+    var dndEndMinutes = 7 * 60 {
+        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
+    }
+    @ObservationIgnored nonisolated(unsafe) private var quietHoursTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var idleHibernationTask: Task<Void, Never>?
+    /// Per-service grace timers for the `.immediate` hibernation policy: a service
+    /// switched away from is torn down a few seconds later unless switched back to.
+    /// Keyed by service id so switching back can cancel the pending teardown.
+    @ObservationIgnored private var pendingImmediateHibernation: [UUID: Task<Void, Never>] = [:]
+
+    /// App lock (Touch ID / password), loaded from AppPreferences. `isLocked`
+    /// drives an opaque cover over the window content in ContentView.
+    var appLockEnabled = false
+    var lockOnLaunch = true
+    var lockOnSleep = true
+    var isLocked = false
+
+    /// Global content-blocking toggle, mirrored from AppPreferences at launch.
+    /// The Settings switch writes both this and the persisted value via
+    /// `setContentBlockingEnabled(_:)`.
+    var contentBlockingEnabled = true
+
+    /// "Hide annoyances" toggle, mirrored from AppPreferences at launch. Written
+    /// via `setAnnoyanceBlockingEnabled(_:)`.
+    var annoyanceBlockingEnabled = false
+
+    /// Auto-hibernate idle background services. Loaded from AppPreferences at
+    /// launch; written via `setAutoHibernateIdleEnabled(_:)`.
+    var autoHibernateIdleEnabled = false
+    /// Idle minutes before auto-hibernation fires. Mirrored from AppPreferences.
+    var autoHibernateIdleMinutes = 10
+
+    /// Default camera/microphone permission for services that haven't pinned
+    /// their own, mirrored from AppPreferences at launch. Written via
+    /// `setDefaultCameraPolicy(_:)` / `setDefaultMicrophonePolicy(_:)`. Read on
+    /// the permission hot path, so kept in memory rather than re-fetched.
+    var defaultCameraPolicy: MediaPermissionPolicy = .ask
+    var defaultMicrophonePolicy: MediaPermissionPolicy = .ask
+
+    /// Non-nil when the persistent store failed and we fell back to in-memory storage.
+    /// The UI should display a warning banner when this is set.
+    private(set) var storeError: String?
+
+    /// On-disk location of the persistent store that failed to open. Lets the
+    /// UI offer a "Reveal in Finder" action so the user can back up or remove
+    /// the file themselves — we never delete it for them.
+    ///
+    /// NOT the general-purpose "where is the store" accessor: this is the
+    /// *directory*, not the file, and it is set only on the `.inMemoryFallback`
+    /// path below — it stays nil after `.openedClean`. `refreshStoreCandidates`
+    /// needs the store's file path unconditionally, which is what `storeURL`
+    /// (just below) is for.
+    private(set) var storeFileURL: URL?
+
+    /// The live store's full file path, in every launch outcome — unlike
+    /// `storeFileURL` above. Kept so `refreshStoreCandidates` can re-read the
+    /// current store at any later time without needing `config` to still be in
+    /// scope.
+    private let storeURL: URL
+
+    /// The live store's filename, used to check a chosen backup belongs to this
+    /// store. Both debug and release currently name the file "default.store" —
+    /// it's the *directory* that differs between them (see `init` below), not
+    /// the filename — but this is read from the actual `ModelConfiguration`
+    /// rather than hardcoded, so a future change to either branch's filename
+    /// can't silently drift out of sync with what `chooseStoreRestore` checks
+    /// candidates against. Assigned once in `init`, like `storeURL` beside it.
+    private let storeFileName: String
+
+    /// Whether the store banner is a dismissible notice (an automatic recovery
+    /// succeeded) rather than a standing warning (running on temporary storage).
+    /// The UI shows a close button only when this is true.
+    private(set) var storeErrorDismissible = false
+
+    /// UserDefaults flag, durable across the store being emptied, recording that
+    /// this install has ever held real data. It is what lets `seedDefaultDataIfNeeded`
+    /// tell a genuine fresh install from a store that came up empty after a
+    /// failed migration — the store file itself can't, because a wipe makes it
+    /// look brand new. See `loadContainer`.
+    static let hasEverHadDataKey = "atoll.hasEverHadData"
+
+    /// The spaces, services, and links the store last held, written after a
+    /// clean open and again at termination. A store that comes up below this
+    /// lost data between launches; a user who deletes spaces lowers it on the
+    /// way out, so their own housekeeping never looks like loss.
+    static let contentRecordKey = "atoll.lastKnownContent"
+
+    /// Pairings of backup and live state the user has already declined, so a
+    /// declined offer does not come back every launch.
+    static let declinedRestoresKey = "atoll.declinedRestores"
+
+    /// Bound on how many declined pairings `declineStoreRecovery` keeps, so a
+    /// long-lived install cannot grow this list without end.
+    static let maxDeclinedRestores = 20
+
+    /// Why Atoll is offering to restore a backup, or nil when it is not.
+    private(set) var storeRecoveryOffer: StoreRecoveryOffer?
+
+    /// Every store the user could restore from, including the live one.
+    private(set) var storeCandidates: [StoreCandidate] = []
+
+    /// The candidate the picker starts on, or nil when the user must choose.
+    private(set) var preselectedCandidate: StoreCandidate?
+
+    /// Whether the picker sheet is up.
+    var isShowingStoreRecovery = false
+
+    /// Whether the user picked a backup and Atoll owes them a restart. Set
+    /// when the pick is scheduled and the relaunch poller is armed; read once
+    /// the sheet has closed, since the quit cannot happen while it is up. See
+    /// `quitForScheduledRestore`.
+    private(set) var isRestoreRestartArmed = false
+
+    /// Whether `init` fell back to a throwaway in-memory container because the
+    /// real store was unusable. While this is true, the container's counts are
+    /// not the user's store — reading `.spaces`/`.services` from it can show an
+    /// empty or freshly-seeded shape that has nothing to do with what actually
+    /// sits on disk. `evaluateStoreRecovery` and `recordStoreContent` both
+    /// branch on this so neither one mistakes the temporary container for the
+    /// real thing.
+    private(set) var isStoreInMemoryFallback = false
+
+    /// Whether the store arrived at this launch already holding dangling join
+    /// rows — the signature of a store damaged between sessions. Read from the
+    /// raw file before anything opens or repairs it.
+    private let storeWasDamagedAtLaunch: Bool
+
+    /// Whether this launch's container came from an automatic restore.
+    private let storeWasRestoredAtLaunch: Bool
+
+    /// Whether it is safe to run the *irreversible* reclamation this launch:
+    /// deleting service rows that belong to no space, and wiping the on-disk
+    /// website data (cookies, logins) of stores nothing points at.
+    ///
+    /// Both of those are correct on a healthy store and destructive on a damaged
+    /// one, and the two escalate into each other. `repairDanglingLinks` deletes
+    /// join rows whose space row is missing; every service that lived only in
+    /// that space is then linkless, so `reapOrphanedServices` deletes it and
+    /// tombstones its data store — turning a store problem that the recovery
+    /// picker could have undone into a permanent logout. Restoring a backup can
+    /// produce the same shape for a launch.
+    ///
+    /// So neither runs on a launch where the store was damaged, restored, or
+    /// replaced by the in-memory fallback. Nothing is lost by waiting: an
+    /// invisible orphan row costs nothing to carry, the user gets the recovery
+    /// banner instead, and the next clean launch reclaims it.
+    private var isSafeToReclaim: Bool {
+        !isStoreInMemoryFallback && !storeWasDamagedAtLaunch && !storeWasRestoredAtLaunch
+    }
+
+    init() {
+        // The current shipping shape, pinned as an explicit `VersionedSchema`.
+        // `loadContainer` opens it through `AtollMigrationPlan`, so an older
+        // store migrates through named, tested stages instead of inference. See
+        // `Atoll/Models/Schema/AtollSchema.swift`.
+        let schema = Schema(versionedSchema: AtollSchemaVCurrent.self)
+        // Neither build may use SwiftData's implicit default path. It is
+        // `Application Support/default.store` with no bundle id in it, so every
+        // non-sandboxed SwiftData app that takes the default opens the same
+        // file and migrates it to its own model, dropping the other's tables.
+        // Debug builds have sat in their own directory for a while, so a copy
+        // run from Xcode never opens the installed release app's data; the
+        // release build now moves into one too, for the collision `StoreRelocation`
+        // documents. The debug *bundle id* (project.yml) already separates
+        // WebKit, Preferences and notifications.
+        #if DEBUG
+        let debugDir = URL.applicationSupportDirectory.appending(path: "Atoll-debug")
+        try? FileManager.default.createDirectory(at: debugDir, withIntermediateDirectories: true)
+        let config = ModelConfiguration(schema: schema, url: debugDir.appending(path: "default.store"))
+        #else
+        let config = ModelConfiguration(schema: schema, url: StoreRelocation.resolveStoreURL())
+        #endif
+        self.storeFileName = config.url.lastPathComponent
+        self.storeURL = config.url
+
+        // A restore the user picked last session, applied before anything opens
+        // the store.
+        StoreRepair.applyPendingRestore(at: config.url)
+
+        // Snapshot the store before a newly-installed version opens it, so a
+        // migration that loses or reshapes data is always recoverable. No-op
+        // when the running version is unchanged from the last launch. This runs
+        // once here (not inside the open/retry path) so the retry restores from
+        // the snapshot it just took rather than overwriting it.
+        StoreRepair.backupBeforeMigrationIfNeeded(at: config.url)
+
+        // Note the store's condition BEFORE the open path repairs it — once
+        // `tryOpen` has run `repairDanglingLinks`, the damage is gone and the
+        // evidence with it. See `isSafeToReclaim`.
+        self.storeWasDamagedAtLaunch = StoreRepair.hasDanglingLinks(at: config.url)
+
+        // Open the store, self-healing an emptied or unusable store from the
+        // newest usable pre-migration snapshot. The outcome drives the banner.
+        let (loadedContainer, outcome) = Self.loadContainer(schema: schema, config: config)
+        self.modelContainer = loadedContainer
+        if case .restoredFromSnapshot = outcome {
+            self.storeWasRestoredAtLaunch = true
+        } else {
+            self.storeWasRestoredAtLaunch = false
+        }
+
+        switch outcome {
+        case .openedClean:
+            break
+        case .restoredFromSnapshot(_, let takenAt):
+            let when: String
+            if let takenAt {
+                let f = DateFormatter()
+                f.dateStyle = .medium
+                f.timeStyle = .short
+                when = " taken \(f.string(from: takenAt))"
+            } else {
+                when = ""
+            }
+            self.storeError = "Atoll recovered your data from an automatic backup\(when)."
+            self.storeErrorDismissible = true
+        case .inMemoryFallback:
+            // Point at the containing folder, not just the store file: after a
+            // migration that emptied the store the file itself holds nothing, and
+            // the recoverable copies are the `.snapshot-*.bak` siblings Atoll
+            // writes before every update. Changes won't be saved (in-memory), so
+            // the user can quit, restore a snapshot, and relaunch without loss.
+            self.storeError = "Your saved data couldn't be loaded, so Atoll is running with temporary storage — changes won't be saved. Atoll keeps automatic backups from before each update; your data folder (with those backups) is at: \(config.url.deletingLastPathComponent().path)"
+            self.storeFileURL = config.url.deletingLastPathComponent()
+            self.isStoreInMemoryFallback = true
+        }
+
+        self.dataStoreManager = DataStoreManager()
+        self.userScriptManager = UserScriptManager()
+        self.badgeManager = BadgeManager()
+
+        // Capture the modelContainer locally so the @Sendable closure below
+        // doesn't capture `self` before all stored properties are assigned.
+        let container = self.modelContainer
+        let badgeManager = self.badgeManager
+        self.userScriptManager.isServiceMuted = { @Sendable serviceID in
+            // WKScriptMessageHandler.didReceive is invoked on the main
+            // thread, so we can safely hop into the main actor here to
+            // read the persisted mute state. A service is muted when its
+            // own isMuted flag is true *or* any of its parent spaces is
+            // muted (mute-the-space cascades to its members).
+            MainActor.assumeIsolated {
+                let context = container.mainContext
+                // Indexed single-row fetch, not a full-table scan — this runs on
+                // every intercepted web notification (matches isServiceNotifyingOS).
+                var descriptor = FetchDescriptor<ServiceInstance>(
+                    predicate: #Predicate { $0.id == serviceID }
+                )
+                descriptor.fetchLimit = 1
+                guard let service = try? context.fetch(descriptor).first else { return false }
+                return service.isEffectivelyMuted
+            }
+        }
+        self.userScriptManager.isServiceNotifyingOS = { @Sendable serviceID in
+            // Per-service flag (not cascaded, unlike mute); nil → enabled. Runs
+            // on every intercepted web notification, so use an indexed single-row
+            // fetch rather than a full-table scan. Fails silent: a missing or
+            // deleted service does not post a banner.
+            MainActor.assumeIsolated {
+                let context = container.mainContext
+                var descriptor = FetchDescriptor<ServiceInstance>(
+                    predicate: #Predicate { $0.id == serviceID }
+                )
+                descriptor.fetchLimit = 1
+                guard let service = try? context.fetch(descriptor).first else { return false }
+                return service.notifiesOSEffective
+            }
+        }
+        self.userScriptManager.isDoNotDisturbActive = { @Sendable in
+            MainActor.assumeIsolated { badgeManager.doNotDisturb }
+        }
+        self.notificationManager = NotificationManager(badgeManager: badgeManager)
+        self.transientBadgeFetcher = TransientBadgeFetcher(
+            badgeManager: badgeManager,
+            dataStoreManager: dataStoreManager
+        )
+        self.contentBlocker = ContentBlockerManager()
+        self.webViewPool = WebViewPool(
+            dataStoreManager: dataStoreManager,
+            userScriptManager: userScriptManager,
+            contentBlocker: contentBlocker
+        )
+        self.networkMonitor = NetworkMonitor()
+
+        loadAppPreferences()
+        startContentBlocker()
+        setupNotificationNavigation()
+        setupHibernationCallbacks()
+        setupMenuBarNavigation()
+        setupSystemSleepHandling()
+        setupNetworkHandling()
+        setupExternalLinkRouting()
+        setupMediaPermissions()
+        setupTerminationRecording()
+        let didSeedDefaults = seedDefaultDataIfNeeded()
+        backfillPasskeyNoticeIfNeeded(freshInstall: didSeedDefaults)
+        reapOrphanedServices()
+        restoreWindowState()
+        let didUpdate = Self.recordLaunchVersionAndCheckUpdate()
+        fetchMissingAndStaleFavicons(force: didUpdate)
+        fetchCatalogIcons(force: didUpdate)
+        preloadActiveSpaceServices()
+        startTransientBadgeFetcher()
+        reclaimUnreferencedDataStores()
+        cleanUpOrphanedDataStores()
+
+        // Record what the store holds, then decide whether a fuller backup is
+        // worth offering. Order matters: recording first would hide the very
+        // shortfall the offer looks for, so evaluate first.
+        evaluateStoreRecovery(storeURL: config.url)
+        recordStoreContent()
+    }
+
+    deinit {
+        for token in systemObserverTokens {
+            NSWorkspace.shared.notificationCenter.removeObserver(token)
+        }
+        for token in distributedObserverTokens {
+            DistributedNotificationCenter.default().removeObserver(token)
+        }
+        for token in defaultCenterTokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+        quietHoursTask?.cancel()
+        idleHibernationTask?.cancel()
+    }
+
+    /// Wires the WebViewPool's external-link handler so that cross-domain
+    /// target=_blank navigations route through `handleExternalLink(_:)` —
+    /// which prefers switching to a matching Atoll service over opening
+    /// Safari, but falls back to NSWorkspace when no service matches.
+    private func setupExternalLinkRouting() {
+        webViewPool.externalLinkHandler = { [weak self] url, sourceServiceID in
+            self?.handleExternalLink(url, from: sourceServiceID)
+        }
+    }
+
+    /// Wires the WebViewPool's media-capture handler so every service's
+    /// `getUserMedia()` is resolved against the persisted per-service policy.
+    private func setupMediaPermissions() {
+        webViewPool.mediaCapturePolicyProvider = { [weak self] serviceID, type, frame in
+            await self?.resolveMediaPermission(serviceID: serviceID, type: type, frame: frame) ?? .deny
+        }
+        // Any teardown of a service's web view (hibernate, recreate, evict, or
+        // remove) invalidates a pending prompt for it — deny + drain so a stale
+        // prompt can't linger and block a later service's prompt.
+        webViewPool.onServiceTornDown = { [weak self] serviceID in
+            self?.drainMediaRequests(for: serviceID)
+        }
+    }
+
+    /// Resolves a service's camera/microphone request into a WebKit decision from
+    /// the persisted per-service policy (falling back to the global default, then
+    /// `.ask`). Fails closed (`.deny`) whenever anything is uncertain: unknown
+    /// service, a persisted grant reached from a cross-origin subframe, or — until
+    /// the prompt lands in the next step — an `.ask` outcome.
+    @MainActor
+    func resolveMediaPermission(
+        serviceID: UUID,
+        type: WKMediaCaptureType,
+        frame: WKFrameInfo
+    ) async -> WKPermissionDecision {
+        guard let service = fetchService(id: serviceID) else { return .deny }
+        let camera = MediaPermissionResolver.effectivePolicy(
+            serviceRaw: service.cameraPolicyRaw, globalRaw: defaultCameraPolicy.rawValue)
+        let microphone = MediaPermissionResolver.effectivePolicy(
+            serviceRaw: service.microphonePolicyRaw, globalRaw: defaultMicrophonePolicy.rawValue)
+
+        let kind = Self.captureKind(from: type)
+        let resolution = MediaPermissionResolver.resolve(kind, camera: camera, microphone: microphone)
+        if resolution == .deny { return .deny }  // an explicit Deny blocks any origin
+
+        // Never grant or prompt behind the lock screen, or for a service the user
+        // isn't actively viewing — a preloaded/background service must not grab the
+        // camera/mic or throw a surprise prompt. Both fail closed.
+        guard !isLocked else {
+            AppLogger.webView.info("Media capture denied: app is locked")
+            return .deny
+        }
+        guard webViewPool.activeServiceID == serviceID else {
+            AppLogger.webView.info("Media capture denied: \(service.label) isn't the active service")
+            return .deny
+        }
+
+        if isCaptureFrameTrusted(frame, service: service) {
+            // The service's own origin: honor its policy. `.ask` prompts and
+            // remembers the answer on ONLY the device(s) actually asked about
+            // (kind-gated), so a mic-only prompt can't silently pin the camera.
+            if resolution == .grant { return .grant }
+            let asked = MediaPermissionResolver.askedFields(kind, camera: camera, microphone: microphone)
+            let allowed = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                enqueueMediaRequest(
+                    serviceID: serviceID, serviceLabel: service.label, originHost: nil,
+                    camAsked: asked.camera, micAsked: asked.microphone, continuation: continuation)
+            }
+            persistMediaAnswer(serviceID: serviceID, allow: allowed, camAsked: asked.camera, micAsked: asked.microphone)
+            return allowed ? .grant : .deny
+        }
+
+        // A foreign origin inside the service's own web view (e.g. a call service
+        // whose media host differs from its home host). Decide per the
+        // foreign-origin rules.
+        let originHost = frame.securityOrigin.host
+        switch Self.foreignCaptureOutcome(
+            isMainFrame: frame.isMainFrame,
+            originHost: originHost,
+            isFirstParty: isFirstPartyService(service),
+            resolution: resolution
+        ) {
+        case .deny:
+            logMediaDenyUntrusted(frame, service: service)
+            return .deny
+        case .grantSilently:
+            return .grant
+        case .promptNamingOrigin:
+            let asked = MediaPermissionResolver.askedFields(kind, camera: .ask, microphone: .ask)
+            let allowed = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                enqueueMediaRequest(
+                    serviceID: serviceID, serviceLabel: service.label, originHost: originHost,
+                    camAsked: asked.camera, micAsked: asked.microphone, continuation: continuation)
+            }
+            return allowed ? .grant : .deny
+        }
+    }
+
+    /// Appends a prompt to the queue and shows it if none is currently up.
+    private func enqueueMediaRequest(
+        serviceID: UUID,
+        serviceLabel: String,
+        originHost: String?,
+        camAsked: Bool,
+        micAsked: Bool,
+        continuation: CheckedContinuation<Bool, Never>
+    ) {
+        let request = MediaPermissionRequest(
+            id: UUID(), serviceLabel: serviceLabel, originHost: originHost,
+            camAsked: camAsked, micAsked: micAsked)
+        mediaQueue.append(PendingMediaEntry(
+            request: request,
+            serviceID: serviceID,
+            continuation: continuation
+        ))
+        if pendingMediaRequest == nil {
+            pendingMediaRequest = mediaQueue.first?.request
+        }
+    }
+
+    /// Answers the shown prompt (from the alert's buttons), resumes its awaiting
+    /// resolver, and presents the next queued prompt. Takes the request id so a
+    /// stray tap can only answer the prompt it was shown for — never the next one.
+    func answerMediaRequest(_ id: UUID, allow: Bool) {
+        guard mediaQueue.first?.request.id == id else { return }
+        let entry = mediaQueue.removeFirst()
+        entry.continuation.resume(returning: allow)
+        presentNextMediaRequest()
+    }
+
+    /// Offers "always appear active" right after adding a presence-sensitive
+    /// service (per the catalog `presenceSensitive` flag), so backgrounding
+    /// Atoll doesn't make the user look away in Teams. A no-op for every other
+    /// service — the prompt only appears where it's relevant.
+    func offerPresenceActivationIfNeeded(serviceID: UUID, catalogEntryID: String?) {
+        guard let catalogEntryID,
+              ServiceCatalog.shared.entry(for: catalogEntryID)?.presenceSensitive == true,
+              let service = currentServiceInstance(id: serviceID) else { return }
+        presencePrompt = PresencePrompt(id: serviceID, serviceLabel: service.label)
+    }
+
+    /// Answers the presence offer. Enabling turns on the service's focus override
+    /// and rebuilds its web view so it takes effect; either answer clears the
+    /// prompt. Guards the service still exists (it could be deleted mid-prompt).
+    func answerPresencePrompt(_ id: UUID, enable: Bool) {
+        defer { presencePrompt = nil }
+        guard enable, let service = currentServiceInstance(id: id) else { return }
+        service.stayActiveInBackground = true
+        applyServiceEdits(serviceID: id, urlChanged: false, presenceChanged: true)
+    }
+
+    /// Resumes (with deny) and clears any prompts queued for a service that's
+    /// being removed, so a delete mid-prompt can't strand a continuation.
+    private func drainMediaRequests(for serviceID: UUID) {
+        guard mediaQueue.contains(where: { $0.serviceID == serviceID }) else { return }
+        let headWasStranded = mediaQueue.first?.serviceID == serviceID
+        let stranded = mediaQueue.filter { $0.serviceID == serviceID }
+        mediaQueue.removeAll { $0.serviceID == serviceID }
+        for entry in stranded { entry.continuation.resume(returning: false) }
+        // Only re-present if the prompt currently on screen was one we just
+        // drained; a drained non-head entry leaves the visible prompt alone.
+        if headWasStranded { presentNextMediaRequest() }
+    }
+
+    /// Denies and clears every queued prompt. Used when the app locks — a capture
+    /// prompt must not sit above the lock screen leaking a service name or letting
+    /// the user grant capture without unlocking.
+    private func drainAllMediaRequests() {
+        guard !mediaQueue.isEmpty else { return }
+        let all = mediaQueue
+        mediaQueue.removeAll()
+        for entry in all { entry.continuation.resume(returning: false) }
+        pendingMediaRequest = nil
+    }
+
+    /// Dismisses the current prompt and shows the next queued one on the following
+    /// runloop tick. SwiftUI won't re-present an alert while `isPresented` stays
+    /// true, so the binding must go false → true between entries.
+    private func presentNextMediaRequest() {
+        pendingMediaRequest = nil
+        guard let next = mediaQueue.first?.request else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.pendingMediaRequest == nil,
+                  self.mediaQueue.first?.request.id == next.id else { return }
+            self.pendingMediaRequest = next
+        }
+    }
+
+    /// Persists an "ask" answer as an explicit allow/deny, on only the fields that
+    /// were asked (leaving an already-explicit camera or mic policy untouched).
+    private func persistMediaAnswer(serviceID: UUID, allow: Bool, camAsked: Bool, micAsked: Bool) {
+        guard let service = fetchService(id: serviceID) else { return }
+        let policy: MediaPermissionPolicy = allow ? .allow : .deny
+        if camAsked { service.cameraPolicy = policy }
+        if micAsked { service.microphonePolicy = policy }
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to persist media permission: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+    }
+
+    /// Sets and persists the global default camera policy for services without
+    /// a per-service value. Mirrors the other global-toggle setters.
+    func setDefaultCameraPolicy(_ policy: MediaPermissionPolicy) {
+        defaultCameraPolicy = policy
+        persistDefaultMediaPolicies()
+    }
+
+    /// Sets and persists the global default microphone policy.
+    func setDefaultMicrophonePolicy(_ policy: MediaPermissionPolicy) {
+        defaultMicrophonePolicy = policy
+        persistDefaultMediaPolicies()
+    }
+
+    private func persistDefaultMediaPolicies() {
+        let prefs = ensurePreferences()
+        prefs.defaultCameraPolicyRaw = defaultCameraPolicy.rawValue
+        prefs.defaultMicrophonePolicyRaw = defaultMicrophonePolicy.rawValue
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save default media policies: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+    }
+
+    /// Mutes every service whose microphone is currently live (⇧⌘M). Logs the
+    /// count so the action isn't silent when nothing was muted.
+    func muteAllMicrophones() {
+        let count = webViewPool.muteAllMicrophones()
+        AppLogger.general.info("Muted \(count) live microphone(s)")
+    }
+
+    /// Logs a capture denial caused by the requesting origin not belonging to the
+    /// service, naming both hosts — so a cross-domain call that's being wrongly
+    /// blocked is diagnosable in Console rather than a silent nothing.
+    private func logMediaDenyUntrusted(_ frame: WKFrameInfo, service: ServiceInstance) {
+        let frameHost = frame.securityOrigin.host
+        let serviceHost = URL(string: service.url)?.host ?? service.url
+        AppLogger.webView.info(
+            "Media capture denied: request origin \(frameHost, privacy: .public) doesn't belong to \(service.label, privacy: .public) (\(serviceHost, privacy: .public))")
+    }
+
+    private func isCaptureFrameTrusted(_ frame: WKFrameInfo, service: ServiceInstance) -> Bool {
+        guard let serviceHost = URL(string: service.url)?.host else { return false }
+        let frameHost = frame.securityOrigin.host
+        guard !frameHost.isEmpty else { return false }
+        // Stricter capture-specific same-site test (not the link-routing one): two
+        // owners on a shared hosting suffix (*.web.app, *.github.io, …) are NOT the
+        // same site, so an Allow-pinned service can't leak its grant to another site
+        // there. First-party cross-domain trust is handled separately, on the
+        // foreign-origin path in resolveMediaPermission.
+        return WebViewCoordinator.captureOriginBelongsToService(frameHost, serviceHost: serviceHost)
+    }
+
+    /// What to do with a capture request whose origin is NOT the service's own site
+    /// — a foreign origin inside the service's own web view. Pure, so it's
+    /// unit-testable without a live `WKFrameInfo`. `resolution` is already known to
+    /// be `.grant` or `.ask` here (an explicit `.deny` is short-circuited earlier).
+    /// - A third-party SUBFRAME (can't meaningfully consent, the spoofiest case) or
+    ///   an empty origin fails closed.
+    /// - A first-party vendor pinned to Allow grants silently. This is the ONE
+    ///   cross-domain silent grant — the seamless-call case the flag exists for —
+    ///   and its accepted risk: the vendor's own main frame, navigated to a foreign
+    ///   origin, gets the grant.
+    /// - Everything else prompts NAMING THE REAL ORIGIN and does not persist: a
+    ///   non-first-party service, or a first-party vendor still on Ask. Naming the
+    ///   real origin (not the service) stops a hijacked main frame from borrowing
+    ///   the vendor's name; not persisting keeps a one-off foreign answer from
+    ///   pinning a blanket service Allow.
+    enum ForeignCaptureOutcome: Equatable { case grantSilently, promptNamingOrigin, deny }
+
+    static func foreignCaptureOutcome(
+        isMainFrame: Bool,
+        originHost: String,
+        isFirstParty: Bool,
+        resolution: MediaPermissionResolver.Resolution
+    ) -> ForeignCaptureOutcome {
+        guard isMainFrame, !originHost.isEmpty else { return .deny }
+        if isFirstParty, resolution == .grant { return .grantSilently }
+        return .promptNamingOrigin
+    }
+
+    /// Whether `service` is a curated first-party vendor: the catalog entry carries
+    /// the `firstParty` flag AND the service still points at that vendor's own site.
+    /// The second check means a user who edits the service's URL elsewhere doesn't
+    /// carry the vendor's cross-domain trust to the new site. Custom, non-catalog
+    /// services are never first-party.
+    private func isFirstPartyService(_ service: ServiceInstance) -> Bool {
+        guard let id = service.catalogEntryID,
+              let entry = ServiceCatalog.shared.entry(for: id),
+              entry.firstParty == true,
+              let serviceHost = URL(string: service.url)?.host,
+              let entryHost = URL(string: entry.url)?.host else { return false }
+        return WebViewCoordinator.captureOriginBelongsToService(serviceHost, serviceHost: entryHost)
+    }
+
+    private static func captureKind(from type: WKMediaCaptureType) -> MediaCaptureKind {
+        switch type {
+        case .camera: return .camera
+        case .microphone: return .microphone
+        case .cameraAndMicrophone: return .cameraAndMicrophone
+        @unknown default: return .cameraAndMicrophone  // unknown ⇒ most restrictive
+        }
+    }
+
+    /// Decides what to do with a link that the user clicked in one service
+    /// and which targets a different origin. If any other Atoll service owns
+    /// that domain (same registrable domain, or the exact host for
+    /// shared-umbrella domains like google.com) we switch to it (preserving
+    /// auth/space context) and navigate to the deep URL. Otherwise we hand off
+    /// to the system default browser.
+    ///
+    /// Multi-account aware: when several services match the same host (e.g.
+    /// personal + work Notion), we prefer the match in the current space so
+    /// "click a Notion link from Work Slack" lands in Work Notion. Only
+    /// crosses spaces when the current space has no match.
+    private func handleExternalLink(_ url: URL, from sourceServiceID: UUID?) {
+        guard let host = url.host else {
+            WebViewCoordinator.openExternally(url)
+            return
+        }
+
+        if let match = findServiceMatching(host: host, preferringSpace: selectedSpaceID) {
+            switchToService(match, navigateTo: url)
+            return
+        }
+
+        // No Atoll service owns this link. Open it in an in-app window when the
+        // source service opted into that; otherwise hand it to the browser.
+        let optedIn = sourceServiceID
+            .flatMap { fetchService(id: $0) }?
+            .opensExternalLinksInAppEffective ?? false
+        if WebViewCoordinator.shouldOpenInAppBrowser(sourceOptedIn: optedIn, url: url) {
+            InAppBrowserWindow.open(url)
+        } else {
+            WebViewCoordinator.openExternally(url)
+        }
+    }
+
+    private func findServiceMatching(host: String, preferringSpace spaceID: UUID?) -> ServiceInstance? {
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<ServiceInstance>()
+        guard let services = try? context.fetch(descriptor) else { return nil }
+
+        let matches = services.filter { service in
+            guard let serviceHost = URL(string: service.url)?.host else { return false }
+            return WebViewCoordinator.belongsToService(host, serviceHost: serviceHost)
+        }
+        if matches.isEmpty { return nil }
+        if matches.count == 1 { return matches.first }
+
+        // Multiple instances of the same site (e.g. personal + work Notion).
+        // Prefer one inside the current space; fall back to any match.
+        if let spaceID,
+           let inCurrentSpace = matches.first(where: { service in
+               service.spaceLinks.contains {
+                   $0.modelContext != nil && $0.space.modelContext != nil && $0.space.id == spaceID
+               }
+           }) {
+            return inCurrentSpace
+        }
+        return matches.first
+    }
+
+    private func switchToService(_ service: ServiceInstance, navigateTo url: URL) {
+        // Make sure we're in a space that contains this service so the
+        // sidebar selection becomes visible. If the service lives in
+        // multiple spaces, pick the first.
+        if let firstSpace = service.spaceLinks.first(where: {
+            $0.modelContext != nil && $0.space.modelContext != nil
+        })?.space.id {
+            selectedSpaceID = firstSpace
+        }
+        selectedServiceID = service.id
+
+        // Acquire (or wake) the web view and load the deep URL. webView(for:)
+        // marks the service active and handles soft-hibernation of whatever
+        // was previously displayed.
+        let webView = webViewPool.webView(for: service)
+        webView.load(URLRequest(url: url))
+    }
+
+    /// Hooks NSWorkspace sleep/wake notifications so polling tasks pause
+    /// while the Mac is asleep (otherwise their `Task.sleep` calls keep
+    /// firing on wake-up and stack up missed work). On wake we restart
+    /// polling for every live WKWebView — active mode for the currently
+    /// displayed service, background mode for the rest.
+    private func setupSystemSleepHandling() {
+        let center = NSWorkspace.shared.notificationCenter
+        systemObserverTokens.append(center.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.suspendPolling(reason: "system sleep")
+            }
+        })
+        systemObserverTokens.append(center.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.resumePolling(reason: "system wake")
+            }
+        })
+    }
+
+    /// Records what the store holds as the app goes away. A deliberate deletion
+    /// during the session lowers the record here, which is what stops the next
+    /// launch reading the user's own housekeeping as data loss.
+    private func setupTerminationRecording() {
+        // `queue: nil`, not `.main`, is load-bearing here. A non-nil queue makes
+        // `NotificationCenter` deliver the block asynchronously via
+        // `queue.addOperation`, and `NSApplication` exits right after posting
+        // this notification without giving the run loop another turn to drain
+        // it — the block would be silently dropped. `queue: nil` runs it
+        // synchronously on the posting thread instead, which AppKit guarantees
+        // is main for this notification, so `MainActor.assumeIsolated` still
+        // holds and the write actually lands before the process exits.
+        defaultCenterTokens.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.recordStoreContent() }
+        })
+    }
+
+    /// Pauses or resumes polling when network connectivity toggles. While
+    /// offline every poll (active, background, and hibernated) would only fire
+    /// doomed requests, draining battery for nothing; on reconnect we restart
+    /// so badges refresh promptly.
+    private func setupNetworkHandling() {
+        networkMonitor.onChange = { [weak self] online in
+            Task { @MainActor in
+                guard let self else { return }
+                if online {
+                    self.resumePolling(reason: "network reachable")
+                } else {
+                    self.suspendPolling(reason: "network unreachable")
+                }
+            }
+        }
+    }
+
+    /// Suspends all polling subsystems. Used for both system sleep and loss of
+    /// network connectivity — in either case continued polling is wasted work.
+    private func suspendPolling(reason: String) {
+        notificationManager.stopAllPolling()
+        transientBadgeFetcher.pause()
+        AppLogger.general.info("Paused polling — \(reason)")
+    }
+
+    /// Resumes polling: restarts active/background polling for every live web
+    /// view and re-arms the hibernated-service poller.
+    private func resumePolling(reason: String) {
+        // Sleep/wake and network changes both drive suspend/resume. Waking while
+        // still offline must not restart polling: NWPathMonitor only fires on a
+        // change, so a still-unsatisfied path delivers no event to re-suspend,
+        // and pollers would hammer a dead network until the next transition.
+        guard networkMonitor.isOnline else {
+            AppLogger.general.info("Not resuming polling — offline (\(reason))")
+            return
+        }
+        AppLogger.general.info("Resuming polling — \(reason)")
+        restartPollingAfterWake()
+        transientBadgeFetcher.resume()
+    }
+
+    private func restartPollingAfterWake() {
+        let activeID = webViewPool.activeServiceID
+        for id in webViewPool.liveServiceIDs {
+            guard let webView = webViewPool.liveWebView(for: id) else { continue }
+            let catalog = catalogEntry(for: id)
+            notificationManager.startPolling(
+                for: id,
+                webView: webView,
+                isMuted: { [weak self] in self?.isServiceEffectivelyMuted(id) ?? false },
+                showBadge: { [weak self] in self?.isServiceShowingBadge(id) ?? true },
+                catalogEntry: catalog,
+                mode: (id == activeID) ? .active : .background
+            )
+        }
+        AppLogger.general.info("System wake — restarted polling for \(self.webViewPool.liveServiceIDs.count) service(s)")
+    }
+
+    /// Effective mute state for a service: true if its own `isMuted` flag is
+    /// set, or any space it belongs to has `isMuted` set. Used by polling and
+    /// notification gating so that a muted space cascades to every member.
+    nonisolated func isServiceEffectivelyMuted(_ serviceID: UUID) -> Bool {
+        withService(id: serviceID) { $0.isEffectivelyMuted } ?? false
+    }
+
+    /// Single-service fetch by id (predicate + limit 1) instead of fetching the
+    /// whole table and scanning. Main-actor only, since it hands back a SwiftData
+    /// model; nonisolated callers use `withService` to extract Sendable values.
+    private func fetchService(id: UUID) -> ServiceInstance? {
+        var descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try? modelContainer.mainContext.fetch(descriptor).first
+    }
+
+    /// Runs `body` against the service with `id` on the main actor and returns
+    /// only the Sendable value it produces, so the SwiftData model never crosses
+    /// the actor boundary. Used by the nonisolated mute/badge/catalog lookups on
+    /// the poll and render paths. Returns nil when the service is gone.
+    private nonisolated func withService<T: Sendable>(id: UUID, _ body: @MainActor (ServiceInstance) -> T) -> T? {
+        MainActor.assumeIsolated {
+            guard let service = fetchService(id: id) else { return nil }
+            return body(service)
+        }
+    }
+
+    // MARK: - Active service actions (driven by keyboard shortcuts)
+
+    /// Reload the currently displayed service's web view. Triggered by Cmd-R.
+    func reloadActiveService() {
+        guard let id = webViewPool.activeServiceID,
+              let webView = webViewPool.liveWebView(for: id) else { return }
+        webView.reload()
+    }
+
+    /// Applies user edits to a service: persists label/URL/keep-loaded, syncs
+    /// the pool's never-hibernate set, and navigates the live web view to the
+    /// new URL when it changed. The caller has already mutated the model;
+    /// this performs the runtime side effects and saves.
+    func applyServiceEdits(
+        serviceID: UUID,
+        urlChanged: Bool,
+        cssChanged: Bool = false,
+        userAgentChanged: Bool = false,
+        darkModeChanged: Bool = false,
+        presenceChanged: Bool = false
+    ) {
+        guard let service = currentServiceInstance(id: serviceID) else { return }
+        webViewPool.setNeverHibernate(service.hibernationPolicyEffective == .never, for: serviceID)
+        // A policy change may add or drop the only per-service timer, so re-gate
+        // the sweep; drop any pending grace teardown so a switch away from
+        // `.immediate` doesn't fire under a service the user just made sticky.
+        cancelImmediateHibernation(serviceID)
+        startIdleHibernationTimer()
+
+        if cssChanged || presenceChanged {
+            // Custom CSS and the focus override are both injected when the web
+            // view is built, so rebuild it. The rebuild also re-bakes the
+            // dark-mode scripts and picks up any user-agent change and the new
+            // URL, so those are handled here.
+            webViewPool.recreateWebView(for: serviceID, preserveURL: !urlChanged)
+            webViewRebuildToken &+= 1
+        } else {
+            // Dark-mode change applies live without a rebuild — the pool
+            // recomputes the injection from the service's new mode.
+            if darkModeChanged {
+                webViewPool.refreshDarkMode(for: service)
+            }
+            if userAgentChanged {
+                webViewPool.setUserAgent(service.userAgent, for: serviceID)
+            }
+            if urlChanged, let url = URL(string: service.url) {
+                webViewPool.navigate(serviceID, to: url)
+            }
+        }
+
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save service edits: \(error.localizedDescription)")
+            // Discard the failed mutation so it can't silently ride along on the
+            // next unrelated successful save.
+            modelContainer.mainContext.rollback()
+        }
+    }
+
+    /// Wipes all website data (cookies, local/session storage, caches) for a
+    /// service's data store — effectively logging the user out — then reloads
+    /// the live web view so the logged-out state is visible immediately. The
+    /// service itself, its links, and its place in every space are preserved.
+    func clearSession(for serviceID: UUID) {
+        guard let service = currentServiceInstance(id: serviceID) else { return }
+        let store = dataStoreManager.dataStore(forIdentifier: service.dataStoreIdentifier)
+        let homeURL = URL(string: service.url)
+        let pool = webViewPool
+        Task { @MainActor in
+            let types = WKWebsiteDataStore.allWebsiteDataTypes()
+            await store.removeData(ofTypes: types, modifiedSince: .distantPast)
+            if let webView = pool.liveWebView(for: serviceID) {
+                if let homeURL {
+                    webView.load(URLRequest(url: homeURL))
+                } else {
+                    webView.reload()
+                }
+            }
+            AppLogger.dataStore.info("Cleared session for service \(serviceID)")
+        }
+    }
+
+    /// Multiply the active service's page zoom by `factor`, clamped to 0.5x–3.0x.
+    /// The new zoom is persisted on the ServiceInstance so it survives
+    /// hibernation, relaunch, and switching back and forth.
+    func adjustActiveServiceZoom(by factor: Double) {
+        guard let id = webViewPool.activeServiceID,
+              let webView = webViewPool.liveWebView(for: id),
+              let service = currentServiceInstance(id: id) else { return }
+        let target = max(0.5, min(3.0, Self.effectiveZoom(pageZoom: service.pageZoom, defaultZoom: defaultZoom) * factor))
+        applyZoom(target, to: webView, service: service)
+    }
+
+    /// The zoom a service should render at: its own explicit zoom if set,
+    /// otherwise the Atoll-wide default. Pure so it can be unit-tested.
+    static func effectiveZoom(pageZoom: Double?, defaultZoom: Double) -> Double {
+        pageZoom ?? defaultZoom
+    }
+
+    /// The effective zoom for a specific service, using the current global default.
+    func effectiveZoom(for service: ServiceInstance) -> Double {
+        Self.effectiveZoom(pageZoom: service.pageZoom, defaultZoom: defaultZoom)
+    }
+
+    /// Applies a new Atoll-wide default zoom in memory and to every open
+    /// service that has no explicit per-service zoom. Persistence is handled by
+    /// the Settings view (mirrors the badge/presence preferences). Clamped to
+    /// the same 0.5x–3.0x range as manual zoom.
+    func applyDefaultZoom(_ zoom: Double) {
+        let clamped = max(0.5, min(3.0, zoom))
+        defaultZoom = clamped
+        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
+        for service in services where service.pageZoom == nil {
+            webViewPool.liveWebView(for: service.id)?.pageZoom = CGFloat(clamped)
+        }
+    }
+
+    // MARK: - Scheduled Do Not Disturb (quiet hours)
+
+    /// True when `nowMinutes` (minutes since midnight) falls inside the
+    /// quiet-hours window, handling the midnight wrap-around (e.g. 22:00→07:00).
+    /// A zero-length window (start == end) is treated as no window. Pure, for
+    /// unit testing.
+    static func isWithinQuietHours(nowMinutes: Int, start: Int, end: Int) -> Bool {
+        guard start != end else { return false }
+        if start < end { return nowMinutes >= start && nowMinutes < end }
+        return nowMinutes >= start || nowMinutes < end
+    }
+
+    /// Whether the schedule currently puts Atoll into Do Not Disturb.
+    var scheduledDNDActive: Bool {
+        guard scheduledDNDEnabled else { return false }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let mins = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        return Self.isWithinQuietHours(nowMinutes: mins, start: dndStartMinutes, end: dndEndMinutes)
+    }
+
+    /// Pushes the effective DND (manual toggle OR active schedule) into the
+    /// badge manager, which the notification gate also reads. Call whenever the
+    /// manual toggle or the schedule changes, and on the minute timer.
+    func refreshEffectiveDoNotDisturb() {
+        badgeManager.doNotDisturb = doNotDisturb || scheduledDNDActive
+        badgeManager.updateDockBadge()
+    }
+
+    /// Re-evaluates the quiet-hours schedule every minute so effective DND flips
+    /// at the window boundaries without the user touching anything.
+    private func startQuietHoursTimer() {
+        quietHoursTask?.cancel()
+        quietHoursTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                self?.refreshEffectiveDoNotDisturb()
+            }
+        }
+    }
+
+    /// Whether a service must stay live for real-time notifications, by its
+    /// catalog category. Delegates to the model so the edit sheet and the sweep
+    /// share one definition. Custom (non-catalog) services aren't covered — use
+    /// the `.never` hibernation policy for those.
+    private func isNotificationCritical(_ serviceID: UUID) -> Bool {
+        fetchService(id: serviceID)?.isNotificationCritical ?? false
+    }
+
+    /// True if any service opts into its own hibernation timing (`.after` or
+    /// `.immediate`), so the idle sweep must run even with the global toggle off.
+    private func hasExplicitHibernationPolicy() -> Bool {
+        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
+        return services.contains {
+            switch $0.hibernationPolicyEffective {
+            case .after, .immediate: return true
+            case .followGlobal, .never: return false
+            }
+        }
+    }
+
+    /// Runs a periodic idle sweep, fully hibernating background services idle
+    /// past their own threshold — except chat apps (kept live for instant
+    /// alerts), "Keep Loaded" services, and any service in a call. The sweep
+    /// runs while the global toggle is on OR any service sets its own timer, so a
+    /// per-service policy still fires when the global switch is off.
+    private func startIdleHibernationTimer() {
+        idleHibernationTask?.cancel()
+        guard autoHibernateIdleEnabled || hasExplicitHibernationPolicy() else { return }
+        idleHibernationTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                await self?.hibernateIdleServices()
+            }
+        }
+    }
+
+    private func hibernateIdleServices() async {
+        guard !isLocked else { return }
+        // Wind the sweep down once nothing needs it — e.g. the only service with
+        // its own timer was deleted, or the global toggle went off. This is the
+        // catch-all for every path that can drop the last reason to run (deleting
+        // a service from a space, deleting a space) without each having to re-gate
+        // the timer. `||` short-circuits, so the fetch only runs with global off.
+        guard autoHibernateIdleEnabled || hasExplicitHibernationPolicy() else {
+            idleHibernationTask?.cancel()
+            return
+        }
+        let now = Date()
+        // The pool has already filtered out active / chat / Keep-Loaded / pinned
+        // services, so every candidate is a live background service the sweep may
+        // consider against its own idle threshold.
+        for candidate in webViewPool.idleCandidates(now: now) {
+            // Re-check across each hibernation's await: the app may have locked
+            // mid-sweep, and we shouldn't keep tearing down the rest after that.
+            guard !isLocked else { return }
+            guard let service = fetchService(id: candidate.id),
+                  // Belt-and-suspenders: the pool already excludes chat services
+                  // via its cache, but read the model too so a cache miss can't
+                  // hibernate a service the user needs live for instant alerts.
+                  !service.isNotificationCritical,
+                  let threshold = idleThreshold(for: service),
+                  candidate.idle >= threshold
+            else { continue }
+            // The pool does the call check and re-validates the guards across
+            // that await, so a service the user switches to mid-sweep is never
+            // hibernated out from under them.
+            await webViewPool.hibernateIfStillIdle(candidate.id)
+        }
+    }
+
+    /// The idle seconds after which a service should hibernate, or nil if it
+    /// shouldn't on this sweep. `.never` never fires; `.followGlobal` fires only
+    /// while the global toggle is on; `.after` uses the service's own minutes;
+    /// `.immediate` uses a short backstop here — its real teardown is the
+    /// switch-away grace timer (`scheduleImmediateHibernationIfNeeded`).
+    private func idleThreshold(for service: ServiceInstance) -> TimeInterval? {
+        HibernationResolver.idleThreshold(
+            policy: service.hibernationPolicyEffective,
+            globalEnabled: autoHibernateIdleEnabled,
+            globalIdleMinutes: autoHibernateIdleMinutes,
+            afterMinutes: service.hibernateAfterMinutesEffective
+        )
+    }
+
+    /// Schedule a full hibernation a few seconds after the user switches away
+    /// from an `.immediate`-policy service, cancelled if they switch back. The
+    /// teardown goes through `hibernateIfStillIdle`, which re-checks active/call/
+    /// exempt across its await, so a service you return to — or a chat app — is
+    /// never torn down under you even if this fires first.
+    private func scheduleImmediateHibernationIfNeeded(_ serviceID: UUID) {
+        guard let service = fetchService(id: serviceID),
+              service.hibernationPolicyEffective == .immediate,
+              !service.isNotificationCritical else { return }
+        pendingImmediateHibernation[serviceID]?.cancel()
+        pendingImmediateHibernation[serviceID] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(HibernationResolver.immediateBackstopSeconds))
+            guard !Task.isCancelled, let self else { return }
+            // Skip the teardown while locked — the periodic idle sweep is the
+            // backstop and catches this service once unlocked. Either way, clear
+            // the pending entry below so it can't linger pointing at a finished
+            // task. A non-cancelled task still owns its entry (a replacement is
+            // only scheduled after cancel()), so clearing here is safe.
+            if !self.isLocked {
+                // hibernateIfStillIdle can suspend up to ~2s on its call probe;
+                // the pending entry stays in place across it so a switch-back's
+                // cancel() still lands. Re-check cancellation before clearing.
+                await self.webViewPool.hibernateIfStillIdle(serviceID)
+            }
+            guard !Task.isCancelled else { return }
+            self.pendingImmediateHibernation[serviceID] = nil
+        }
+    }
+
+    /// Cancel a pending `.immediate` teardown — the user switched back, or the
+    /// service was removed or already hibernated.
+    private func cancelImmediateHibernation(_ serviceID: UUID) {
+        pendingImmediateHibernation[serviceID]?.cancel()
+        pendingImmediateHibernation[serviceID] = nil
+    }
+
+    /// Turns auto-hibernation on/off, persists it, and starts or stops the sweep.
+    func setAutoHibernateIdleEnabled(_ enabled: Bool) {
+        autoHibernateIdleEnabled = enabled
+        let prefs = ensurePreferences()
+        prefs.autoHibernateIdleEnabled = enabled
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save auto-hibernate toggle: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+        startIdleHibernationTimer()
+    }
+
+    // MARK: - App lock
+
+    /// Shows the lock screen. No-op unless the lock is enabled, so a stray
+    /// "Lock Now" can't trap a user who never set it up.
+    func lock() {
+        guard appLockEnabled else { return }
+        isLocked = true
+        // Don't leave a capture prompt hanging over the lock screen.
+        drainAllMediaRequests()
+    }
+
+    /// Prompts for Touch ID (with the login password as fallback) and unlocks on
+    /// success. If the device can't evaluate the policy at all (no password set),
+    /// unlock rather than trap the user out of their app.
+    func authenticate() {
+        let context = LAContext()
+        context.localizedFallbackTitle = "Enter Password"
+        var policyError: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &policyError) else {
+            AppLogger.general.error("App lock: cannot evaluate policy (\(policyError?.localizedDescription ?? "unknown")); unlocking to avoid lockout")
+            isLocked = false
+            return
+        }
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Atoll") { [weak self] success, error in
+            Task { @MainActor in
+                guard let self else { return }
+                if success {
+                    self.isLocked = false
+                } else {
+                    AppLogger.general.info("App lock: authentication did not succeed (\(error?.localizedDescription ?? "cancelled"))")
+                }
+            }
+        }
+    }
+
+    /// Locks when the Mac sleeps or the screen locks, if the user opted in.
+    private func setupLockObservers() {
+        let lockOnSleepIfNeeded: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.appLockEnabled, self.lockOnSleep else { return }
+                self.lock()
+            }
+        }
+        systemObserverTokens.append(NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: lockOnSleepIfNeeded))
+        distributedObserverTokens.append(DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main, using: lockOnSleepIfNeeded))
+    }
+
+
+
+    /// Reset the active service's zoom to 1.0. Triggered by Cmd-0.
+    func resetActiveServiceZoom() {
+        guard let id = webViewPool.activeServiceID,
+              let webView = webViewPool.liveWebView(for: id),
+              let service = currentServiceInstance(id: id) else { return }
+        applyZoom(1.0, to: webView, service: service)
+    }
+
+    private func applyZoom(_ value: Double, to webView: WKWebView, service: ServiceInstance) {
+        webView.pageZoom = CGFloat(value)
+        service.pageZoom = value
+        do { try modelContainer.mainContext.save() } catch {
+            AppLogger.dataStore.error("Failed to persist zoom: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+    }
+
+    private func currentServiceInstance(id: UUID) -> ServiceInstance? {
+        fetchService(id: id)
+    }
+
+    /// Per-service "show badge" flag, queried live so the polling task picks
+    /// up toggles without restart.
+    nonisolated func isServiceShowingBadge(_ serviceID: UUID) -> Bool {
+        withService(id: serviceID) { $0.showBadge } ?? true
+    }
+
+    /// Re-applies mute/show-badge state immediately after settings changes.
+    /// Polling tasks read these values on their next tick, but the UI and dock
+    /// badge should update synchronously. The transient badge fetcher re-reads
+    /// mute/show-badge at write time, so it needs no per-service state sync here.
+    func refreshBadgeState(for serviceID: UUID) {
+        guard let service = currentServiceInstance(id: serviceID) else { return }
+        let count = badgeManager.rawCount(for: serviceID)
+        let isMuted = isServiceEffectivelyMuted(serviceID)
+        let showBadge = service.showBadge
+        badgeManager.updateBadge(
+            for: serviceID,
+            count: count,
+            isMuted: isMuted,
+            showBadge: showBadge
+        )
+    }
+
+    /// Tombstone list of `WKWebsiteDataStore` identifiers for services the
+    /// user deleted but whose on-disk data hasn't been removed yet. Tracked
+    /// in UserDefaults rather than via `WKWebsiteDataStore.allDataStoreIdentifiers`
+    /// — that API has been observed to crash on macOS 26 when WebKit
+    /// hands the returned `Vector<UUID>` to the Swift bridge (`BridgeObjectBox`
+    /// initializeWithTake EXC_BAD_ACCESS during preload).
+    private static let orphanedDataStoresKey = "atoll.orphanedDataStoreIdentifiers"
+
+    /// Pure helper: given each service's set of parent-space IDs, returns the
+    /// services that would be left with no space at all once `spaceID` is
+    /// removed (i.e. they belong *only* to the space being deleted). Factored
+    /// out so the orphan rule is unit-testable without SwiftData.
+    nonisolated static func servicesOrphaned(
+        byDeletingSpace spaceID: UUID,
+        memberships: [UUID: Set<UUID>]
+    ) -> Set<UUID> {
+        var orphaned: Set<UUID> = []
+        for (serviceID, spaces) in memberships
+        where spaces.contains(spaceID) && spaces.subtracting([spaceID]).isEmpty {
+            orphaned.insert(serviceID)
+        }
+        return orphaned
+    }
+
+    /// Deletes a space and reclaims any services that lived *only* in it.
+    /// A service linked to other spaces is preserved (the delete-confirmation
+    /// dialog promises this); a service orphaned by the deletion has its web
+    /// view torn down and its on-disk `WKWebsiteDataStore` scheduled for
+    /// removal, so deleting a space never leaves invisible orphan records or
+    /// leaks per-service storage. Selection is moved off the deleted space.
+    func deleteSpace(_ spaceID: UUID) {
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<Space>(predicate: #Predicate { $0.id == spaceID })
+        guard let space = try? context.fetch(descriptor).first else { return }
+
+        // Never delete the last space. With zero spaces the content area is
+        // blank and ⌘N would present an Add-Service sheet with no space to add
+        // to. The UI hides the delete action when only one space remains; this
+        // is the safety net.
+        let spaceCount = (try? context.fetchCount(FetchDescriptor<Space>())) ?? 0
+        guard spaceCount > 1 else {
+            AppLogger.dataStore.warning("Refusing to delete the last remaining space")
+            return
+        }
+
+        // Guard against dangling links on both sides before materializing
+        // `.service`/`.space` — reading a deleted model traps.
+        let linkedServices = space.serviceLinks
+            .filter { $0.modelContext != nil && $0.service.modelContext != nil }
+            .map(\.service)
+        var memberships: [UUID: Set<UUID>] = [:]
+        for service in linkedServices {
+            memberships[service.id] = Set(
+                service.spaceLinks
+                    .filter { $0.modelContext != nil && $0.space.modelContext != nil }
+                    .map { $0.space.id }
+            )
+        }
+        let orphanedIDs = Self.servicesOrphaned(byDeletingSpace: spaceID, memberships: memberships)
+
+        // Delete the models and their orphaned services, but hold off on every
+        // irreversible side effect (tearing down web views, wiping on-disk data
+        // stores) until the save succeeds. Doing them first meant a failed save
+        // left the service still in the store yet logged out with its cookies
+        // deleted 2s later — data loss the rest of the code is careful to avoid.
+        let reclaimed = linkedServices.filter { orphanedIDs.contains($0.id) }
+        // Capture the identifiers BEFORE deleting — reading them off the models
+        // after they're deleted would fault the freed backing data and trap.
+        let reclaimedServiceIDs = reclaimed.map(\.id)
+        let orphanedDataStoreIDs = reclaimed.map(\.dataStoreIdentifier)
+        for service in reclaimed { context.delete(service) }
+        context.delete(space)
+
+        do {
+            try context.save()
+            AppLogger.dataStore.info("Deleted space \(spaceID); reclaimed \(reclaimed.count) orphaned service(s)")
+        } catch {
+            // Undo the pending deletes so the store, web views, and data stores
+            // stay consistent with each other; nothing destructive has run yet.
+            context.rollback()
+            AppLogger.dataStore.error("Failed to delete space \(spaceID); rolled back: \(error.localizedDescription)")
+            return
+        }
+
+        // Save committed — now the destructive cleanup is safe.
+        for serviceID in reclaimedServiceIDs { webViewPool.removeWebView(for: serviceID) }
+        for dataStoreID in orphanedDataStoreIDs { markDataStoreOrphaned(dataStoreID) }
+
+        // Fix up selection: clear a selected service that was just reclaimed,
+        // and move off the deleted space to the first remaining one.
+        if let selected = selectedServiceID, orphanedIDs.contains(selected) {
+            selectedServiceID = nil
+        }
+        if selectedSpaceID == spaceID {
+            let remaining = (try? context.fetch(
+                FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
+            ))?.first
+            selectedSpaceID = remaining?.id
+            selectedServiceID = nil
+        }
+
+        cleanUpOrphanedDataStores()
+    }
+
+    /// Result of a single open attempt, kept separate from the caller so the
+    /// (possibly empty or corrupt) container is released before any file-level
+    /// restore runs — SwiftData holds the SQLite connection until the container
+    /// deallocates, and the retry must not race a live handle.
+    private enum TryOpenResult {
+        case usable(ModelContainer)
+        /// Opened fine but held zero spaces while the user has had data before —
+        /// the signature of a silent migration failure. Divert to restore.
+        case emptiedWithHistory
+        /// Open threw, or the store still held dangling links after repair.
+        case failed
+    }
+
+    /// Marks (once) that this install has held real data, so a later empty store
+    /// is recognized as loss, not a fresh install.
+    private static func markHasData(_ defaults: UserDefaults) {
+        if !defaults.bool(forKey: hasEverHadDataKey) {
+            defaults.set(true, forKey: hasEverHadDataKey)
+        }
+    }
+
+    /// Why an open attempt was unusable — drives `recoveryPlan`.
+    enum UnusableKind: Equatable {
+        /// Opened fine but held zero spaces while the user had data: the
+        /// migration rewrote the on-disk file empty. Restoring is pure gain.
+        case emptiedWithHistory
+        /// Open threw, or the store still held dangling links after repair. The
+        /// on-disk file was NOT rewritten, so it may still hold the real data.
+        case openFailed
+    }
+
+    /// What to do after an open found the store unusable, when no restore has run
+    /// yet. Pure, so the data-safety rules are unit-testable without provoking a
+    /// real SwiftData failure.
+    enum Recovery: Equatable {
+        /// Run temporary (in-memory), leaving the on-disk store and snapshots
+        /// untouched. Keeps the durable flag so a later launch never reseeds.
+        case preserveInMemory
+        /// Nothing on disk to recover (no file, no usable snapshot): clear the
+        /// stale flag and let a fresh store seed normally.
+        case freshStart
+    }
+
+    /// Decides recovery for an unusable open.
+    ///
+    /// The load-bearing rule: NEVER overwrite a store that still has rows on disk
+    /// (`before > 0`). An open can fail transiently — a lingering file lock, a
+    /// dangling-link false positive — while the data is perfectly intact, and
+    /// rolling it back to an older snapshot would lose the newest changes. Only
+    /// restore when the on-disk store is empty (the migration rewrote it) or
+    /// absent (nothing to lose). `fileExisted` separates "no file" (a possible
+    /// fresh start) from "file present but empty" (preserve, don't reseed).
+    static func recoveryPlan(
+        kind: UnusableKind,
+        before: Int?,
+        fileExisted: Bool
+    ) -> (attemptRestore: Bool, ifNoRestore: Recovery) {
+        switch kind {
+        case .emptiedWithHistory:
+            return (true, fileExisted ? .preserveInMemory : .freshStart)
+        case .openFailed:
+            if (before ?? 0) > 0 {
+                // Data on disk we couldn't open — leave it entirely alone.
+                return (false, .preserveInMemory)
+            }
+            // before == nil here means the read-only probe couldn't read the file
+            // either (not just "no rows"), so a present-but-unreadable file is
+            // treated as restorable: restoreFromSnapshot copies the current triple
+            // aside to `.prerestore-*` first, so nothing is destroyed even if it
+            // held data. `caller` only clears the flag / seeds when no usable
+            // backup exists.
+            return (true, fileExisted ? .preserveInMemory : .freshStart)
+        }
+    }
+
+    /// Opens the persistent store and, if it is unusable, automatically restores
+    /// the newest usable pre-migration snapshot and reopens **once**. It never
+    /// overwrites a store that still has data on disk, never deletes the user's
+    /// store, and never seeds over recoverable data. Falls back to a throwaway
+    /// in-memory store when nothing can be restored but data may still exist on
+    /// disk; a genuine fresh start (no file, no snapshot) opens a clean store
+    /// that seeds normally. `defaults` is injectable for tests.
+    ///
+    /// The one-retry cap bounds a genuinely deterministic migration failure
+    /// (restore → reopen → empty again) to a safe in-memory session rather than
+    /// a loop; this class of bug is a race, so the retry usually succeeds.
+    static func loadContainer(
+        schema: Schema,
+        config: ModelConfiguration,
+        defaults: UserDefaults = .standard
+    ) -> (ModelContainer, StoreLoadOutcome) {
+        // "No file" (fresh install / wiped-away store) vs "file present but
+        // empty" (this-launch emptying) need different handling, and the raw
+        // count can't tell them apart (both can read as nil/0), so check the
+        // file directly. The count still catches an existing user whose first
+        // launch on this build empties the store: the flag isn't set yet, but
+        // the on-disk count is > 0.
+        let fileExisted = FileManager.default.fileExists(atPath: config.url.path)
+        let before = StoreRepair.spaceCount(at: config.url)
+        let hadHistory = (before ?? 0) > 0 || defaults.bool(forKey: hasEverHadDataKey)
+        if (before ?? 0) > 0 { markHasData(defaults) }
+
+        let kind: UnusableKind
+        switch tryOpen(schema: schema, config: config, hadHistory: hadHistory) {
+        case .usable(let opened):
+            if ((try? opened.mainContext.fetchCount(FetchDescriptor<Space>())) ?? 0) > 0 {
+                markHasData(defaults)
+            }
+            return (opened, .openedClean)
+        case .emptiedWithHistory:
+            kind = .emptiedWithHistory
+        case .failed:
+            kind = .openFailed
+        }
+
+        let plan = recoveryPlan(kind: kind, before: before, fileExisted: fileExisted)
+        // Whether a usable backup EXISTS matters more than whether the restore
+        // ultimately succeeds: we must never clear the durable flag and reseed
+        // while a usable backup sits on disk. So look it up up front and branch on
+        // its existence, not just on the restore outcome.
+        let candidate = plan.attemptRestore ? StoreRepair.newestRestorableSnapshot(for: config.url) : nil
+        AppLogger.dataStore.error("Store unusable on open (kind=\(String(describing: kind)), before=\(before.map(String.init) ?? "nil"), fileExisted=\(fileExisted)); attemptRestore=\(plan.attemptRestore), haveBackup=\(candidate != nil)")
+
+        if let candidate {
+            if StoreRepair.restoreFromSnapshot(candidate, to: config.url),
+               case .usable(let reopened) = tryOpen(schema: schema, config: config, hadHistory: true) {
+                markHasData(defaults)
+                AppLogger.dataStore.info("Automatic restore succeeded from backup \(candidate.version ?? "?")")
+                return (reopened, .restoredFromSnapshot(version: candidate.version, takenAt: candidate.takenAt))
+            }
+            // A usable backup exists but the restore/reopen didn't take (a partial
+            // copy, or a deterministic migration that re-empties). NEVER seed over
+            // it: keep the flag and the snapshot untouched and run in-memory so the
+            // next launch retries. Skipping this — reseeding while a good backup
+            // is on disk — would reintroduce the original data-loss bug.
+            AppLogger.dataStore.error("Restore did not take though a usable backup exists; preserving it and running in-memory")
+            return (inMemoryContainer(schema: schema), .inMemoryFallback(reason: "restore failed; usable backup preserved"))
+        }
+
+        // No usable snapshot exists to restore from.
+        switch plan.ifNoRestore {
+        case .freshStart:
+            // Genuinely nothing to recover: no store file existed AND no usable
+            // backup is on disk. Only here is it safe to clear the stale flag and
+            // let a fresh store seed.
+            defaults.set(false, forKey: hasEverHadDataKey)
+            if case .usable(let fresh) = tryOpen(schema: schema, config: config, hadHistory: false) {
+                AppLogger.dataStore.info("No file and nothing to restore; starting fresh")
+                return (fresh, .openedClean)
+            }
+            AppLogger.dataStore.error("Fresh open failed; falling back to in-memory storage")
+            return (inMemoryContainer(schema: schema), .inMemoryFallback(reason: "fresh open failed"))
+        case .preserveInMemory:
+            AppLogger.dataStore.error("No restore performed; running in-memory. On-disk store and snapshots preserved for manual recovery")
+            return (inMemoryContainer(schema: schema), .inMemoryFallback(reason: "store unusable; on-disk data and snapshots preserved"))
+        }
+    }
+
+    /// One open attempt. Repairs dangling links on the raw file first (safe on a
+    /// healthy store), opens, then classifies the result. Wrapped in an
+    /// `autoreleasepool` so the Core Data coordinator and any fetch temporaries
+    /// are released before the caller does file-level restore — SwiftData holds
+    /// the SQLite connection until they drain, and the retry must not race a live
+    /// handle. The container escapes only via `.usable`; the other cases let it
+    /// (and its connection) tear down here.
+    private static func tryOpen(
+        schema: Schema,
+        config: ModelConfiguration,
+        hadHistory: Bool
+    ) -> TryOpenResult {
+        // Repair a store corrupted by a pre-inverse build BEFORE opening it. The
+        // dangling `SpaceServiceLink` rows such a build leaves cannot be removed
+        // once SwiftData faults them, so cleanup happens on the raw file first.
+        StoreRepair.repairDanglingLinks(at: config.url)
+        return autoreleasepool {
+            let opened: ModelContainer
+            do {
+                // Open through the explicit migration plan: SwiftData matches the
+                // store to a declared version and walks the named stages, rather
+                // than inferring the mapping fresh at open time.
+                opened = try ModelContainer(
+                    for: schema,
+                    migrationPlan: AtollMigrationPlan.self,
+                    configurations: [config]
+                )
+            } catch {
+                // The explicit plan could not open the store. Rather than fail
+                // straight to recovery, fall back to plain INFERRED migration —
+                // exactly what shipped before the versioned schema existed. This
+                // makes the plan strictly non-regressive: on an OS where the plan
+                // misbehaves (the macOS 14 migration bugs the design worries
+                // about), or for a store older than the plan's floor, we are never
+                // worse than the previous release. The empty/dangling checks below
+                // and the caller's safety net still guard whatever this opens.
+                AppLogger.dataStore.error("Versioned-plan open failed (\(error.localizedDescription)); retrying with inferred migration")
+                do {
+                    opened = try ModelContainer(for: schema, configurations: [config])
+                } catch {
+                    AppLogger.dataStore.error("Inferred-migration open also failed: \(error.localizedDescription)")
+                    return .failed
+                }
+            }
+            // If any dangling link slipped through repair, a later unguarded
+            // `.space`/`.service` read would fault a deleted model and brick
+            // the app — treat as unusable.
+            if storeHasDanglingLinks(opened) { return .failed }
+            let spaces = (try? opened.mainContext.fetchCount(FetchDescriptor<Space>())) ?? 0
+            // Empty AND we've had data → migration silently emptied it. Don't
+            // run (or seed) on it; the caller restores instead.
+            if spaces == 0 && hadHistory { return .emptiedWithHistory }
+            return .usable(opened)
+        }
+    }
+
+    /// The last-resort in-memory container. Failing to build even this means the
+    /// schema itself is broken and the app cannot run.
+    private static func inMemoryContainer(schema: Schema) -> ModelContainer {
+        let cfg = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        do {
+            return try ModelContainer(for: schema, configurations: [cfg])
+        } catch {
+            AppLogger.dataStore.fault("In-memory model container failed: \(error.localizedDescription)")
+            fatalError("Failed to initialize any model container: \(error.localizedDescription)")
+        }
+    }
+
+    /// Clears the store banner. Only offered for the dismissible recovery notice;
+    /// the temporary-storage warning stays put because it reflects an ongoing
+    /// "changes won't be saved" state.
+    func dismissStoreBanner() {
+        storeError = nil
+    }
+
+    /// Post-open sanity check for dangling `SpaceServiceLink` rows — join rows
+    /// whose non-optional `space` points at a deleted `Space`, left behind by a
+    /// build that shipped before `Space.serviceLinks` declared its inverse (the
+    /// `.cascade` rule never fired). Reading such a link's `space` faults the
+    /// deleted row and traps, crashing the app at launch, so the actual cleanup
+    /// runs on the raw store file BEFORE it opens (`StoreRepair`, called from
+    /// `init`). By the time this runs the store should already be clean; this
+    /// only detects and logs anything that slipped through — deliberately
+    /// without ever touching a link's `space`/`service`. It walks outward from
+    /// live spaces and services (reading link `id`s only) and treats any link
+    /// not reachable from BOTH sides as dangling. It does NOT delete: an
+    /// object-graph delete faults the dead space on save (the very crash we
+    /// avoid), which is why removal is the raw-file repair's job.
+    /// Whether the store still holds any dangling `SpaceServiceLink` — a join
+    /// row whose non-optional `space` or `service` points at a deleted row.
+    /// Reading such a link's relationship faults the deleted model and traps
+    /// ("backing data could no longer be found"), which is the launch/keystroke
+    /// crash `StoreRepair` exists to prevent. `StoreRepair` runs on the raw file
+    /// before the container opens; this is the post-open verification. If it
+    /// returns true, the store is unsafe to run on and `init` falls back to the
+    /// in-memory store rather than let a later unguarded `.space`/`.service`
+    /// read brick the app.
+    ///
+    /// It never touches a dangling relationship: it walks outward only from
+    /// live spaces and services, reading link `id`s (a stored attribute), and
+    /// treats any link not reachable from BOTH sides as dangling.
+    static func storeHasDanglingLinks(_ container: ModelContainer) -> Bool {
+        let context = container.mainContext
+        let links: [SpaceServiceLink]
+        let spaces: [Space]
+        let services: [ServiceInstance]
+        do {
+            links = try context.fetch(FetchDescriptor<SpaceServiceLink>())
+            guard !links.isEmpty else { return false }
+            spaces = try context.fetch(FetchDescriptor<Space>())
+            services = try context.fetch(FetchDescriptor<ServiceInstance>())
+        } catch {
+            // Fail CLOSED: if we can't verify the store is clean, assume it
+            // isn't. Returning false here would open a possibly-corrupt store
+            // live, and the inline `.modelContext` guards are only a backstop —
+            // treating an unverifiable store as unsafe (→ in-memory fallback) is
+            // the safe default.
+            AppLogger.dataStore.error("Dangling-link check failed; treating store as unsafe: \(error.localizedDescription)")
+            return true
+        }
+
+        var reachableFromSpace: Set<UUID> = []
+        for space in spaces {
+            for link in space.serviceLinks { reachableFromSpace.insert(link.id) }
+        }
+        var reachableFromService: Set<UUID> = []
+        for service in services {
+            for link in service.spaceLinks { reachableFromService.insert(link.id) }
+        }
+        return links.contains {
+            !reachableFromSpace.contains($0.id) || !reachableFromService.contains($0.id)
+        }
+    }
+
+    // MARK: - Store recovery picker
+
+    /// What the live store holds right now, read from the open container.
+    /// Cheaper and more accurate than a second SQLite read, which would miss
+    /// anything not yet checkpointed.
+    ///
+    /// Only meaningful while `modelContainer` is the real store. While
+    /// `isStoreInMemoryFallback` is true this reads the throwaway in-memory
+    /// container instead — empty, or freshly reseeded — which has nothing to
+    /// do with what actually sits on disk. `evaluateStoreRecovery` and
+    /// `recordStoreContent` both branch around that case rather than trusting
+    /// this call blindly.
+    func liveStoreContent() -> StoreContent? {
+        let context = modelContainer.mainContext
+        do {
+            return StoreContent(
+                spaces: try context.fetchCount(FetchDescriptor<Space>()),
+                services: try context.fetchCount(FetchDescriptor<ServiceInstance>()),
+                links: try context.fetchCount(FetchDescriptor<SpaceServiceLink>()),
+                spaceNames: try context.fetch(FetchDescriptor<Space>()).map(\.name),
+                serviceLabels: try context.fetch(FetchDescriptor<ServiceInstance>()).map(\.label)
+            )
+        } catch {
+            AppLogger.dataStore.error("Could not read live store content: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Whether `recordStoreContent` should write a new record right now. Pure
+    /// and `static` so each guard is directly testable without standing up a
+    /// live `AppState` (which the test suite deliberately never does).
+    ///
+    /// Five things independently block a write:
+    /// - `content == nil`: the store couldn't be read; unknown is never
+    ///   recorded as empty.
+    /// - `content.isEmpty`: writing an empty record would erase the evidence
+    ///   the offer depends on and silence the feature for good.
+    /// - `isInMemoryFallback`: the running container is a throwaway, so its
+    ///   counts are not the user's store — recording them would stamp a
+    ///   seed-shaped (or empty) record over the real history.
+    /// - `offerOutstanding`: an offer is computed by comparing the live store
+    ///   against the CURRENT record. A store that lost every space but kept
+    ///   its services is not `isEmpty`, so without this guard the record would
+    ///   be overwritten with that diminished shape moments after the offer was
+    ///   computed from it — and a crash, or a quit before the picker is
+    ///   answered, would then lose the evidence permanently, with no decline
+    ///   ever recorded either. Recording is correct again as soon as the offer
+    ///   is gone, including right after the user declines it: the decline key
+    ///   already suppresses that exact pairing from firing again.
+    /// - `restoreScheduled`: a restore the user just picked is waiting to apply
+    ///   at the next launch (`StoreRepair.pendingRestoreKey` is set). The store
+    ///   is about to change out from under this content, so recording its
+    ///   current shape is never worth doing — and without this guard, clearing
+    ///   `storeRecoveryOffer` on a successful pick would let a partial-loss
+    ///   store's diminished content overwrite the record before the restore
+    ///   actually applies: if that restore then failed to take effect, the
+    ///   record would agree with the diminished store, and the banner that
+    ///   depends on the mismatch would never come back. On the ordinary path
+    ///   `NSApp.terminate(nil)` never returns, so the offer is never actually
+    ///   cleared before `willTerminate` fires — this guard is what keeps that
+    ///   correct on purpose rather than by that accident, for whenever
+    ///   termination is deferred or cancelled. `applyPendingRestore` clears the
+    ///   pending key at the top of the next `init`, so the launch-time record
+    ///   write right after is unaffected.
+    static func shouldRecordContent(
+        _ content: StoreContent?,
+        offerOutstanding: Bool,
+        isInMemoryFallback: Bool,
+        restoreScheduled: Bool
+    ) -> Bool {
+        guard !isInMemoryFallback else { return false }
+        guard !offerOutstanding else { return false }
+        guard !restoreScheduled else { return false }
+        guard let content, !content.isEmpty else { return false }
+        return true
+    }
+
+    /// Records what the store holds, so a later launch can tell loss from
+    /// housekeeping. Called after a clean open and again at termination; a hard
+    /// crash can leave it stale, which costs at most one declinable offer. See
+    /// `shouldRecordContent` for the guards that decide whether this actually
+    /// writes — at launch of a healthy store no offer is outstanding, so
+    /// termination recording proceeds normally and a user's own housekeeping
+    /// (deleting a space mid-session) still lowers the record rather than
+    /// looking like loss on the next launch.
+    func recordStoreContent(defaults: UserDefaults = .standard) {
+        let content = liveStoreContent()
+        guard Self.shouldRecordContent(
+            content,
+            offerOutstanding: storeRecoveryOffer != nil,
+            isInMemoryFallback: isStoreInMemoryFallback,
+            restoreScheduled: defaults.string(forKey: StoreRepair.pendingRestoreKey) != nil
+        ), let content else { return }
+        defaults.set(StoreInventory.encodeRecord(content), forKey: Self.contentRecordKey)
+    }
+
+    /// The live store's content right now, accounting for the in-memory
+    /// fallback: `liveStoreContent()` alone would report the throwaway
+    /// container's shape, not what actually sits on disk. Shared by
+    /// `evaluateStoreRecovery` (at launch) and `refreshStoreCandidates` (any
+    /// time after), so the fallback-aware rule can't drift between the two.
+    private func currentLiveContent() -> StoreContent? {
+        isStoreInMemoryFallback ? StoreInventory.readContent(at: storeURL) : liveStoreContent()
+    }
+
+    /// Works out whether to offer a restore and prepares the picker's contents.
+    ///
+    /// While `isStoreInMemoryFallback` is true, `liveStoreContent()` reflects
+    /// the throwaway container, not the real store that failed to open — a
+    /// store that merely failed to open (rather than being genuinely empty)
+    /// would then wrongly show as empty in the picker, and a fuller backup
+    /// could be preselected over data that is still intact on disk. Read the
+    /// actual file instead in that case; an unreadable result is passed
+    /// through as unknown (nil), never substituted with zero.
+    func evaluateStoreRecovery(storeURL: URL, defaults: UserDefaults = .standard) {
+        let live = currentLiveContent()
+        let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
+        let best = StoreInventory.best(among: candidates)
+        let declined = Set(defaults.stringArray(forKey: Self.declinedRestoresKey) ?? [])
+
+        storeCandidates = candidates
+        storeRecoveryOffer = StoreInventory.offer(
+            liveContent: live,
+            best: best,
+            record: StoreInventory.decodeRecord(defaults.string(forKey: Self.contentRecordKey)),
+            declinedKeys: declined
+        )
+        preselectedCandidate = StoreInventory.preselection(among: candidates, liveContent: live)
+        if let offer = storeRecoveryOffer {
+            // Expected, user-facing behavior, not a fault — an offer being up
+            // is normal operation for this feature, so this stays out of
+            // `.error` to avoid manufacturing noise on a data-safety path that
+            // support already watches closely.
+            AppLogger.dataStore.notice("Offering a store restore (\(String(describing: offer))); candidates=\(candidates.count)")
+        }
+    }
+
+    /// Re-reads the candidates so the sheet never shows launch-time counts.
+    /// `evaluateStoreRecovery` runs once, at the end of `init`; the Settings
+    /// entry point can open the picker hours later, after the live store has
+    /// changed, so its "Your data now" row would otherwise still show what the
+    /// store held at launch — the wrong-comparison mistake this feature exists
+    /// to prevent. Call before reading `storeCandidates`/`preselectedCandidate`.
+    ///
+    /// Deliberately does NOT touch `storeRecoveryOffer`: the banner reflects
+    /// what was true at launch, and recomputing the offer here could raise or
+    /// clear a banner behind the sheet the user did not ask this call to
+    /// change. Decline bookkeeping is untouched for the same reason.
+    func refreshStoreCandidates() {
+        let live = currentLiveContent()
+        let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
+        storeCandidates = candidates
+        preselectedCandidate = StoreInventory.preselection(among: candidates, liveContent: live)
+    }
+
+    /// Remembers that the user said no to this pairing, and drops the offer.
+    ///
+    /// Uses the live candidate already computed into `storeCandidates` by
+    /// `evaluateStoreRecovery` rather than calling `liveStoreContent()` again:
+    /// that candidate's content is the fallback-aware value `offer(...)`
+    /// itself was checked against, so the decline key matches exactly. Calling
+    /// `liveStoreContent()` fresh here would read the wrong source in the
+    /// in-memory-fallback case (the throwaway container, not the file), so the
+    /// key it produced would never match the one `offer(...)` checks on a
+    /// later launch, and the decline would silently fail to stick.
+    func declineStoreRecovery(defaults: UserDefaults = .standard) {
+        if let best = StoreInventory.best(among: storeCandidates) {
+            let liveContent = storeCandidates.first(where: { $0.kind == .live })?.content
+            let key = StoreInventory.declineKey(live: liveContent, candidate: best)
+            var declined = defaults.stringArray(forKey: Self.declinedRestoresKey) ?? []
+            if !declined.contains(key) {
+                declined.append(key)
+                defaults.set(Array(declined.suffix(Self.maxDeclinedRestores)), forKey: Self.declinedRestoresKey)
+            }
+        }
+        storeRecoveryOffer = nil
+    }
+
+    /// Validates a chosen candidate and writes its pending-restore key —
+    /// everything `chooseStoreRestore` needs done before the process-level
+    /// relaunch, and nothing more. Hoisted out of that instance method (and
+    /// `nonisolated`, since it touches only its arguments, `StoreRepair`, and
+    /// `AppLogger`, none of them main-actor state) so this is directly
+    /// testable without building an `AppState` — the suite deliberately never
+    /// does, and `chooseStoreRestore` itself is unreachable from a test because
+    /// it needs a live instance's `storeFileName`.
+    ///
+    /// Returns whether the key was written. Both guards below leave `defaults`
+    /// completely untouched on failure: a candidate that fails `isRestorable`
+    /// (the live store, a damaged file, or one whose content couldn't be
+    /// read), or one whose filename `validatedRestoreName` rejects.
+    @discardableResult
+    nonisolated static func scheduleRestore(
+        _ candidate: StoreCandidate,
+        storeName: String,
+        defaults: UserDefaults
+    ) -> Bool {
+        guard candidate.isRestorable else { return false }
+        guard let name = StoreRepair.validatedRestoreName(
+            candidate.url.lastPathComponent,
+            storeName: storeName
+        ) else {
+            AppLogger.dataStore.error("Refusing to schedule a restore from an unexpected filename")
+            return false
+        }
+        defaults.set(name, forKey: StoreRepair.pendingRestoreKey)
+        AppLogger.dataStore.info("Scheduled a restore from \(name)")
+        return true
+    }
+
+    /// Records the user's pick and restarts so it can be applied before the
+    /// store opens.
+    ///
+    /// Returns false in two different cases, and only the second leaves
+    /// something written: `scheduleRestore` rejecting the pick writes nothing,
+    /// but a written key whose relaunch then fails to spawn is deliberately
+    /// left in place — `StoreRepair.applyPendingRestore` re-checks the key on
+    /// every launch, so the restore still happens the next time the user opens
+    /// Atoll by hand, and throwing the key away here would be strictly worse.
+    /// `storeRecoveryOffer` is cleared only when both steps succeed, so a spawn
+    /// failure leaves the offer (and whatever sheet is bound to it) in place
+    /// for the caller to report rather than silently dismissing it as if the
+    /// restore had actually started.
+    ///
+    /// This only *arms* the restart. The quit itself waits for the picker's
+    /// sheet to be dismissed, because AppKit refuses to terminate through an
+    /// attached sheet and drops the request rather than deferring it — see
+    /// `quitForScheduledRestore`. Arming still happens here, while the sheet is
+    /// up, so a spawn failure can be reported in it.
+    @discardableResult
+    func chooseStoreRestore(_ candidate: StoreCandidate, defaults: UserDefaults = .standard) -> Bool {
+        guard Self.scheduleRestore(candidate, storeName: storeFileName, defaults: defaults) else { return false }
+        guard AppRelauncher.armRelaunch() else {
+            AppLogger.dataStore.error("Restore was scheduled but the relaunch could not be spawned; it will still apply on the next launch")
+            return false
+        }
+        storeRecoveryOffer = nil
+        isRestoreRestartArmed = true
+        return true
+    }
+
+    /// Quits if the user picked a backup, called once the picker's sheet has
+    /// closed.
+    ///
+    /// Split from `chooseStoreRestore` because quitting from inside the sheet
+    /// silently did nothing: AppKit will not terminate while a sheet is
+    /// attached, so the app stayed up, the relaunch poller expired on its own
+    /// bound, and the restore only landed whenever the user next opened Atoll
+    /// by hand. The flag matters as much as the timing — this runs on every
+    /// dismissal of that sheet, including Cancel, and must quit only when a
+    /// restore is actually waiting.
+    func quitForScheduledRestore() {
+        guard isRestoreRestartArmed else { return }
+        isRestoreRestartArmed = false
+        AppRelauncher.quit()
+    }
+
+    /// Safety net for crash-mid-delete (or stores written by a build that
+    /// predates `deleteSpace`'s reclaim logic): deletes any `ServiceInstance`
+    /// that no longer belongs to any space and schedules its data store for
+    /// removal. Runs once at launch, before preloading.
+    private func reapOrphanedServices() {
+        // A store that arrived damaged, was restored, or isn't the real store at
+        // all can present a perfectly healthy service as linkless. Deleting it
+        // here would wipe its cookies for good. See `isSafeToReclaim`.
+        guard isSafeToReclaim else {
+            AppLogger.dataStore.info("Skipping the orphan reap: the store was damaged, restored, or is the in-memory fallback")
+            return
+        }
+
+        let context = modelContainer.mainContext
+        let services: [ServiceInstance]
+        do {
+            services = try context.fetch(FetchDescriptor<ServiceInstance>())
+        } catch {
+            AppLogger.dataStore.error("Failed to fetch services for orphan reaping: \(error.localizedDescription)")
+            return
+        }
+
+        let orphans = services.filter { $0.spaceLinks.isEmpty }
+        guard !orphans.isEmpty else { return }
+
+        // Capture identifiers before deleting; tombstoning + removing the on-disk
+        // stores is irreversible, so defer it until the delete actually commits
+        // (matches deleteSpace). A failed save rolls back so nothing is wiped.
+        let orphanedIDs = orphans.map(\.dataStoreIdentifier)
+        for service in orphans {
+            context.delete(service)
+        }
+        do {
+            try context.save()
+            AppLogger.dataStore.info("Reaped \(orphans.count) orphaned service(s) at launch")
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to reap orphaned services; rolled back: \(error.localizedDescription)")
+            return
+        }
+        for id in orphanedIDs { markDataStoreOrphaned(id) }
+        cleanUpOrphanedDataStores()
+    }
+
+    /// Mark a per-service data store identifier as orphaned. Called from
+    /// the delete paths; the actual `WKWebsiteDataStore.remove(...)` is
+    /// deferred to `cleanUpOrphanedDataStores()` so the live WKWebView has
+    /// time to tear down first.
+    func markDataStoreOrphaned(_ identifier: UUID) {
+        var orphans = Self.loadOrphanedIdentifiers()
+        orphans.insert(identifier)
+        Self.saveOrphanedIdentifiers(orphans)
+    }
+
+    /// Removes any data store identifiers previously marked as orphaned.
+    /// Runs at launch (deferred) and after the user deletes a service.
+    func cleanUpOrphanedDataStores() {
+        // Drop any identifier a service currently claims, and forget it for
+        // good. The tombstone list lives in UserDefaults and the services live
+        // in the store, so the two can disagree: restoring a backup rolls the
+        // store back past a deletion and brings the service row with it, while
+        // the tombstone written when it was deleted stays behind. Without this
+        // reconcile, the next launch wipes the cookies of a service the user can
+        // see and is using. Nothing legitimate is lost — a tombstone whose
+        // service exists again is, by definition, wrong.
+        let reconciled = Self.reconciledTombstones(
+            tombstoned: Self.loadOrphanedIdentifiers(),
+            claimed: liveDataStoreIdentifiers()
+        )
+        let tombstoned = reconciled.keep
+        if !reconciled.dropped.isEmpty {
+            AppLogger.dataStore.info("Dropping \(reconciled.dropped.count) tombstone(s) for data store(s) a live service still claims")
+            Self.saveOrphanedIdentifiers(tombstoned)
+        }
+
+        // Exclude identifiers a prior invocation is already processing, so two
+        // overlapping calls (e.g. two deletes soon after launch) don't both run
+        // the backoff loop and call `remove(...)` on the same store concurrently.
+        let orphans = tombstoned.subtracting(dataStoresBeingRemoved)
+        guard !orphans.isEmpty else { return }
+        dataStoresBeingRemoved.formUnion(orphans)
+
+        // Drop cached handles so a live instance can't keep the on-disk store
+        // alive while we try to remove it.
+        for identifier in orphans {
+            dataStoreManager.evict(identifier: identifier)
+        }
+
+        // Must stay on the main actor. WKWebsiteDataStore's internal
+        // `allDataStores` registry asserts main-thread access, so calling
+        // `remove(forIdentifier:)` from a background thread traps inside WebKit
+        // (EXC_BREAKPOINT). Both `Task.sleep` and the async `remove` suspend
+        // rather than block, so running here doesn't stall the UI.
+        Task { @MainActor in
+            // Removing a store while its WKWebView is still retained traps inside
+            // WebKit, so removal must wait for the view to drop. The pool has
+            // already released its own reference by the time this runs; the last
+            // lingering one is SwiftUI's view hierarchy, which the pool can't see
+            // — so we can't cheaply gate on "pool has no live view for this id".
+            // Rather than trust one fixed delay (too short on a slow machine →
+            // trap; too long always → sluggish), wait a conservative beat, then
+            // retry with backoff, re-attempting only the stores WebKit still
+            // reports as in use. Anything that never succeeds stays in the
+            // tombstone list and is retried at the next launch, so no store leaks.
+            var removed: Set<UUID> = []
+            let backoff: [Duration] = [.seconds(2), .seconds(3), .seconds(5)]
+            for delay in backoff {
+                try? await Task.sleep(for: delay)
+                let pending = orphans.subtracting(removed)
+                guard !pending.isEmpty else { break }
+                for identifier in pending {
+                    do {
+                        try await WKWebsiteDataStore.remove(forIdentifier: identifier)
+                        removed.insert(identifier)
+                        AppLogger.dataStore.info("Removed orphaned data store \(identifier)")
+                    } catch {
+                        AppLogger.dataStore.warning("Data store \(identifier) not yet removable, will retry: \(error.localizedDescription)")
+                    }
+                }
+            }
+
+            // Release the in-flight claim so a later delete of the same store
+            // (should one somehow re-orphan) isn't blocked.
+            dataStoresBeingRemoved.subtract(orphans)
+
+            // Read-modify-write rather than overwriting with a stale snapshot:
+            // another delete may have appended new orphans while we slept, and
+            // blindly saving `orphans − removed` would drop them, leaking those
+            // stores permanently.
+            let current = Self.loadOrphanedIdentifiers()
+            Self.saveOrphanedIdentifiers(current.subtracting(removed))
+        }
+    }
+
+    /// Every data store identifier a service currently claims. Empty when the
+    /// store can't be read — callers must treat that as "unknown", never as
+    /// "nothing is claimed".
+    private func liveDataStoreIdentifiers() -> Set<UUID> {
+        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
+        return Set(services.map(\.dataStoreIdentifier))
+    }
+
+    /// Where WebKit keeps the identifier-scoped stores made by
+    /// `WKWebsiteDataStore(forIdentifier:)`, for a non-sandboxed app.
+    ///
+    /// Read by enumeration rather than through
+    /// `WKWebsiteDataStore.allDataStoreIdentifiers`, which has been observed to
+    /// crash on macOS 26 (see `orphanedDataStoresKey`). Only the *names* come
+    /// from the filesystem; removal still goes through the supported
+    /// `remove(forIdentifier:)`, so nothing here deletes a directory by hand.
+    nonisolated static func websiteDataStoreDirectory(bundleID: String?) -> URL? {
+        guard let bundleID, !bundleID.isEmpty else { return nil }
+        return URL.libraryDirectory
+            .appending(path: "WebKit")
+            .appending(path: bundleID)
+            .appending(path: "WebsiteDataStore")
+    }
+
+    /// The on-disk stores no service claims. Pure, so the rule is testable
+    /// without WebKit or a store.
+    ///
+    /// `claimed` being empty returns nothing rather than everything: an empty
+    /// claim set means the store could not be read, and answering "then all of
+    /// them are garbage" would wipe every login the user has.
+    nonisolated static func unreferencedDataStoreIdentifiers(
+        onDisk: Set<UUID>,
+        claimed: Set<UUID>
+    ) -> Set<UUID> {
+        guard !claimed.isEmpty else { return [] }
+        return onDisk.subtracting(claimed)
+    }
+
+    /// Tombstones every on-disk data store no service points at, so the existing
+    /// removal path reclaims it.
+    ///
+    /// These accumulate whenever a service row disappears without going through
+    /// a delete — a store lost and reseeded, or rolled back to a backup taken
+    /// before the service existed. The replacement service gets a fresh
+    /// identifier and a fresh empty store, so the user is logged out while the
+    /// old store keeps their cookies on disk indefinitely. Nothing reclaimed
+    /// them, because nothing ever tombstoned them.
+    ///
+    /// Gated on `isSafeToReclaim` for the same reason as the orphan reap, and
+    /// this one is the more dangerous of the two: on a launch where the store
+    /// came up empty or seeded, every real store would read as unreferenced.
+    private func reclaimUnreferencedDataStores() {
+        guard isSafeToReclaim else { return }
+        guard let dir = Self.websiteDataStoreDirectory(bundleID: Bundle.main.bundleIdentifier),
+              let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+
+        let onDisk = Set(names.compactMap(UUID.init(uuidString:)))
+        let unreferenced = Self.unreferencedDataStoreIdentifiers(
+            onDisk: onDisk,
+            claimed: liveDataStoreIdentifiers()
+        )
+        guard !unreferenced.isEmpty else { return }
+
+        AppLogger.dataStore.info("Reclaiming \(unreferenced.count) website data store(s) no service points at")
+        for identifier in unreferenced { markDataStoreOrphaned(identifier) }
+    }
+
+    private static func loadOrphanedIdentifiers() -> Set<UUID> {
+        guard let raw = UserDefaults.standard.array(forKey: orphanedDataStoresKey) as? [String] else {
+            return []
+        }
+        return Set(raw.compactMap(UUID.init(uuidString:)))
+    }
+
+    private static func saveOrphanedIdentifiers(_ identifiers: Set<UUID>) {
+        if identifiers.isEmpty {
+            UserDefaults.standard.removeObject(forKey: orphanedDataStoresKey)
+        } else {
+            UserDefaults.standard.set(identifiers.map(\.uuidString), forKey: orphanedDataStoresKey)
+        }
+    }
+
+    /// Preloads web views for all services in the currently selected space.
+    /// Runs after window state is restored so `selectedSpaceID` is already set.
+    /// The selected service (if any) loads first, then the rest stagger at 500ms intervals.
+    /// Returns services for a space, safely skipping any links with dangling relationships
+    /// (can happen if the previous session crashed mid-delete).
+    func servicesForSpace(_ spaceID: UUID) -> [ServiceInstance] {
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<SpaceServiceLink>()
+        do {
+            return try context.fetch(descriptor)
+                // Guard both relationships: a link that outlived its deleted
+                // service *or* its deleted space (crash mid-delete) would trap
+                // when we materialize the non-optional relationship to read its
+                // id. Reading `.modelContext` is safe (nil once deleted); read it
+                // before `.space.id`.
+                .filter {
+                    $0.modelContext != nil
+                        && $0.service.modelContext != nil
+                        && $0.space.modelContext != nil
+                        && $0.space.id == spaceID
+                }
+                .sorted { $0.sortOrder < $1.sortOrder }
+                .map(\.service)
+        } catch {
+            AppLogger.dataStore.error("Failed to fetch links for space \(spaceID): \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    private func preloadActiveSpaceServices() {
+        guard let spaceID = selectedSpaceID else { return }
+        let services = servicesForSpace(spaceID)
+        guard !services.isEmpty else { return }
+
+        // Move the selected service to the front so it preloads first.
+        // We can't use sorted { a,_ in a.id == selected } — that violates
+        // Swift's strict-weak-ordering and the sort is undefined.
+        let selected = selectedServiceID
+        var ordered = services
+        if let selected, let idx = ordered.firstIndex(where: { $0.id == selected }) {
+            let item = ordered.remove(at: idx)
+            ordered.insert(item, at: 0)
+        }
+
+        // Pin the selected service so the LRU sweep that fires after each
+        // preload can't evict it before WebContentView attaches and sets
+        // `activeServiceID` (which would otherwise protect it).
+        if let selected {
+            webViewPool.pin(selected)
+        }
+
+        // Chat services in OTHER spaces have to come up too. A service only
+        // posts notification banners through the `atollNotification` handler on
+        // a live web view; the transient badge fetcher deliberately omits that
+        // handler, so a service with no web view is silent — its badge moves on
+        // the 180s sweep and nothing else. Preloading only the selected space
+        // therefore made "chat apps stay live so their messages arrive at once"
+        // true only inside the space you happened to be looking at, which is why
+        // Slack in another space went quiet until it was visited.
+        //
+        // The pool exempts these from both hibernation sweeps, so once up they
+        // stay up.
+        let alsoKeepLive = crossSpaceCriticalServices(excluding: Set(services.map(\.id)))
+
+        Task {
+            await webViewPool.preloadAll(ordered)
+            if let selected {
+                webViewPool.unpin(selected)
+            }
+            if !alsoKeepLive.isEmpty {
+                AppLogger.webView.info("Preloading \(alsoKeepLive.count) chat service(s) outside the active space so they can post notifications")
+                await webViewPool.preloadAll(alsoKeepLive)
+            }
+        }
+    }
+
+    /// Notification-critical services that the active-space preload won't cover,
+    /// capped so they cannot fill the pool.
+    ///
+    /// The cap matters because these are exempt from eviction: without one, a
+    /// user with more chat services than `WebViewPool.maxLoaded` would pin every
+    /// slot permanently and the LRU sweep would have nothing left to reclaim.
+    /// The order is the fetch's, made deterministic by sorting on id so the same
+    /// services win the cap on every launch rather than a different set each time.
+    private func crossSpaceCriticalServices(excluding covered: Set<UUID>) -> [ServiceInstance] {
+        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
+        return Self.criticalServicesToKeepLive(
+            among: services,
+            covered: covered,
+            limit: Self.maxCrossSpaceCriticalServices
+        )
+    }
+
+    /// The selection rule behind `crossSpaceCriticalServices`, split out so the
+    /// exclusion, the critical test, the deterministic order and the cap are
+    /// testable without a running pool.
+    static func criticalServicesToKeepLive(
+        among services: [ServiceInstance],
+        covered: Set<UUID>,
+        limit: Int
+    ) -> [ServiceInstance] {
+        guard limit > 0 else { return [] }
+        return services
+            .filter { !covered.contains($0.id) && $0.isNotificationCritical }
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// Which tombstones survive a reconcile against the services that exist, and
+    /// which are dropped as stale. Pure, so the rule that protects a live
+    /// service's cookies is testable without UserDefaults or a store.
+    nonisolated static func reconciledTombstones(
+        tombstoned: Set<UUID>,
+        claimed: Set<UUID>
+    ) -> (keep: Set<UUID>, dropped: Set<UUID>) {
+        let dropped = tombstoned.intersection(claimed)
+        return (tombstoned.subtracting(dropped), dropped)
+    }
+
+    /// How many chat services outside the active space are kept live. Held well
+    /// below `WebViewPool.maxLoaded` so the active space and the LRU sweep keep
+    /// room to work.
+    static let maxCrossSpaceCriticalServices = 5
+
+    /// Wires the transient badge fetcher's collaborators and starts its
+    /// launch + slow-periodic sweep. The fetcher renders each service that has no
+    /// live web view (everything outside the active space, plus anything the pool
+    /// evicted) once in a short-lived offscreen view, reads its badge, and tears
+    /// it down — so per-space aggregate badges are correct at launch and stay
+    /// roughly current, instead of staying blank until each service is opened.
+    private func startTransientBadgeFetcher() {
+        // Fresh target list each sweep. Built synchronously on the main actor so
+        // no @Model object is held across a suspension point; the fetcher only
+        // ever sees the plain-value `Target` snapshots.
+        transientBadgeFetcher.targetsProvider = { [weak self] in
+            guard let self else { return [] }
+            let services: [ServiceInstance]
+            do {
+                services = try self.modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())
+            } catch {
+                AppLogger.badges.error("Badge sweep fetch failed: \(error.localizedDescription)")
+                return []
+            }
+            return services.compactMap { service in
+                // A live web view already runs a poll that covers the badge, so
+                // skip it; muted / badge-hidden services never show a count.
+                guard !self.webViewPool.hasWebView(for: service.id),
+                      !service.isEffectivelyMuted,
+                      service.showBadge
+                else { return nil }
+                let badgeJS = service.catalogEntryID
+                    .flatMap { ServiceCatalog.shared.entry(for: $0) }?.badgeJS
+                return TransientBadgeFetcher.Target(
+                    id: service.id,
+                    url: service.url,
+                    dataStoreIdentifier: service.dataStoreIdentifier,
+                    userAgent: service.userAgent,
+                    badgeJS: badgeJS
+                )
+            }
+        }
+
+        transientBadgeFetcher.hasLiveWebView = { [weak self] id in
+            self?.webViewPool.hasWebView(for: id) ?? false
+        }
+
+        transientBadgeFetcher.currentBadgeParams = { [weak self] id in
+            guard let self, let service = self.currentServiceInstance(id: id) else { return nil }
+            return (self.isServiceEffectivelyMuted(id), service.showBadge)
+        }
+
+        transientBadgeFetcher.enabledContentRuleLists = { [weak self] in
+            self?.contentBlocker.enabledLists() ?? []
+        }
+
+        transientBadgeFetcher.start()
+    }
+
+    /// Preloads services when the user switches to a different space.
+    func preloadServicesForSpace(_ spaceID: UUID) {
+        let services = servicesForSpace(spaceID)
+        Task {
+            await webViewPool.preloadAll(services)
+        }
+    }
+
+    private func fetchCatalogIcons(force: Bool = false) {
+        let entries = ServiceCatalog.shared.entries
+        Task.detached(priority: .utility) {
+            await CatalogIconCache.shared.fetchAllIfNeeded(entries: entries, force: force)
+        }
+    }
+
+    private static let lastRunVersionKey = "atoll.lastRunAppVersion"
+
+    /// Records the current app version and reports whether this launch follows an
+    /// update (a different version ran last time). Used to refresh the icon caches
+    /// so a release that adds or changes icons shows them at once, instead of
+    /// waiting out the weekly staleness timer.
+    private static func recordLaunchVersionAndCheckUpdate() -> Bool {
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let previous = UserDefaults.standard.string(forKey: lastRunVersionKey)
+        if !current.isEmpty {
+            UserDefaults.standard.set(current, forKey: lastRunVersionKey)
+        }
+        return shouldBustCachesOnLaunch(previousVersion: previous, currentVersion: current)
+    }
+
+    /// Pure launch-vs-update decision: bust caches only when a real, different
+    /// prior version is known. A fresh install (no previous) has no stale cache,
+    /// and an unknown current version can't be compared, so both leave caches be.
+    static func shouldBustCachesOnLaunch(previousVersion: String?, currentVersion: String) -> Bool {
+        guard !currentVersion.isEmpty, let previousVersion, !previousVersion.isEmpty else { return false }
+        return previousVersion != currentVersion
+    }
+
+    /// The single AppPreferences row, created (and inserted) once if missing.
+    /// All preference *writes* must go through this: unlike a per-view @Query
+    /// existence check, a fresh fetch here sees pending inserts, so two
+    /// first-time setters in the same tick reuse one row instead of each
+    /// inserting a duplicate (which then makes `.first` read nondeterministically
+    /// and settings appear to reset). Reads may still use @Query.
+    @discardableResult
+    func ensurePreferences() -> AppPreferences {
+        let context = modelContainer.mainContext
+        if let existing = try? context.fetch(FetchDescriptor<AppPreferences>()).first {
+            return existing
+        }
+        let prefs = AppPreferences()
+        context.insert(prefs)
+        return prefs
+    }
+
+    private func loadAppPreferences() {
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<AppPreferences>()
+        let prefs: AppPreferences?
+        do {
+            prefs = try context.fetch(descriptor).first
+        } catch {
+            AppLogger.dataStore.error("Failed to load preferences: \(error.localizedDescription)")
+            prefs = nil
+        }
+
+        // No AppKit/dockTile/setActivationPolicy access in this scope — it
+        // runs inside AppState.init via @State, which fires before the
+        // SwiftUI App scene has finished wiring up NSApp. Touching AppKit
+        // there can race with NSApplication bootstrap. Defer the
+        // AppKit-facing mutations to the next runloop tick.
+        userScriptManager.autoDismissCookieBanners = prefs?.autoDismissCookieBanners ?? true
+        defaultZoom = prefs?.defaultZoomEffective ?? 1.0
+        railLayout = prefs?.railLayout ?? .sidebar
+        appearanceMode = prefs?.appearanceMode ?? .system
+        scheduledDNDEnabled = prefs?.scheduledDNDEnabled ?? false
+        dndStartMinutes = prefs?.dndStartMinutes ?? (22 * 60)
+        dndEndMinutes = prefs?.dndEndMinutes ?? (7 * 60)
+
+        appLockEnabled = prefs?.appLockEnabled ?? false
+        lockOnLaunch = prefs?.lockOnLaunch ?? true
+        lockOnSleep = prefs?.lockOnSleep ?? true
+        contentBlockingEnabled = prefs?.contentBlockingEnabledEffective ?? true
+        annoyanceBlockingEnabled = prefs?.annoyanceBlockingEnabledEffective ?? false
+        let googleFallback = prefs?.googleFaviconFallbackEnabledEffective ?? false
+        Task { await FaviconFetcher.shared.setGoogleFallbackEnabled(googleFallback) }
+        autoHibernateIdleEnabled = prefs?.autoHibernateIdleEnabledEffective ?? false
+        autoHibernateIdleMinutes = prefs?.autoHibernateIdleMinutesEffective ?? 10
+        defaultCameraPolicy = prefs?.defaultCameraPolicyRaw.flatMap(MediaPermissionPolicy.init(rawValue:)) ?? .ask
+        defaultMicrophonePolicy = prefs?.defaultMicrophonePolicyRaw.flatMap(MediaPermissionPolicy.init(rawValue:)) ?? .ask
+        // Start locked at launch when opted in; ContentView's lock overlay
+        // prompts for Touch ID on appear.
+        if appLockEnabled && lockOnLaunch {
+            isLocked = true
+        }
+
+        let resolvedShowBadge = prefs?.showBadgeCountInDock ?? true
+        let resolvedPresenceMode = prefs?.appPresenceMode ?? .dock
+        Task { @MainActor in
+            // Launch AppKit-facing setup is now safe (past the init runloop tick).
+            // Flip the flag first so the DND `didSet`s become live from here on.
+            self.isLaunchComplete = true
+            self.badgeManager.showBadgeCountInDock = resolvedShowBadge
+            AppPresenceManager().apply(mode: resolvedPresenceMode)
+            // Apply any active quiet-hours schedule now, then keep it current.
+            self.refreshEffectiveDoNotDisturb()
+            self.startQuietHoursTimer()
+            self.startIdleHibernationTimer()
+            self.setupLockObservers()
+            self.startDarkMode()
+        }
+    }
+
+    /// Pushes the initial effective appearance to the pool (so dark-opted-in
+    /// services theme correctly) and observes macOS appearance changes for when
+    /// the app follows the system. Runs after launch, on the main actor.
+    private func startDarkMode() {
+        applyEffectiveAppearanceChange()
+        distributedObserverTokens.append(DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyEffectiveAppearanceChange() }
+        })
+    }
+
+    /// Re-evaluates the effective Light/Dark appearance and, when it actually
+    /// changed, re-applies dark theming across all live web views. Called at
+    /// launch, when the user picks an appearance, and when the OS theme flips in
+    /// System mode.
+    func applyEffectiveAppearanceChange() {
+        let dark = isEffectiveAppearanceDark
+        guard dark != lastKnownAppearanceDark else { return }
+        lastKnownAppearanceDark = dark
+        webViewPool.applyDarkState(isDark: dark, services: allServices())
+    }
+
+    /// All services (the pool skips those without a live web view). Every
+    /// On-mode service needs re-evaluating on an appearance change, so this
+    /// can't pre-filter to only the currently-live ones.
+    private func allServices() -> [ServiceInstance] {
+        let context = modelContainer.mainContext
+        return (try? context.fetch(FetchDescriptor<ServiceInstance>())) ?? []
+    }
+
+    /// Kicks off content-blocklist compilation at launch (before preload, so it
+    /// usually finishes before the first web view is built). Syncs the enabled
+    /// state from prefs and, once the lists are ready, re-attaches them to any
+    /// web views that were built first.
+    private func startContentBlocker() {
+        contentBlocker.isEnabled = contentBlockingEnabled
+        contentBlocker.annoyanceEnabled = annoyanceBlockingEnabled
+        contentBlocker.onReady = { [weak self] in
+            // Lists finished compiling after some web views were already built —
+            // attach them in place (no teardown, no reload, no lost polling).
+            self?.webViewPool.reattachContentBlocker()
+        }
+        contentBlocker.start()
+    }
+
+    /// Flips the global content blocker, persists it, and rebuilds live web
+    /// views so the change takes effect immediately.
+    func setContentBlockingEnabled(_ enabled: Bool) {
+        contentBlockingEnabled = enabled
+        contentBlocker.isEnabled = enabled
+        let prefs = ensurePreferences()
+        prefs.contentBlockingEnabled = enabled
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save content-blocking toggle: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+        webViewPool.reattachContentBlocker()
+    }
+
+    /// Opts in or out of the Google favicon fallback and persists the choice.
+    /// Pushes the flag into the fetcher actor so later fetches pick it up.
+    func setGoogleFaviconFallbackEnabled(_ enabled: Bool) {
+        let prefs = ensurePreferences()
+        prefs.googleFaviconFallbackEnabled = enabled
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save favicon fallback toggle: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+        Task { await FaviconFetcher.shared.setGoogleFallbackEnabled(enabled) }
+    }
+
+    /// Flips annoyance hiding, persists it, and re-attaches lists to live views.
+    func setAnnoyanceBlockingEnabled(_ enabled: Bool) {
+        annoyanceBlockingEnabled = enabled
+        contentBlocker.annoyanceEnabled = enabled
+        let prefs = ensurePreferences()
+        prefs.annoyanceBlockingEnabled = enabled
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save annoyance-blocking toggle: \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+        webViewPool.reattachContentBlocker()
+    }
+
+    private func setupHibernationCallbacks() {
+        // Let the pool classify chat services (which it can't, since the category
+        // lives in the catalog) so BOTH its sweeps — the idle timer and the LRU
+        // cap sweep — keep them live for instant notifications.
+        webViewPool.isNotificationCritical = { [weak self] serviceID in
+            self?.isNotificationCritical(serviceID) ?? false
+        }
+
+        // When a service's page finishes loading (startup or login redirect),
+        // poll its badge immediately instead of waiting for the next tick.
+        webViewPool.onNavigationFinished = { [weak self] serviceID in
+            guard let self,
+                  let webView = self.webViewPool.liveWebView(for: serviceID) else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.notificationManager.pollNow(
+                    for: serviceID,
+                    webView: webView,
+                    isMuted: self.isServiceEffectivelyMuted(serviceID),
+                    showBadge: self.isServiceShowingBadge(serviceID),
+                    catalogEntry: self.catalogEntry(for: serviceID)
+                )
+            }
+        }
+
+        webViewPool.onServiceHibernated = { [weak self] serviceID in
+            // The web view is gone, so its live poll can't run. The transient
+            // badge fetcher's periodic sweep now covers this service (it targets
+            // anything without a live web view); the badge holds its last value
+            // until the next sweep.
+            self?.notificationManager.stopPolling(for: serviceID)
+            // Its grace timer (if any) has done its job; clear the entry.
+            self?.cancelImmediateHibernation(serviceID)
+        }
+
+        webViewPool.onServiceSoftHibernated = { [weak self] serviceID in
+            guard let self else { return }
+            // A service set to hibernate immediately is torn down a few seconds
+            // after you switch away from it, unless you switch back first.
+            self.scheduleImmediateHibernationIfNeeded(serviceID)
+            // Downgrade the active 5s-adaptive poll to a flat 30s background
+            // poll. We keep the WKWebView around (soft hibernation) so we can
+            // still read its `document.title` without waking the service.
+            guard let webView = self.webViewPool.liveWebView(for: serviceID) else {
+                self.notificationManager.stopPolling(for: serviceID)
+                return
+            }
+            self.startBackgroundPolling(for: serviceID, webView: webView)
+        }
+
+        webViewPool.onServiceSoftWoke = { [weak self] serviceID in
+            // Switched back before the grace timer fired — call off the teardown.
+            self?.cancelImmediateHibernation(serviceID)
+            // Polling will restart when WebContentView attaches the web view
+            // No further action here — startPolling is called from the view layer
+        }
+
+        webViewPool.onServicePreloaded = { [weak self] serviceID, webView in
+            // A freshly-preloaded service has a live WKWebView but isn't on
+            // screen. Start it on the background poll so its <title>-based
+            // badge count contributes to the sidebar and the per-space
+            // aggregate as soon as the page finishes loading.
+            self?.startBackgroundPolling(for: serviceID, webView: webView)
+        }
+
+        webViewPool.onServiceRemoved = { [weak self] serviceID in
+            guard let self else { return }
+            self.notificationManager.stopPolling(for: serviceID)
+            self.badgeManager.removeBadge(for: serviceID)
+            self.drainMediaRequests(for: serviceID)
+            self.cancelImmediateHibernation(serviceID)
+        }
+    }
+
+    /// Starts (or replaces) a background-mode poll for a service with a live
+    /// WKWebView that isn't currently displayed.
+    private func startBackgroundPolling(for serviceID: UUID, webView: WKWebView) {
+        let catalogEntry = catalogEntry(for: serviceID)
+        notificationManager.startPolling(
+            for: serviceID,
+            webView: webView,
+            isMuted: { [weak self] in self?.isServiceEffectivelyMuted(serviceID) ?? false },
+            showBadge: { [weak self] in self?.isServiceShowingBadge(serviceID) ?? true },
+            catalogEntry: catalogEntry,
+            mode: .background
+        )
+    }
+
+    private nonisolated func catalogEntry(for serviceID: UUID) -> ServiceCatalogEntry? {
+        withService(id: serviceID) { service -> ServiceCatalogEntry? in
+            guard let entryID = service.catalogEntryID else { return nil }
+            return ServiceCatalog.shared.entry(for: entryID)
+        } ?? nil
+    }
+
+    private func setupMenuBarNavigation() {
+        NotificationCenter.default.addObserver(
+            forName: .menuBarServiceActivated,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let userInfo = notification.userInfo,
+                  let serviceID = userInfo["serviceID"] as? UUID,
+                  let spaceID = userInfo["spaceID"] as? UUID
+            else { return }
+            Task { @MainActor in
+                self?.selectedSpaceID = spaceID
+                self?.selectedServiceID = serviceID
+            }
+        }
+    }
+
+    private func setupNotificationNavigation() {
+        notificationManager.onServiceRequested = { [weak self] serviceID in
+            self?.navigateToServiceFromNotification(serviceID)
+        }
+        // Drain any notification taps that arrived (e.g. launched the app)
+        // before the handler was wired, in order. The last one wins the final
+        // selection, but each is processed rather than silently dropped.
+        for pending in notificationManager.drainPendingNotifications() {
+            navigateToServiceFromNotification(pending)
+        }
+    }
+
+    /// Selects the service a notification refers to, and switches to a space
+    /// that contains it so the selection is actually visible in the sidebar.
+    private func navigateToServiceFromNotification(_ serviceID: UUID) {
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
+        guard let service = try? context.fetch(descriptor).first else { return }
+
+        // If the service isn't in the current space, move to one that has it.
+        // Guard the link relationships first: reading `$0.space.id` on a link
+        // whose Space was deleted (a dangling link that outlived StoreRepair)
+        // faults the freed model and traps. Reading `.modelContext` is safe.
+        let liveLinks = service.spaceLinks.filter {
+            $0.modelContext != nil && $0.space.modelContext != nil
+        }
+        let inCurrentSpace = liveLinks.contains { $0.space.id == selectedSpaceID }
+        if !inCurrentSpace, let firstSpace = liveLinks.first?.space.id {
+            selectedSpaceID = firstSpace
+        }
+        selectedServiceID = serviceID
+    }
+
+    private func restoreWindowState() {
+        let context = modelContainer.mainContext
+        do {
+            let prefs = try context.fetch(FetchDescriptor<AppPreferences>()).first
+
+            // Apply a saved space only if it still exists. A nil/invalid saved
+            // value leaves the seeded selection in place.
+            let existingSpaceIDs = Set(try context.fetch(FetchDescriptor<Space>()).map(\.id))
+            if let savedSpaceID = prefs?.selectedSpaceID, existingSpaceIDs.contains(savedSpaceID) {
+                selectedSpaceID = savedSpaceID
+            }
+
+            // Validate the service selection against the current space. A space
+            // or service selected last session may have been deleted (or reaped
+            // at launch); ContentView's onChange fix-up doesn't run for the
+            // initial value, so a dangling id would strand the app on a blank
+            // pane until the user clicked. Fall back to the space's first service.
+            guard let spaceID = selectedSpaceID else {
+                selectedServiceID = nil
+                return
+            }
+            let servicesInSpace = servicesForSpace(spaceID)
+            if let savedServiceID = prefs?.selectedServiceID,
+               servicesInSpace.contains(where: { $0.id == savedServiceID }) {
+                selectedServiceID = savedServiceID
+            } else if selectedServiceID == nil
+                        || !servicesInSpace.contains(where: { $0.id == selectedServiceID }) {
+                selectedServiceID = servicesInSpace.first?.id
+            }
+        } catch {
+            AppLogger.dataStore.error("Failed to restore window state: \(error.localizedDescription)")
+        }
+    }
+
+    /// Fetches favicons for services that have none cached, and refreshes
+    /// stale favicons (older than 7 days). Runs in a background Task to avoid
+    /// blocking app launch.
+    private func fetchMissingAndStaleFavicons(force: Bool = false) {
+        let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<ServiceInstance>()
+        let services: [ServiceInstance]
+        do {
+            services = try context.fetch(descriptor)
+        } catch {
+            AppLogger.favicon.error("Failed to fetch services for favicon refresh: \(error.localizedDescription)")
+            return
+        }
+
+        let staleThreshold = Date().addingTimeInterval(-7 * 24 * 60 * 60) // 7 days
+
+        let needsFetch = services.filter { service in
+            guard service.customIconData == nil else { return false }
+            // After an app update, refresh every service's favicon regardless of
+            // age. Otherwise back off on the timestamp for both "never fetched"
+            // and "stale": a service whose favicon keeps failing gets stamped on
+            // failure (below), so it retries at most weekly instead of every launch.
+            if force { return true }
+            guard let fetchedAt = service.faviconFetchedAt else { return true }
+            return fetchedAt < staleThreshold
+        }
+
+        guard !needsFetch.isEmpty else { return }
+        AppLogger.favicon.info("Fetching favicons for \(needsFetch.count) service(s)")
+
+        // Capture IDs before the Task — model objects may be deleted during await
+        let fetchEntries = needsFetch.map { (id: $0.id, url: $0.url, hadIcon: $0.fetchedIconData != nil) }
+
+        Task {
+            for entry in fetchEntries {
+                let data = await FaviconFetcher.shared.fetchFavicon(for: entry.url)
+                // Re-fetch the model — it may have been deleted while we were awaiting
+                let entryID = entry.id
+                let descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == entryID })
+                guard let service = try? context.fetch(descriptor).first else { continue }
+
+                if let data {
+                    service.fetchedIconData = data
+                }
+                // Stamp on every attempt, success or failure, so a service whose
+                // favicon can't be fetched backs off instead of retrying every
+                // launch (a nil icon with a recent timestamp is "recently tried").
+                service.faviconFetchedAt = Date()
+            }
+            do {
+                try context.save()
+                AppLogger.favicon.info("Favicon refresh complete")
+            } catch {
+                AppLogger.dataStore.error("Failed to save refreshed favicons: \(error.localizedDescription)")
+                context.rollback()
+            }
+        }
+    }
+
+    /// Seeds the default spaces and services on a first launch. Returns `true`
+    /// if it seeded (a fresh install), `false` if data already existed or the
+    /// fetch failed — the caller uses this to decide whether to backfill the
+    /// passkey notice.
+    @discardableResult
+    private func seedDefaultDataIfNeeded(defaults: UserDefaults = .standard) -> Bool {
+        let context = modelContainer.mainContext
+
+        // Sorted so the fallback selection is the top space (sortOrder 0), not a
+        // nondeterministic one — matches deleteSpace's remaining-space pick.
+        let descriptor = FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
+        let existingSpaces: [Space]
+        do {
+            existingSpaces = try context.fetch(descriptor)
+        } catch {
+            AppLogger.dataStore.error("Failed to fetch spaces during seeding: \(error.localizedDescription)")
+            return false
+        }
+
+        guard existingSpaces.isEmpty else {
+            selectedSpaceID = existingSpaces.first?.id
+            return false
+        }
+
+        // Seed defaults ONLY on a genuine fresh install. An empty store while
+        // this install has held data before is data loss, not a first launch —
+        // `loadContainer` already tried to restore it, and writing defaults here
+        // would overwrite the very store (or its in-memory stand-in) we want to
+        // preserve for recovery. This is the guard that turns the original bug
+        // from silent, permanent loss into a recoverable, surfaced condition.
+        guard !defaults.bool(forKey: Self.hasEverHadDataKey) else {
+            AppLogger.dataStore.error("Store is empty but this install has had data; skipping seed to avoid overwriting a lost store")
+            return false
+        }
+
+        let personalSpace = Space(name: DefaultSeed.spaces[0].name, emoji: DefaultSeed.spaces[0].emoji, sortOrder: 0)
+        let workSpace = Space(name: DefaultSeed.spaces[1].name, emoji: DefaultSeed.spaces[1].emoji, sortOrder: 1)
+        context.insert(personalSpace)
+        context.insert(workSpace)
+
+        // Each space gets its own ServiceInstance — even for the same service URL —
+        // so cookies, sessions, and login state are fully isolated between spaces.
+        for (index, entry) in DefaultSeed.personalServices.enumerated() {
+            let service = ServiceInstance(label: entry.label, url: entry.url, catalogEntryID: entry.catalogID)
+            context.insert(service)
+            context.insert(SpaceServiceLink(sortOrder: index, space: personalSpace, service: service))
+        }
+
+        for (index, entry) in DefaultSeed.workServices.enumerated() {
+            let service = ServiceInstance(label: entry.label, url: entry.url, catalogEntryID: entry.catalogID)
+            context.insert(service)
+            context.insert(SpaceServiceLink(sortOrder: index, space: workSpace, service: service))
+        }
+
+        do {
+            try context.save()
+            selectedSpaceID = personalSpace.id
+            // Record that this install now holds data, so a future empty store is
+            // recognized as loss rather than reseeded.
+            Self.markHasData(defaults)
+            AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
+
+            // Fetch favicons for all seeded services — capture IDs before the Task
+            let allServicesDescriptor = FetchDescriptor<ServiceInstance>()
+            do {
+                let entries = try context.fetch(allServicesDescriptor).map { (id: $0.id, url: $0.url) }
+                Task {
+                    for entry in entries {
+                        let data = await FaviconFetcher.shared.fetchFavicon(for: entry.url)
+                        guard let data else { continue }
+                        let entryID = entry.id
+                        let desc = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == entryID })
+                        guard let service = try? context.fetch(desc).first else { continue }
+                        service.fetchedIconData = data
+                        service.faviconFetchedAt = Date()
+                    }
+                    do {
+                        try context.save()
+                    } catch {
+                        AppLogger.dataStore.error("Failed to save seeded favicons: \(error.localizedDescription)")
+                        context.rollback()
+                    }
+                }
+            } catch {
+                AppLogger.dataStore.error("Failed to fetch services for favicon seeding: \(error.localizedDescription)")
+            }
+            return true
+        } catch {
+            AppLogger.dataStore.error("Failed to seed default data: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private static let passkeyNoticeBackfilledKey = "passkeyNoticeBackfilled"
+
+    /// Runs once, the first time a build with the passkey notice launches. For a
+    /// pre-existing install it marks every current service as having seen the
+    /// notice, so the banner only appears for services added afterward rather
+    /// than for every service the user already had. On a fresh install
+    /// (`freshInstall == true`) it skips the marking, so the notice still shows
+    /// the first time each seeded service is opened.
+    private func backfillPasskeyNoticeIfNeeded(freshInstall: Bool) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.passkeyNoticeBackfilledKey) else { return }
+        // Set the flag first so a failure below doesn't re-run (and re-suppress)
+        // the notice on a later launch after the user has added new services.
+        defaults.set(true, forKey: Self.passkeyNoticeBackfilledKey)
+
+        guard !freshInstall else { return }
+
+        let context = modelContainer.mainContext
+        let services: [ServiceInstance]
+        do {
+            services = try context.fetch(FetchDescriptor<ServiceInstance>())
+        } catch {
+            AppLogger.dataStore.error("Failed to fetch services for passkey-notice backfill: \(error.localizedDescription)")
+            return
+        }
+
+        var changed = false
+        for service in services where service.hasSeenPasskeyNotice == nil {
+            service.hasSeenPasskeyNotice = true
+            changed = true
+        }
+        guard changed else { return }
+        do {
+            try context.save()
+            AppLogger.dataStore.info("Backfilled passkey notice for \(services.count) existing service(s)")
+        } catch {
+            AppLogger.dataStore.error("Failed to backfill passkey notice: \(error.localizedDescription)")
+            context.rollback()
+        }
+    }
+
+    /// Whether the passkey-limitation banner should show for `service` — true
+    /// until the notice has been seen once for that service.
+    func shouldShowPasskeyNotice(for service: ServiceInstance) -> Bool {
+        service.needsPasskeyNotice
+    }
+
+    /// Records that the passkey notice has been shown for the given service so
+    /// it never appears again for it.
+    func markPasskeyNoticeSeen(for serviceID: UUID) {
+        let context = modelContainer.mainContext
+        var descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
+        descriptor.fetchLimit = 1
+        guard let service = try? context.fetch(descriptor).first, service.needsPasskeyNotice else { return }
+        service.hasSeenPasskeyNotice = true
+        do {
+            try context.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to persist passkey notice dismissal: \(error.localizedDescription)")
+            context.rollback()
+        }
+    }
+}

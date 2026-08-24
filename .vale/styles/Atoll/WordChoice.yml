@@ -1,0 +1,14 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: true
+swap:
+  "in order to": to
+  "prior to": before
+  "subsequent to": after
+  "utili[sz]e": use
+  functionality: function
+  commence: start
+  terminate: stop
+  "at this point in time": now
+  "due to the fact that": because

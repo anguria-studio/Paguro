@@ -1,80 +1,77 @@
-name: Chorus
+name: Atoll
+
+# XcodeGen creates the Xcode project from this file.
+# Run `xcodegen generate` after each change to this file.
 options:
-  bundleIdPrefix: com.nicojan
+  bundleIdPrefix: com.tommasolaterza
   deploymentTarget:
-    macOS: "14.0"
-  xcodeVersion: "15.0"
+    macOS: "26.0"
   createIntermediateGroups: true
+  groupSortPosition: top
 
 packages:
-  Sparkle:
-    url: https://github.com/sparkle-project/Sparkle
-    majorVersion: 2.9.3
+  AtollCore:
+    path: Core
 
 targets:
-  Chorus:
+  Atoll:
     type: application
     platform: macOS
     sources:
-      - path: Chorus
+      - path: Atoll
         excludes:
           - "**/.DS_Store"
     resources:
-      - path: Chorus/Resources/ServiceCatalog.json
-      - path: Chorus/Resources/hagezi-light.json
-      - path: Chorus/Resources/fanboy-annoyance.json
-      - path: Chorus/Resources/darkreader.js
-      - path: Chorus/Resources/NotificationScripts
+      - path: Atoll/Resources/ServiceCatalog.json
+      - path: Atoll/Resources/hagezi-light.json
+      - path: Atoll/Resources/fanboy-annoyance.json
+      - path: Atoll/Resources/darkreader.js
+      - path: Atoll/Resources/NotificationScripts
         optional: true
     dependencies:
-      - package: Sparkle
+      - package: AtollCore
+        product: AtollCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nicojan.Chorus
-        PRODUCT_NAME: Chorus
-        MARKETING_VERSION: "1.5.18"
-        CURRENT_PROJECT_VERSION: "27"
+        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll
+        PRODUCT_NAME: Atoll
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
-        INFOPLIST_FILE: Chorus/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Chorus/Chorus.entitlements
-        ENABLE_HARDENED_RUNTIME: true
-        COMBINE_HIDPI_IMAGES: true
+        SWIFT_STRICT_CONCURRENCY: complete
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: Atoll/Atoll.entitlements
+
+        COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        GENERATE_INFOPLIST_FILE: true
-        INFOPLIST_KEY_NSUserNotificationsUsageDescription: "Chorus forwards notifications from your web services to macOS."
-        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.social-networking"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Atoll/Info.plist
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_LSUIElement: NO
+        INFOPLIST_KEY_NSUserNotificationsUsageDescription: "Atoll shows notifications from the web services that you add."
       configs:
-        # Debug builds run under a separate bundle id so a copy launched from
-        # Xcode can never share the installed release app's data. The bundle id
-        # keys WebKit storage, Preferences, Caches and notifications; the
-        # SwiftData store is moved separately in AppState.init (its default path
-        # is not bundle-scoped). See fix/isolate-debug-data.
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: com.nicojan.Chorus.debug
-        # Only the Release build (used by Archive) needs the Developer ID team.
-        # Keeping it out of Debug lets the app sign ad-hoc so it and the ad-hoc
-        # xctest bundle share a Team ID; a real team on only the host trips
-        # dyld's Team ID check and unit tests fail to load.
-        Release:
-          DEVELOPMENT_TEAM: "3CY4DX3K45"
+          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll.debug
     scheme:
       testTargets:
-        - ChorusTests
+        - AtollTests
 
-  ChorusTests:
+  AtollTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: ChorusTests
+      - path: AtollTests
     dependencies:
-      - target: Chorus
+      - target: Atoll
+      - package: AtollCore
+        product: AtollCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nicojan.ChorusTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.AtollTests
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
-        # Required so the test bundle can be code-signed; without an explicit
-        # Info.plist this generates one. (Some XcodeGen versions add it by
-        # default and some don't, so set it explicitly.)
-        GENERATE_INFOPLIST_FILE: true
+        SWIFT_STRICT_CONCURRENCY: complete
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        GENERATE_INFOPLIST_FILE: YES

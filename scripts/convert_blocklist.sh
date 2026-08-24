@@ -3,12 +3,12 @@
 # Regenerates the bundled content-blocking lists from pinned upstream sources,
 # using AdGuard's SafariConverterLib to convert filter lists into the
 # WKContentRuleList JSON the app compiles at launch:
-#   - Chorus/Resources/hagezi-light.json   (HaGezi "Light" ad/tracker domains)
-#   - Chorus/Resources/fanboy-annoyance.json (Fanboy annoyances, from EasyList)
+#   - Atoll/Resources/hagezi-light.json   (HaGezi "Light" ad/tracker domains)
+#   - Atoll/Resources/fanboy-annoyance.json (Fanboy annoyances, from EasyList)
 #
 # IMPORTANT: SafariConverterLib is GPLv3. It is used here ONLY as an offline
 # build tool — its JSON *output* is bundled, the library is never linked into
-# the app. Do NOT add it as a Swift Package dependency in project.yml, or Chorus
+# the app. Do NOT add it as a Swift Package dependency in project.yml, or Atoll
 # (MIT) becomes a GPL derivative. See the content-blocker design notes.
 #
 # Run this to bump the bundled lists, then commit the regenerated JSON.
@@ -55,12 +55,12 @@ convert() {
 
 convert \
   "https://raw.githubusercontent.com/hagezi/dns-blocklists/${HAGEZI_REF}/adblock/light.txt" \
-  "$REPO_ROOT/Chorus/Resources/hagezi-light.json" \
+  "$REPO_ROOT/Atoll/Resources/hagezi-light.json" \
   "HaGezi Light @ ${HAGEZI_REF}"
 
 convert \
   "https://easylist-downloads.adblockplus.org/fanboy-annoyance.txt" \
-  "$REPO_ROOT/Chorus/Resources/fanboy-annoyance.json" \
+  "$REPO_ROOT/Atoll/Resources/fanboy-annoyance.json" \
   "Fanboy Annoyance List (EasyList)"
 
 echo "==> Done. Remember to commit the regenerated JSON."

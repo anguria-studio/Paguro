@@ -1,0 +1,6 @@
+extends: existence
+message: "Use the full form instead of '%s'."
+level: error
+ignorecase: true
+tokens:
+  - "\\b(?:aren't|can't|couldn't|didn't|doesn't|don't|hasn't|haven't|isn't|it's|shouldn't|wasn't|weren't|won't|wouldn't)\\b"

@@ -1,132 +1,86 @@
-# Chorus
+# Atoll
 
-A native macOS app that unifies your web services (Gmail, Slack, Discord,
-Notion, ChatGPT, and more) into one window, each with its own fully isolated
-session. A lightweight, WebKit-based alternative to Chromium apps like Rambox
-and Franz, built for Apple Silicon.
+Atoll is a native macOS workspace for web services.
 
-**[Download the latest release](https://github.com/nicojan/Chorus/releases/latest)** (macOS 14 or later), or install it with Homebrew:
+It keeps each service account in a separate WebKit data store.
+It also provides native controls, notifications, and a small island near the MacBook notch.
 
-```sh
-brew install --cask nicojan/tap/chorus
-```
+Atoll is in early development.
+Do not use it as your only way to access an important account.
 
-The build is signed, notarized, and updates itself via Sparkle. Homebrew installs
-from my own tap rather than the main homebrew/cask tap, which takes only projects
-with more stars than Chorus has so far.
+## Product goals
 
-> Status: 1.5.17 is the current release. See [CHANGELOG.md](CHANGELOG.md) for
-> what changed.
-
-![Chorus running several web services in one window](assets/screenshot.png)
-
-## Features
-
-- **Isolated sessions per service.** Each service gets its own
-  `WKWebsiteDataStore`, so you can stay signed into two Gmail accounts (or a
-  personal and work Slack) side by side with no cookie leakage.
-- **Spaces.** Group services into spaces (e.g. 🏠 Personal, 💼 Work). A service
-  can live in more than one space; sessions stay isolated per instance.
-- **Badges & notifications.** Unread counts surface on the dock and per-space
-  chips via title/DOM polling and intercepted web `Notification`s, and appear
-  immediately on launch and after sign-in. Per-service control over badges and
-  macOS notifications, per-service and per-space mute, plus global Do Not Disturb.
-- **Memory-aware hibernation.** Least-recently-used services hibernate to
-  reclaim memory and wake instantly where you left off. Each service can also
-  set its own policy: follow the global setting, hibernate when you switch to
-  another service, hibernate after a set idle time, or never hibernate. Chat
-  apps stay live whatever you pick, so their alerts still arrive.
-- **Quick switcher** (`⌘K`), **find in page** (`⌘F`), **zoom** (`⌘+`/`⌘-`/`⌘0`),
-  reload (`⌘R`), and drag-to-reorder services and spaces.
-- **Smart link routing.** Cross-service links open in a matching Chorus service
-  when one exists, otherwise in your default browser. Per service, you can
-  instead have outside links open in a Chorus window.
-- **Ad & tracker blocking.** Blocks known ad and tracking domains across your
-  services with the HaGezi blocklist, on by default. It won't remove ads a site
-  serves from its own domain, like YouTube.
-- **Camera and microphone.** Video calls and voice work in the services that need
-  them, from Google Meet to Microsoft Teams. Each service asks the first time it
-  wants your camera or mic. You can set Allow, Ask, or Deny for a single service
-  or as the default for all of them, mute every microphone at once with `⇧⌘M`, and
-  see a dot on a service while its camera or mic is live.
-- **Resilient.** Pauses polling when offline or asleep, recovers from WebContent
-  crashes with backoff, and never deletes your data without consent.
-
-## How Chorus compares
-
-Chorus, Rambox, and Franz all put your web apps in one window. They differ in how
-they are built and what they cost. Rambox and Franz are Electron apps that bundle
-Chromium and run on Windows and Linux as well as macOS, and both charge for the
-full feature set. Franz's free tier stops at three services and one workspace.
-Chorus is a native macOS app. It uses the system's own WebKit instead of shipping
-a browser inside itself, so it stays lighter on memory, and every feature is free
-with the source open under the MIT license.
-
-| Feature | Chorus | Rambox | Franz |
-|---------|--------|--------|-------|
-| Price | Free, every feature | Freemium | Freemium; free tier caps at 3 services |
-| Open source | Yes (MIT) | No | No |
-| Engine | Native WebKit | Electron | Electron |
-| Platforms | macOS 14+ | Windows, macOS, Linux | Windows, macOS, Linux |
-| Preset services | ~70, plus any URL | 700+ | 70+ |
-| Isolated session per service | Yes | Yes | Yes |
-| Spaces / workspaces | Unlimited | Yes | Free tier: 1 |
-| Custom CSS per service | Yes, with presets | Yes | No |
-| Dark mode for any service | Yes | Yes | No |
-| Quiet-hours Do Not Disturb | Yes | Yes | No |
-| App lock | Touch ID | Password | No |
-| Cross-device sync | No | Yes | Yes |
-
-Chorus makes two trades for staying native and free. It runs only on macOS, and
-it ships with more than seventy preset services where Rambox lists several hundred,
-though you can add any site by its URL. It also keeps your data on your Mac rather
-than syncing across devices.
+- Use native macOS controls and behavior.
+- Keep account data local and separate.
+- Show useful notifications without a service API.
+- Stop all work after the user quits the app.
+- Use public Apple APIs.
+- Keep the code clear and easy to test.
 
 ## Requirements
 
-- macOS 14 (Sonoma) or later
-- Xcode 16+ / Swift 6
-- [XcodeGen](https://github.com/yonsm/XcodeGen) (`brew install xcodegen`). The
-  Xcode project is generated from `project.yml`.
+- macOS 26 or later
+- Xcode 26 or later
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
-## Build & run
+Vale is optional for local work.
+The build service runs Vale for each pull request.
+
+## Build the app
 
 ```sh
-# Regenerate the Xcode project after changing project.yml or adding files
 xcodegen generate
-
-# Build and run the test suite from the CLI
-xcodebuild test -project Chorus.xcodeproj -scheme Chorus -destination 'platform=macOS'
+xcodebuild \
+  -project Atoll.xcodeproj \
+  -scheme Atoll \
+  -configuration Debug \
+  build
 ```
 
-Or open `Chorus.xcodeproj` in Xcode and run the **Chorus** scheme.
+Run the core tests with this command:
 
-## Project layout
+```sh
+swift test --package-path Core
+```
 
-| Path | What |
-|------|------|
-| `Chorus/App/` | App entry point and `AppState` (central coordinator) |
-| `Chorus/Models/` | SwiftData models: `ServiceInstance`, `Space`, `SpaceServiceLink`, `AppPreferences` |
-| `Chorus/Services/` | Badges, notifications, polling, data stores, catalog, networking |
-| `Chorus/Views/` | SwiftUI views: main window, sidebar, web view pool, settings, sheets |
-| `Chorus/Resources/` | Service catalog JSON and assets |
-| `ChorusTests/` | Unit tests (pure logic: badges, validation, parsing, reordering, …) |
+Run the app tests with this command:
 
-Architecture details live in [docs/internal/chorus-architecture-v2.md](docs/internal/chorus-architecture-v2.md).
+```sh
+xcodebuild \
+  -project Atoll.xcodeproj \
+  -scheme Atoll \
+  -configuration Debug \
+  test
+```
 
-## Notes
+## Documentation
 
-- The app icon is a generated placeholder; replace the images in
-  `Chorus/Resources/Assets.xcassets/AppIcon.appiconset/` with custom artwork.
-- Shipping to the Mac App Store additionally requires code signing, a
-  provisioning profile, and notarization. Those are outside the scope of this
-  repo.
+- [Architecture](docs/ARCHITECTURE.md)
+- [Design choices](docs/DESIGN.md)
+- [Backlog](docs/BACKLOG.md)
+- [Error and gotcha log](docs/ERRORS.md)
+- [Notification system](docs/features/NOTIFICATIONS.md)
+- [Island and notch support](docs/features/ISLAND.md)
+- [Web sessions](docs/features/WEB-SESSIONS.md)
+- [Distribution](docs/features/DISTRIBUTION.md)
 
-## Contributing
+## Project links
 
-Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
-to get set up.
+- [Source repository](https://github.com/tommasoltrz/Atoll)
+- [Issue tracker](https://github.com/tommasoltrz/Atoll/issues)
+
+## Project history
+
+Atoll uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
+Chorus is an MIT-licensed project by Nico Jan.
+The Git history keeps the upstream work and its authorship.
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for other sources and licenses.
 
 ## License
 
-Chorus is available under the MIT License. See [LICENSE](LICENSE).
+Atoll uses the MIT License.
+See [LICENSE](LICENSE).
+
+Service names and logos belong to their respective owners.
+Atoll uses them only to identify a service.

@@ -1,46 +1,66 @@
-# Contributing to Chorus
+# Contributing to Atoll
 
-Thanks for taking an interest in Chorus. Bug reports, fixes, and new features
-are all welcome.
+Thank you for your interest in Atoll.
 
-## Build and test
+Atoll is an early project.
+Open an [issue](https://github.com/tommasoltrz/Atoll/issues) before you make a large change.
+This step helps contributors avoid duplicate work.
 
-You will need macOS 14 or later, Xcode 15 or newer, and XcodeGen
-(`brew install xcodegen`).
+## Set up the project
+
+1. Install Xcode 26 or later.
+2. Install XcodeGen.
+3. Run `xcodegen generate` in the repository root.
+4. Run `swift test --package-path Core`.
+5. Run the Atoll scheme tests in Xcode.
+
+## Make a change
+
+1. Keep the change small and focused.
+2. Add a test for each new rule or fixed defect.
+3. Update the related feature document.
+4. Add a backlog item when work must continue later.
+5. Add an entry to `docs/ERRORS.md` when you find a durable gotcha.
+6. Run the build and all related tests.
+
+Do not edit `Atoll.xcodeproj` by hand.
+Edit `project.yml`, and then run `xcodegen generate`.
+
+## Code rules
+
+- Use Swift 6 concurrency checks.
+- Keep UI state on the main actor.
+- Put pure rules and value types in `AtollCore`.
+- Keep AppKit and WebKit code in the app target.
+- Use public Apple APIs only.
+- Treat each web message as untrusted input.
+- Do not download executable scripts at run time.
+- Do not add a dependency without a clear need.
+- Use a clear name for each concept.
+- Prefer small types with one purpose.
+
+## Documentation rules
+
+Use ASD-STE100 Simplified Technical English where practical.
+Use short sentences and active voice.
+Use one term for one concept.
+Put one instruction in each numbered step.
+
+The Vale rules check a mechanical subset of ASD-STE100.
+The rules do not prove full or certified compliance.
+
+Install Vale with Homebrew if you want a local check:
 
 ```sh
-xcodegen generate
-xcodebuild test -project Chorus.xcodeproj -scheme Chorus -destination 'platform=macOS'
+brew install vale
+scripts/lint_docs.sh
 ```
-
-You can also open `Chorus.xcodeproj` in Xcode and run the Chorus scheme.
-
-## Making a change
-
-- Add a test for any logic you can exercise on its own. The tests in
-  `ChorusTests/` cover pure logic such as badge parsing, input validation, and
-  reordering.
-- Match the surrounding style: small files, immutable data, clear names.
-- A new `AppPreferences` field should be `Optional` with a nil-means-default
-  accessor. Chorus ships to people who already have saved data, and that pattern
-  lets SwiftData migrate an old store in place instead of wiping it. Copy the
-  shape of a field that is already there.
-- The Xcode project comes from `project.yml`. Change a version or a build
-  setting in both `project.yml` and the `.pbxproj`, or the next
-  `xcodegen generate` will undo it.
-- Run the test suite before you open a pull request.
 
 ## Pull requests
 
-- Branch off `main` and keep each pull request to a single change.
-- If two pull requests touch the same type or view, they can each look clean
-  against `main` and still collide once the first one lands. Say so in the
-  description when your change edits `AppPreferences` or a settings view.
-- Write commit messages as `type: summary`, for example `fix: ...` or
-  `feat: ...`, with a short body that says why.
-- Say what you changed and how you checked it.
+Describe the user problem first.
+Then describe the solution and its limits.
+List the tests that you ran.
+Add screenshots for each visible change.
 
-## Writing
-
-Anything a user or the public reads, such as the README, release notes, or these
-docs, should be plain and direct. `CLAUDE.md` has the full standard.
+Keep generated files out of a pull request unless the repository tracks them.

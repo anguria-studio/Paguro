@@ -1,0 +1,13 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: error
+ignorecase: false
+swap:
+  MacOS: macOS
+  OSX: macOS
+  Webkit: WebKit
+  SwiftUi: SwiftUI
+  Appkit: AppKit
+  Xcodegen: XcodeGen
+  Github: GitHub
+  Cmd-Q: Command-Q
