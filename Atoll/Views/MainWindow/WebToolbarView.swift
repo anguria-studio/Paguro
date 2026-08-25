@@ -87,6 +87,20 @@ struct WebContentActions: View {
             .disabled(webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
+
+            Button {
+                appState.doNotDisturb.toggle()
+            } label: {
+                Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
+            }
+            .buttonStyle(AtollToolbarButtonStyle(isSelected: appState.doNotDisturb))
+            .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
+            .accessibilityLabel(
+                appState.doNotDisturb
+                    ? "Unmute notifications for all services"
+                    : "Mute notifications for all services"
+            )
+            .accessibilityIdentifier("notifications.globalMute")
         }
         .padding(3)
         .glassEffect(

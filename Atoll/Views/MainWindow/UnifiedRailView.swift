@@ -35,8 +35,6 @@ struct UnifiedRailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showingPalette = false
-    @State private var showingAddService = false
-    @State private var showingAddSpace = false
     @State private var editingSpace: Space?
     @State private var confirmingDeleteSpace: Space?
     @State private var confirmingDelete: SpaceServiceLink?
@@ -84,11 +82,6 @@ struct UnifiedRailView: View {
 
     var body: some View {
         content
-        .sheet(isPresented: $showingAddService) {
-            if let spaceID = selectedSpaceID {
-                AddServiceSheet(spaceID: spaceID)
-            }
-        }
         .sheet(item: $editingService) { service in
             EditServiceSheet(service: service)
         }
@@ -100,9 +93,6 @@ struct UnifiedRailView: View {
                     moveService(link: link, to: newSpace, followToSpace: true)
                 }
             )
-        }
-        .sheet(isPresented: $showingAddSpace) {
-            SpaceEditorSheet(editingSpace: nil, selectedSpaceID: $selectedSpaceID)
         }
         .sheet(item: $editingSpace) { space in
             SpaceEditorSheet(editingSpace: space, selectedSpaceID: $selectedSpaceID)
@@ -161,7 +151,7 @@ struct UnifiedRailView: View {
             Color.clear
                 .frame(height: sidebarPresentation.contentTopInset)
 
-            if sidebarPresentation == .expanded {
+            if sidebarPresentation == .expanded && showsSpaceSwitcher {
                 spaceHeader
                     .padding(.bottom, 7)
             }
@@ -260,15 +250,26 @@ struct UnifiedRailView: View {
         .onDisappear {
             clearDockHover()
         }
+        .contextMenu {
+            railCreationMenu
+        }
     }
 
     private var horizontalBody: some View {
         HStack(spacing: 8) {
-            spaceHeader
-                // 72 points of traffic light, then 8, puts the header at x 80.
-                .padding(.leading, 8 + contentInset)
+            if showsSpaceSwitcher {
+                spaceHeader
+                    // 72 points of traffic light, then 8, puts the header at x 80.
+                    .padding(.leading, 8 + contentInset)
 
-            Divider().frame(width: 1, height: 20)
+                Divider().frame(width: 1, height: 20)
+            } else {
+                // The workspace control is gone, but service tabs must still
+                // start after the traffic lights.
+                Color.clear
+                    .frame(width: contentInset)
+                    .accessibilityHidden(true)
+            }
 
             tabStrip
 
@@ -294,6 +295,10 @@ struct UnifiedRailView: View {
 
     // MARK: - The space header, and the palette it opens
 
+    private var showsSpaceSwitcher: Bool {
+        SpaceSwitcherVisibility.showsSwitcher(spaceCount: spaces.count)
+    }
+
     private var spaceHeader: some View {
         let space = currentSpace
         let muted = space?.isMutedEffective ?? false
@@ -315,7 +320,7 @@ struct UnifiedRailView: View {
                 selectedSpaceID: $selectedSpaceID,
                 onEditSpace: { editingSpace = $0 },
                 onDeleteSpace: { confirmingDeleteSpace = $0 },
-                onAddSpace: { showingAddSpace = true }
+                onAddSpace: { appState.showAddSpace = true }
             )
             // Re-injected rather than left to inheritance, matching how
             // ContentView presents the quick switcher: the palette is
@@ -620,7 +625,7 @@ struct UnifiedRailView: View {
     private var addServiceButton: some View {
         if axis == .vertical {
             Button {
-                showingAddService = true
+                appState.showAddService = true
             } label: {
                 Label("Add service", systemImage: "plus")
                     .font(.atollToolbarControl)
@@ -633,7 +638,7 @@ struct UnifiedRailView: View {
             .disabled(selectedSpaceID == nil)
         } else {
             Button {
-                showingAddService = true
+                appState.showAddService = true
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .medium))
@@ -644,6 +649,18 @@ struct UnifiedRailView: View {
             .help("Add service")
             .accessibilityLabel("Add service")
             .disabled(selectedSpaceID == nil)
+        }
+    }
+
+    @ViewBuilder
+    private var railCreationMenu: some View {
+        Button("Add Service...") {
+            appState.showAddService = true
+        }
+        .disabled(selectedSpaceID == nil)
+
+        Button("Add Workspace...") {
+            appState.showAddSpace = true
         }
     }
 

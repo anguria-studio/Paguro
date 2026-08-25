@@ -175,6 +175,12 @@ struct ContentView: View {
                 .frame(minWidth: 320)
             }
         }
+        .sheet(isPresented: $state.showAddSpace) {
+            SpaceEditorSheet(
+                editingSpace: nil,
+                selectedSpaceID: $state.selectedSpaceID
+            )
+        }
         .sheet(isPresented: $state.showQuickSwitcher) {
             QuickSwitcherView()
                 .environment(appState)
@@ -277,8 +283,9 @@ struct ContentView: View {
         case .topBars:
             VStack(spacing: 0) {
                 rail(axis: .horizontal, spaceSelection: spaceSelection, serviceSelection: serviceSelection, contentInset: lightsWidth)
-                Divider()
                 webContent
+                    .padding(.horizontal, AtollMetric.Sidebar.surfaceInset)
+                    .padding(.bottom, AtollMetric.Sidebar.surfaceInset)
             }
         }
     }

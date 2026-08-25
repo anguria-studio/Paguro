@@ -39,6 +39,7 @@ final class AppState {
     var selectedSpaceID: UUID?
     var selectedServiceID: UUID?
     var showAddService = false
+    var showAddSpace = false
     var showQuickSwitcher = false
 
     /// True once launch-time preference loading has finished. Gates the DND

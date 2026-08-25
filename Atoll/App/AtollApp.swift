@@ -64,6 +64,11 @@ struct AtollApp: App {
                 // covers the transient no-space state).
                 .disabled(appState.selectedSpaceID == nil)
 
+                Button("Add Workspace...") {
+                    appState.showAddSpace = true
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+
                 Button("Quick Switcher") {
                     appState.showQuickSwitcher.toggle()
                 }

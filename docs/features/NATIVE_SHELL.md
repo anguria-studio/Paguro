@@ -65,6 +65,12 @@ It keeps horizontal overflow visible for magnification and tooltips.
 The sidebar state belongs to the window scene.
 Use the sidebar button or `Command-Control-S` to change the state.
 
+When exactly one workspace exists, the rail does not show its name or switcher.
+The top bar still keeps service tabs clear of the traffic lights.
+The File menu can add a workspace.
+A secondary click on the sidebar background can add a service or workspace.
+Service rows keep their own context menus.
+
 ## Content header
 
 The content header is 52 points high.
@@ -100,6 +106,9 @@ The expanded surface has an 8 point inset rounded border.
 The collapsed surface keeps an 8 point gutter on its horizontal and bottom
 edges.
 The content column keeps an 8 point gutter on the right and bottom edges.
+The top-bar layout also keeps an 8 point gutter on the browser's left edge.
+The horizontal rail forms the upper part of the frame around the browser.
+The horizontal rail has no bottom separator.
 The header starts at the window top and uses the native 52 point centerline.
 The header does not compress when the window becomes short.
 The browser and sidebar scroll viewport use the remaining height.

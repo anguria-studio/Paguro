@@ -111,6 +111,19 @@ The app must not run two detection systems.
 The default must avoid two visible alerts for one event.
 The user can enable both routes when desired.
 
+## Global mute
+
+The content header has one global notification mute beside reload.
+It applies to all spaces and services.
+The same state is available in Settings and through `Shift-Command-D`.
+
+Global mute suppresses new macOS notification banners and visible badge counts.
+Atoll continues to detect and store the current unread counts in memory.
+Unmuting restores those counts without waiting for a new poll.
+
+Global mute does not delete notifications that macOS has already delivered.
+It does not stop web views or sign services out.
+
 ## Click routing
 
 A click first selects the service account.
