@@ -30,13 +30,10 @@ struct WebContentView: View {
                 WebContentHeader(
                     webViewState: webViewState,
                     title: selectedService?.label ?? "Atoll",
-                    webAppearanceIsDark: selectedServiceUsesDarkAppearance,
-                    canToggleWebAppearance: selectedService != nil,
                     reservesSidebarToggleSpace: sidebarIsCollapsed,
                     sidebarToggleLeadingInset: AtollMetric.Toolbar.collapsedLeadingInset(
                         sidebarWidth: collapsedSidebarWidth
-                    ),
-                    onToggleWebAppearance: toggleSelectedServiceWebAppearance
+                    )
                 )
             }
 
@@ -113,20 +110,6 @@ struct WebContentView: View {
                 if !webViewState.isLoading { transitionSnapshot = nil }
             }
         }
-    }
-
-    private var selectedServiceUsesDarkAppearance: Bool {
-        selectedService?.webAppearance.usesDarkAppearance(
-            shellIsDark: colorScheme == .dark
-        ) ?? false
-    }
-
-    private func toggleSelectedServiceWebAppearance() {
-        guard let service = selectedService else { return }
-        let mode: ServiceAppearanceMode = selectedServiceUsesDarkAppearance
-            ? .light
-            : .dark
-        appState.setWebAppearance(mode, for: service.id)
     }
 
     private func loadWebViewForSelectedService() {

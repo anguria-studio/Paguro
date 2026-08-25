@@ -68,9 +68,11 @@ Use the sidebar button or `Command-Control-S` to change the state.
 ## Content header
 
 The content header is 52 points high.
-It shows the active service name, reload, and the web appearance control.
+It shows the active service name and reload.
 The service page owns back, forward, and home navigation.
 Atoll does not repeat these controls in permanent window chrome.
+Web appearance stays in the service editor because websites can ignore or
+override the browser preference.
 
 One persistent sidebar button moves with the sidebar edge.
 It rests at the trailing edge of the expanded sidebar.

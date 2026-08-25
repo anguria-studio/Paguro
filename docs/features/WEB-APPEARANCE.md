@@ -14,11 +14,11 @@ It follows the effective Atoll window appearance.
 Therefore, a service starts dark when Atoll is dark.
 
 The service editor also has Always Light and Always Dark overrides.
-The moon button changes the active service to the opposite explicit value.
-The filled moon means that the effective web appearance is dark.
-The outline moon means that it is light.
+The content header does not show an appearance action.
+A persistent header action would imply that Atoll can recolor every service,
+but many services ignore or override the browser preference.
 
-The change applies without a web-view rebuild or reload.
+An editor change applies without a web-view rebuild or reload.
 Atoll saves an explicit override with the service.
 
 ## Implementation

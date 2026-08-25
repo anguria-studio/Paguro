@@ -4,11 +4,8 @@ import SwiftUI
 struct WebContentHeader: View {
     let webViewState: WebViewState
     var title: String
-    var webAppearanceIsDark = false
-    var canToggleWebAppearance = false
     var reservesSidebarToggleSpace = false
     var sidebarToggleLeadingInset = AtollMetric.Toolbar.collapsedLeadingInset
-    var onToggleWebAppearance: () -> Void = {}
     @Environment(AppState.self) private var appState
 
     var body: some View {
@@ -29,12 +26,7 @@ struct WebContentHeader: View {
 
             Spacer(minLength: 24)
 
-            WebContentActions(
-                webViewState: webViewState,
-                webAppearanceIsDark: webAppearanceIsDark,
-                canToggleWebAppearance: canToggleWebAppearance,
-                onToggleWebAppearance: onToggleWebAppearance
-            )
+            WebContentActions(webViewState: webViewState)
         }
         .padding(
             .leading,
@@ -71,15 +63,12 @@ struct SidebarToggleButton: View {
     }
 }
 
-/// The two persistent actions for the active web service.
+/// The persistent recovery action for the active web service.
 ///
-/// Service pages own their navigation. Atoll keeps only recovery from a stale
-/// page and the per-service appearance choice in the window header.
+/// Service pages own their navigation and appearance. Atoll keeps reload in
+/// the window header so the user can recover from a stale page.
 struct WebContentActions: View {
     let webViewState: WebViewState
-    let webAppearanceIsDark: Bool
-    let canToggleWebAppearance: Bool
-    let onToggleWebAppearance: () -> Void
 
     @Environment(AppState.self) private var appState
 
@@ -98,23 +87,6 @@ struct WebContentActions: View {
             .disabled(webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
-
-            Button(action: onToggleWebAppearance) {
-                Image(systemName: webAppearanceIsDark ? "moon.fill" : "moon")
-            }
-            .buttonStyle(AtollToolbarButtonStyle(isSelected: webAppearanceIsDark))
-            .disabled(!canToggleWebAppearance)
-            .help(
-                webAppearanceIsDark
-                    ? "Use a light service appearance"
-                    : "Use a dark service appearance"
-            )
-            .accessibilityLabel(
-                webAppearanceIsDark
-                    ? "Use a light service appearance"
-                    : "Use a dark service appearance"
-            )
-            .accessibilityValue(webAppearanceIsDark ? "Dark" : "Light")
         }
         .padding(3)
         .glassEffect(

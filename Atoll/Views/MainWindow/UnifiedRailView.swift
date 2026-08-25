@@ -33,7 +33,6 @@ struct UnifiedRailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showingPalette = false
     @State private var showingAddService = false
@@ -279,12 +278,7 @@ struct UnifiedRailView: View {
             Spacer(minLength: 40)
 
             // Service controls live at the far right of the bar.
-            WebContentActions(
-                webViewState: appState.webViewState,
-                webAppearanceIsDark: activeServiceUsesDarkAppearance,
-                canToggleWebAppearance: activeService != nil,
-                onToggleWebAppearance: toggleActiveServiceWebAppearance
-            )
+            WebContentActions(webViewState: appState.webViewState)
                 .padding(.trailing, 10)
         }
         .frame(height: Self.barHeight)
@@ -373,27 +367,6 @@ struct UnifiedRailView: View {
         }
         .padding(.trailing, 8)
         .padding(.vertical, 2)
-    }
-
-    private var activeService: ServiceInstance? {
-        guard let id = selectedServiceID,
-              let service = filteredLinks.first(where: { $0.service.id == id })?.service
-        else { return nil }
-        return service
-    }
-
-    private var activeServiceUsesDarkAppearance: Bool {
-        activeService?.webAppearance.usesDarkAppearance(
-            shellIsDark: colorScheme == .dark
-        ) ?? false
-    }
-
-    private func toggleActiveServiceWebAppearance() {
-        guard let service = activeService else { return }
-        let mode: ServiceAppearanceMode = activeServiceUsesDarkAppearance
-            ? .light
-            : .dark
-        appState.setWebAppearance(mode, for: service.id)
     }
 
     // MARK: - Service cells
