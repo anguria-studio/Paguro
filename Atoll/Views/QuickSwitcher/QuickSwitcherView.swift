@@ -18,7 +18,7 @@ struct QuickSwitcherView: View {
             resultsList
         }
         .frame(minWidth: 420, maxWidth: 420, minHeight: 280, maxHeight: 480)
-        .background(.ultraThickMaterial)
+        .atollMaterialBackground(.ultraThickMaterial)
         .clipShape(RoundedRectangle(cornerRadius: AtollRadius.surface))
         .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
         .onChange(of: searchText) {

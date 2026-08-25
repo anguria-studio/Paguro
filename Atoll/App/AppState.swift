@@ -28,8 +28,8 @@ final class AppState {
     let userScriptManager: UserScriptManager
     let badgeManager: BadgeManager
 
-    /// Navigation state (back/forward/loading) for the active service's web view,
-    /// shared so the top tab bar can host the nav buttons.
+    /// Loading state and a weak reference for the active service's web view.
+    /// Both window layouts use this state for reload and stop.
     let webViewState = WebViewState()
     let notificationManager: NotificationManager
     let transientBadgeFetcher: TransientBadgeFetcher
@@ -136,6 +136,16 @@ final class AppState {
     /// App-level appearance override, loaded from AppPreferences.
     var appearanceMode: AppearanceMode = .system
 
+    /// User-selected values for the main window appearance experiment.
+    /// These small visual preferences live in UserDefaults so they remain
+    /// available if the content store needs recovery.
+    var liquidGlassStyle = GlassLabDefaults.style
+    var liquidGlassIntensity = GlassLabDefaults.transparency
+
+    @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
+    private static let liquidGlassStyleKey = "Atoll.liquidGlassStyle"
+    private static let liquidGlassIntensityKey = "Atoll.liquidGlassIntensity"
+
     /// The color scheme to force on the app, or nil to follow the system.
     var appearanceColorScheme: ColorScheme? {
         switch appearanceMode {
@@ -144,23 +154,6 @@ final class AppState {
         case .dark: return .dark
         }
     }
-
-    /// The effective Light/Dark the app is showing right now, resolving `.system`
-    /// against the current macOS appearance. Drives Dark Reader theming. Reads
-    /// AppKit for the `.system` case, so call it on the main actor after launch,
-    /// not during AppState.init.
-    var isEffectiveAppearanceDark: Bool {
-        switch appearanceMode {
-        case .dark: return true
-        case .light: return false
-        case .system:
-            return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        }
-    }
-
-    /// Last effective dark state pushed to the web-view pool, so appearance
-    /// notifications that don't actually change Light/Dark are ignored.
-    private var lastKnownAppearanceDark: Bool?
 
     /// Tokens for the NSWorkspace sleep/wake observers, removed in `deinit`.
     /// AppState is a process-lifetime singleton, so this is hygiene rather than a
@@ -171,9 +164,8 @@ final class AppState {
     /// teardown, so there's no real concurrency exposure.
     @ObservationIgnored nonisolated(unsafe) private var systemObserverTokens: [NSObjectProtocol] = []
 
-    /// Tokens for `DistributedNotificationCenter` observers (screen-lock,
-    /// appearance-change), removed in `deinit` for the same symmetry as the
-    /// workspace tokens above.
+    /// Tokens for `DistributedNotificationCenter` screen-lock observers.
+    /// `deinit` removes them for the same symmetry as the workspace tokens.
     @ObservationIgnored nonisolated(unsafe) private var distributedObserverTokens: [NSObjectProtocol] = []
 
     /// Tokens registered on `NotificationCenter.default`, unregistered in
@@ -1050,6 +1042,50 @@ final class AppState {
         webView.reload()
     }
 
+    /// Changes one service's native web appearance signal. This updates CSS
+    /// `prefers-color-scheme`; it does not recolor the page.
+    func setWebAppearance(_ mode: ServiceAppearanceMode, for serviceID: UUID) {
+        guard let service = currentServiceInstance(id: serviceID) else { return }
+        service.darkModeRaw = mode.rawValue
+        service.forceDarkMode = nil
+        applyServiceEdits(
+            serviceID: serviceID,
+            urlChanged: false,
+            webAppearanceChanged: true
+        )
+    }
+
+    /// Keeps automatic web services in step with the effective SwiftUI color
+    /// scheme. Explicit light and dark service overrides do not change.
+    func updateEffectiveShellAppearance(isDark: Bool) {
+        guard lastEffectiveShellAppearanceDark != isDark else { return }
+        lastEffectiveShellAppearanceDark = isDark
+        let services = (try? modelContainer.mainContext.fetch(
+            FetchDescriptor<ServiceInstance>()
+        )) ?? []
+        webViewPool.applyShellAppearance(isDark: isDark, services: services)
+    }
+
+    func setLiquidGlassIntensity(_ value: Double) {
+        let normalized = GlassIntensityScale.normalized(value)
+        liquidGlassIntensity = normalized
+        UserDefaults.standard.set(normalized, forKey: Self.liquidGlassIntensityKey)
+    }
+
+    func setLiquidGlassStyle(_ style: ShellGlassStyle) {
+        liquidGlassStyle = style
+        UserDefaults.standard.set(style.rawValue, forKey: Self.liquidGlassStyleKey)
+    }
+
+    func resetGlassLab() {
+        liquidGlassStyle = GlassLabDefaults.style
+        liquidGlassIntensity = GlassLabDefaults.transparency
+
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.liquidGlassStyleKey)
+        defaults.removeObject(forKey: Self.liquidGlassIntensityKey)
+    }
+
     /// Applies user edits to a service: persists label/URL/keep-loaded, syncs
     /// the pool's never-hibernate set, and navigates the live web view to the
     /// new URL when it changed. The caller has already mutated the model;
@@ -1059,7 +1095,7 @@ final class AppState {
         urlChanged: Bool,
         cssChanged: Bool = false,
         userAgentChanged: Bool = false,
-        darkModeChanged: Bool = false,
+        webAppearanceChanged: Bool = false,
         presenceChanged: Bool = false
     ) {
         guard let service = currentServiceInstance(id: serviceID) else { return }
@@ -1073,15 +1109,14 @@ final class AppState {
         if cssChanged || presenceChanged {
             // Custom CSS and the focus override are both injected when the web
             // view is built, so rebuild it. The rebuild also re-bakes the
-            // dark-mode scripts and picks up any user-agent change and the new
+            // web appearance and picks up any user-agent change and the new
             // URL, so those are handled here.
             webViewPool.recreateWebView(for: serviceID, preserveURL: !urlChanged)
             webViewRebuildToken &+= 1
         } else {
-            // Dark-mode change applies live without a rebuild — the pool
-            // recomputes the injection from the service's new mode.
-            if darkModeChanged {
-                webViewPool.refreshDarkMode(for: service)
+            // Web appearance changes live without a rebuild or page recoloring.
+            if webAppearanceChanged {
+                webViewPool.refreshWebAppearance(for: service)
             }
             if userAgentChanged {
                 webViewPool.setUserAgent(service.userAgent, for: serviceID)
@@ -2551,6 +2586,21 @@ final class AppState {
         defaultZoom = prefs?.defaultZoomEffective ?? 1.0
         railLayout = prefs?.railLayout ?? .sidebar
         appearanceMode = prefs?.appearanceMode ?? .system
+        liquidGlassStyle = ShellGlassStyle.resolving(
+            UserDefaults.standard.string(forKey: Self.liquidGlassStyleKey)
+        )
+        let hasStoredGlassIntensity = UserDefaults.standard.object(
+            forKey: Self.liquidGlassIntensityKey
+        ) != nil
+        let storedGlassIntensity = hasStoredGlassIntensity
+            ? UserDefaults.standard.double(forKey: Self.liquidGlassIntensityKey)
+            : nil
+        liquidGlassIntensity = GlassIntensityScale.normalized(
+            storedGlassIntensity ?? GlassLabDefaults.transparency
+        )
+        // Frost is now a fixed material rule. Remove the temporary Glass Lab
+        // value so an old experiment cannot affect a future setting.
+        UserDefaults.standard.removeObject(forKey: "Atoll.backdropFrostIntensity")
         scheduledDNDEnabled = prefs?.scheduledDNDEnabled ?? false
         dndStartMinutes = prefs?.dndStartMinutes ?? (22 * 60)
         dndEndMinutes = prefs?.dndEndMinutes ?? (7 * 60)
@@ -2585,41 +2635,7 @@ final class AppState {
             self.startQuietHoursTimer()
             self.startIdleHibernationTimer()
             self.setupLockObservers()
-            self.startDarkMode()
         }
-    }
-
-    /// Pushes the initial effective appearance to the pool (so dark-opted-in
-    /// services theme correctly) and observes macOS appearance changes for when
-    /// the app follows the system. Runs after launch, on the main actor.
-    private func startDarkMode() {
-        applyEffectiveAppearanceChange()
-        distributedObserverTokens.append(DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyEffectiveAppearanceChange() }
-        })
-    }
-
-    /// Re-evaluates the effective Light/Dark appearance and, when it actually
-    /// changed, re-applies dark theming across all live web views. Called at
-    /// launch, when the user picks an appearance, and when the OS theme flips in
-    /// System mode.
-    func applyEffectiveAppearanceChange() {
-        let dark = isEffectiveAppearanceDark
-        guard dark != lastKnownAppearanceDark else { return }
-        lastKnownAppearanceDark = dark
-        webViewPool.applyDarkState(isDark: dark, services: allServices())
-    }
-
-    /// All services (the pool skips those without a live web view). Every
-    /// On-mode service needs re-evaluating on an appearance change, so this
-    /// can't pre-filter to only the currently-live ones.
-    private func allServices() -> [ServiceInstance] {
-        let context = modelContainer.mainContext
-        return (try? context.fetch(FetchDescriptor<ServiceInstance>())) ?? []
     }
 
     /// Kicks off content-blocklist compilation at launch (before preload, so it

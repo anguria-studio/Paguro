@@ -3,6 +3,9 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @SceneStorage("Atoll.sidebarCollapsed") private var sidebarCollapsed = false
+    @State private var collapsedToggleChromeVisible = false
 
     var body: some View {
         @Bindable var state = appState
@@ -83,9 +86,6 @@ struct ContentView: View {
                 serviceSelection: $state.selectedServiceID
             )
             .frame(minWidth: 800, minHeight: 500)
-            // Fill behind everything with the window shade so the traffic-light
-            // insets don't reveal the title-bar vibrancy (the top-left tint).
-            .background(Color(nsColor: .windowBackgroundColor))
             // Extend up into the (hidden) title-bar area so the tab bar sits at
             // the very top of the window; the traffic-light insets keep the
             // top-left clear.
@@ -96,7 +96,39 @@ struct ContentView: View {
         // would otherwise move the window instead of reordering) and let the
         // WindowDragHandles move the window instead. The sidebar keeps the
         // normal title-bar drag.
-        .background(WindowMovableConfigurator(isMovable: appState.railLayout == .sidebar))
+        .background(
+            WindowChromeConfigurator(
+                isMovable: appState.railLayout == .sidebar,
+                glassStyle: appState.liquidGlassStyle,
+                glassIntensity: appState.liquidGlassIntensity
+            )
+        )
+        .containerBackground(.clear, for: .window)
+        .onAppear {
+            collapsedToggleChromeVisible = sidebarCollapsed
+        }
+        .onChange(of: sidebarCollapsed) { _, isCollapsed in
+            guard isCollapsed else {
+                collapsedToggleChromeVisible = false
+                return
+            }
+            guard !reduceMotion else {
+                collapsedToggleChromeVisible = true
+                return
+            }
+
+            // The button has one identity. Add its compact circle after the
+            // movement duration plus one small render margin, so the circle
+            // cannot travel across the window from the expanded rail.
+            collapsedToggleChromeVisible = false
+            Task { @MainActor in
+                try? await Task.sleep(for: AtollMotion.collapsedChromeDelay)
+                guard sidebarCollapsed else { return }
+                withAnimation(.easeOut(duration: AtollMotion.collapsedChromeFadeSeconds)) {
+                    collapsedToggleChromeVisible = true
+                }
+            }
+        }
         // Ask for macOS notification permission here, not in AppState.init:
         // requesting during App.init (before the scene exists) can fail with
         // "Notifications are not allowed for this application" and leave the app
@@ -199,16 +231,42 @@ struct ContentView: View {
         serviceSelection: Binding<UUID?>
     ) -> some View {
         // The title bar is hidden, so content runs to the top edge. Reserve the
-        // top-left for the traffic lights: push the leftmost top elements clear.
-        let lightsHeight: CGFloat = 28
-        let lightsWidth: CGFloat = 72
+        // top-left for the traffic lights: push the horizontal rail clear of the
+        // complete 79 point native button group and add an 8 point gap.
+        let lightsWidth: CGFloat = 80
 
         switch appState.railLayout {
         case .sidebar:
+            let presentation: SidebarPresentation = sidebarCollapsed ? .collapsed : .expanded
             HStack(spacing: 0) {
-                rail(axis: .vertical, spaceSelection: spaceSelection, serviceSelection: serviceSelection, contentInset: lightsHeight)
-                Divider()
+                rail(
+                    axis: .vertical,
+                    spaceSelection: spaceSelection,
+                    serviceSelection: serviceSelection,
+                    sidebarPresentation: presentation
+                )
                 webContent
+                    .padding(.trailing, AtollMetric.Sidebar.surfaceInset)
+                    .padding(.bottom, AtollMetric.Sidebar.surfaceInset)
+            }
+            .overlay(alignment: .topLeading) {
+                // Keep one button alive for both sidebar states. The stock
+                // NavigationSplitView toggle uses the same ownership model, so
+                // its control follows the moving column edge instead of being
+                // removed from one header and inserted into another.
+                SidebarToggleButton(
+                    isCollapsed: sidebarCollapsed,
+                    showsCollapsedChrome: collapsedToggleChromeVisible,
+                    action: toggleSidebar
+                )
+                .position(
+                    x: presentation.toggleCenterX,
+                    y: AtollMetric.Toolbar.height / 2
+                )
+                .animation(
+                    reduceMotion ? nil : .smooth(duration: AtollMotion.sidebarTransitionSeconds),
+                    value: presentation
+                )
             }
         case .topBars:
             VStack(spacing: 0) {
@@ -223,12 +281,14 @@ struct ContentView: View {
         axis: Axis,
         spaceSelection: Binding<UUID?>,
         serviceSelection: Binding<UUID?>,
-        contentInset: CGFloat = 0
+        contentInset: CGFloat = 0,
+        sidebarPresentation: SidebarPresentation = .expanded
     ) -> some View {
         UnifiedRailView(
             selectedSpaceID: spaceSelection,
             selectedServiceID: serviceSelection,
             axis: axis,
+            sidebarPresentation: sidebarPresentation,
             contentInset: contentInset
         )
         .accessibilityElement(children: .contain)
@@ -236,7 +296,10 @@ struct ContentView: View {
     }
 
     private var webContent: some View {
-        WebContentView(selectedServiceID: appState.selectedServiceID)
+        WebContentView(
+            selectedServiceID: appState.selectedServiceID,
+            sidebarIsCollapsed: sidebarCollapsed
+        )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Web content")
@@ -244,6 +307,16 @@ struct ContentView: View {
 
     private func selectFirstService(in spaceID: UUID) {
         appState.selectedServiceID = appState.servicesForSpace(spaceID).first?.id
+    }
+
+    private func toggleSidebar() {
+        if reduceMotion {
+            sidebarCollapsed.toggle()
+        } else {
+            withAnimation(.smooth(duration: AtollMotion.sidebarTransitionSeconds)) {
+                sidebarCollapsed.toggle()
+            }
+        }
     }
 }
 

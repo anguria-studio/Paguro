@@ -1,10 +1,41 @@
 import Foundation
 import SwiftData
 
-/// Per-service dark-theming choice. `on` always themes while the app is Dark;
-/// `off` never does. Off is the default.
-enum ServiceDarkMode: String, CaseIterable {
-    case on, off
+/// The color-scheme signal that Atoll gives to one web service.
+///
+/// Automatic follows the Atoll window. Light and dark are explicit overrides.
+/// This uses the web app's own `prefers-color-scheme` support. It does not
+/// recolor the page.
+enum ServiceAppearanceMode: String, CaseIterable {
+    case automatic, light, dark
+
+    var displayName: String {
+        switch self {
+        case .automatic: return "Follow Atoll"
+        case .light: return "Always Light"
+        case .dark: return "Always Dark"
+        }
+    }
+
+    func usesDarkAppearance(shellIsDark: Bool) -> Bool {
+        switch self {
+        case .automatic: return shellIsDark
+        case .light: return false
+        case .dark: return true
+        }
+    }
+
+    /// Maps values written by the old Dark Reader control onto native web
+    /// appearance. An old Off or Auto value now follows Atoll. An old On value
+    /// remains dark, but uses the service's own dark-theme support.
+    static func resolving(storedRaw: String?, legacyForceDark: Bool?) -> Self {
+        switch storedRaw {
+        case Self.automatic.rawValue, "auto", "off": return .automatic
+        case Self.light.rawValue: return .light
+        case Self.dark.rawValue, "on": return .dark
+        default: return legacyForceDark == true ? .dark : .automatic
+        }
+    }
 }
 
 /// Per-service hibernation policy — when Atoll frees this service's WebContent
@@ -170,16 +201,13 @@ final class ServiceInstance {
     /// A non-nil value overrides the default; a blank value disables both.
     var customCSS: String?
 
-    /// Force a dark appearance on a service that has no dark theme of its own,
-    /// by inverting the page. Services that DO have a dark theme should leave
-    /// this off and simply follow the system appearance. Optional for SwiftData
-    /// lightweight migration; nil is treated as off. Read via
-    /// `isForceDarkModeEnabled`.
+    /// Legacy Dark Reader flag. Optional for SwiftData lightweight migration.
+    /// New code reads it only when it resolves an old service appearance value.
     var forceDarkMode: Bool?
 
-    /// Per-service dark-theming choice (auto/on/off), stored raw for SwiftData
-    /// lightweight migration. Read via `darkMode`, which migrates the legacy
-    /// `forceDarkMode` flag. Only `darkModeRaw` is written from now on.
+    /// Per-service web appearance, stored in the existing raw field so the
+    /// SwiftData shape does not change. Read via `webAppearance`, which maps the
+    /// old Dark Reader values. Only the new appearance values are written now.
     var darkModeRaw: String?
 
     /// Per-service camera / microphone permission, stored raw for SwiftData
@@ -238,16 +266,12 @@ final class ServiceInstance {
     /// Materialises the storage-optional force-dark flag (nil → false).
     var isForceDarkModeEnabled: Bool { forceDarkMode ?? false }
 
-    /// The effective dark-theming mode. An explicit `darkModeRaw` of `"on"` or
-    /// `"off"` wins; otherwise a legacy `forceDarkMode == true` service maps to
-    /// `.on` (preserving its behavior). A stored `"auto"`, an unknown value, or
-    /// nothing set all default to `.off` — manual theming is opt-in, so any
-    /// service that rode the old auto mode stops theming until the user turns it
-    /// back on for that service.
-    var darkMode: ServiceDarkMode {
-        if let raw = darkModeRaw, let mode = ServiceDarkMode(rawValue: raw) { return mode }
-        if forceDarkMode == true { return .on }
-        return .off
+    /// The appearance signal for this service. Automatic is the default.
+    var webAppearance: ServiceAppearanceMode {
+        ServiceAppearanceMode.resolving(
+            storedRaw: darkModeRaw,
+            legacyForceDark: forceDarkMode
+        )
     }
 
     /// Whether the passkey-limitation notice still needs to be shown for this

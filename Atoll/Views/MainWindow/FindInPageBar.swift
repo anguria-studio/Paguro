@@ -68,7 +68,7 @@ struct FindInPageBar: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(.ultraThickMaterial)
+        .atollMaterialBackground(.ultraThickMaterial)
         .clipShape(RoundedRectangle(cornerRadius: AtollRadius.control))
         .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
         .padding(8)

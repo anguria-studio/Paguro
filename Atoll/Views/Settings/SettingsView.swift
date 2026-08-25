@@ -108,13 +108,51 @@ struct GeneralSettingsView: View {
                         ensurePrefs().appearanceModeRaw = mode.rawValue
                         appState.appearanceMode = mode
                         save("appearance mode")
-                        // Re-theme dark-opted-in services for the new appearance.
-                        appState.applyEffectiveAppearanceChange()
                     }
                 )) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }
+                }
+
+                Picker("Window glass", selection: Binding(
+                    get: { appState.liquidGlassStyle },
+                    set: { appState.setLiquidGlassStyle($0) }
+                )) {
+                    ForEach(ShellGlassStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .help("Changes the native Liquid Glass style behind the main window shell.")
+
+                HStack(spacing: 12) {
+                    Slider(
+                        value: Binding(
+                            get: { appState.liquidGlassIntensity },
+                            set: { appState.setLiquidGlassIntensity($0) }
+                        ),
+                        in: 0...1
+                    ) {
+                        Text("Shell transparency")
+                    }
+
+                    Text("\(Int((appState.liquidGlassIntensity * 100).rounded()))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, alignment: .trailing)
+                }
+                .help("Controls how much of the desktop appears through the Atoll shell. Web pages remain opaque.")
+
+                HStack {
+                    Text("These experimental controls update the main window live.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset Glass Lab") {
+                        appState.resetGlassLab()
+                    }
+                    .controlSize(.small)
                 }
 
                 Picker("Layout", selection: Binding(
@@ -592,7 +630,6 @@ struct AboutSettingsView: View {
     private let authorURL = URL(string: "https://nicojan.com/")!
     private let blocklistURL = URL(string: "https://github.com/hagezi/dns-blocklists")!
     private let annoyanceListURL = URL(string: "https://easylist.to/")!
-    private let darkReaderURL = URL(string: "https://github.com/darkreader/darkreader")!
 
     var body: some View {
         Form {
@@ -624,13 +661,6 @@ struct AboutSettingsView: View {
                     .foregroundStyle(.secondary)
                 Link("HaGezi blocklists (GPL-3.0)", destination: blocklistURL)
                 Link("EasyList / Fanboy Annoyance List", destination: annoyanceListURL)
-            }
-
-            Section("Dark theme") {
-                Text("Per-service dark theming uses Dark Reader.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Link("Dark Reader (MIT)", destination: darkReaderURL)
             }
 
             Section {

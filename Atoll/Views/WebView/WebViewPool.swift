@@ -36,10 +36,8 @@ final class WebViewPool {
     private let userScriptManager: UserScriptManager
     private let contentBlocker: ContentBlockerManager
 
-    /// The app's current effective Light/Dark appearance, pushed by AppState.
-    /// Baked into each web view's Dark Reader scripts at build time so a service
-    /// opted into dark theming starts in the right state.
-    private(set) var effectiveAppearanceDark = false
+    /// The effective Atoll window appearance. Automatic services follow it.
+    private(set) var effectiveShellAppearanceDark = false
 
     /// The currently active/displayed service
     private(set) var activeServiceID: UUID?
@@ -195,6 +193,7 @@ final class WebViewPool {
 
         let config = makeConfiguration(for: instance)
         let webView = WKWebView(frame: .zero, configuration: config)
+        applyWebAppearance(to: webView, for: instance)
         webView.allowsBackForwardNavigationGestures = true
         webView.customUserAgent = instance.userAgent ?? UserAgentProvider.safariDefault
 
@@ -237,6 +236,7 @@ final class WebViewPool {
 
         let config = makeConfiguration(for: instance)
         let webView = WKWebView(frame: .zero, configuration: config)
+        applyWebAppearance(to: webView, for: instance)
         webView.allowsBackForwardNavigationGestures = true
         webView.customUserAgent = instance.userAgent ?? UserAgentProvider.safariDefault
 
@@ -610,14 +610,9 @@ final class WebViewPool {
         // exposes video PiP through the native media controls automatically.
 
         let controller = WKUserContentController()
-        let injection = DarkReaderSupport.injection(
-            mode: instance.darkMode,
-            appDark: effectiveAppearanceDark
-        )
         userScriptManager.configureScripts(
             for: instance,
             customCSS: effectiveCSS(for: instance),
-            darkInjection: injection,
             stayActiveInBackground: instance.staysActiveInBackgroundEffective,
             on: controller
         )
@@ -652,8 +647,7 @@ final class WebViewPool {
     }
 
     /// The effective per-service CSS (service defaults + any custom CSS), or nil
-    /// when there's none. Shared by `makeConfiguration` and the dark-mode
-    /// reinstall paths so both bake the same scripts.
+    /// when there is none.
     private func effectiveCSS(for instance: ServiceInstance) -> String? {
         let css = ServiceCSSDefaults.effectiveCSS(
             instanceCSS: instance.customCSS,
@@ -663,57 +657,41 @@ final class WebViewPool {
         return css
     }
 
-    /// Applies a Light/Dark appearance change to every live web view: recomputes
-    /// each service's dark injection and applies it on the current document at
-    /// once, re-baking the view's user scripts so its next full navigation
-    /// starts in the right state (and without a flash). Mirrors
-    /// `reattachContentBlocker`: live views only, in place, no teardown. Views
-    /// rebuilt later read the new state via `makeConfiguration`.
-    func applyDarkState(isDark: Bool, services: [ServiceInstance]) {
-        effectiveAppearanceDark = isDark
-        let byID = Dictionary(services.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        for (id, webView) in webViews {
-            guard let instance = byID[id] else { continue }
-            let inj = DarkReaderSupport.injection(mode: instance.darkMode, appDark: isDark)
-            applyInjectionLive(inj, to: webView, instance: instance)
-        }
-    }
-
-    /// Recomputes and applies a single live service's dark injection — used after
-    /// a per-service On/Off edit. A no-op if the view isn't live (it rebuilds via
-    /// `makeConfiguration`).
-    func refreshDarkMode(for instance: ServiceInstance) {
-        guard let webView = webViews[instance.id] else { return }
-        let inj = DarkReaderSupport.injection(mode: instance.darkMode, appDark: effectiveAppearanceDark)
-        applyInjectionLive(inj, to: webView, instance: instance)
-    }
-
-    /// Applies an injection to a live web view in place: enable/disable theming
-    /// on the current document, then re-bake the view's user scripts so the next
-    /// navigation matches. `.themed` injects the library before enabling because
-    /// the current document's isolated world may not have it yet.
-    private func applyInjectionLive(
-        _ injection: DarkReaderSupport.DarkInjection,
-        to webView: WKWebView,
-        instance: ServiceInstance
-    ) {
-        let world = DarkReaderSupport.world
-        switch injection {
-        case .themed:
-            webView.evaluateJavaScript(DarkReaderSupport.libraryJS, in: nil, in: world, completionHandler: nil)
-            webView.evaluateJavaScript(DarkReaderSupport.enableJS, in: nil, in: world, completionHandler: nil)
-        case .none:
-            webView.evaluateJavaScript(DarkReaderSupport.disableJS, in: nil, in: world, completionHandler: nil)
-        }
-        let controller = webView.configuration.userContentController
-        controller.removeAllUserScripts()
-        userScriptManager.installUserScripts(
-            for: instance,
-            customCSS: effectiveCSS(for: instance),
-            darkInjection: injection,
-            stayActiveInBackground: instance.staysActiveInBackgroundEffective,
-            on: controller
+    /// Applies an Atoll appearance change to every live service. Automatic
+    /// services follow it. Explicit service overrides keep their value.
+    func applyShellAppearance(isDark: Bool, services: [ServiceInstance]) {
+        effectiveShellAppearanceDark = isDark
+        let byID = Dictionary(
+            services.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
         )
+        for (id, webView) in webViews {
+            guard let service = byID[id] else { continue }
+            applyWebAppearance(to: webView, for: service)
+        }
+    }
+
+    /// Applies one service override without rebuilding or reloading its web view.
+    func refreshWebAppearance(for instance: ServiceInstance) {
+        guard let webView = webViews[instance.id] else { return }
+        applyWebAppearance(to: webView, for: instance)
+    }
+
+    /// Returns the AppKit appearance name that drives CSS
+    /// `prefers-color-scheme` in the web view.
+    nonisolated static func webAppearanceName(
+        mode: ServiceAppearanceMode,
+        shellIsDark: Bool
+    ) -> NSAppearance.Name {
+        mode.usesDarkAppearance(shellIsDark: shellIsDark) ? .darkAqua : .aqua
+    }
+
+    private func applyWebAppearance(to webView: WKWebView, for instance: ServiceInstance) {
+        let name = Self.webAppearanceName(
+            mode: instance.webAppearance,
+            shellIsDark: effectiveShellAppearanceDark
+        )
+        webView.appearance = NSAppearance(named: name)
     }
 
     /// Live services eligible for auto-hibernation, each paired with how long it

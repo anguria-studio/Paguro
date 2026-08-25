@@ -1,0 +1,51 @@
+# Web appearance
+
+Status: active
+
+## Purpose
+
+Atoll sends a native light or dark color-scheme signal to each web service.
+Atoll does not recolor the web page.
+
+## User control
+
+Automatic is the default.
+It follows the effective Atoll window appearance.
+Therefore, a service starts dark when Atoll is dark.
+
+The service editor also has Always Light and Always Dark overrides.
+The moon button changes the active service to the opposite explicit value.
+The filled moon means that the effective web appearance is dark.
+The outline moon means that it is light.
+
+The change applies without a web-view rebuild or reload.
+Atoll saves an explicit override with the service.
+
+## Implementation
+
+Atoll sets the `NSAppearance` of each `WKWebView`.
+WebKit then updates the CSS `prefers-color-scheme` media query.
+This is the same signal that a website receives from Safari.
+
+Atoll does not inject a theme library.
+Atoll does not add an invert filter or replace service colors.
+
+## Limits
+
+The website must support `prefers-color-scheme` for this control to change its
+appearance.
+Some services use only an account setting for their theme.
+For these services, the user must change the theme inside the service.
+
+Atoll does not modify or bypass the service's own account setting.
+
+## Test rules
+
+Tests must verify these conditions:
+
+1. Automatic follows light and dark Atoll appearances.
+2. Always Light stays light when Atoll is dark.
+3. Always Dark stays dark when Atoll is light.
+4. Old Dark Reader On values map to Always Dark.
+5. Old Dark Reader Off and Auto values map to Automatic.
+6. A live appearance change does not rebuild the web view.

@@ -26,7 +26,6 @@ final class UserScriptManager {
     func configureScripts(
         for instance: ServiceInstance,
         customCSS: String?,
-        darkInjection: DarkReaderSupport.DarkInjection,
         stayActiveInBackground: Bool,
         on controller: WKUserContentController
     ) {
@@ -34,7 +33,6 @@ final class UserScriptManager {
         installUserScripts(
             for: instance,
             customCSS: customCSS,
-            darkInjection: darkInjection,
             stayActiveInBackground: stayActiveInBackground,
             on: controller
         )
@@ -64,13 +62,10 @@ final class UserScriptManager {
     }
 
     /// Adds all user scripts. Safe to call again after `removeAllUserScripts()`
-    /// to re-bake state (e.g. the Dark Reader theme scripts) so the next full
-    /// navigation is correct. `darkInjection` selects what dark-theming scripts
-    /// to bake.
+    /// when an injected service option changes.
     func installUserScripts(
         for instance: ServiceInstance,
         customCSS: String?,
-        darkInjection: DarkReaderSupport.DarkInjection,
         stayActiveInBackground: Bool,
         on controller: WKUserContentController
     ) {
@@ -136,33 +131,6 @@ final class UserScriptManager {
             controller.addUserScript(cssScript)
         }
 
-        // Dark theming. `.themed` injects Dark Reader into an ISOLATED world so
-        // its window.chrome stub and DarkReader global never reach the site (the
-        // shared DOM means the theme it injects still applies), with an anti-flash
-        // background and enable baked in. `.none` adds nothing.
-        switch darkInjection {
-        case .none:
-            break
-        case .themed:
-            controller.addUserScript(WKUserScript(
-                source: DarkReaderSupport.antiFlashScript(),
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true,
-                in: DarkReaderSupport.world
-            ))
-            controller.addUserScript(WKUserScript(
-                source: DarkReaderSupport.libraryJS,
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true,
-                in: DarkReaderSupport.world
-            ))
-            controller.addUserScript(WKUserScript(
-                source: DarkReaderSupport.bootstrapScript(enable: true),
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true,
-                in: DarkReaderSupport.world
-            ))
-        }
     }
 
     /// Builds a script that injects `css` into the page as a `<style>` element.

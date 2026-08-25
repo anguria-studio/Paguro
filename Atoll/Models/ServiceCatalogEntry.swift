@@ -9,12 +9,6 @@ struct ServiceCatalogEntry: Codable, Identifiable, Hashable {
     let badgeJS: String?
     let userAgent: String?
     let description: String
-    /// True for services that already render dark on their own when the app is
-    /// dark — always-dark web apps, dark-by-default ones, or ones that follow
-    /// `prefers-color-scheme` by default. Dark Reader is kept off for these in
-    /// `.auto` mode so it doesn't double-darken and break them. Optional so
-    /// entries without the key still decode (nil → not native-dark).
-    let nativeDark: Bool?
     /// True for curated, reputable call vendors (Messenger, Teams, Meet, …) whose
     /// calling runs across their own family of domains — Messenger jumps
     /// `facebook.com`→`messenger.com`, Teams spans the Microsoft domains. For these

@@ -105,6 +105,7 @@ It must not hibernate a service during a call or download.
 - notification bridge messages.
 
 See [Web sessions](features/WEB-SESSIONS.md).
+See [Web appearance](features/WEB-APPEARANCE.md).
 
 ## Notification flow
 

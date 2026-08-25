@@ -18,7 +18,7 @@ struct EditServiceSheet: View {
     @State private var mobileView: Bool = false
     @State private var openLinksInApp: Bool = false
     @State private var stayActive: Bool = false
-    @State private var darkMode: ServiceDarkMode = .off
+    @State private var webAppearance: ServiceAppearanceMode = .automatic
     @State private var notify: Bool = true
     @State private var osNotify: Bool = true
     @State private var badge: Bool = true
@@ -104,12 +104,13 @@ struct EditServiceSheet: View {
                 Toggle("Always appear active", isOn: $stayActive)
                     .help("Keeps this service from showing you as away or idle while Atoll is in the background, so your status stays active even when you work in other apps. Useful for Microsoft Teams. May hold back some of this service's notifications, since it now thinks you're looking at it.")
 
-                Picker("Dark theme for this service", selection: $darkMode) {
-                    Text("On").tag(ServiceDarkMode.on)
-                    Text("Off").tag(ServiceDarkMode.off)
+                Picker("Web appearance", selection: $webAppearance) {
+                    ForEach(ServiceAppearanceMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
                 }
                 .pickerStyle(.segmented)
-                .help("On applies a dark theme to this service while the app is dark. Off never does.")
+                .help("Atoll sends this color scheme to websites that support it. Atoll does not recolor the page.")
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -165,7 +166,7 @@ struct EditServiceSheet: View {
             initialUserAgent = service.userAgent
             openLinksInApp = service.opensExternalLinksInAppEffective
             stayActive = service.staysActiveInBackgroundEffective
-            darkMode = service.darkMode
+            webAppearance = service.webAppearance
             notify = !service.isMuted
             osNotify = service.notifiesOSEffective
             badge = service.showBadge
@@ -174,7 +175,7 @@ struct EditServiceSheet: View {
             customCSS = service.customCSS ?? defaultCSS
             // Start the pickers at the EFFECTIVE policy (the service's own value,
             // else the global default), so what's shown is what applies. Saving
-            // pins it on the service (consistent with the dark-theme picker).
+            // pins it on the service (consistent with the web-appearance picker).
             cameraPolicy = MediaPermissionResolver.effectivePolicy(
                 serviceRaw: service.cameraPolicyRaw, globalRaw: appState.defaultCameraPolicy.rawValue)
             microphonePolicy = MediaPermissionResolver.effectivePolicy(
@@ -294,9 +295,9 @@ struct EditServiceSheet: View {
             } else {
                 newCSS = customCSS
             }
-            // Dark theming applies live without a rebuild, so it's tracked
-            // separately from CSS changes.
-            let darkModeChanged = service.darkMode != darkMode
+            // Native web appearance applies live without a rebuild, so it is
+            // tracked separately from CSS changes.
+            let webAppearanceChanged = service.webAppearance != webAppearance
             let cssChanged = (service.customCSS ?? "") != (newCSS ?? "")
 
             // Only the Mobile-view toggle drives the UA here. Rewrite it only when
@@ -324,7 +325,7 @@ struct EditServiceSheet: View {
             // and any older build reading the store still honor "keep loaded".
             service.neverHibernate = (hibernationPolicy == .never)
             service.customCSS = newCSS
-            service.darkModeRaw = darkMode.rawValue
+            service.darkModeRaw = webAppearance.rawValue
             service.forceDarkMode = nil          // retire the legacy flag
             if userAgentChanged {
                 service.userAgent = mobileView ? UserAgentProvider.mobileSafari : nil
@@ -347,7 +348,7 @@ struct EditServiceSheet: View {
                 urlChanged: urlChanged,
                 cssChanged: cssChanged,
                 userAgentChanged: userAgentChanged,
-                darkModeChanged: darkModeChanged,
+                webAppearanceChanged: webAppearanceChanged,
                 presenceChanged: presenceChanged
             )
             if muteChanged || badgeChanged {

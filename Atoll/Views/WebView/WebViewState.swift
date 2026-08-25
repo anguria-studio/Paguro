@@ -4,12 +4,7 @@ import WebKit
 @MainActor
 @Observable
 final class WebViewState {
-    private(set) var canGoBack = false
-    private(set) var canGoForward = false
     private(set) var isLoading = false
-    private(set) var estimatedProgress: Double = 0
-    private(set) var currentURL: URL?
-    private(set) var title: String?
 
     private var observations: [NSKeyValueObservation] = []
     private(set) weak var webView: WKWebView?
@@ -28,51 +23,16 @@ final class WebViewState {
         generation &+= 1
         let gen = generation
         observations.removeAll()
-        canGoBack = webView.canGoBack
-        canGoForward = webView.canGoForward
         isLoading = webView.isLoading
-        estimatedProgress = webView.estimatedProgress
-        currentURL = webView.url
-        title = webView.title
 
         // WKWebView fires KVO on the main thread in practice, but this is not
         // contractually guaranteed. Use DispatchQueue.main.async for safety —
         // it's a no-op if already on main, and handles the off-main edge case
         // without the crash risk of MainActor.assumeIsolated.
         observations.append(
-            webView.observe(\.canGoBack, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? false
-                DispatchQueue.main.async { guard let self, self.generation == gen else { return }; self.canGoBack = value }
-            }
-        )
-        observations.append(
-            webView.observe(\.canGoForward, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? false
-                DispatchQueue.main.async { guard let self, self.generation == gen else { return }; self.canGoForward = value }
-            }
-        )
-        observations.append(
             webView.observe(\.isLoading, options: [.new]) { [weak self] _, change in
                 let value = change.newValue ?? false
                 DispatchQueue.main.async { guard let self, self.generation == gen else { return }; self.isLoading = value }
-            }
-        )
-        observations.append(
-            webView.observe(\.estimatedProgress, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? 0
-                DispatchQueue.main.async { guard let self, self.generation == gen else { return }; self.estimatedProgress = value }
-            }
-        )
-        observations.append(
-            webView.observe(\.url, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? nil
-                DispatchQueue.main.async { guard let self, self.generation == gen else { return }; self.currentURL = value }
-            }
-        )
-        observations.append(
-            webView.observe(\.title, options: [.new]) { [weak self] _, change in
-                let value = change.newValue ?? nil
-                DispatchQueue.main.async { guard let self, self.generation == gen else { return }; self.title = value }
             }
         )
     }
@@ -81,11 +41,6 @@ final class WebViewState {
         generation &+= 1
         observations.removeAll()
         webView = nil
-        canGoBack = false
-        canGoForward = false
         isLoading = false
-        estimatedProgress = 0
-        currentURL = nil
-        title = nil
     }
 }

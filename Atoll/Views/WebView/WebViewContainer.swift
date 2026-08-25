@@ -18,6 +18,19 @@ struct WebViewContainer: NSViewRepresentable {
 final class WebViewHostView: NSView {
     private weak var currentWebView: WKWebView?
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerCurve = .continuous
+        layer?.cornerRadius = AtollRadius.surface
+        layer?.masksToBounds = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     func setWebView(_ webView: WKWebView) {
         guard webView !== currentWebView else { return }
 

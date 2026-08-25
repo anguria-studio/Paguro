@@ -2016,16 +2016,46 @@ final class AtollTests: XCTestCase {
 
     // MARK: - Content blocker
 
-    // MARK: - Dark Reader
+    // MARK: - Web appearance
 
-    func testDarkInjectionTruthTable() {
-        typealias I = DarkReaderSupport.DarkInjection
-        // `.themed` only when the mode is On AND the app is dark; every other
-        // combination of mode × appDark is `.none`.
-        XCTAssertEqual(DarkReaderSupport.injection(mode: .on, appDark: true), I.themed)
-        XCTAssertEqual(DarkReaderSupport.injection(mode: .on, appDark: false), I.none)
-        XCTAssertEqual(DarkReaderSupport.injection(mode: .off, appDark: true), I.none)
-        XCTAssertEqual(DarkReaderSupport.injection(mode: .off, appDark: false), I.none)
+    func testWebAppearanceTruthTable() {
+        XCTAssertTrue(ServiceAppearanceMode.automatic.usesDarkAppearance(shellIsDark: true))
+        XCTAssertFalse(ServiceAppearanceMode.automatic.usesDarkAppearance(shellIsDark: false))
+        XCTAssertTrue(ServiceAppearanceMode.dark.usesDarkAppearance(shellIsDark: false))
+        XCTAssertFalse(ServiceAppearanceMode.light.usesDarkAppearance(shellIsDark: true))
+
+        XCTAssertEqual(
+            WebViewPool.webAppearanceName(mode: .automatic, shellIsDark: true),
+            .darkAqua
+        )
+        XCTAssertEqual(
+            WebViewPool.webAppearanceName(mode: .automatic, shellIsDark: false),
+            .aqua
+        )
+    }
+
+    func testNativeWebAppearanceDrivesPrefersColorScheme() async throws {
+        let html = """
+        <html><body><div role="main">ready</div></body></html>
+        """
+
+        let darkWebView = WKWebView(frame: .zero)
+        darkWebView.appearance = NSAppearance(named: .darkAqua)
+        darkWebView.loadHTMLString(html, baseURL: nil)
+        try await waitForFixture(darkWebView)
+        let darkMatches = try await darkWebView.evaluateJavaScript(
+            "matchMedia('(prefers-color-scheme: dark)').matches"
+        ) as? Bool
+        XCTAssertEqual(darkMatches, true)
+
+        let lightWebView = WKWebView(frame: .zero)
+        lightWebView.appearance = NSAppearance(named: .aqua)
+        lightWebView.loadHTMLString(html, baseURL: nil)
+        try await waitForFixture(lightWebView)
+        let lightMatches = try await lightWebView.evaluateJavaScript(
+            "matchMedia('(prefers-color-scheme: dark)').matches"
+        ) as? Bool
+        XCTAssertEqual(lightMatches, false)
     }
 
     /// Runs the catalog's Gmail `badgeJS` against a stub Gmail DOM. `hiddenUnread`
@@ -2203,72 +2233,36 @@ final class AtollTests: XCTestCase {
         XCTAssertEqual(count, 3, "an offscreen view should still read the inbox count from the nav label")
     }
 
-    func testDarkModeMigrationFromLegacyFlag() {
-        // Explicit mode wins.
-        XCTAssertEqual(ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "off").darkMode, .off)
-        XCTAssertEqual(ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "on").darkMode, .on)
-        // Legacy force-dark maps to On.
-        XCTAssertEqual(ServiceInstance(label: "x", url: "https://e.com", forceDarkMode: true).darkMode, .on)
-        // A stored "auto" (from before manual-only) and nothing set both resolve
-        // to Off — manual theming is opt-in, so a service that rode the old auto
-        // mode stops theming until the user turns it back on.
-        XCTAssertEqual(ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "auto").darkMode, .off)
-        XCTAssertEqual(ServiceInstance(label: "x", url: "https://e.com").darkMode, .off)
+    func testWebAppearanceMigratesLegacyDarkReaderValues() {
+        XCTAssertEqual(
+            ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "off").webAppearance,
+            .automatic
+        )
+        XCTAssertEqual(
+            ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "on").webAppearance,
+            .dark
+        )
+        XCTAssertEqual(
+            ServiceInstance(label: "x", url: "https://e.com", forceDarkMode: true).webAppearance,
+            .dark
+        )
+        XCTAssertEqual(
+            ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "auto").webAppearance,
+            .automatic
+        )
+        XCTAssertEqual(
+            ServiceInstance(label: "x", url: "https://e.com").webAppearance,
+            .automatic
+        )
+        XCTAssertEqual(
+            ServiceInstance(label: "x", url: "https://e.com", darkModeRaw: "light").webAppearance,
+            .light
+        )
     }
 
     func testAnnoyanceBlockingDefaultsFalse() {
         XCTAssertFalse(AppPreferences().annoyanceBlockingEnabledEffective)
         XCTAssertTrue(AppPreferences(annoyanceBlockingEnabled: true).annoyanceBlockingEnabledEffective)
-    }
-
-    func testDarkReaderBootstrapEnablesOnlyWhenDark() {
-        let dark = DarkReaderSupport.bootstrapScript(enable: true)
-        XCTAssertTrue(dark.contains("DarkReader.enable"))
-        XCTAssertTrue(dark.contains("setFetchMethod(window.fetch)"))
-
-        let light = DarkReaderSupport.bootstrapScript(enable: false)
-        XCTAssertFalse(light.contains("DarkReader.enable("))
-        XCTAssertTrue(light.contains("setFetchMethod(window.fetch)"))
-    }
-
-    func testDarkReaderAntiFlashSetsDarkBackground() {
-        let s = DarkReaderSupport.antiFlashScript()
-        XCTAssertTrue(s.contains("atoll-dr-antiflash"))
-        XCTAssertTrue(s.contains("#1a1a1a"))
-    }
-
-    func testDarkReaderLoadCoverRevealsAndSelfRemoves() {
-        let s = DarkReaderSupport.antiFlashScript()
-        // The cover is an opaque overlay on top of everything, not a background
-        // style, so it hides Dark Reader's washed intermediate pass, not just a
-        // white flash.
-        XCTAssertTrue(s.contains("z-index:2147483647"))
-        // It reveals once the page stops mutating and removes itself afterward.
-        XCTAssertTrue(s.contains("MutationObserver"))
-        XCTAssertTrue(s.contains("removeChild"))
-        // An absolute failsafe guarantees it can never trap the view.
-        XCTAssertTrue(s.contains("setTimeout(reveal, FAILSAFE_MS)"))
-        // Interaction is restored the instant the fade begins.
-        XCTAssertTrue(s.contains("pointerEvents = 'none'"))
-        // The cover is visual only, never modal: it's click-through from creation
-        // so a page that settles before it reveals stays usable underneath
-        // instead of having its input swallowed by the overlay.
-        XCTAssertTrue(s.contains("pointer-events:none"))
-        // Theming is always baked at document-start now (no detection verdict to
-        // wait for), so the cover begins settling immediately.
-        XCTAssertTrue(s.contains("beginSettle();"))
-    }
-
-    func testDarkReaderLoadCoverSettleCapIsConfigurable() {
-        XCTAssertTrue(DarkReaderSupport.antiFlashScript(settleCapMs: 6000).contains("SETTLE_CAP_MS = 6000"))
-    }
-
-    func testDarkReaderCoverHooksAreWired() {
-        let cover = DarkReaderSupport.antiFlashScript()
-        // The cover exposes the dismiss hook its live caller reaches across the
-        // shared isolated-world globals; disabling theming tears it down.
-        XCTAssertTrue(cover.contains("window.__atollCoverDismiss"))
-        XCTAssertTrue(DarkReaderSupport.disableJS.contains("__atollCoverDismiss"))
     }
 
     func testContentBlockingEnabledDefaultsTrue() {
@@ -2350,6 +2344,118 @@ final class AtollTests: XCTestCase {
         XCTAssertEqual(AtollRadius.surface, 14)
     }
 
+    /// The shell uses the compact system type ramp from the two reference apps.
+    /// These values must change as one reviewed group.
+    func testMainWindowTypeRampMatchesTheReferenceApps() {
+        XCTAssertEqual(Set(AtollTypeSize.allValues), [10.5, 11, 12, 12.5, 13, 14])
+        XCTAssertEqual(AtollTypeSize.sidebarLabel, 13)
+        XCTAssertEqual(AtollTypeSize.sidebarSection, 11)
+        XCTAssertEqual(AtollTypeSize.toolbarControl, 12)
+        XCTAssertEqual(AtollTypeSize.toolbarTitle, 14)
+    }
+
+    func testGlassIntensityScaleClampsAndRevealsTheBackdrop() {
+        XCTAssertEqual(GlassIntensityScale.normalized(-1), 0)
+        XCTAssertEqual(GlassIntensityScale.normalized(0.5), 0.5)
+        XCTAssertEqual(GlassIntensityScale.normalized(2), 1)
+        XCTAssertGreaterThan(
+            GlassIntensityScale.shellOpacity(0),
+            GlassIntensityScale.shellOpacity(1)
+        )
+        XCTAssertGreaterThan(
+            GlassIntensityScale.controlTintAlpha(0),
+            GlassIntensityScale.controlTintAlpha(1)
+        )
+        XCTAssertEqual(GlassIntensityScale.shellOpacity(0), 1, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.shellOpacity(0.5), 0.5, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.shellOpacity(1), 0, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.surfaceOpacity(0), 0.08, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.surfaceOpacity(1), 0, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.sidebarOpacity(0), 0.12, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.sidebarOpacity(1), 0, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.materialTintOpacity(1), 0, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.adaptiveSelectionProgress(0.6), 0, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.adaptiveSelectionProgress(0.8), 0.5, accuracy: 0.000_001)
+        XCTAssertEqual(GlassIntensityScale.adaptiveSelectionProgress(1), 1, accuracy: 0.000_001)
+    }
+
+    func testGlassLabUsesThreeExplicitNativeStyleChoices() {
+        XCTAssertEqual(
+            ShellGlassStyle.allCases.map(\.rawValue),
+            ["off", "clear", "regular"]
+        )
+        XCTAssertEqual(ShellGlassStyle.resolving("regular"), .regular)
+        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), .clear)
+        XCTAssertEqual(ShellGlassStyle.resolving(nil), .clear)
+        XCTAssertEqual(GlassLabDefaults.style, .clear)
+        XCTAssertEqual(GlassLabDefaults.transparency, 0.5)
+        XCTAssertEqual(GlassLabDefaults.fixedFrost, 1)
+    }
+
+    /// Both rail forms derive from one reviewed source-list geometry rule.
+    func testNativeSidebarGeometryIsInternallyConsistent() {
+        XCTAssertEqual(AtollMetric.Sidebar.surfaceWidth, 218)
+        XCTAssertEqual(AtollMetric.Sidebar.expandedWidth, 234)
+        XCTAssertEqual(AtollMetric.Sidebar.collapsedWidth, 64)
+        XCTAssertEqual(AtollMetric.Sidebar.contentInset, 10)
+        XCTAssertEqual(AtollMetric.Sidebar.horizontalInset, 18)
+        XCTAssertEqual(AtollMetric.Sidebar.rowWidth, 198)
+        XCTAssertEqual(
+            AtollMetric.Sidebar.rowWidth + (AtollMetric.Sidebar.contentInset * 2),
+            AtollMetric.Sidebar.surfaceWidth
+        )
+        XCTAssertEqual(AtollMetric.Sidebar.rowHeight, 28)
+        XCTAssertEqual(AtollMetric.Sidebar.dockItemSize, 38)
+        XCTAssertEqual(AtollMetric.Sidebar.dockRowHeight, 46)
+        XCTAssertEqual(AtollMetric.Sidebar.collapsedIconSize, 24)
+        XCTAssertEqual(
+            AtollMetric.Sidebar.collapsedWidth
+                - (AtollMetric.Sidebar.surfaceInset * 2)
+                - AtollMetric.Sidebar.dockItemSize,
+            10
+        )
+        XCTAssertEqual(AtollMetric.Sidebar.rowRadius, 7)
+        XCTAssertEqual(AtollMetric.Sidebar.surfaceInset, 8)
+        XCTAssertEqual(AtollMetric.Sidebar.topBarHeight, 52)
+        XCTAssertEqual(AtollMetric.Sidebar.collapsedSurfaceTopInset, 52)
+        XCTAssertEqual(AtollMetric.Sidebar.collapsedContentTopInset, 60)
+        XCTAssertEqual(AtollMetric.Sidebar.expandedToggleTrailingInset, 14)
+        XCTAssertEqual(AtollMetric.Sidebar.footerHeight, 52)
+        XCTAssertEqual(AtollMetric.Toolbar.height, 52)
+        XCTAssertEqual(AtollMetric.Toolbar.controlSize, 28)
+        XCTAssertEqual(AtollMetric.Toolbar.sidebarToggleSize, 32)
+        XCTAssertEqual(AtollMetric.Toolbar.glyphSize, 14)
+        XCTAssertEqual(AtollMetric.Toolbar.sidebarGlyphSize, 16)
+        XCTAssertEqual(AtollMetric.Toolbar.horizontalInset, 8)
+        XCTAssertEqual(AtollMetric.Toolbar.trafficLightTrailingEdge, 79)
+        XCTAssertEqual(AtollMetric.Toolbar.trafficLightClearance, 16)
+        XCTAssertEqual(AtollMetric.Toolbar.collapsedLeadingInset, 31)
+        XCTAssertEqual(
+            AtollMetric.Sidebar.collapsedWidth
+                + AtollMetric.Toolbar.collapsedLeadingInset
+                - AtollMetric.Toolbar.trafficLightTrailingEdge,
+            AtollMetric.Toolbar.trafficLightClearance
+        )
+    }
+
+    func testSidebarPresentationMapsToReviewedGeometry() {
+        XCTAssertEqual(SidebarPresentation.expanded.width, 234)
+        XCTAssertEqual(SidebarPresentation.expanded.serviceRowHeight, 28)
+        XCTAssertEqual(SidebarPresentation.expanded.surfaceTopInset, 8)
+        XCTAssertEqual(SidebarPresentation.expanded.surfaceBottomInset, 8)
+        XCTAssertEqual(SidebarPresentation.expanded.contentTopInset, 52)
+        XCTAssertEqual(SidebarPresentation.expanded.toggleCenterX, 204)
+        XCTAssertTrue(SidebarPresentation.expanded.showsLabels)
+
+        XCTAssertEqual(SidebarPresentation.collapsed.width, 64)
+        XCTAssertEqual(SidebarPresentation.collapsed.serviceRowHeight, 46)
+        XCTAssertEqual(SidebarPresentation.collapsed.surfaceTopInset, 52)
+        XCTAssertEqual(SidebarPresentation.collapsed.surfaceBottomInset, 8)
+        XCTAssertEqual(SidebarPresentation.collapsed.contentTopInset, 60)
+        XCTAssertEqual(SidebarPresentation.collapsed.toggleCenterX, 111)
+        XCTAssertFalse(SidebarPresentation.collapsed.showsLabels)
+    }
+
     /// Three severities, and the tone has to carry the difference: same fill
     /// weight throughout, a different tint and a different icon per severity.
     func testNoticeSeveritiesAreDistinctInToneAndIcon() {
@@ -2361,13 +2467,12 @@ final class AtollTests: XCTestCase {
         XCTAssertEqual(Set(all.map(\.fillOpacity)).count, 1)
     }
 
-    /// Selection and keyboard focus must never be drawn the same way. The audit's
-    /// finding was that `focusEffectDisabled()` deleted the focus signal instead
-    /// of reshaping it; a fill for one and a ring for the other is the reshape.
+    /// A selected row needs only its fill. A ring appears when keyboard focus is
+    /// on another row, where it gives information that selection does not.
     func testSelectionAndFocusNeverDrawTheSameMark() {
         XCTAssertEqual(RowMark(isSelected: true, isFocused: false), RowMark(fill: .selected, ring: false))
         XCTAssertEqual(RowMark(isSelected: false, isFocused: true), RowMark(fill: .none, ring: true))
-        XCTAssertEqual(RowMark(isSelected: true, isFocused: true), RowMark(fill: .selected, ring: true))
+        XCTAssertEqual(RowMark(isSelected: true, isFocused: true), RowMark(fill: .selected, ring: false))
         XCTAssertEqual(RowMark(isSelected: false, isFocused: false), RowMark(fill: .none, ring: false))
     }
 
@@ -4929,7 +5034,6 @@ final class AtollTests: XCTestCase {
         manager.installUserScripts(
             for: makeService(label: "Slack", catalogID: "slack"),
             customCSS: nil,
-            darkInjection: .none,
             stayActiveInBackground: false,
             on: controller
         )

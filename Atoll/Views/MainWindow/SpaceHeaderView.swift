@@ -23,11 +23,9 @@ enum SpaceHeader {
 /// you are. The other spaces are one click away in `SpacePaletteView` rather
 /// than always on screen, which is the price recorded with the pick.
 ///
-/// Geometry comes off the `C · Rethink` frames on Figma page `08`: 224 by 36 at
-/// radius 8 in the vertical rail, and 150 by 32 in the horizontal bar. Where the
-/// header sits — y 38 down the rail, x 80 along the bar so it clears the traffic
-/// lights — is the rail's business, not the header's, exactly as the row gutter
-/// is in `ServiceRowView`.
+/// The vertical header uses the same width and inset as each service row. The
+/// horizontal header stays 150 by 32 points so a space change does not move the
+/// service tabs. The rail places the header clear of the traffic lights.
 struct SpaceHeaderView: View {
     let spaceName: String?
     let emoji: String
@@ -43,15 +41,15 @@ struct SpaceHeaderView: View {
 
     /// Matches the rail and row widths in `ServiceRowView`, so the header and
     /// the services below it line up on both edges.
-    static let headerWidth: CGFloat = 224
-    static let headerHeight: CGFloat = 36
+    static let headerWidth = AtollMetric.Sidebar.rowWidth
+    static let headerHeight = AtollMetric.Sidebar.headerHeight
     /// The horizontal bar's header is a fixed width rather than hugging its
     /// name: it is the leftmost thing in the bar and a header that resized on
     /// every space switch would shove every service tab sideways.
     static let barHeaderWidth: CGFloat = 150
     static let barHeaderHeight: CGFloat = 32
 
-    private static let cornerRadius: CGFloat = 8
+    private static let cornerRadius = AtollMetric.Sidebar.rowRadius
     private static let gutter: CGFloat = 8
 
     var body: some View {
@@ -79,16 +77,19 @@ struct SpaceHeaderView: View {
     private var content: some View {
         HStack(spacing: Self.gutter) {
             Text(emoji)
-                .font(.system(size: axis == .vertical ? 16 : 15))
+                .font(.system(size: axis == .vertical ? 11 : 15))
                 .opacity(isMuted ? 0.5 : 1.0)
                 .accessibilityHidden(true)
 
             Text(displayName)
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(axis == .vertical ? .atollSidebarSection : .atollSidebarLabelSelected)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(spaceName == nil ? .secondary : .primary)
+                .foregroundStyle(
+                    axis == .vertical
+                        ? AtollColor.Text.tertiary
+                        : (spaceName == nil ? AtollColor.Text.secondary : AtollColor.Text.primary)
+                )
 
             Spacer(minLength: 0)
 
@@ -103,12 +104,12 @@ struct SpaceHeaderView: View {
 
             // Says the header does something. `chevron.up.chevron.down` is what
             // AppKit puts on a pop-up button, which is what this behaves like.
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+            Image(systemName: axis == .vertical ? "chevron.down" : "chevron.up.chevron.down")
+                .font(.system(size: axis == .vertical ? 8 : AtollTypeSize.sidebarAccessory, weight: .medium))
+                .foregroundStyle(AtollColor.Text.tertiary)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, Self.gutter)
+        .padding(.horizontal, axis == .vertical ? 4 : Self.gutter)
         .frame(
             width: axis == .vertical ? Self.headerWidth : Self.barHeaderWidth,
             height: axis == .vertical ? Self.headerHeight : Self.barHeaderHeight
@@ -125,9 +126,9 @@ struct SpaceHeaderView: View {
     /// is open, which is the pop-up button behaviour it borrows.
     private var fillStyle: AnyShapeStyle {
         if isPaletteOpen {
-            return AnyShapeStyle(.tint.opacity(0.12))
+            return AnyShapeStyle(AtollColor.Fill.control)
         } else if isHovering {
-            return AnyShapeStyle(Color.primary.opacity(0.06))
+            return AnyShapeStyle(AtollColor.Fill.rowHover)
         }
         return AnyShapeStyle(Color.clear)
     }

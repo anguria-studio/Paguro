@@ -99,7 +99,7 @@ struct SpacePaletteView: View {
             addSpaceButton
         }
         .frame(width: Self.paletteWidth)
-        .background(.ultraThickMaterial)
+        .atollMaterialBackground(.ultraThickMaterial)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
         .focusable()
         .focused($isFocused)
@@ -158,7 +158,7 @@ struct SpacePaletteView: View {
             Text(space.emoji)
                 .font(.title3)
                 .padding(6)
-                .background(.ultraThickMaterial)
+                .atollMaterialBackground(.ultraThickMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: AtollRadius.control))
         }
         .dropDestination(for: String.self) { items, location in

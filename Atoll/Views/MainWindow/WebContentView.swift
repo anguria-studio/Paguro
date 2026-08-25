@@ -4,6 +4,7 @@ import WebKit
 
 struct WebContentView: View {
     let selectedServiceID: UUID?
+    let sidebarIsCollapsed: Bool
 
     @Environment(AppState.self) private var appState
     @Query private var services: [ServiceInstance]
@@ -12,8 +13,9 @@ struct WebContentView: View {
     @State private var previousServiceID: UUID?
     @State private var showPasskeyNotice = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
-    /// Shared nav state so the top tab bar can host the nav buttons.
+    /// Shared web state for reload and stop in both window layouts.
     private var webViewState: WebViewState { appState.webViewState }
 
     private var selectedService: ServiceInstance? {
@@ -23,23 +25,20 @@ struct WebContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let service = selectedService, let webView = currentWebView {
+            if appState.railLayout == .sidebar {
+                WebContentHeader(
+                    webViewState: webViewState,
+                    title: selectedService?.label ?? "Atoll",
+                    webAppearanceIsDark: selectedServiceUsesDarkAppearance,
+                    canToggleWebAppearance: selectedService != nil,
+                    reservesSidebarToggleSpace: sidebarIsCollapsed,
+                    onToggleWebAppearance: toggleSelectedServiceWebAppearance
+                )
+            }
+
+            if selectedService != nil, let webView = currentWebView {
                 if showPasskeyNotice {
                     passkeyNoticeBanner
-                }
-
-                // The bar layout hosts the nav buttons in the top bar itself; the
-                // sidebar layout has no bar, so they get a slim row above the
-                // content. Still keyed off `.sidebar` after the enum dropped to
-                // two cases, and still right: those are the only two places the
-                // buttons can go.
-                if appState.railLayout == .sidebar {
-                    WebNavButtons(webViewState: webViewState, homeURL: URL(string: service.url))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(nsColor: .windowBackgroundColor))
-                    Divider()
                 }
 
                 ZStack(alignment: .topTrailing) {
@@ -70,11 +69,17 @@ struct WebContentView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
+                .background(
+                    AtollColor.shellCanvas(intensity: appState.liquidGlassIntensity)
+                )
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: webViewState.isLoading)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: appState.findInPageVisible)
             } else if selectedService != nil {
                 ProgressView("Loading service…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(
+                        AtollColor.shellCanvas(intensity: appState.liquidGlassIntensity)
+                    )
             } else {
                 emptyState
             }
@@ -91,6 +96,9 @@ struct WebContentView: View {
             // so the active service picks up the freshly created view.
             loadWebViewForSelectedService()
         }
+        .onChange(of: colorScheme) { _, newScheme in
+            appState.updateEffectiveShellAppearance(isDark: newScheme == .dark)
+        }
         .onChange(of: webViewState.isLoading) { _, loading in
             // Drop the snapshot once the page finishes so it can't linger over a
             // loaded page and to free the bitmap. Delayed past the fade, and
@@ -103,7 +111,25 @@ struct WebContentView: View {
         }
     }
 
+    private var selectedServiceUsesDarkAppearance: Bool {
+        selectedService?.webAppearance.usesDarkAppearance(
+            shellIsDark: colorScheme == .dark
+        ) ?? false
+    }
+
+    private func toggleSelectedServiceWebAppearance() {
+        guard let service = selectedService else { return }
+        let mode: ServiceAppearanceMode = selectedServiceUsesDarkAppearance
+            ? .light
+            : .dark
+        appState.setWebAppearance(mode, for: service.id)
+    }
+
     private func loadWebViewForSelectedService() {
+        // Set the native web appearance before Atoll creates a new WKWebView.
+        // Existing automatic services update in place.
+        appState.updateEffectiveShellAppearance(isDark: colorScheme == .dark)
+
         // Stop the outgoing service's active poll — but only if the pool still
         // regards it as the active service. On a deep-link switch AppState has
         // already made the incoming service active and moved the outgoing one
@@ -203,7 +229,7 @@ struct WebContentView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(AtollColor.Fill.quietSurface)
         .overlay(alignment: .bottom) { Divider() }
         .transition(.move(edge: .top).combined(with: .opacity))
         .task {
@@ -268,6 +294,8 @@ struct WebContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(
+            AtollColor.shellCanvas(intensity: appState.liquidGlassIntensity)
+        )
     }
 }

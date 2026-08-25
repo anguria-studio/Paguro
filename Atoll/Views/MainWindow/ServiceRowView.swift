@@ -8,10 +8,10 @@ import SwiftUI
 /// were two identical squares and the name lived only in a tooltip. Both axes
 /// now carry the name.
 ///
-/// Geometry comes off the `C · Rethink` frames on Figma page `08`: a 224 by 34
-/// row inside a 240 point rail, a 20 point icon at x 8, the label at x 36, and
-/// the badge trailing. The horizontal tab keeps the same parts and hugs its
-/// label instead of taking a fixed width.
+/// The vertical row follows the source-list geometry in Renewals and
+/// MacCleanerNative. The rail is 218 points wide. Each row has a 10 point side
+/// inset and a height of 28 points. The horizontal tab keeps the same parts and
+/// fits its label instead of taking a fixed width.
 ///
 /// Icon resolution, the spoken label, the badge and the media glyph are all
 /// shared with the rest of the app through `ServiceIconView.swift`.
@@ -19,6 +19,7 @@ struct ServiceRowView: View {
     let instance: ServiceInstance
     let isSelected: Bool
     var axis: Axis = .vertical
+    var sidebarPresentation: SidebarPresentation = .expanded
     var badgeCount: Int = 0
     var isHibernated: Bool = false
     var isMuted: Bool = false
@@ -26,30 +27,31 @@ struct ServiceRowView: View {
     var micActive: Bool = false
     var micMuted: Bool = false
     var health: ServiceHealth = .live
-    /// Whether the keyboard is on this row. Drawn as a ring, never as the fill
-    /// selection uses — see `RowMark`.
+    var glassIntensity = GlassIntensityScale.defaultValue
+    /// Whether the keyboard is on this row. A ring appears only when keyboard
+    /// focus differs from selection — see `RowMark`.
     var isFocused: Bool = false
     let action: () -> Void
 
     @State private var isHovering = false
 
-    /// Width of the vertical rail, and of a row inside it. The 8 point gutter on
-    /// each side is applied by the rail, not by the row.
-    static let railWidth: CGFloat = 240
-    static let rowWidth: CGFloat = 224
-    /// Row height in the vertical rail. The rail stacks these at 2 point spacing,
-    /// which is the drawn 36 point pitch.
-    static let rowHeight: CGFloat = 34
+    /// The expanded rail uses the MacCleanerNative source-list width.
+    static let rowWidth = AtollMetric.Sidebar.rowWidth
+    /// Compact source-list row height.
+    static let rowHeight = AtollMetric.Sidebar.rowHeight
     /// Tab height in the horizontal bar.
     static let tabHeight: CGFloat = 32
     /// Roughly what a labelled tab measures. Used only as the drop-midpoint
     /// fallback before the first geometry pass records a real width.
     static let tabTypicalWidth: CGFloat = 120
 
-    private static let cornerRadius = AtollRadius.control
-    private static let iconSize: CGFloat = 20
+    private static let cornerRadius = AtollMetric.Sidebar.rowRadius
     private static let iconCornerRadius = AtollRadius.icon
     private static let gutter: CGFloat = 8
+
+    private var isDockItem: Bool {
+        axis == .vertical && sidebarPresentation == .collapsed
+    }
 
     var body: some View {
         Button(action: action) {
@@ -57,15 +59,27 @@ struct ServiceRowView: View {
                 .opacity(isHibernated ? 0.6 : (isMuted ? 0.85 : 1.0))
                 .background {
                     let mark = RowMark(isSelected: isSelected, isFocused: isFocused, isHovering: isHovering)
-                    RoundedRectangle(cornerRadius: Self.cornerRadius)
-                        .fill(mark.fillStyle)
-                        .overlay(
+                    let adaptiveProgress = axis == .vertical && mark.fill == .selected
+                        ? GlassIntensityScale.adaptiveSelectionProgress(glassIntensity)
+                        : 0
+
+                    ZStack {
+                        RoundedRectangle(cornerRadius: Self.cornerRadius)
+                            .fill(mark.fillStyle)
+                            .opacity(1 - adaptiveProgress)
+
+                        if mark.fill == .selected {
                             RoundedRectangle(cornerRadius: Self.cornerRadius)
-                                .strokeBorder(
-                                    mark.ring ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear),
-                                    lineWidth: 2
-                                )
-                        )
+                                .fill(AtollColor.Fill.sidebarAdaptiveSelection)
+                                .opacity(adaptiveProgress)
+                        }
+
+                        RoundedRectangle(cornerRadius: Self.cornerRadius)
+                            .strokeBorder(
+                                mark.ring ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear),
+                                lineWidth: 2
+                            )
+                    }
                 }
                 .contentShape(Rectangle())
         }
@@ -88,28 +102,28 @@ struct ServiceRowView: View {
         .accessibilityAddTraits([.isButton, isSelected ? .isSelected : []])
     }
 
+    @ViewBuilder
     private var content: some View {
+        if isDockItem {
+            dockContent
+        } else {
+            labelledContent
+        }
+    }
+
+    private var labelledContent: some View {
         HStack(spacing: Self.gutter) {
-            ServiceIconSquare(
-                instance: instance,
-                size: Self.iconSize,
-                cornerRadius: Self.iconCornerRadius
-            )
-            // The health mark sits on the icon's bottom-right corner, as drawn.
-            // It is the one thing that stayed on the icon when the badge, bell,
-            // moon and camera dot moved inline: it is about the icon's page, and
-            // there is no room for a fifth thing on the trailing edge.
-            .overlay(alignment: .bottomTrailing) {
-                ServiceHealthDot(health: health)
-                    .offset(x: 3, y: 3)
-            }
+            serviceIcon(size: AtollMetric.Sidebar.expandedIconSize)
 
             Text(instance.label)
-                .font(.subheadline)
-                .fontWeight(isSelected ? .semibold : .regular)
+                .font(isSelected ? .atollSidebarLabelSelected : .atollSidebarLabel)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(isSelected ? .primary : .secondary)
+                .foregroundStyle(
+                    isSelected
+                        ? AtollColor.Fill.sidebarSelectedTint
+                        : AtollColor.Text.primary
+                )
 
             if axis == .vertical {
                 // Pushes the accessories to the trailing edge of the fixed-width
@@ -135,6 +149,47 @@ struct ServiceRowView: View {
         .fixedSize(horizontal: axis == .horizontal, vertical: false)
     }
 
+    /// The collapsed sidebar keeps only the service icon and its live marks.
+    /// The label remains available through the tooltip and accessibility text.
+    private var dockContent: some View {
+        serviceIcon(size: AtollMetric.Sidebar.collapsedIconSize)
+            .overlay(alignment: .topTrailing) {
+                if badgeCount > 0 && instance.showBadge {
+                    BadgeCountView(count: badgeCount)
+                        .scaleEffect(0.86)
+                        .offset(x: 7, y: -6)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if cameraActive || micActive || micMuted {
+                    MediaIndicatorGlyph(
+                        cameraActive: cameraActive,
+                        micActive: micActive,
+                        micMuted: micMuted
+                    )
+                    .offset(x: -5, y: 5)
+                }
+            }
+            .frame(
+                width: AtollMetric.Sidebar.dockItemSize,
+                height: AtollMetric.Sidebar.dockItemSize
+            )
+    }
+
+    private func serviceIcon(size: CGFloat) -> some View {
+        ServiceIconSquare(
+            instance: instance,
+            size: size,
+            cornerRadius: Self.iconCornerRadius
+        )
+        // Health belongs to the service page, so it stays on the icon in both
+        // sidebar forms.
+        .overlay(alignment: .bottomTrailing) {
+            ServiceHealthDot(health: health)
+                .offset(x: 3, y: 3)
+        }
+    }
+
     /// State that used to hang off the icon's corners, now inline where there is
     /// room for it. Ordered so the badge — the one thing that changes on its own
     /// while you are not looking — always lands last, on the trailing edge.
@@ -149,15 +204,15 @@ struct ServiceRowView: View {
 
             if isHibernated {
                 Image(systemName: "moon.zzz.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+                    .font(.atollSidebarAccessory)
+                    .foregroundStyle(AtollColor.Text.tertiary)
                     .accessibilityHidden(true)
             }
 
             if isMuted {
                 Image(systemName: "bell.slash.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+                    .font(.atollSidebarAccessory)
+                    .foregroundStyle(AtollColor.Text.tertiary)
                     .accessibilityHidden(true)
             }
 

@@ -1,21 +1,87 @@
 import SwiftUI
 
-/// Compact web navigation controls — back, forward, reload/stop, home — for the
-/// active service. No URL and no background of its own: it's hosted at the right
-/// of the top tab bar (horizontal layouts) and above the content (sidebar).
-struct WebNavButtons: View {
+/// The native header above web content in the left-sidebar layout.
+struct WebContentHeader: View {
     let webViewState: WebViewState
-    var homeURL: URL?
+    var title: String
+    var webAppearanceIsDark = false
+    var canToggleWebAppearance = false
+    var reservesSidebarToggleSpace = false
+    var onToggleWebAppearance: () -> Void = {}
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         HStack(spacing: 12) {
-            navButton("chevron.left", label: "Back", enabled: webViewState.canGoBack) {
-                webViewState.webView?.goBack()
-            }
-            navButton("chevron.right", label: "Forward", enabled: webViewState.canGoForward) {
-                webViewState.webView?.goForward()
+            if reservesSidebarToggleSpace {
+                Color.clear
+                    .frame(
+                        width: AtollMetric.Toolbar.sidebarToggleSize,
+                        height: AtollMetric.Toolbar.sidebarToggleSize
+                    )
+                    .accessibilityHidden(true)
             }
 
+            Text(title)
+                .font(.atollToolbarTitle)
+                .foregroundStyle(AtollColor.Text.primary)
+                .lineLimit(1)
+
+            Spacer(minLength: 24)
+
+            WebContentActions(
+                webViewState: webViewState,
+                webAppearanceIsDark: webAppearanceIsDark,
+                canToggleWebAppearance: canToggleWebAppearance,
+                onToggleWebAppearance: onToggleWebAppearance
+            )
+        }
+        .padding(
+            .leading,
+            reservesSidebarToggleSpace
+                ? AtollMetric.Toolbar.collapsedLeadingInset
+                : AtollMetric.Toolbar.horizontalInset
+        )
+        .padding(.trailing, AtollMetric.Toolbar.horizontalInset)
+        .frame(height: AtollMetric.Toolbar.height)
+        .background(WindowDragHandle())
+        .background(
+            AtollColor.shellCanvas(intensity: appState.liquidGlassIntensity)
+        )
+    }
+}
+
+/// The standard sidebar disclosure action.
+struct SidebarToggleButton: View {
+    let isCollapsed: Bool
+    let showsCollapsedChrome: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "sidebar.left")
+        }
+        .buttonStyle(AtollSidebarButtonStyle(isCollapsed: showsCollapsedChrome))
+        .keyboardShortcut("s", modifiers: [.command, .control])
+        .help(isCollapsed ? "Expand sidebar" : "Collapse sidebar")
+        .accessibilityLabel(isCollapsed ? "Expand sidebar" : "Collapse sidebar")
+        .accessibilityIdentifier("sidebar.toggle")
+    }
+}
+
+/// The two persistent actions for the active web service.
+///
+/// Service pages own their navigation. Atoll keeps only recovery from a stale
+/// page and the per-service appearance choice in the window header.
+struct WebContentActions: View {
+    let webViewState: WebViewState
+    let webAppearanceIsDark: Bool
+    let canToggleWebAppearance: Bool
+    let onToggleWebAppearance: () -> Void
+
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        HStack(spacing: 2) {
             Button {
                 if webViewState.isLoading {
                     webViewState.webView?.stopLoading()
@@ -24,37 +90,41 @@ struct WebNavButtons: View {
                 }
             } label: {
                 Image(systemName: webViewState.isLoading ? "xmark" : "arrow.clockwise")
-                    .font(.system(size: 12, weight: .medium))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AtollToolbarButtonStyle())
             .disabled(webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
 
-            if let homeURL {
-                navButton("house", label: "Home", enabled: webViewState.webView != nil) {
-                    webViewState.webView?.load(URLRequest(url: homeURL))
-                }
+            Button(action: onToggleWebAppearance) {
+                Image(systemName: webAppearanceIsDark ? "moon.fill" : "moon")
             }
-
+            .buttonStyle(AtollToolbarButtonStyle(isSelected: webAppearanceIsDark))
+            .disabled(!canToggleWebAppearance)
+            .help(
+                webAppearanceIsDark
+                    ? "Use a light service appearance"
+                    : "Use a dark service appearance"
+            )
+            .accessibilityLabel(
+                webAppearanceIsDark
+                    ? "Use a light service appearance"
+                    : "Use a dark service appearance"
+            )
+            .accessibilityValue(webAppearanceIsDark ? "Dark" : "Light")
         }
+        .padding(3)
+        .glassEffect(
+            .regular
+                .tint(
+                    AtollColor.Fill.glassTint(
+                        intensity: appState.liquidGlassIntensity
+                    )
+                )
+                .interactive(),
+            in: .capsule
+        )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Navigation")
-    }
-
-    private func navButton(
-        _ icon: String,
-        label: String,
-        enabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .help(label)
-        .accessibilityLabel(label)
+        .accessibilityLabel("Service controls")
     }
 }

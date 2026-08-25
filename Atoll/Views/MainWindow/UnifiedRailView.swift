@@ -22,9 +22,9 @@ struct UnifiedRailView: View {
     @Binding var selectedSpaceID: UUID?
     @Binding var selectedServiceID: UUID?
     var axis: Axis = .vertical
-    /// Inset applied to the content (top for the vertical rail, leading for the
-    /// horizontal bar) to clear the window traffic lights, kept inside so the
-    /// background and dividers still run full-length.
+    var sidebarPresentation: SidebarPresentation = .expanded
+    /// Leading inset for the horizontal bar. It keeps the space header clear of
+    /// the window traffic lights.
     var contentInset: CGFloat = 0
 
     @Query private var allLinks: [SpaceServiceLink]
@@ -32,6 +32,7 @@ struct UnifiedRailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showingPalette = false
     @State private var showingAddService = false
@@ -49,11 +50,10 @@ struct UnifiedRailView: View {
     /// here and the arrow keys move relative to it.
     @FocusState private var focusedServiceID: UUID?
     // Fallback drop midpoints, used only until the first geometry pass records a
-    // cell's real size. Both are half of what `ServiceRowView` draws: a 34 point
-    // row in the vertical rail, and a labelled tab of roughly 120 points in the
-    // horizontal bar. A wrong (too large) value would make every drop on that
+    // cell's real size. They are half of what `ServiceRowView` draws: the active
+    // sidebar row height and a labelled tab of roughly 120 points. A wrong (too
+    // large) value would make every drop on that
     // axis resolve `.before` and leave the last slot unreachable.
-    private static let serviceDropMidpoint: CGFloat = ServiceRowView.rowHeight / 2
     private static let serviceDropMidpointHorizontal: CGFloat = ServiceRowView.tabTypicalWidth / 2
     /// Measured size of each drop cell, so the before/after split uses the target's
     /// true midpoint instead of a hardcoded guess.
@@ -153,32 +153,72 @@ struct UnifiedRailView: View {
         }
     }
 
-    /// 240 points wide, against the 52 + 52 and two dividers the two rails used
-    /// to take. The header sits at y 38 — 28 points of traffic light, then 10 —
-    /// which is where the frame draws it.
+    /// A compact source list in expanded form and an icon dock when collapsed.
     private var verticalBody: some View {
         VStack(spacing: 0) {
-            spaceHeader
-                .padding(.top, 10 + contentInset)
-                .padding(.bottom, 6)
+            Color.clear
+                .frame(height: sidebarPresentation.contentTopInset)
+
+            if sidebarPresentation == .expanded {
+                spaceHeader
+                    .padding(.bottom, 7)
+            }
 
             ScrollView {
-                // 2 points between 34 point rows is the drawn 36 point pitch.
-                LazyVStack(spacing: 2) {
+                LazyVStack(spacing: sidebarPresentation == .expanded ? 2 : 4) {
                     ForEach(filteredLinks) { link in
                         serviceRow(for: link)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.bottom, 8)
             }
 
-            Divider()
+            if sidebarPresentation == .expanded {
+                VStack(spacing: 0) {
+                    Divider()
+                        .padding(.horizontal, 14)
 
-            addServiceButton
-                .padding(.vertical, 6)
+                    addServiceButton
+                        .frame(maxHeight: .infinity)
+                        .padding(.bottom, 8)
+                }
+                .frame(height: AtollMetric.Sidebar.footerHeight)
+            }
         }
-        .frame(width: ServiceRowView.railWidth)
-        .background(.background)
+        .frame(width: sidebarPresentation.width)
+        .background {
+            RoundedRectangle(cornerRadius: AtollRadius.surface, style: .continuous)
+                .fill(
+                    AtollColor.sidebarCanvas(
+                        intensity: appState.liquidGlassIntensity
+                    )
+                )
+                .padding(
+                    EdgeInsets(
+                        top: sidebarPresentation.surfaceTopInset,
+                        leading: AtollMetric.Sidebar.surfaceInset,
+                        bottom: sidebarPresentation.surfaceBottomInset,
+                        trailing: AtollMetric.Sidebar.surfaceInset
+                    )
+                )
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: AtollRadius.surface, style: .continuous)
+                .strokeBorder(AtollColor.shellBorder, lineWidth: 1)
+                .padding(
+                    EdgeInsets(
+                        top: sidebarPresentation.surfaceTopInset,
+                        leading: AtollMetric.Sidebar.surfaceInset,
+                        bottom: sidebarPresentation.surfaceBottomInset,
+                        trailing: AtollMetric.Sidebar.surfaceInset
+                    )
+                )
+        }
+        .animation(
+            reduceMotion ? nil : .smooth(duration: AtollMotion.sidebarTransitionSeconds),
+            value: sidebarPresentation
+        )
     }
 
     private var horizontalBody: some View {
@@ -191,25 +231,29 @@ struct UnifiedRailView: View {
 
             tabStrip
 
-            // Empty stretch between the tabs and the nav buttons. It draws
+            // Empty stretch between the tabs and the service controls. It draws
             // nothing and takes no hit of its own, so a click here falls through
             // to the window-drag handle behind the row.
             Spacer(minLength: 40)
 
-            // Nav buttons live at the far right of the bar (top-right corner of
-            // the window), acting on the active service.
-            WebNavButtons(webViewState: appState.webViewState, homeURL: activeHomeURL)
+            // Service controls live at the far right of the bar.
+            WebContentActions(
+                webViewState: appState.webViewState,
+                webAppearanceIsDark: activeServiceUsesDarkAppearance,
+                canToggleWebAppearance: activeService != nil,
+                onToggleWebAppearance: toggleActiveServiceWebAppearance
+            )
                 .padding(.trailing, 10)
         }
         .frame(height: Self.barHeight)
         // The OS window drag is off in the bar layout, so tab drags reorder
-        // instead of moving the window (see WindowMovableConfigurator). A
+        // instead of moving the window (see WindowChromeConfigurator). A
         // full-width drag handle behind the row restores "click any empty part
-        // of the bar to move the window": the header, tabs and nav buttons sit
+        // of the bar to move the window": the header, tabs and service controls sit
         // in front and take their own clicks, and every empty area falls through
         // to here.
         .background(WindowDragHandle())
-        .background(Color(nsColor: .windowBackgroundColor))
+        .atollMaterialBackground(.regularMaterial)
     }
 
     // MARK: - The space header, and the palette it opens
@@ -289,12 +333,25 @@ struct UnifiedRailView: View {
         .padding(.vertical, 2)
     }
 
-    /// Home URL of the currently selected service, for the nav home button.
-    private var activeHomeURL: URL? {
+    private var activeService: ServiceInstance? {
         guard let id = selectedServiceID,
               let service = filteredLinks.first(where: { $0.service.id == id })?.service
         else { return nil }
-        return URL(string: service.url)
+        return service
+    }
+
+    private var activeServiceUsesDarkAppearance: Bool {
+        activeService?.webAppearance.usesDarkAppearance(
+            shellIsDark: colorScheme == .dark
+        ) ?? false
+    }
+
+    private func toggleActiveServiceWebAppearance() {
+        guard let service = activeService else { return }
+        let mode: ServiceAppearanceMode = activeServiceUsesDarkAppearance
+            ? .light
+            : .dark
+        appState.setWebAppearance(mode, for: service.id)
     }
 
     // MARK: - Service cells
@@ -319,7 +376,7 @@ struct UnifiedRailView: View {
                 Text(link.service.label)
                     .font(.caption)
                     .padding(6)
-                    .background(.ultraThickMaterial)
+                    .atollMaterialBackground(.ultraThickMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: AtollRadius.control))
             }
             .dropDestination(for: String.self) { items, location in
@@ -330,7 +387,7 @@ struct UnifiedRailView: View {
                 let placement: ServiceReorderPlacement = {
                     let size = cellSizes[link.id]
                     if axis == .vertical {
-                        let mid = (size?.height).map { $0 / 2 } ?? Self.serviceDropMidpoint
+                        let mid = (size?.height).map { $0 / 2 } ?? sidebarPresentation.serviceRowHeight / 2
                         return location.y < mid ? .before : .after
                     }
                     let mid = (size?.width).map { $0 / 2 } ?? Self.serviceDropMidpointHorizontal
@@ -356,10 +413,9 @@ struct UnifiedRailView: View {
             .focused($focusedServiceID, equals: link.service.id)
             // The system's rectangular ring stays off, but the signal it used to
             // carry is now drawn by the row itself (`RowMark`): a fill for
-            // selection, a ring for focus, never the same mark. 1.5.10 switched
-            // the system ring off because it stacked on the app's own border and
-            // the 52 point strip clipped the result; the rail is 240 wide now,
-            // and the app draws one ring rather than two.
+            // selection, and a ring only when focus differs from selection.
+            // 1.5.10 switched the system ring off because it stacked on the
+            // app's own border and the 52 point strip clipped the result.
             .focusEffectDisabled()
             .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow]) { press in
                 handleServiceKey(press, for: link)
@@ -381,6 +437,7 @@ struct UnifiedRailView: View {
             instance: link.service,
             isSelected: isSelected,
             axis: axis,
+            sidebarPresentation: axis == .vertical ? sidebarPresentation : .expanded,
             badgeCount: badge,
             isHibernated: hibernated,
             isMuted: muted,
@@ -388,6 +445,7 @@ struct UnifiedRailView: View {
             micActive: media?.micActive ?? false,
             micMuted: media?.micMuted ?? false,
             health: health,
+            glassIntensity: appState.liquidGlassIntensity,
             isFocused: focused
         ) {
             selectService(link)
@@ -436,40 +494,37 @@ struct UnifiedRailView: View {
         return .handled
     }
 
-    /// In the wide vertical rail this is a labelled row like the services above
-    /// it, with the plus sitting in a 20 point box so its text starts on the same
-    /// x as theirs. The horizontal bar has no width to spare, so it stays a plus.
+    /// The vertical rail uses a small native bordered action. The horizontal bar
+    /// has no width to spare, so it stays a plain plus.
+    @ViewBuilder
     private var addServiceButton: some View {
-        Button {
-            showingAddService = true
-        } label: {
-            Group {
-                if axis == .vertical {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(width: 20, height: 20)
-                        Text("Add service")
-                            .font(.subheadline)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 8)
-                    .frame(width: ServiceRowView.rowWidth, height: 30)
-                } else {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 36, height: ServiceRowView.tabHeight)
-                }
+        if axis == .vertical {
+            Button {
+                showingAddService = true
+            } label: {
+                Label("Add service", systemImage: "plus")
+                    .font(.atollToolbarControl)
+                    .frame(maxWidth: .infinity)
             }
-            .foregroundStyle(.secondary)
-            .contentShape(Rectangle())
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .frame(width: ServiceRowView.rowWidth)
+            .help("Add service")
+            .disabled(selectedSpaceID == nil)
+        } else {
+            Button {
+                showingAddService = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 36, height: ServiceRowView.tabHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Add service")
+            .accessibilityLabel("Add service")
+            .disabled(selectedSpaceID == nil)
         }
-        .buttonStyle(.plain)
-        .help("Add service")
-        .accessibilityLabel("Add service")
-        // Without a space there is nothing to add a service to, and
-        // AddServiceSheet needs one.
-        .disabled(selectedSpaceID == nil)
     }
 
     @ViewBuilder

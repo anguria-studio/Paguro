@@ -33,7 +33,6 @@ targets:
       - path: Atoll/Resources/ServiceCatalog.json
       - path: Atoll/Resources/hagezi-light.json
       - path: Atoll/Resources/fanboy-annoyance.json
-      - path: Atoll/Resources/darkreader.js
       - path: Atoll/Resources/NotificationScripts
         optional: true
     dependencies:

@@ -39,6 +39,9 @@ __pycache__/
 # Personal marketing drafts (not part of the repo)
 /marketing/
 
+# Local company documents
+/attestation_domiciliation_LTRZ_Software.pdf
+
 # Private work plans and local writing-tool files
 /.project/
 /.vale.local.ini
