@@ -1,4 +1,5 @@
 import AppKit
+import AtollCore
 import SwiftUI
 
 /// System font sizes for the main window.
@@ -54,7 +55,9 @@ enum AtollMetric {
         static let surfaceInset: CGFloat = 8
         static let surfaceWidth: CGFloat = 218
         static let expandedWidth: CGFloat = surfaceWidth + (surfaceInset * 2)
-        static let collapsedWidth: CGFloat = 64
+        static let collapsedWidth = CGFloat(
+            DockIconSizing.railWidth(baseSize: DockIconSizing.defaultBaseSize)
+        )
         static let contentInset: CGFloat = 10
         static let horizontalInset: CGFloat = surfaceInset + contentInset
         static let rowWidth: CGFloat = surfaceWidth - (contentInset * 2)
@@ -64,13 +67,25 @@ enum AtollMetric {
         static let headerHeight: CGFloat = 24
         static let rowRadius: CGFloat = 7
         static let expandedIconSize: CGFloat = 18
-        static let collapsedIconSize: CGFloat = 24
+        static let collapsedIconSize = CGFloat(DockIconSizing.defaultBaseSize)
         static let topBarHeight: CGFloat = 52
         static let collapsedSurfaceTopInset: CGFloat = topBarHeight
         static let collapsedContentTopInset: CGFloat =
             collapsedSurfaceTopInset + surfaceInset
         static let expandedToggleTrailingInset: CGFloat = 14
         static let footerHeight: CGFloat = 52
+
+        static func collapsedWidth(iconSize: Double) -> CGFloat {
+            CGFloat(DockIconSizing.railWidth(baseSize: iconSize))
+        }
+
+        static func dockItemSize(displayedIconSize: Double) -> CGFloat {
+            CGFloat(DockIconSizing.selectionSize(displayedIconSize: displayedIconSize))
+        }
+
+        static func dockRowHeight(displayedIconSize: Double) -> CGFloat {
+            CGFloat(DockIconSizing.rowHeight(displayedIconSize: displayedIconSize))
+        }
     }
 
     enum Toolbar {
@@ -86,6 +101,13 @@ enum AtollMetric {
             trafficLightTrailingEdge
                 - Sidebar.collapsedWidth
                 + trafficLightClearance
+
+        static func collapsedLeadingInset(sidebarWidth: CGFloat) -> CGFloat {
+            max(
+                0,
+                trafficLightTrailingEdge + trafficLightClearance - sidebarWidth
+            )
+        }
     }
 }
 
@@ -94,6 +116,8 @@ enum AtollMotion {
     static let sidebarTransitionSeconds = 0.25
     static let collapsedChromeDelay: Duration = .milliseconds(300)
     static let collapsedChromeFadeSeconds = 0.08
+    static let dockMagnificationSeconds = 0.16
+    static let dockHoverExitDelay: Duration = .milliseconds(140)
 }
 
 /// The user-facing transparency scale for the Atoll shell.
@@ -168,15 +192,31 @@ enum GlassLabDefaults {
     static let fixedFrost = 1.0
 }
 
+enum DockRailPosition: String, CaseIterable {
+    case top
+    case center
+
+    var displayName: String {
+        switch self {
+        case .top: "Top"
+        case .center: "Center"
+        }
+    }
+}
+
 /// The two visual forms of the left sidebar.
 enum SidebarPresentation: Equatable {
     case expanded
     case collapsed
 
     var width: CGFloat {
+        width(iconRailBaseSize: DockIconSizing.defaultBaseSize)
+    }
+
+    func width(iconRailBaseSize: Double) -> CGFloat {
         switch self {
         case .expanded: AtollMetric.Sidebar.expandedWidth
-        case .collapsed: AtollMetric.Sidebar.collapsedWidth
+        case .collapsed: AtollMetric.Sidebar.collapsedWidth(iconSize: iconRailBaseSize)
         }
     }
 

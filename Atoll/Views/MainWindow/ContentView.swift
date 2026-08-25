@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AtollCore
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
@@ -85,7 +86,11 @@ struct ContentView: View {
                 spaceSelection: $state.selectedSpaceID,
                 serviceSelection: $state.selectedServiceID
             )
-            .frame(minWidth: 800, minHeight: 500)
+            // A minimum height here makes the shell larger than a short
+            // window. SwiftUI then centers and clips the complete shell, which
+            // removes the header and bottom gutter. Let the web content and
+            // sidebar scroll area absorb all vertical compression.
+            .frame(minWidth: 800)
             // Extend up into the (hidden) title-bar area so the tab bar sits at
             // the very top of the window; the traffic-light insets keep the
             // top-left clear.
@@ -245,6 +250,7 @@ struct ContentView: View {
                     serviceSelection: serviceSelection,
                     sidebarPresentation: presentation
                 )
+                .zIndex(1)
                 webContent
                     .padding(.trailing, AtollMetric.Sidebar.surfaceInset)
                     .padding(.bottom, AtollMetric.Sidebar.surfaceInset)
@@ -298,7 +304,10 @@ struct ContentView: View {
     private var webContent: some View {
         WebContentView(
             selectedServiceID: appState.selectedServiceID,
-            sidebarIsCollapsed: sidebarCollapsed
+            sidebarIsCollapsed: sidebarCollapsed,
+            collapsedSidebarWidth: AtollMetric.Sidebar.collapsedWidth(
+                iconSize: appState.iconRailBaseSize
+            )
         )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .contain)

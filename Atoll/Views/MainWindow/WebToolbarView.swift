@@ -7,6 +7,7 @@ struct WebContentHeader: View {
     var webAppearanceIsDark = false
     var canToggleWebAppearance = false
     var reservesSidebarToggleSpace = false
+    var sidebarToggleLeadingInset = AtollMetric.Toolbar.collapsedLeadingInset
     var onToggleWebAppearance: () -> Void = {}
     @Environment(AppState.self) private var appState
 
@@ -38,11 +39,13 @@ struct WebContentHeader: View {
         .padding(
             .leading,
             reservesSidebarToggleSpace
-                ? AtollMetric.Toolbar.collapsedLeadingInset
+                ? sidebarToggleLeadingInset
                 : AtollMetric.Toolbar.horizontalInset
         )
         .padding(.trailing, AtollMetric.Toolbar.horizontalInset)
         .frame(height: AtollMetric.Toolbar.height)
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
         .background(WindowDragHandle())
         .background(
             AtollColor.shellCanvas(intensity: appState.liquidGlassIntensity)

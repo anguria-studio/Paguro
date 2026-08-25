@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import WebKit
 import LocalAuthentication
+import AtollCore
 
 /// How `AppState` ended up with its `ModelContainer` at launch — drives the
 /// recovery banner. See `AppState.loadContainer`.
@@ -136,15 +137,30 @@ final class AppState {
     /// App-level appearance override, loaded from AppPreferences.
     var appearanceMode: AppearanceMode = .system
 
-    /// User-selected values for the main window appearance experiment.
-    /// These small visual preferences live in UserDefaults so they remain
-    /// available if the content store needs recovery.
+    /// Small visual preferences live in UserDefaults so they remain available
+    /// if the content store needs recovery.
     var liquidGlassStyle = GlassLabDefaults.style
     var liquidGlassIntensity = GlassLabDefaults.transparency
+    var iconRailBaseSize = DockIconSizing.defaultBaseSize
+    var iconRailMagnificationEnabled = false
+    var iconRailMagnifiedSize = DockIconSizing.defaultMagnifiedSize
+    var iconRailPosition = DockRailPosition.center
 
     @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
     private static let liquidGlassStyleKey = "Atoll.liquidGlassStyle"
     private static let liquidGlassIntensityKey = "Atoll.liquidGlassIntensity"
+    private static let iconRailBaseSizeKey = "Atoll.iconRailBaseSize"
+    private static let iconRailMagnificationEnabledKey = "Atoll.iconRailMagnificationEnabled"
+    private static let iconRailMagnifiedSizeKey = "Atoll.iconRailMagnifiedSize"
+    private static let iconRailPositionKey = "Atoll.iconRailPosition"
+
+    var iconRailMagnification: Double {
+        guard iconRailMagnificationEnabled else { return 0 }
+        return DockIconSizing.magnification(
+            baseSize: iconRailBaseSize,
+            peakSize: iconRailMagnifiedSize
+        )
+    }
 
     /// The color scheme to force on the app, or nil to follow the system.
     var appearanceColorScheme: ColorScheme? {
@@ -1084,6 +1100,37 @@ final class AppState {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: Self.liquidGlassStyleKey)
         defaults.removeObject(forKey: Self.liquidGlassIntensityKey)
+    }
+
+    func setIconRailBaseSize(_ value: Double) {
+        let magnification = iconRailMagnification
+        iconRailBaseSize = DockIconSizing.baseSize(value)
+        iconRailMagnifiedSize = DockIconSizing.peakSize(
+            baseSize: iconRailBaseSize,
+            magnification: magnification
+        )
+
+        let defaults = UserDefaults.standard
+        defaults.set(iconRailBaseSize, forKey: Self.iconRailBaseSizeKey)
+        defaults.set(iconRailMagnifiedSize, forKey: Self.iconRailMagnifiedSizeKey)
+    }
+
+    func setIconRailMagnification(_ value: Double) {
+        let magnification = DockIconSizing.magnification(value)
+        iconRailMagnificationEnabled = magnification > 0
+        iconRailMagnifiedSize = DockIconSizing.peakSize(
+            baseSize: iconRailBaseSize,
+            magnification: magnification
+        )
+
+        let defaults = UserDefaults.standard
+        defaults.set(iconRailMagnificationEnabled, forKey: Self.iconRailMagnificationEnabledKey)
+        defaults.set(iconRailMagnifiedSize, forKey: Self.iconRailMagnifiedSizeKey)
+    }
+
+    func setIconRailPosition(_ position: DockRailPosition) {
+        iconRailPosition = position
+        UserDefaults.standard.set(position.rawValue, forKey: Self.iconRailPositionKey)
     }
 
     /// Applies user edits to a service: persists label/URL/keep-loaded, syncs
@@ -2598,6 +2645,28 @@ final class AppState {
         liquidGlassIntensity = GlassIntensityScale.normalized(
             storedGlassIntensity ?? GlassLabDefaults.transparency
         )
+        let defaults = UserDefaults.standard
+        let storedBaseSize = defaults.object(forKey: Self.iconRailBaseSizeKey) != nil
+            ? defaults.double(forKey: Self.iconRailBaseSizeKey)
+            : DockIconSizing.defaultBaseSize
+        iconRailBaseSize = DockIconSizing.baseSize(storedBaseSize)
+        iconRailMagnificationEnabled = defaults.object(
+            forKey: Self.iconRailMagnificationEnabledKey
+        ) != nil
+            ? defaults.bool(forKey: Self.iconRailMagnificationEnabledKey)
+            : false
+        let storedMagnifiedSize = defaults.object(
+            forKey: Self.iconRailMagnifiedSizeKey
+        ) != nil
+            ? defaults.double(forKey: Self.iconRailMagnifiedSizeKey)
+            : DockIconSizing.defaultMagnifiedSize
+        iconRailMagnifiedSize = DockIconSizing.magnifiedSize(
+            storedMagnifiedSize,
+            baseSize: iconRailBaseSize
+        )
+        iconRailPosition = defaults.string(forKey: Self.iconRailPositionKey)
+            .flatMap(DockRailPosition.init(rawValue:))
+            ?? .center
         // Frost is now a fixed material rule. Remove the temporary Glass Lab
         // value so an old experiment cannot affect a future setting.
         UserDefaults.standard.removeObject(forKey: "Atoll.backdropFrostIntensity")

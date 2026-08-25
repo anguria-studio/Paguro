@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import os
+import AtollCore
 
 /// One rail, in either axis, holding the current space as its header and that
 /// space's services under it.
@@ -41,6 +42,8 @@ struct UnifiedRailView: View {
     @State private var confirmingDeleteSpace: Space?
     @State private var confirmingDelete: SpaceServiceLink?
     @State private var editingService: ServiceInstance?
+    @State private var hoveredDockServiceID: UUID?
+    @State private var dockHoverExitTask: Task<Void, Never>?
     /// The link whose service is being moved into a brand-new space: set when the
     /// user picks "New Space…", it presents the space editor and, on create,
     /// moves the service into the freshly made space.
@@ -164,15 +167,33 @@ struct UnifiedRailView: View {
                     .padding(.bottom, 7)
             }
 
-            ScrollView {
-                LazyVStack(spacing: sidebarPresentation == .expanded ? 2 : 4) {
-                    ForEach(filteredLinks) { link in
-                        serviceRow(for: link)
+            GeometryReader { geometry in
+                ScrollView {
+                    LazyVStack(spacing: sidebarPresentation == .expanded ? 2 : 0) {
+                        ForEach(filteredLinks) { link in
+                            serviceRow(for: link)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, dockRailTopPadding(viewportHeight: geometry.size.height))
+                    .padding(.bottom, sidebarPresentation == .expanded ? 8 : 0)
+                    .offset(y: dockStackVerticalOffset)
+                    .animation(
+                        reduceMotion
+                            ? nil
+                            : .smooth(duration: AtollMotion.dockMagnificationSeconds),
+                        value: dockStackVerticalOffset
+                    )
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 8)
+                .scrollClipDisabled(sidebarPresentation == .collapsed)
             }
+            .clipShape(VerticalRailClipShape())
+            .padding(
+                .bottom,
+                sidebarPresentation == .collapsed
+                    ? AtollMetric.Sidebar.surfaceInset
+                    : 0
+            )
 
             if sidebarPresentation == .expanded {
                 VStack(spacing: 0) {
@@ -186,7 +207,11 @@ struct UnifiedRailView: View {
                 .frame(height: AtollMetric.Sidebar.footerHeight)
             }
         }
-        .frame(width: sidebarPresentation.width)
+        .frame(
+            width: sidebarPresentation.width(
+                iconRailBaseSize: appState.iconRailBaseSize
+            )
+        )
         .background {
             RoundedRectangle(cornerRadius: AtollRadius.surface, style: .continuous)
                 .fill(
@@ -219,6 +244,23 @@ struct UnifiedRailView: View {
             reduceMotion ? nil : .smooth(duration: AtollMotion.sidebarTransitionSeconds),
             value: sidebarPresentation
         )
+        .animation(
+            reduceMotion ? nil : .smooth(duration: AtollMotion.sidebarTransitionSeconds),
+            value: appState.iconRailBaseSize
+        )
+        .onChange(of: sidebarPresentation) { _, presentation in
+            if presentation != .collapsed {
+                clearDockHover()
+            }
+        }
+        .onChange(of: appState.iconRailMagnificationEnabled) { _, enabled in
+            if !enabled {
+                clearDockHover()
+            }
+        }
+        .onDisappear {
+            clearDockHover()
+        }
     }
 
     private var horizontalBody: some View {
@@ -433,6 +475,8 @@ struct UnifiedRailView: View {
         health: ServiceHealth,
         focused: Bool
     ) -> some View {
+        let displayedIconSize = dockIconSize(for: link.service.id)
+        let baseIconSize = appState.iconRailBaseSize
         ServiceRowView(
             instance: link.service,
             isSelected: isSelected,
@@ -446,10 +490,113 @@ struct UnifiedRailView: View {
             micMuted: media?.micMuted ?? false,
             health: health,
             glassIntensity: appState.liquidGlassIntensity,
+            dockIconSize: displayedIconSize,
+            dockItemSize: AtollMetric.Sidebar.dockItemSize(
+                displayedIconSize: Double(displayedIconSize)
+            ),
+            dockRowHeight: AtollMetric.Sidebar.dockRowHeight(
+                displayedIconSize: Double(displayedIconSize)
+            ),
+            dockIconHorizontalOffset: CGFloat(DockIconSizing.horizontalOffset(
+                baseSize: baseIconSize,
+                displayedIconSize: Double(displayedIconSize)
+            )),
+            dockTooltipLeadingOffset: CGFloat(DockIconSizing.tooltipLeadingOffset(
+                baseSize: baseIconSize,
+                displayedIconSize: Double(displayedIconSize)
+            )),
+            isDockHovered: hoveredDockServiceID == link.service.id,
+            dockMagnificationActive: hoveredDockServiceID != nil
+                && appState.iconRailMagnificationEnabled,
+            onDockHoverChange: { hovering in
+                if hovering {
+                    beginDockHover(for: link.service.id)
+                } else {
+                    endDockHover(for: link.service.id)
+                }
+            },
             isFocused: focused
         ) {
             selectService(link)
         }
+    }
+
+    private func dockIconSize(for serviceID: UUID) -> CGFloat {
+        guard sidebarPresentation == .collapsed,
+              let itemIndex = filteredLinks.firstIndex(where: { $0.service.id == serviceID })
+        else {
+            return CGFloat(DockIconSizing.baseSize(appState.iconRailBaseSize))
+        }
+
+        let hoveredIndex = hoveredDockServiceID.flatMap { hoveredID in
+            filteredLinks.firstIndex(where: { $0.service.id == hoveredID })
+        }
+        return CGFloat(DockIconSizing.displayedSize(
+            baseSize: appState.iconRailBaseSize,
+            magnifiedSize: appState.iconRailMagnifiedSize,
+            magnificationEnabled: appState.iconRailMagnificationEnabled,
+            itemIndex: itemIndex,
+            hoveredIndex: hoveredIndex
+        ))
+    }
+
+    private var dockStackVerticalOffset: CGFloat {
+        guard sidebarPresentation == .collapsed else { return 0 }
+
+        let hoveredIndex = hoveredDockServiceID.flatMap { hoveredID in
+            filteredLinks.firstIndex(where: { $0.service.id == hoveredID })
+        }
+        return CGFloat(DockIconSizing.stackVerticalOffset(
+            baseSize: appState.iconRailBaseSize,
+            magnifiedSize: appState.iconRailMagnifiedSize,
+            magnificationEnabled: appState.iconRailMagnificationEnabled,
+            itemCount: filteredLinks.count,
+            hoveredIndex: hoveredIndex
+        ))
+    }
+
+    private func dockRailTopPadding(viewportHeight: CGFloat) -> CGFloat {
+        guard sidebarPresentation == .collapsed,
+              appState.iconRailPosition == .center
+        else { return 0 }
+
+        return CGFloat(DockIconSizing.centeredTopPadding(
+            viewportHeight: Double(viewportHeight),
+            itemCount: filteredLinks.count,
+            baseSize: appState.iconRailBaseSize,
+            bottomInset: 0
+        ))
+    }
+
+    /// A magnified row changes the pointer target while the pointer is still.
+    /// Keep its hover state briefly so the new geometry can settle. Entry stays
+    /// immediate, and entry on any icon cancels the pending exit.
+    private func beginDockHover(for serviceID: UUID) {
+        dockHoverExitTask?.cancel()
+        dockHoverExitTask = nil
+        hoveredDockServiceID = serviceID
+    }
+
+    private func endDockHover(for serviceID: UUID) {
+        guard hoveredDockServiceID == serviceID else { return }
+
+        dockHoverExitTask?.cancel()
+        dockHoverExitTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: AtollMotion.dockHoverExitDelay)
+            } catch {
+                return
+            }
+
+            guard hoveredDockServiceID == serviceID else { return }
+            hoveredDockServiceID = nil
+        }
+    }
+
+    private func clearDockHover() {
+        dockHoverExitTask?.cancel()
+        dockHoverExitTask = nil
+        hoveredDockServiceID = nil
     }
 
     /// Selects a service and co-locates keyboard focus on its cell, so a click
@@ -841,5 +988,22 @@ struct UnifiedRailView: View {
         appState.webViewPool.removeWebView(for: serviceID)
         appState.markDataStoreOrphaned(dataStoreIdentifier)
         appState.cleanUpOrphanedDataStores()
+    }
+}
+
+/// Clips the scrolling rail at its top and bottom while it keeps enough
+/// horizontal space for a magnified icon and its tooltip.
+private struct VerticalRailClipShape: Shape {
+    private static let horizontalOverflow: CGFloat = 4_096
+
+    func path(in rect: CGRect) -> Path {
+        Path(
+            CGRect(
+                x: rect.minX - Self.horizontalOverflow,
+                y: rect.minY,
+                width: rect.width + (Self.horizontalOverflow * 2),
+                height: rect.height
+            )
+        )
     }
 }

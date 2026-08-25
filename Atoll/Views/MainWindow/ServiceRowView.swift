@@ -28,12 +28,21 @@ struct ServiceRowView: View {
     var micMuted: Bool = false
     var health: ServiceHealth = .live
     var glassIntensity = GlassIntensityScale.defaultValue
+    var dockIconSize = AtollMetric.Sidebar.collapsedIconSize
+    var dockItemSize = AtollMetric.Sidebar.dockItemSize
+    var dockRowHeight = AtollMetric.Sidebar.dockRowHeight
+    var dockIconHorizontalOffset: CGFloat = 0
+    var dockTooltipLeadingOffset: CGFloat = 0
+    var isDockHovered = false
+    var dockMagnificationActive = false
+    var onDockHoverChange: (Bool) -> Void = { _ in }
     /// Whether the keyboard is on this row. A ring appears only when keyboard
     /// focus differs from selection — see `RowMark`.
     var isFocused: Bool = false
     let action: () -> Void
 
     @State private var isHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The expanded rail uses the MacCleanerNative source-list width.
     static let rowWidth = AtollMetric.Sidebar.rowWidth
@@ -53,12 +62,20 @@ struct ServiceRowView: View {
         axis == .vertical && sidebarPresentation == .collapsed
     }
 
+    private var presentsHover: Bool {
+        isDockItem ? isDockHovered : isHovering
+    }
+
     var body: some View {
         Button(action: action) {
             content
                 .opacity(isHibernated ? 0.6 : (isMuted ? 0.85 : 1.0))
                 .background {
-                    let mark = RowMark(isSelected: isSelected, isFocused: isFocused, isHovering: isHovering)
+                    let mark = RowMark(
+                        isSelected: isSelected,
+                        isFocused: isFocused,
+                        isHovering: presentsHover
+                    )
                     let adaptiveProgress = axis == .vertical && mark.fill == .selected
                         ? GlassIntensityScale.adaptiveSelectionProgress(glassIntensity)
                         : 0
@@ -80,14 +97,36 @@ struct ServiceRowView: View {
                                 lineWidth: 2
                             )
                     }
+                    .opacity(isDockItem && dockMagnificationActive ? 0 : 1)
                 }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        // The name is on the row now, so the tooltip is only there for the case
-        // the row truncates it.
-        .help(instance.label)
+        .frame(height: isDockItem ? dockRowHeight : nil)
+        .offset(x: isDockItem ? dockIconHorizontalOffset : 0)
+        .animation(
+            reduceMotion
+                ? nil
+                : .smooth(duration: AtollMotion.dockMagnificationSeconds),
+            value: dockIconSize
+        )
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: 0.1),
+            value: presentsHover
+        )
+        .onHover { hovering in
+            isHovering = hovering
+            if isDockItem {
+                onDockHoverChange(hovering)
+            }
+        }
+        .modifier(
+            ServiceHelpModifier(
+                label: instance.label,
+                isEnabled: !isDockItem
+            )
+        )
+        .zIndex(isDockItem && presentsHover ? 10 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ServiceAccessibility.label(
             name: instance.label,
@@ -152,7 +191,7 @@ struct ServiceRowView: View {
     /// The collapsed sidebar keeps only the service icon and its live marks.
     /// The label remains available through the tooltip and accessibility text.
     private var dockContent: some View {
-        serviceIcon(size: AtollMetric.Sidebar.collapsedIconSize)
+        serviceIcon(size: dockIconSize)
             .overlay(alignment: .topTrailing) {
                 if badgeCount > 0 && instance.showBadge {
                     BadgeCountView(count: badgeCount)
@@ -171,9 +210,43 @@ struct ServiceRowView: View {
                 }
             }
             .frame(
-                width: AtollMetric.Sidebar.dockItemSize,
-                height: AtollMetric.Sidebar.dockItemSize
+                width: dockItemSize,
+                height: dockItemSize
             )
+            .overlay(alignment: .leading) {
+                if presentsHover {
+                    dockTooltip
+                        .offset(x: dockTooltipLeadingOffset)
+                        .transition(.opacity)
+                }
+            }
+    }
+
+    private var dockTooltip: some View {
+        Text(instance.label)
+            .font(.callout)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(
+                    cornerRadius: AtollMetric.Sidebar.rowRadius,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: AtollMetric.Sidebar.rowRadius,
+                    style: .continuous
+                )
+                .strokeBorder(AtollColor.shellBorder, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
+            .fixedSize()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private func serviceIcon(size: CGFloat) -> some View {
@@ -222,4 +295,18 @@ struct ServiceRowView: View {
         }
     }
 
+}
+
+private struct ServiceHelpModifier: ViewModifier {
+    let label: String
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.help(label)
+        } else {
+            content
+        }
+    }
 }

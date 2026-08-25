@@ -24,9 +24,11 @@ An 8 point window gutter surrounds it, so the complete rail is 234 points wide.
 It shows the current space, service icons, service names, status marks, and the
 add action.
 
-The collapsed dock is 64 points wide.
+The collapsed dock is 54 to 84 points wide.
 It shows only service icons and live status marks.
-Each service icon is 24 points square in a 38 point selection area.
+Each service icon is 14 to 44 points square.
+The default size is 24 points.
+The selection area and rail width grow with this size.
 It does not show the space selector or the add action.
 Its material surface starts 52 points below the window top.
 The first dock item starts 8 points below this edge.
@@ -37,6 +39,28 @@ This position keeps the dock edge away from the traffic lights.
 The selected service, drag order, badge count, health state, media state,
 keyboard focus, context menu, tooltip, and VoiceOver label remain available in
 both states.
+
+The Icon Rail settings follow the macOS Dock control model.
+The Size slider controls the base icon size.
+The Magnification slider controls the complete effect.
+Zero turns magnification off. Higher values increase the peak size smoothly.
+The nearest two icons on each side receive a smaller part of the effect.
+Affected rows grow to move neighboring icons apart.
+The hovered icon keeps its original vertical center. Icons above it move up,
+and icons below it move down.
+Icons grow toward the right and can extend over the web content edge.
+Atoll hides dock selection and hover tiles while magnification is active.
+Hovering an icon shows its service name in a material label on the right.
+The label keeps a 14 point gap after the rail or the magnified icon.
+It does not take pointer events or replace the VoiceOver service name.
+Hover entry is immediate. Hover exit has a short delay so a changing pointer
+target does not make the icon and label flicker.
+Reduce Motion keeps the size change and removes its animation.
+The Vertical position setting offers Top and Center.
+Center is the default and centers the base-size stack in the available height.
+The icon viewport ends at the inner top and bottom edges of the dock surface.
+It clips vertical overflow and permits vertical scrolling when items do not fit.
+It keeps horizontal overflow visible for magnification and tooltips.
 
 The sidebar state belongs to the window scene.
 Use the sidebar button or `Command-Control-S` to change the state.
@@ -75,6 +99,8 @@ The collapsed surface keeps an 8 point gutter on its horizontal and bottom
 edges.
 The content column keeps an 8 point gutter on the right and bottom edges.
 The header starts at the window top and uses the native 52 point centerline.
+The header does not compress when the window becomes short.
+The browser and sidebar scroll viewport use the remaining height.
 The browser top aligns with the top edge of the collapsed dock.
 The Atoll header is part of the shell and has no browser outline or corner mask.
 The native web view is the browser surface.

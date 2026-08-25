@@ -5,6 +5,7 @@ import WebKit
 struct WebContentView: View {
     let selectedServiceID: UUID?
     let sidebarIsCollapsed: Bool
+    let collapsedSidebarWidth: CGFloat
 
     @Environment(AppState.self) private var appState
     @Query private var services: [ServiceInstance]
@@ -32,6 +33,9 @@ struct WebContentView: View {
                     webAppearanceIsDark: selectedServiceUsesDarkAppearance,
                     canToggleWebAppearance: selectedService != nil,
                     reservesSidebarToggleSpace: sidebarIsCollapsed,
+                    sidebarToggleLeadingInset: AtollMetric.Toolbar.collapsedLeadingInset(
+                        sidebarWidth: collapsedSidebarWidth
+                    ),
                     onToggleWebAppearance: toggleSelectedServiceWebAppearance
                 )
             }
