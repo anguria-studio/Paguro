@@ -40,6 +40,9 @@ The selected service, drag order, badge count, health state, media state,
 keyboard focus, context menu, tooltip, and VoiceOver label remain available in
 both states.
 
+The service editor can set a custom icon from a local image or a website.
+See [Service icons](SERVICE-ICONS.md).
+
 The Icon Rail settings follow the macOS Dock control model.
 The Size slider controls the base icon size.
 The Magnification slider controls the complete effect.

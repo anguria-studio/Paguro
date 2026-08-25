@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 import SwiftData
 import SQLite3
 import JavaScriptCore
@@ -83,6 +84,74 @@ final class AtollTests: XCTestCase {
                 .init(url: "https://example.com/app/icons/favicon-32.png", size: 32),
                 .init(url: "https://example.com/apple-touch-icon.png", size: 180),
             ]
+        )
+    }
+
+    func testFaviconParserFindsManifestAndResolvesItsIcons() {
+        let html = """
+        <html><head>
+            <link href="../app.webmanifest" rel="manifest">
+        </head></html>
+        """
+        let pageURL = URL(string: "https://example.com/products/mail/index.html")!
+        XCTAssertEqual(
+            FaviconFetcher.parseManifestURLs(from: html, baseURL: pageURL),
+            [URL(string: "https://example.com/products/app.webmanifest")!]
+        )
+
+        let manifest = """
+        {
+          "icons": [
+            {"src":"icons/icon-192.png","sizes":"192x192","purpose":"any"},
+            {"src":"/brand.svg","sizes":"any"},
+            {"src":"mono.svg","sizes":"512x512","purpose":"monochrome"}
+          ]
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(
+            FaviconFetcher.parseManifestIconLinks(
+                from: manifest,
+                manifestURL: URL(string: "https://example.com/products/app.webmanifest")!
+            ),
+            [
+                .init(url: "https://example.com/products/icons/icon-192.png", size: 192),
+                .init(url: "https://example.com/brand.svg", size: 4096),
+            ]
+        )
+    }
+
+    func testServiceIconImageProcessorNormalizesAndLimitsDimensions() throws {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 512,
+            pixelsHigh: 256,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bitmapFormat: [],
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ))
+        let source = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let normalized = try ServiceIconImageProcessor.normalizedPNG(from: source)
+        let result = try XCTUnwrap(NSBitmapImageRep(data: normalized))
+
+        XCTAssertEqual([UInt8](normalized.prefix(4)), [0x89, 0x50, 0x4E, 0x47])
+        XCTAssertEqual(result.pixelsWide, 256)
+        XCTAssertEqual(result.pixelsHigh, 128)
+    }
+
+    func testServiceIconImageProcessorRejectsUnsafeInput() {
+        XCTAssertThrowsError(
+            try ServiceIconImageProcessor.normalizedPNG(from: Data([0, 1, 2, 3]))
+        )
+        XCTAssertThrowsError(
+            try ServiceIconImageProcessor.normalizedPNG(
+                from: Data(count: ServiceIconImageProcessor.maximumInputBytes + 1)
+            )
         )
     }
 

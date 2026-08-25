@@ -18,27 +18,36 @@ actor FaviconFetcher {
     func fetchFavicon(for urlString: String) async -> Data? {
         guard let baseURL = URL(string: urlString),
               let host = baseURL.host,
-              let scheme = baseURL.scheme
+              let rootURL = Self.originRootURL(for: baseURL)
         else { return nil }
 
-        // Try high-res sources first, then fall back to lower-res
-        let candidates = [
-            "\(scheme)://\(host)/apple-touch-icon.png",
-            "\(scheme)://\(host)/apple-touch-icon-precomposed.png",
-            "\(scheme)://\(host)/favicon-192x192.png",
-            "\(scheme)://\(host)/favicon-96x96.png",
-            "\(scheme)://\(host)/favicon-32x32.png",
-            "\(scheme)://\(host)/favicon.ico",
+        // A direct image URL is an explicit user choice in the service editor.
+        if Self.directImageExtensions.contains(baseURL.pathExtension.lowercased()),
+           let data = await fetchURL(baseURL.absoluteString),
+           isValidImage(data) {
+            return data
+        }
+
+        // Try common high-resolution paths first, then lower-resolution paths.
+        // Resolve them from the origin so a custom port is preserved.
+        let candidatePaths = [
+            "apple-touch-icon.png",
+            "apple-touch-icon-precomposed.png",
+            "favicon-192x192.png",
+            "favicon-96x96.png",
+            "favicon-32x32.png",
+            "favicon.ico",
         ]
 
-        for candidate in candidates {
+        for path in candidatePaths {
+            let candidate = rootURL.appending(path: path).absoluteString
             if let data = await fetchURL(candidate), isValidImage(data) {
                 AppLogger.favicon.debug("Favicon found at \(candidate, privacy: .private)")
                 return data
             }
         }
 
-        // Try parsing HTML for <link rel="icon"> tags
+        // Try HTML icon links and the linked web-app manifest.
         if let data = await fetchFromHTMLLinks(url: baseURL) {
             return data
         }
@@ -64,12 +73,26 @@ actor FaviconFetcher {
               let html = String(data: htmlData, encoding: .utf8)
         else { return nil }
 
-        let iconURLs = Self.parseIconLinks(from: html, baseURL: url)
+        var iconURLs = Self.parseIconLinks(from: html, baseURL: url)
+
+        // A page can link to more than one manifest, but a small cap prevents a
+        // hostile page from turning icon discovery into an unbounded fetch loop.
+        for manifestURL in Self.parseManifestURLs(from: html, baseURL: url).prefix(3) {
+            guard Self.isFetchableIconURL(manifestURL),
+                  let manifestData = await fetchURL(manifestURL.absoluteString)
+            else { continue }
+            iconURLs.append(
+                contentsOf: Self.parseManifestIconLinks(
+                    from: manifestData,
+                    manifestURL: manifestURL
+                )
+            )
+        }
 
         // Sort by size descending — prefer largest icon
         let sorted = iconURLs.sorted { $0.size > $1.size }
 
-        for iconInfo in sorted {
+        for iconInfo in sorted.prefix(32) {
             // The href came from (possibly hostile / compromised) page HTML, so
             // gate it: http/https only, no loopback/link-local/private hosts.
             // Without this a `<link rel=icon href="file:///…">` or an internal-IP
@@ -146,6 +169,16 @@ actor FaviconFetcher {
         let size: Int
     }
 
+    private struct Manifest: Decodable {
+        let icons: [ManifestIcon]?
+    }
+
+    private struct ManifestIcon: Decodable {
+        let src: String
+        let sizes: String?
+        let purpose: String?
+    }
+
     nonisolated static func parseIconLinks(from html: String, baseURL: URL) -> [IconLink] {
         var results: [IconLink] = []
 
@@ -170,6 +203,52 @@ actor FaviconFetcher {
         return results
     }
 
+    nonisolated static func parseManifestURLs(from html: String, baseURL: URL) -> [URL] {
+        let linkPattern = /<link\b[^>]*>/.ignoresCase()
+
+        return html.matches(of: linkPattern).compactMap { match in
+            let tag = String(match.output)
+            guard let rel = attributeValue(in: tag, named: "rel")?.lowercased() else {
+                return nil
+            }
+            let relTokens = Set(rel.split(whereSeparator: \.isWhitespace).map(String.init))
+            guard relTokens.contains("manifest"),
+                  let href = attributeValue(in: tag, named: "href")
+            else {
+                return nil
+            }
+            return URL(string: href, relativeTo: baseURL)?.absoluteURL
+        }
+    }
+
+    nonisolated static func parseManifestIconLinks(
+        from data: Data,
+        manifestURL: URL
+    ) -> [IconLink] {
+        guard let manifest = try? JSONDecoder().decode(Manifest.self, from: data) else {
+            return []
+        }
+
+        return (manifest.icons ?? []).prefix(64).compactMap { icon in
+            let purposes = Set(
+                (icon.purpose ?? "any")
+                    .lowercased()
+                    .split(whereSeparator: \.isWhitespace)
+                    .map(String.init)
+            )
+            // A monochrome-only resource is meant to be recolored by its user
+            // agent. Atoll needs a normal or maskable full-color service icon.
+            guard purposes.contains("any") || purposes.contains("maskable"),
+                  let resolvedURL = URL(string: icon.src, relativeTo: manifestURL)?.absoluteURL
+            else {
+                return nil
+            }
+
+            let size = icon.sizes.map(Self.largestIconSize) ?? 0
+            return IconLink(url: resolvedURL.absoluteString, size: size)
+        }
+    }
+
     nonisolated private static func attributeValue(in tag: String, named name: String) -> String? {
         let pattern = #"(?i)\b"# + NSRegularExpression.escapedPattern(for: name) + #"\s*=\s*["']([^"']+)["']"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
@@ -182,6 +261,9 @@ actor FaviconFetcher {
     }
 
     nonisolated private static func largestIconSize(from sizes: String) -> Int {
+        if sizes.lowercased().split(whereSeparator: \.isWhitespace).contains("any") {
+            return 4096
+        }
         guard let regex = try? NSRegularExpression(pattern: #"(\d+)x\d+"#) else { return 0 }
         let range = NSRange(sizes.startIndex..<sizes.endIndex, in: sizes)
         return regex.matches(in: sizes, range: range).compactMap { match in
@@ -189,6 +271,25 @@ actor FaviconFetcher {
             return Int(sizes[valueRange])
         }.max() ?? 0
     }
+
+    nonisolated private static func originRootURL(for url: URL) -> URL? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host != nil
+        else {
+            return nil
+        }
+        components.scheme = scheme
+        components.path = "/"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private static let directImageExtensions: Set<String> = [
+        "gif", "icns", "ico", "jpeg", "jpg", "png", "svg", "webp",
+    ]
 
     /// Hard ceiling on any single fetch (favicon or the HTML we parse for links).
     /// Favicons are KBs; this only exists to stop a hostile/broken endpoint from
@@ -242,6 +343,8 @@ actor FaviconFetcher {
         if header[0] == 0x00 && header[1] == 0x00 && header[2] == 0x01 && header[3] == 0x00 { return true }
         // GIF
         if header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46 { return true }
+        // Apple icon image
+        if header == [0x69, 0x63, 0x6E, 0x73] { return true } // "icns"
         // WebP: the container is "RIFF"<size>"WEBP". Verify the WEBP tag at
         // bytes 8–11, not just the RIFF magic — WAV/AVI are also RIFF and would
         // be cached as junk that never renders.

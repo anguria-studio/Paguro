@@ -11,6 +11,8 @@ struct AddServiceSheet: View {
     @State private var selectedTab: AddServiceTab = .catalog
     @State private var customURL = ""
     @State private var customLabel = ""
+    @State private var customIconData: Data?
+    @State private var iconWebsiteURL = ""
     @State private var urlError: String?
 
     enum AddServiceTab: String, CaseIterable {
@@ -129,6 +131,17 @@ struct AddServiceSheet: View {
                     .foregroundStyle(.red)
             }
 
+            Divider()
+
+            ServiceIconEditor(
+                label: customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "Service"
+                    : customLabel,
+                serviceURL: customURL,
+                customIconData: $customIconData,
+                websiteURL: $iconWebsiteURL
+            )
+
             Button("Add Service") {
                 addCustomService()
             }
@@ -156,7 +169,8 @@ struct AddServiceSheet: View {
 
         let service = ServiceInstance(
             label: label,
-            url: url
+            url: url,
+            customIconData: customIconData
         )
         modelContext.insert(service)
 
@@ -177,20 +191,23 @@ struct AddServiceSheet: View {
         appState.selectedSpaceID = spaceID
         appState.selectedServiceID = service.id
 
-        // Fetch favicon in background — capture ID before the await
-        let serviceID = service.id
-        let serviceURL = url
-        Task {
-            let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL)
-            guard let data else { return }
-            let desc = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
-            guard let svc = try? modelContext.fetch(desc).first else { return }
-            svc.fetchedIconData = data
-            svc.faviconFetchedAt = Date()
-            do {
-                try modelContext.save()
-            } catch {
-                AppLogger.dataStore.error("Failed to save fetched favicon: \(error.localizedDescription)")
+        if customIconData == nil {
+            // Fetch the normal website favicon when the user did not choose an
+            // explicit icon. Capture stable values before the await.
+            let serviceID = service.id
+            let serviceURL = url
+            Task {
+                let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL)
+                guard let data else { return }
+                let desc = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
+                guard let svc = try? modelContext.fetch(desc).first else { return }
+                svc.fetchedIconData = data
+                svc.faviconFetchedAt = Date()
+                do {
+                    try modelContext.save()
+                } catch {
+                    AppLogger.dataStore.error("Failed to save fetched favicon: \(error.localizedDescription)")
+                }
             }
         }
 

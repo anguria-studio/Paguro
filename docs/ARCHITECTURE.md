@@ -106,6 +106,7 @@ It must not hibernate a service during a call or download.
 
 See [Web sessions](features/WEB-SESSIONS.md).
 See [Web appearance](features/WEB-APPEARANCE.md).
+See [Service icons](features/SERVICE-ICONS.md).
 
 ## Notification flow
 

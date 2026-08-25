@@ -13,6 +13,8 @@ struct EditServiceSheet: View {
 
     @State private var label: String = ""
     @State private var url: String = ""
+    @State private var customIconData: Data?
+    @State private var iconWebsiteURL = ""
     @State private var hibernationPolicy: HibernationPolicy = .followGlobal
     @State private var hibernateAfterMinutes: Int = 10
     @State private var mobileView: Bool = false
@@ -70,6 +72,15 @@ struct EditServiceSheet: View {
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("Service address")
                 }
+
+                ServiceIconEditor(
+                    label: label.isEmpty ? service.label : label,
+                    serviceURL: url,
+                    fallbackIconData: service.fetchedIconData,
+                    fallbackCatalogID: service.catalogEntryID,
+                    customIconData: $customIconData,
+                    websiteURL: $iconWebsiteURL
+                )
 
                 VStack(alignment: .leading, spacing: 6) {
                     Picker("Hibernate", selection: $hibernationPolicy) {
@@ -160,6 +171,7 @@ struct EditServiceSheet: View {
         .onAppear {
             label = service.label
             url = service.url
+            customIconData = service.customIconData
             hibernationPolicy = service.hibernationPolicyEffective
             hibernateAfterMinutes = service.hibernateAfterMinutesEffective
             mobileView = service.userAgent == UserAgentProvider.mobileSafari
@@ -319,6 +331,7 @@ struct EditServiceSheet: View {
 
             service.label = validLabel
             service.url = validURL
+            service.customIconData = customIconData
             service.hibernationPolicyRaw = hibernationPolicy.rawValue
             service.hibernateAfterMinutes = hibernateAfterMinutes
             // Keep the legacy flag in sync so the pool's never-hibernate fast path
