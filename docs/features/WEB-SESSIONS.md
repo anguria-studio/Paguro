@@ -72,7 +72,8 @@ error page when it hibernated resumes at its home URL.
 
 ## Navigation
 
-The coordinator classifies each navigation before it loads.
+`AtollCore` classifies each navigation before it loads.
+The coordinator converts WebKit values to the Core request and performs the result.
 The result can stay in the service, open in another Atoll service, or open outside Atoll.
 
 An unknown custom scheme opens only after an explicit rule accepts it.

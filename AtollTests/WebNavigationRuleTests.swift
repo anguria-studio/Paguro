@@ -2,27 +2,9 @@ import XCTest
 import WebKit
 @testable import Atoll
 
-/// Rules that keep a live service page on screen: which schemes a web view
-/// may load, which provisional failures keep the current page, and where a
-/// service resumes after full hibernation.
+/// Adapter rules that keep a live service page on screen after a failed load
+/// or full hibernation.
 final class WebNavigationRuleTests: XCTestCase {
-    // MARK: - Schemes
-
-    func testWebSchemesLoadInTheWebView() {
-        for scheme in ["http", "https", "HTTPS", "about", "blob", "data"] {
-            XCTAssertTrue(WebViewCoordinator.isWebScheme(scheme), scheme)
-        }
-    }
-
-    /// App schemes that a page reaches programmatically used to fall through to
-    /// WebKit, which cannot show them; the failed load replaced the live page
-    /// with the error page.
-    func testAppAndSystemSchemesDoNotLoadInTheWebView() {
-        for scheme in ["slack", "msteams", "zoommtg", "mailto", "tel", "file", "smb", "javascript"] {
-            XCTAssertFalse(WebViewCoordinator.isWebScheme(scheme), scheme)
-        }
-    }
-
     // MARK: - Provisional failures
 
     func testCancelledLoadKeepsTheCurrentPage() {

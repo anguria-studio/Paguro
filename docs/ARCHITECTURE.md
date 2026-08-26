@@ -112,6 +112,9 @@ coordinator keeps the download alive until it ends.
 - web process failure;
 - notification bridge messages.
 
+It converts navigation actions to `NavigationRequestContext` values.
+`AtollCore` owns the deterministic navigation decision and its routing order.
+
 See [Web sessions](features/WEB-SESSIONS.md).
 See [Web appearance](features/WEB-APPEARANCE.md).
 See [Service icons](features/SERVICE-ICONS.md).

@@ -73,18 +73,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     /// and the "ask" prompt. Nil ⇒ deny (fail closed).
     var mediaCapturePolicyProvider: ((UUID, WKMediaCaptureType, WKFrameInfo) async -> WKPermissionDecision)?
 
-    /// URL schemes that a web view can load. Every other scheme is cancelled
-    /// before WebKit tries it: WebKit cannot show an app scheme such as
-    /// `slack://`, and the failed load would replace the live page with the
-    /// error page.
-    nonisolated private static let webSchemes: Set<String> = [
-        "http", "https", "about", "blob", "data"
-    ]
-
-    nonisolated static func isWebScheme(_ scheme: String) -> Bool {
-        webSchemes.contains(scheme.lowercased())
-    }
-
     /// The legacy WebKit error domain that `WKWebView` still reports for
     /// load failures that are not network errors.
     nonisolated private static let webKitLegacyErrorDomain = "WebKitErrorDomain"
@@ -171,79 +159,34 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         }
         #endif
 
-        // 1. Non-web schemes never reach WebKit. A click on a vetted scheme
-        //    (mailto:, tel:, facetime:, maps:, …) goes to the system handler;
-        //    `openExternally` drops every other scheme. Only a real click
-        //    qualifies: a page that runs
-        //    `location.href = "facetime-audio://attacker"` (navigationType
-        //    `.other`) could otherwise spawn Mail/Messages/call prompts with no
-        //    user gesture, on repeat. Cancel in every case, because WebKit
-        //    cannot load an app scheme and the failure would replace the live
-        //    page with the error page.
-        if let scheme = url.scheme, !Self.isWebScheme(scheme) {
-            if navigationAction.navigationType == .linkActivated {
-                Self.openExternally(url)
-            } else {
-                AppLogger.webView.info("Dropped programmatic navigation to scheme \(scheme, privacy: .public)")
-            }
+        let request = NavigationRequestContext(
+            url: url,
+            isLinkActivated: navigationAction.navigationType == .linkActivated,
+            shouldDownload: navigationAction.shouldPerformDownload,
+            hasCommandModifier: navigationAction.modifierFlags.contains(.command),
+            targetsMainFrame: navigationAction.targetFrame?.isMainFrame ?? true,
+            currentHost: webView.url?.host
+        )
+
+        switch NavigationDecision.decide(request) {
+        case .cancel:
             return .cancel
-        }
-
-        // 2. A navigation WebKit has flagged as a download — an `<a download>`
-        //    click, or a link whose response will be streamed to disk. Convert
-        //    it to a download in-app. This must come before the external-link
-        //    routing below: a Teams/SharePoint "Download" link points at a
-        //    different host, so routing would kick it to the browser (or, for a
-        //    same-host PDF, WebKit would show it inline) and no file would save.
-        if navigationAction.shouldPerformDownload {
+        case .download:
             return .download
-        }
-
-        // 3. Cmd-clicks unconditionally go to the system browser — matches
-        //    Safari's "open in new tab/window" convention. Detected via the
-        //    modifierFlags on the navigation action.
-        if navigationAction.navigationType == .linkActivated,
-           navigationAction.modifierFlags.contains(.command) {
+        case .openExternally(.system):
             Self.openExternally(url)
             return .cancel
-        }
-
-        // 4. A link the user clicked that leaves the current service is routed
-        //    through the external-link handler, which opens another matching
-        //    Atoll service if one owns that domain, otherwise the default
-        //    browser. This covers both new-window links (targetFrame == nil) and
-        //    plain in-frame link clicks.
-        //
-        //    Gated deliberately:
-        //    - only `.linkActivated` (a real user click), so OAuth/SSO redirects
-        //      and other programmatic navigations (navigationType `.other`) stay
-        //      in-app and can complete;
-        //    - only the main frame (or a new-window request), so an embedded
-        //      iframe navigating cross-origin isn't kicked out;
-        //    - "leaves the service" is `!WebRoutingPolicy.belongsToService`, which keeps
-        //      *.slack.com workspaces in-app but treats Google products
-        //      (docs. vs mail.google.com) as separate;
-        //    - identity gateways (accounts.google.com, login.microsoftonline.com,
-        //      …) are exempt via `isAuthenticationHost`, so clicking "Sign in" on a
-        //      signed-out page (Gmail → accounts.google.com) loads in place and
-        //      the login can finish instead of being kicked to the browser.
-        if navigationAction.navigationType == .linkActivated,
-           navigationAction.targetFrame?.isMainFrame ?? true,
-           let currentHost = webView.url?.host,
-           let targetHost = url.host,
-           !WebRoutingPolicy.belongsToService(targetHost, serviceHost: currentHost),
-           !WebRoutingPolicy.isAuthenticationHost(targetHost) {
+        case .openExternally(.matchingServiceOrSystem):
             if let handler = externalLinkHandler {
                 handler(url, instanceID)
             } else {
                 Self.openExternally(url)
             }
             return .cancel
+        case .allow:
+            break
         }
 
-        // 5. Everything else (same-service navigation, cross-domain in-frame
-        //    OAuth round-trips, and programmatic new-window requests handled by
-        //    createWebViewWith) loads in place.
         #if DEBUG
         // A live service test needs the navigation boundary, but it must not
         // record a path, query, account name, or page title. The host and broad
