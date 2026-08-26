@@ -64,8 +64,8 @@ It must first check these conditions:
 - no active camera;
 - policy permits hibernation.
 
-A download does not block hibernation. The coordinator keeps the download
-alive until it ends, and `Command-Q` cancels it.
+A download does not block hibernation. Its download handler stays alive until
+the transfer ends, and `Command-Q` cancels it.
 Atoll does not track user interaction inside a page. The pool never hibernates
 the active service, and it restarts the idle timer when the user selects a
 service.

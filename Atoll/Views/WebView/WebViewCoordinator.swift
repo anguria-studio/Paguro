@@ -5,7 +5,9 @@ import os
 import AtollCore
 
 @MainActor
-final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+
+    private let downloadHandler = WebDownloadHandler()
 
     private var popupWebView: WKWebView?
     private var popupWindow: NSWindow?
@@ -240,7 +242,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         // even for a type WebKit could render inline (e.g. a PDF served as a
         // download — the reported Teams case). Otherwise download anything we
         // can't display.
-        if Self.isAttachment(navigationResponse.response) {
+        if WebDownloadHandler.isAttachment(navigationResponse.response) {
             return .download
         }
         return navigationResponse.canShowMIMEType ? .allow : .download
@@ -304,9 +306,9 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
             return
         }
 
-        // The service's own content process died — reconcile downloads it started
-        // so a stuck transfer can't leak this coordinator (see cancelActiveDownloads).
-        cancelActiveDownloads()
+        // A terminated content process cannot be trusted to deliver a final
+        // download callback. Cancel its transfers and release their handler.
+        downloadHandler.cancelActiveDownloads()
 
         let now = Date()
         crashTimestamps.append(now)
@@ -741,15 +743,14 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     // context menu handling. Custom context menus can be added via
     // WKUIDelegate methods if needed in the future.
 
-    // MARK: - Download Delegate
+    // MARK: - Download handoff
 
     func webView(
         _ webView: WKWebView,
         navigationAction: WKNavigationAction,
         didBecome download: WKDownload
     ) {
-        download.delegate = self
-        trackDownload(download)
+        downloadHandler.track(download)
     }
 
     func webView(
@@ -757,150 +758,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         navigationResponse: WKNavigationResponse,
         didBecome download: WKDownload
     ) {
-        download.delegate = self
-        trackDownload(download)
-    }
-
-    /// Maps each in-flight download to the destination we chose for it, so the
-    /// finish handler can reveal the right file (WKDownload doesn't hand the
-    /// destination back). Keyed by object identity; cleared on finish/failure.
-    private var downloadDestinations: [ObjectIdentifier: URL] = [:]
-
-    /// Downloads still running. The set holds the `WKDownload` objects, not
-    /// only their identities, so a cancel can reach a download that never
-    /// delivers a terminal callback.
-    private var activeDownloads: Set<WKDownload> = []
-
-    /// Coordinators with a download in flight.
-    ///
-    /// Membership keeps a coordinator alive until its last download ends. The
-    /// coordinator is otherwise retained only by `WebViewPool.coordinators`,
-    /// and `WKDownload.delegate` is weak. Without this set, evicting or
-    /// hibernating the web view mid-download would release the coordinator,
-    /// drop the delegate, lose `downloadDestinations`, and silently abort the
-    /// transfer. The set also lets `cancelAllDownloads()` reach downloads whose
-    /// web view is already gone, so quitting stops every transfer.
-    private static var coordinatorsWithDownloads: Set<WebViewCoordinator> = []
-
-    private func trackDownload(_ download: WKDownload) {
-        activeDownloads.insert(download)
-        Self.coordinatorsWithDownloads.insert(self)
-    }
-
-    private func untrackDownload(_ download: WKDownload) {
-        activeDownloads.remove(download)
-        if activeDownloads.isEmpty { Self.coordinatorsWithDownloads.remove(self) }
-    }
-
-    /// Cancels every in-flight download of this coordinator and releases it
-    /// from the download registry. Called when the content process dies (such
-    /// downloads cannot be relied on to deliver a terminal callback) and during
-    /// shutdown. An aborted transfer is acceptable in both cases; the user can
-    /// retry.
-    func cancelActiveDownloads() {
-        guard !activeDownloads.isEmpty else { return }
-        for download in activeDownloads { download.cancel(nil) }
-        activeDownloads.removeAll()
-        downloadDestinations.removeAll()
-        Self.coordinatorsWithDownloads.remove(self)
-    }
-
-    /// Cancels every in-flight download in the process, including downloads
-    /// whose web view was already torn down. `Command-Q` must stop all work.
-    static func cancelAllDownloads() {
-        for coordinator in coordinatorsWithDownloads {
-            coordinator.cancelActiveDownloads()
-        }
-        coordinatorsWithDownloads.removeAll()
-    }
-
-    // Save straight to the user's Downloads folder — the browser-like default —
-    // rather than prompting with a save panel for every file. WKDownload fails
-    // if the destination already exists, so we pick a non-colliding name.
-    func download(
-        _ download: WKDownload,
-        decideDestinationUsing response: URLResponse,
-        suggestedFilename: String
-    ) async -> URL? {
-        let fileManager = FileManager.default
-        let downloads: URL
-        do {
-            downloads = try fileManager.url(
-                for: .downloadsDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-        } catch {
-            AppLogger.webView.error("Couldn't locate the Downloads folder: \(error.localizedDescription)")
-            return nil
-        }
-
-        let filename = WebRoutingPolicy.sanitizedDownloadFilename(suggestedFilename)
-        let destination = Self.nonCollidingURL(
-            in: downloads,
-            filename: filename,
-            fileExists: { fileManager.fileExists(atPath: $0.path) }
-        )
-        downloadDestinations[ObjectIdentifier(download)] = destination
-        return destination
-    }
-
-    func downloadDidFinish(_ download: WKDownload) {
-        let key = ObjectIdentifier(download)
-        let destination = downloadDestinations.removeValue(forKey: key)
-        untrackDownload(download)
-        guard let destination else { return }
-        AppLogger.webView.info("Download finished: \(destination.lastPathComponent)")
-        // Bounce the Downloads stack in the Dock — the standard macOS
-        // "download finished" feedback, so the user can see where it landed.
-        DistributedNotificationCenter.default().post(
-            name: NSNotification.Name("com.apple.DownloadFileFinished"),
-            object: destination.path
-        )
-    }
-
-    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        downloadDestinations.removeValue(forKey: ObjectIdentifier(download))
-        untrackDownload(download)
-        AppLogger.webView.error("Download failed: \(error.localizedDescription)")
-    }
-
-    // MARK: - Helpers
-
-    /// Whether the response asks to be saved rather than displayed, i.e. it
-    /// carries a `Content-Disposition: attachment` header. Used so a downloadable
-    /// file WebKit could otherwise render inline (a PDF, an image) still saves.
-    nonisolated static func isAttachment(_ response: URLResponse) -> Bool {
-        guard let http = response as? HTTPURLResponse,
-              let disposition = http.value(forHTTPHeaderField: "Content-Disposition") else {
-            return false
-        }
-        return disposition.lowercased().contains("attachment")
-    }
-
-    /// Returns a URL in `directory` for `filename` that no file occupies,
-    /// inserting " (1)", " (2)", … before the extension on collisions — matching
-    /// how browsers de-duplicate downloads. `fileExists` is injected so the
-    /// logic is testable without touching the disk.
-    nonisolated static func nonCollidingURL(
-        in directory: URL,
-        filename: String,
-        fileExists: (URL) -> Bool
-    ) -> URL {
-        let candidate = directory.appendingPathComponent(filename)
-        guard fileExists(candidate) else { return candidate }
-
-        let ns = filename as NSString
-        let ext = ns.pathExtension
-        let base = ns.deletingPathExtension
-        var index = 1
-        while true {
-            let name = ext.isEmpty ? "\(base) (\(index))" : "\(base) (\(index)).\(ext)"
-            let url = directory.appendingPathComponent(name)
-            if !fileExists(url) { return url }
-            index += 1
-        }
+        downloadHandler.track(download)
     }
 
 }

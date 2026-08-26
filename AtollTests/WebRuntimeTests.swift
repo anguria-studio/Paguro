@@ -457,7 +457,7 @@ final class WebRuntimeTests: XCTestCase {
 
     func testNonCollidingURLReturnsBaseWhenFree() {
         let dir = URL(fileURLWithPath: "/Users/x/Downloads")
-        let url = WebViewCoordinator.nonCollidingURL(in: dir, filename: "a.txt", fileExists: { _ in false })
+        let url = WebDownloadHandler.nonCollidingURL(in: dir, filename: "a.txt", fileExists: { _ in false })
         XCTAssertEqual(url.lastPathComponent, "a.txt")
     }
 
@@ -465,7 +465,7 @@ final class WebRuntimeTests: XCTestCase {
         let dir = URL(fileURLWithPath: "/Users/x/Downloads")
         // "a.txt" and "a (1).txt" are taken; the next free name is "a (2).txt".
         let taken: Set<String> = ["a.txt", "a (1).txt"]
-        let url = WebViewCoordinator.nonCollidingURL(
+        let url = WebDownloadHandler.nonCollidingURL(
             in: dir,
             filename: "a.txt",
             fileExists: { taken.contains($0.lastPathComponent) }
@@ -476,7 +476,7 @@ final class WebRuntimeTests: XCTestCase {
     func testNonCollidingURLHandlesExtensionlessNames() {
         let dir = URL(fileURLWithPath: "/Users/x/Downloads")
         let taken: Set<String> = ["README"]
-        let url = WebViewCoordinator.nonCollidingURL(
+        let url = WebDownloadHandler.nonCollidingURL(
             in: dir,
             filename: "README",
             fileExists: { taken.contains($0.lastPathComponent) }
@@ -494,23 +494,23 @@ final class WebRuntimeTests: XCTestCase {
     }
 
     func testIsAttachmentDetectsDisposition() {
-        XCTAssertTrue(WebViewCoordinator.isAttachment(
+        XCTAssertTrue(WebDownloadHandler.isAttachment(
             httpResponse(headers: ["Content-Disposition": "attachment; filename=\"report.pdf\""])
         ))
         // Case-insensitive on the header value.
-        XCTAssertTrue(WebViewCoordinator.isAttachment(
+        XCTAssertTrue(WebDownloadHandler.isAttachment(
             httpResponse(headers: ["Content-Disposition": "ATTACHMENT"])
         ))
     }
 
     func testIsAttachmentFalseForInlineOrMissing() {
-        XCTAssertFalse(WebViewCoordinator.isAttachment(
+        XCTAssertFalse(WebDownloadHandler.isAttachment(
             httpResponse(headers: ["Content-Disposition": "inline"])
         ))
-        XCTAssertFalse(WebViewCoordinator.isAttachment(httpResponse(headers: [:])))
+        XCTAssertFalse(WebDownloadHandler.isAttachment(httpResponse(headers: [:])))
         // A non-HTTP response has no headers to inspect.
         let url = URL(string: "https://example.com")!
-        XCTAssertFalse(WebViewCoordinator.isAttachment(
+        XCTAssertFalse(WebDownloadHandler.isAttachment(
             URLResponse(url: url, mimeType: "application/pdf", expectedContentLength: 1, textEncodingName: nil)
         ))
     }

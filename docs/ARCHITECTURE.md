@@ -72,6 +72,7 @@ The main services and startup adapters are:
 - `HibernationScheduler` for idle sweeps and immediate-hibernation grace tasks.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
+- `WebDownloadHandler` for download lifetime, destinations, and cancellation.
 - `NotificationManager` for notification polling and macOS delivery.
 - `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
 - `AppPresenceController` for Dock and menu-bar behavior.
@@ -122,7 +123,7 @@ The data store keeps cookies and local storage separate from other accounts.
 It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
 microphone is in use. A download continues after hibernation, because the
-coordinator keeps the download alive until it ends.
+download handler keeps itself alive until the transfer ends.
 The pool reports service activation and hibernation through callbacks.
 `HibernationScheduler` owns the hibernate, wake, and removal callbacks and
 forwards notification-related events to `NotificationRuntime`.

@@ -342,7 +342,7 @@ final class WebViewPool {
     /// delegates during process termination. The persistent website data
     /// stores remain on disk.
     func shutdown() {
-        WebViewCoordinator.cancelAllDownloads()
+        WebDownloadHandler.cancelAllDownloads()
         let serviceIDs = Array(webViews.keys)
         for serviceID in serviceIDs {
             teardownWebView(serviceID)
