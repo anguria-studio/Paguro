@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import WebKit
 import LocalAuthentication
+import UniformTypeIdentifiers
 import AtollCore
 
 /// How `AppState` ended up with its `ModelContainer` at launch — drives the
@@ -1504,6 +1505,319 @@ final class AppState {
             isMuted: isMuted,
             showBadge: showBadge
         )
+    }
+
+    struct ServiceMoveOutcome: Equatable {
+        let serviceID: UUID
+        let sourceSpaceID: UUID
+        let targetSpaceID: UUID
+    }
+
+    struct ServiceDeletionOutcome: Equatable {
+        let serviceID: UUID
+        let dataStoreIdentifier: UUID
+    }
+
+    /// Relocates one existing link to the end of another space and saves it.
+    /// A fresh fetch supplies both membership and target ordering because
+    /// SwiftData inverse relationships can lag behind unsaved changes.
+    static func moveService(
+        linkID: UUID,
+        to targetSpaceID: UUID,
+        in context: ModelContext
+    ) throws -> ServiceMoveOutcome? {
+        let links = try liveLinks(in: context)
+        guard let link = links.first(where: { $0.id == linkID }) else { return nil }
+        let sourceSpaceID = link.space.id
+        let serviceID = link.service.id
+        guard sourceSpaceID != targetSpaceID else { return nil }
+
+        var targetDescriptor = FetchDescriptor<Space>(
+            predicate: #Predicate { $0.id == targetSpaceID }
+        )
+        targetDescriptor.fetchLimit = 1
+        guard let targetSpace = try context.fetch(targetDescriptor).first else { return nil }
+        guard !links.contains(where: {
+            $0.id != linkID
+                && $0.service.id == serviceID
+                && $0.space.id == targetSpaceID
+        }) else { return nil }
+
+        let targetOrders = links
+            .filter { $0.space.id == targetSpaceID }
+            .map(\.sortOrder)
+        link.sortOrder = (targetOrders.max() ?? -1) + 1
+        link.space = targetSpace
+        try context.save()
+        return ServiceMoveOutcome(
+            serviceID: serviceID,
+            sourceSpaceID: sourceSpaceID,
+            targetSpaceID: targetSpaceID
+        )
+    }
+
+    /// Applies a drag or accessibility reorder inside one space and saves it.
+    static func reorderService(
+        droppedLinkID: UUID,
+        relativeTo targetLinkID: UUID,
+        placement: ServiceReorderPlacement,
+        in context: ModelContext
+    ) throws -> Bool {
+        let links = try liveLinks(in: context)
+        guard let droppedLink = links.first(where: { $0.id == droppedLinkID }),
+              let targetLink = links.first(where: { $0.id == targetLinkID }),
+              WorkspaceNavigationPolicy.allowsReorder(
+                sourceWorkspaceID: droppedLink.space.id,
+                targetWorkspaceID: targetLink.space.id
+              )
+        else { return false }
+
+        let spaceLinks = links
+            .filter { $0.space.id == targetLink.space.id }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        let linksByID = Dictionary(uniqueKeysWithValues: spaceLinks.map { ($0.id, $0) })
+        guard let reorderedIDs = ServiceReorder.reorderedIDs(
+            spaceLinks.map(\.id),
+            moving: droppedLinkID,
+            relativeTo: targetLinkID,
+            placement: placement
+        ) else { return false }
+
+        let reorderedLinks = reorderedIDs.compactMap { linksByID[$0] }
+        guard reorderedLinks.count == reorderedIDs.count else { return false }
+        for (index, link) in reorderedLinks.enumerated() {
+            link.sortOrder = index
+        }
+        try context.save()
+        return true
+    }
+
+    /// Deletes one service and its links, then saves.
+    /// Runtime and data-store teardown remain with the instance wrapper below
+    /// so irreversible work starts only after this method succeeds.
+    static func deleteService(
+        _ serviceID: UUID,
+        in context: ModelContext
+    ) throws -> ServiceDeletionOutcome? {
+        var descriptor = FetchDescriptor<ServiceInstance>(
+            predicate: #Predicate { $0.id == serviceID }
+        )
+        descriptor.fetchLimit = 1
+        guard let service = try context.fetch(descriptor).first else { return nil }
+        let dataStoreIdentifier = service.dataStoreIdentifier
+
+        // SwiftData owns the cascade from a service to its links. Deleting the
+        // links first invalidates objects that the cascade then inspects and
+        // produces invalidated-model diagnostics.
+        context.delete(service)
+        try context.save()
+        return ServiceDeletionOutcome(
+            serviceID: serviceID,
+            dataStoreIdentifier: dataStoreIdentifier
+        )
+    }
+
+    /// Persists one service's mute setting.
+    static func setServiceMuted(
+        _ muted: Bool,
+        for serviceID: UUID,
+        in context: ModelContext
+    ) throws -> Bool {
+        var descriptor = FetchDescriptor<ServiceInstance>(
+            predicate: #Predicate { $0.id == serviceID }
+        )
+        descriptor.fetchLimit = 1
+        guard let service = try context.fetch(descriptor).first else { return false }
+        service.isMuted = muted
+        try context.save()
+        return true
+    }
+
+    /// Persists one space's mute setting and returns the affected services.
+    static func setWorkspaceMuted(
+        _ muted: Bool,
+        for spaceID: UUID,
+        in context: ModelContext
+    ) throws -> Set<UUID>? {
+        var descriptor = FetchDescriptor<Space>(
+            predicate: #Predicate { $0.id == spaceID }
+        )
+        descriptor.fetchLimit = 1
+        guard let space = try context.fetch(descriptor).first else { return nil }
+        let serviceIDs = Set(
+            try liveLinks(in: context)
+                .filter { $0.space.id == spaceID }
+                .map { $0.service.id }
+        )
+        space.isMuted = muted
+        try context.save()
+        return serviceIDs
+    }
+
+    /// Persists normalized custom icon bytes. Nil restores the default source.
+    static func setCustomIconData(
+        _ data: Data?,
+        for serviceID: UUID,
+        in context: ModelContext
+    ) throws -> Bool {
+        var descriptor = FetchDescriptor<ServiceInstance>(
+            predicate: #Predicate { $0.id == serviceID }
+        )
+        descriptor.fetchLimit = 1
+        guard let service = try context.fetch(descriptor).first else { return false }
+        service.customIconData = data
+        try context.save()
+        return true
+    }
+
+    func moveService(linkID: UUID, to targetSpaceID: UUID, followToSpace: Bool) {
+        let context = modelContainer.mainContext
+        let outcome: ServiceMoveOutcome?
+        do {
+            outcome = try Self.moveService(
+                linkID: linkID,
+                to: targetSpaceID,
+                in: context
+            )
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to move service; rolled back: \(error.localizedDescription)")
+            return
+        }
+        guard let outcome else { return }
+
+        let movedSelectedRow = selectedServiceID == outcome.serviceID
+            && selectedSpaceID == outcome.sourceSpaceID
+        if followToSpace {
+            selectedSpaceID = outcome.targetSpaceID
+            selectedServiceID = outcome.serviceID
+        } else if movedSelectedRow {
+            selectedServiceID = nil
+        }
+    }
+
+    @discardableResult
+    func reorderService(
+        droppedLinkID: UUID,
+        relativeTo targetLinkID: UUID,
+        placement: ServiceReorderPlacement
+    ) -> Bool {
+        let context = modelContainer.mainContext
+        do {
+            return try Self.reorderService(
+                droppedLinkID: droppedLinkID,
+                relativeTo: targetLinkID,
+                placement: placement,
+                in: context
+            )
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to reorder services; rolled back: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func deleteService(_ serviceID: UUID) {
+        let context = modelContainer.mainContext
+        let outcome: ServiceDeletionOutcome?
+        do {
+            outcome = try Self.deleteService(serviceID, in: context)
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to delete service; rolled back: \(error.localizedDescription)")
+            return
+        }
+        guard let outcome else { return }
+
+        if selectedServiceID == outcome.serviceID {
+            selectedServiceID = nil
+        }
+        webViewPool.removeWebView(for: outcome.serviceID)
+        markDataStoreOrphaned(outcome.dataStoreIdentifier)
+        cleanUpOrphanedDataStores()
+    }
+
+    func setServiceMuted(_ muted: Bool, for serviceID: UUID) {
+        let context = modelContainer.mainContext
+        do {
+            guard try Self.setServiceMuted(muted, for: serviceID, in: context) else { return }
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to toggle service mute; rolled back: \(error.localizedDescription)")
+            return
+        }
+        refreshBadgeState(for: serviceID)
+    }
+
+    func setWorkspaceMuted(_ muted: Bool, for spaceID: UUID) {
+        let context = modelContainer.mainContext
+        let serviceIDs: Set<UUID>?
+        do {
+            serviceIDs = try Self.setWorkspaceMuted(muted, for: spaceID, in: context)
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to toggle workspace mute; rolled back: \(error.localizedDescription)")
+            return
+        }
+        guard let serviceIDs else { return }
+        for serviceID in serviceIDs {
+            refreshBadgeState(for: serviceID)
+        }
+    }
+
+    func pickCustomIcon(for serviceID: UUID) {
+        guard let service = currentServiceInstance(id: serviceID) else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose an icon for \(service.label)"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessed { url.stopAccessingSecurityScopedResource() }
+        }
+
+        let context = modelContainer.mainContext
+        do {
+            let raw = try Data(contentsOf: url, options: .mappedIfSafe)
+            let normalized = try ServiceIconImageProcessor.normalizedPNG(from: raw)
+            _ = try Self.setCustomIconData(normalized, for: serviceID, in: context)
+        } catch {
+            context.rollback()
+            AppLogger.ui.error("Failed to set custom icon: \(error.localizedDescription)")
+        }
+    }
+
+    func resetIcon(for serviceID: UUID) {
+        guard let service = currentServiceInstance(id: serviceID) else { return }
+        let shouldFetch = service.fetchedIconData == nil
+        let serviceURL = service.url
+        let context = modelContainer.mainContext
+        do {
+            guard try Self.setCustomIconData(nil, for: serviceID, in: context) else { return }
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to reset icon; rolled back: \(error.localizedDescription)")
+            return
+        }
+        guard shouldFetch else { return }
+
+        Task { @MainActor [weak self] in
+            guard let self,
+                  let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL),
+                  let service = self.currentServiceInstance(id: serviceID)
+            else { return }
+            service.fetchedIconData = data
+            service.faviconFetchedAt = Date()
+            do {
+                try self.modelContainer.mainContext.save()
+            } catch {
+                self.modelContainer.mainContext.rollback()
+                AppLogger.dataStore.error("Failed to cache fetched icon; rolled back: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Tombstone list of `WKWebsiteDataStore` identifiers for services the

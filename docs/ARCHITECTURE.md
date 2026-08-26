@@ -65,6 +65,10 @@ The main services are:
 - `NotificationManager` for notification polling and macOS delivery.
 - `AppPresenceController` for Dock and menu-bar behavior.
 
+The main rail sends service and workspace mutation intents to `AppState`.
+`AppState` owns their SwiftData commits, rollback, selection updates, and
+runtime cleanup after a successful destructive save.
+
 The planned `SessionStoreManager` and `NotificationPipeline` will replace the
 current managers when their runtime phases start. The planned `IslandStore`
 and `IslandPanelController` will remain optional services. The backlog tracks

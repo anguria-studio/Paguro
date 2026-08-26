@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import UniformTypeIdentifiers
 import os
 import AtollCore
 
@@ -30,7 +29,6 @@ struct UnifiedRailView: View {
 
     @Query private var allLinks: [SpaceServiceLink]
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -143,7 +141,11 @@ struct UnifiedRailView: View {
                 editingSpace: nil,
                 selectedSpaceID: $selectedSpaceID,
                 onCreate: { newSpace in
-                    moveService(link: link, to: newSpace, followToSpace: true)
+                    appState.moveService(
+                        linkID: link.id,
+                        to: newSpace.id,
+                        followToSpace: true
+                    )
                 }
             )
         }
@@ -160,7 +162,7 @@ struct UnifiedRailView: View {
         ) {
             Button("Delete", role: .destructive) {
                 if let link = confirmingDelete {
-                    deleteService(link: link)
+                    appState.deleteService(link.service.id)
                 }
                 confirmingDelete = nil
             }
@@ -566,9 +568,9 @@ struct UnifiedRailView: View {
                     let mid = (size?.width).map { $0 / 2 } ?? Self.serviceDropMidpointHorizontal
                     return location.x < mid ? .before : .after
                 }()
-                return reorderService(
+                return appState.reorderService(
                     droppedLinkID: droppedID,
-                    relativeTo: link,
+                    relativeTo: link.id,
                     placement: placement
                 )
             }
@@ -833,7 +835,7 @@ struct UnifiedRailView: View {
     private func workspaceContextMenu(for space: Space) -> some View {
         Toggle("Mute Workspace", isOn: Binding(
             get: { space.isMutedEffective },
-            set: { setWorkspaceMuted($0, for: space) }
+            set: { appState.setWorkspaceMuted($0, for: space.id) }
         ))
 
         Divider()
@@ -864,9 +866,7 @@ struct UnifiedRailView: View {
         Toggle("Mute Notifications", isOn: Binding(
             get: { link.service.isMuted },
             set: { newValue in
-                link.service.isMuted = newValue
-                save("toggle service mute")
-                syncBadge(for: link.service)
+                appState.setServiceMuted(newValue, for: link.service.id)
             }
         ))
 
@@ -899,11 +899,11 @@ struct UnifiedRailView: View {
 
         Divider()
         Button("Change Icon...") {
-            pickCustomIcon(for: link.service)
+            appState.pickCustomIcon(for: link.service.id)
         }
         if link.service.customIconData != nil {
             Button("Reset Icon") {
-                resetIcon(for: link.service)
+                appState.resetIcon(for: link.service.id)
             }
         }
         Divider()
@@ -911,7 +911,11 @@ struct UnifiedRailView: View {
             let targets = eligibleSpaces(for: link.service)
             ForEach(targets) { space in
                 Button {
-                    moveService(link: link, to: space, followToSpace: false)
+                    appState.moveService(
+                        linkID: link.id,
+                        to: space.id,
+                        followToSpace: false
+                    )
                 } label: {
                     Text("\(space.emoji)  \(space.name)")
                 }
@@ -933,28 +937,6 @@ struct UnifiedRailView: View {
         }
     }
 
-    // MARK: - Mutations
-    //
-    // Everything below moved across from `ServiceSidebarView` unchanged. The
-    // delete and move paths in particular are the ones that cost this repo real
-    // user data when they were got wrong, and their guards (save-before-teardown,
-    // rollback on failure) are load-bearing.
-
-    @discardableResult
-    private func save(_ context: String) -> Bool {
-        do {
-            try modelContext.save()
-            return true
-        } catch {
-            AppLogger.dataStore.error("Failed to save (\(context)): \(error.localizedDescription)")
-            // Discard the failed mutation so it can't ride along on the next
-            // unrelated successful save, and so destructive callers can skip
-            // their irreversible teardown when the store didn't actually change.
-            modelContext.rollback()
-            return false
-        }
-    }
-
     /// Opens the service's current page in the system default browser,
     /// preferring the live WKWebView's URL over the catalog/home URL so
     /// the user lands where they actually were.
@@ -963,25 +945,6 @@ struct UnifiedRailView: View {
         let target = liveURL ?? URL(string: service.url)
         if let target {
             WebViewCoordinator.openExternally(target)
-        }
-    }
-
-    /// Re-applies BadgeManager state for a service after its mute/showBadge
-    /// changed, so the rail and dock totals update immediately instead of
-    /// waiting for the next poll tick.
-    private func syncBadge(for service: ServiceInstance) {
-        appState.refreshBadgeState(for: service.id)
-    }
-
-    /// A workspace mute is an immediate presentation mask. Keep each member's
-    /// raw unread count, then re-apply its effective mute state to the rail and
-    /// Dock badge without waiting for the next page poll.
-    private func setWorkspaceMuted(_ muted: Bool, for space: Space) {
-        space.isMuted = muted
-        guard save("toggle workspace mute") else { return }
-
-        for link in links(in: space.id) {
-            syncBadge(for: link.service)
         }
     }
 
@@ -998,37 +961,6 @@ struct UnifiedRailView: View {
         return spaces.filter { eligible.contains($0.id) }
     }
 
-    /// Relocates a service to another space by repointing its existing link
-    /// (rather than delete-then-create), so the service never drops to zero links
-    /// and no data store is orphaned. The link lands at the end of the target's
-    /// list. `followToSpace` switches the view to the target and re-selects the
-    /// service there — used for the new-space path, where the target is empty and
-    /// landing on it makes sense; the existing-space path leaves the view put and
-    /// just clears selection if the moved service was showing, matching
-    /// "Remove from this space".
-    private func moveService(link: SpaceServiceLink, to targetSpace: Space, followToSpace: Bool) {
-        guard link.modelContext != nil, link.space.id != targetSpace.id else { return }
-        let serviceID = link.service.id
-        let movedSelectedRow = selectedServiceID == serviceID
-            && selectedSpaceID == link.space.id
-
-        // Compute the tail order before repointing, so the link's old order in
-        // its current space doesn't count toward the target's max.
-        let targetOrders = allLinks
-            .filter { $0.modelContext != nil && $0.space.modelContext != nil && $0.space.id == targetSpace.id }
-            .map(\.sortOrder)
-        link.sortOrder = (targetOrders.max() ?? -1) + 1
-        link.space = targetSpace
-        save("move service to space")
-
-        if followToSpace {
-            selectedSpaceID = targetSpace.id
-            selectedServiceID = serviceID
-        } else if movedSelectedRow {
-            selectedServiceID = nil
-        }
-    }
-
     /// The view only fixes up selection. `AppState.removeLink` owns the
     /// decision to delete the service, the save, and the teardown order.
     private func removeFromSpace(link: SpaceServiceLink) {
@@ -1038,115 +970,24 @@ struct UnifiedRailView: View {
         appState.removeLink(link.id)
     }
 
-    private func pickCustomIcon(for service: ServiceInstance) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.message = "Choose an icon for \(service.label)"
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessed { url.stopAccessingSecurityScopedResource() }
-        }
-        do {
-            let raw = try Data(contentsOf: url, options: .mappedIfSafe)
-            service.customIconData = try ServiceIconImageProcessor.normalizedPNG(from: raw)
-            save("set custom icon")
-        } catch {
-            AppLogger.ui.error("Failed to read icon file: \(error.localizedDescription)")
-        }
-    }
-
-    private func resetIcon(for service: ServiceInstance) {
-        service.customIconData = nil
-        save("reset icon")
-        if service.fetchedIconData == nil {
-            Task {
-                let data = await FaviconFetcher.shared.fetchFavicon(for: service.url)
-                if let data {
-                    service.fetchedIconData = data
-                    service.faviconFetchedAt = Date()
-                    save("cache fetched icon")
-                }
-            }
-        }
-    }
-
     private func moveServiceUp(_ link: SpaceServiceLink) {
-        var links = links(in: link.space.id)
+        let links = links(in: link.space.id)
         guard let index = links.firstIndex(where: { $0.id == link.id }), index > 0 else { return }
-        links.swapAt(index, index - 1)
-        for (i, l) in links.enumerated() { l.sortOrder = i }
-        save("move service up")
+        appState.reorderService(
+            droppedLinkID: link.id,
+            relativeTo: links[index - 1].id,
+            placement: .before
+        )
     }
 
     private func moveServiceDown(_ link: SpaceServiceLink) {
-        var links = links(in: link.space.id)
+        let links = links(in: link.space.id)
         guard let index = links.firstIndex(where: { $0.id == link.id }), index < links.count - 1 else { return }
-        links.swapAt(index, index + 1)
-        for (i, l) in links.enumerated() { l.sortOrder = i }
-        save("move service down")
-    }
-
-    @discardableResult
-    private func reorderService(
-        droppedLinkID: UUID,
-        relativeTo target: SpaceServiceLink,
-        placement: ServiceReorderPlacement
-    ) -> Bool {
-        guard let droppedLink = liveLinks.first(where: { $0.id == droppedLinkID }),
-              WorkspaceNavigationPolicy.allowsReorder(
-                sourceWorkspaceID: droppedLink.space.id,
-                targetWorkspaceID: target.space.id
-              )
-        else { return false }
-
-        var links = links(in: target.space.id)
-        let linksByID = Dictionary(uniqueKeysWithValues: links.map { ($0.id, $0) })
-        guard let reorderedIDs = ServiceReorder.reorderedIDs(
-            links.map(\.id),
-            moving: droppedLinkID,
-            relativeTo: target.id,
-            placement: placement
-        ) else {
-            return false
-        }
-        links = reorderedIDs.compactMap { linksByID[$0] }
-        guard links.count == reorderedIDs.count else { return false }
-
-        for (index, link) in links.enumerated() {
-            link.sortOrder = index
-        }
-        save("reorder services")
-        return true
-    }
-
-    private func deleteService(link: SpaceServiceLink) {
-        let service = link.service
-        let serviceID = service.id
-        let dataStoreIdentifier = service.dataStoreIdentifier
-
-        if selectedServiceID == serviceID {
-            selectedServiceID = nil
-        }
-
-        // Delete links explicitly first — avoids cascade-delete leaving dangling
-        // relationship references in the @Query results during the re-render.
-        for spaceLink in service.spaceLinks {
-            modelContext.delete(spaceLink)
-        }
-        modelContext.delete(service)
-
-        // Gate the irreversible teardown behind a committed save (see
-        // removeFromSpace) so a failed save can't wipe a still-present service's
-        // web view and on-disk data store.
-        guard save("delete service") else { return }
-
-        appState.webViewPool.removeWebView(for: serviceID)
-        appState.markDataStoreOrphaned(dataStoreIdentifier)
-        appState.cleanUpOrphanedDataStores()
+        appState.reorderService(
+            droppedLinkID: link.id,
+            relativeTo: links[index + 1].id,
+            placement: .after
+        )
     }
 }
 
