@@ -5,6 +5,57 @@ import AtollCore
 
 final class AppStateMutationTests: XCTestCase {
     @MainActor
+    func testAddServiceUsesTargetTailAndPersistsInput() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let space = Space(name: "Work", emoji: "🏢")
+        let resident = ServiceInstance(label: "Resident", url: "https://resident.example")
+        context.insert(space)
+        context.insert(resident)
+        ModelFixtures.link(resident, to: space, sortOrder: 4, in: context)
+        try context.save()
+
+        let icon = Data([0x01, 0x02])
+        let serviceID = try XCTUnwrap(AppState.addService(
+            label: "Chat",
+            url: "https://chat.example",
+            catalogEntryID: "chat",
+            userAgent: "Test Agent",
+            customIconData: icon,
+            to: space.id,
+            in: context
+        ))
+
+        let services = try context.fetch(FetchDescriptor<ServiceInstance>())
+        let added = try XCTUnwrap(services.first { $0.id == serviceID })
+        XCTAssertEqual(added.label, "Chat")
+        XCTAssertEqual(added.url, "https://chat.example")
+        XCTAssertEqual(added.catalogEntryID, "chat")
+        XCTAssertEqual(added.userAgent, "Test Agent")
+        XCTAssertEqual(added.customIconData, icon)
+        let addedLink = try XCTUnwrap(try AppState.liveLinks(in: context).first {
+            $0.service.id == serviceID
+        })
+        XCTAssertEqual(addedLink.space.id, space.id)
+        XCTAssertEqual(addedLink.sortOrder, 5)
+    }
+
+    @MainActor
+    func testAddServiceDoesNothingForMissingSpace() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+
+        XCTAssertNil(try AppState.addService(
+            label: "Chat",
+            url: "https://chat.example",
+            to: UUID(),
+            in: context
+        ))
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<SpaceServiceLink>()), 0)
+    }
+
+    @MainActor
     func testMoveServiceRelocatesFetchedLinkToTargetTail() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext

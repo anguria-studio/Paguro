@@ -1518,6 +1518,43 @@ final class AppState {
         let dataStoreIdentifier: UUID
     }
 
+    /// Inserts one service at the end of a space and saves it.
+    static func addService(
+        label: String,
+        url: String,
+        catalogEntryID: String? = nil,
+        userAgent: String? = nil,
+        customIconData: Data? = nil,
+        to spaceID: UUID,
+        in context: ModelContext
+    ) throws -> UUID? {
+        var descriptor = FetchDescriptor<Space>(
+            predicate: #Predicate { $0.id == spaceID }
+        )
+        descriptor.fetchLimit = 1
+        guard let space = try context.fetch(descriptor).first else { return nil }
+        let nextOrder = ((try liveLinks(in: context))
+            .filter { $0.space.id == spaceID }
+            .map(\.sortOrder)
+            .max() ?? -1) + 1
+
+        let service = ServiceInstance(
+            label: label,
+            url: url,
+            customIconData: customIconData,
+            catalogEntryID: catalogEntryID,
+            userAgent: userAgent
+        )
+        context.insert(service)
+        context.insert(SpaceServiceLink(
+            sortOrder: nextOrder,
+            space: space,
+            service: service
+        ))
+        try context.save()
+        return service.id
+    }
+
     /// Relocates one existing link to the end of another space and saves it.
     /// A fresh fetch supplies both membership and target ordering because
     /// SwiftData inverse relationships can lag behind unsaved changes.
@@ -1668,6 +1705,63 @@ final class AppState {
         service.customIconData = data
         try context.save()
         return true
+    }
+
+    /// Adds one service and starts post-save runtime work only after the model
+    /// commit succeeds.
+    @discardableResult
+    func addService(
+        label: String,
+        url: String,
+        catalogEntryID: String? = nil,
+        userAgent: String? = nil,
+        customIconData: Data? = nil,
+        to spaceID: UUID
+    ) -> UUID? {
+        let context = modelContainer.mainContext
+        let serviceID: UUID?
+        do {
+            serviceID = try Self.addService(
+                label: label,
+                url: url,
+                catalogEntryID: catalogEntryID,
+                userAgent: userAgent,
+                customIconData: customIconData,
+                to: spaceID,
+                in: context
+            )
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to add service; rolled back: \(error.localizedDescription)")
+            return nil
+        }
+        guard let serviceID else { return nil }
+
+        selectedSpaceID = spaceID
+        selectedServiceID = serviceID
+        offerPresenceActivationIfNeeded(
+            serviceID: serviceID,
+            catalogEntryID: catalogEntryID
+        )
+
+        if customIconData == nil {
+            Task { @MainActor [weak self] in
+                guard let self,
+                      let data = await FaviconFetcher.shared.fetchFavicon(for: url),
+                      let service = self.currentServiceInstance(id: serviceID)
+                else { return }
+                service.fetchedIconData = data
+                service.faviconFetchedAt = Date()
+                do {
+                    try self.modelContainer.mainContext.save()
+                } catch {
+                    self.modelContainer.mainContext.rollback()
+                    AppLogger.dataStore.error("Failed to save fetched favicon; rolled back: \(error.localizedDescription)")
+                }
+            }
+        }
+
+        return serviceID
     }
 
     func moveService(linkID: UUID, to targetSpaceID: UUID, followToSpace: Bool) {

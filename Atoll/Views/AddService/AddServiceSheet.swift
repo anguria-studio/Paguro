@@ -1,12 +1,10 @@
 import SwiftUI
-import SwiftData
 import AtollCore
 
 struct AddServiceSheet: View {
     let spaceID: UUID
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @State private var searchText = ""
     @State private var selectedTab: AddServiceTab = .catalog
@@ -160,63 +158,16 @@ struct AddServiceSheet: View {
     }
 
     private func addCustomService(label: String, url: String) {
-        guard let space = fetchSpace(id: spaceID) else { return }
-        let existingCount = space.serviceLinks.count
-
-        let service = ServiceInstance(
+        guard appState.addService(
             label: label,
             url: url,
-            customIconData: customIconData
-        )
-        modelContext.insert(service)
-
-        let link = SpaceServiceLink(
-            sortOrder: existingCount,
-            space: space,
-            service: service
-        )
-        modelContext.insert(link)
-
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save custom service: \(error.localizedDescription)")
-        }
-
-        // Switch to the service the user just added.
-        appState.selectedSpaceID = spaceID
-        appState.selectedServiceID = service.id
-
-        if customIconData == nil {
-            // Fetch the normal website favicon when the user did not choose an
-            // explicit icon. Capture stable values before the await.
-            let serviceID = service.id
-            let serviceURL = url
-            Task {
-                let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL)
-                guard let data else { return }
-                let desc = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
-                guard let svc = try? modelContext.fetch(desc).first else { return }
-                svc.fetchedIconData = data
-                svc.faviconFetchedAt = Date()
-                do {
-                    try modelContext.save()
-                } catch {
-                    AppLogger.dataStore.error("Failed to save fetched favicon: \(error.localizedDescription)")
-                }
-            }
+            customIconData: customIconData,
+            to: spaceID
+        ) != nil else {
+            urlError = "Atoll could not save this service. Try again."
+            return
         }
 
         dismiss()
-    }
-
-    private func fetchSpace(id: UUID) -> Space? {
-        let descriptor = FetchDescriptor<Space>(predicate: #Predicate { $0.id == id })
-        do {
-            return try modelContext.fetch(descriptor).first
-        } catch {
-            AppLogger.dataStore.error("Failed to fetch space: \(error.localizedDescription)")
-            return nil
-        }
     }
 }
