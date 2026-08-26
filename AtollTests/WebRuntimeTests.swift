@@ -246,22 +246,60 @@ final class WebRuntimeTests: XCTestCase {
     }
 
     @MainActor
-    func testFocusOverrideScriptFakesFocusAndSwallowsBlur() {
+    func testFocusOverrideScriptFakesFocusAndSwallowsOnlyTopLevelBlur() throws {
+        let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
+        var jsError: String?
+        context.exceptionHandler = { _, exception in
+            jsError = exception?.toString() ?? "unknown JS exception"
+        }
+        context.evaluateScript("""
+            var window = this;
+            function EventTarget() { this.listeners = {}; }
+            EventTarget.prototype.addEventListener = function(type, listener) {
+                if (!this.listeners[type]) this.listeners[type] = [];
+                this.listeners[type].push(listener);
+            };
+            function dispatchBlur(receiver, target) {
+                var event = {
+                    target: target,
+                    stopped: false,
+                    stopImmediatePropagation: function() { this.stopped = true; }
+                };
+                var listeners = receiver.listeners.blur || [];
+                for (var i = 0; i < listeners.length; i++) {
+                    listeners[i](event);
+                    if (event.stopped) break;
+                }
+                return event.stopped;
+            }
+            window.listeners = {};
+            window.addEventListener = EventTarget.prototype.addEventListener;
+            var document = new EventTarget();
+            document.hasFocus = function() { return false; };
+            """)
+
         let script = UserScriptManager.makeFocusOverrideScript()
-        // hasFocus() must report true so a presence check reads active. It's
-        // installed by redefining the property, so the name is a quoted literal.
-        XCTAssertTrue(script.contains("'hasFocus'"))
-        XCTAssertTrue(script.contains("return true"))
-        // Blur is swallowed on both window and document, capture phase, so the
-        // page's own idle timer never starts.
-        XCTAssertTrue(script.contains("stopImmediatePropagation"))
-        XCTAssertTrue(script.contains("window.addEventListener('blur'"))
-        XCTAssertTrue(script.contains("document.addEventListener('blur'"))
-        // Only the top-level window/document blur is swallowed — a form field's
-        // own blur (which captures through the same listener) must still reach
-        // the page, or dropdowns and draft-saving break.
-        XCTAssertTrue(script.contains("e.target === window"))
-        XCTAssertTrue(script.contains("e.target === document"))
+        context.evaluateScript(script)
+        context.evaluateScript("""
+            var windowPageBlurCount = 0;
+            var documentPageBlurCount = 0;
+            window.addEventListener('blur', function() { windowPageBlurCount++; });
+            document.addEventListener('blur', function() { documentPageBlurCount++; });
+            var field = {};
+            var windowBlurStopped = dispatchBlur(window, window);
+            var documentBlurStopped = dispatchBlur(document, document);
+            var windowFieldBlurStopped = dispatchBlur(window, field);
+            var documentFieldBlurStopped = dispatchBlur(document, field);
+            """)
+
+        XCTAssertNil(jsError)
+        XCTAssertEqual(context.evaluateScript("document.hasFocus()")?.toBool(), true)
+        XCTAssertEqual(context.evaluateScript("windowBlurStopped")?.toBool(), true)
+        XCTAssertEqual(context.evaluateScript("documentBlurStopped")?.toBool(), true)
+        XCTAssertEqual(context.evaluateScript("windowFieldBlurStopped")?.toBool(), false)
+        XCTAssertEqual(context.evaluateScript("documentFieldBlurStopped")?.toBool(), false)
+        XCTAssertEqual(context.evaluateScript("windowPageBlurCount")?.toInt32(), 1)
+        XCTAssertEqual(context.evaluateScript("documentPageBlurCount")?.toInt32(), 1)
     }
 
     func testTeamsIsPresenceSensitiveInCatalog() {
