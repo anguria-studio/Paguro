@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import os
 import AtollCore
 
 /// One rail, in either axis, holding the current space as its header and that
@@ -27,16 +26,16 @@ struct UnifiedRailView: View {
     /// the window traffic lights.
     var contentInset: CGFloat = 0
 
-    @Query private var allLinks: [SpaceServiceLink]
-    @Query(sort: \Space.sortOrder) private var spaces: [Space]
-    @Environment(AppState.self) private var appState
+    @Query var allLinks: [SpaceServiceLink]
+    @Query(sort: \Space.sortOrder) var spaces: [Space]
+    @Environment(AppState.self) var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showingPalette = false
-    @State private var editingSpace: Space?
-    @State private var confirmingDeleteSpace: Space?
-    @State private var confirmingDelete: SpaceServiceLink?
-    @State private var editingService: ServiceInstance?
+    @State var editingSpace: Space?
+    @State var confirmingDeleteSpace: Space?
+    @State var confirmingDelete: SpaceServiceLink?
+    @State var editingService: ServiceInstance?
     @State private var dockMagnification = DockMagnificationState()
     /// Empty means every workspace starts expanded. Keeping only collapsed IDs
     /// also makes a newly created workspace appear without another state sync.
@@ -44,12 +43,12 @@ struct UnifiedRailView: View {
     /// The link whose service is being moved into a brand-new space: set when the
     /// user picks "New Space…", it presents the space editor and, on create,
     /// moves the service into the freshly made space.
-    @State private var movingToNewSpace: SpaceServiceLink?
+    @State var movingToNewSpace: SpaceServiceLink?
     /// The service cell that currently holds keyboard focus. Two-way bound to
     /// each cell's `.focused`, so a click or Tab that focuses a cell records it
     /// here and the arrow keys move relative to it.
     @FocusState private var focusedLinkID: UUID?
-    private var liveSpaces: [Space] {
+    var liveSpaces: [Space] {
         spaces.filter { $0.modelContext != nil }
     }
 
@@ -507,157 +506,6 @@ struct UnifiedRailView: View {
         .frame(width: ServiceRowView.rowWidth)
         .help("Add service")
         .disabled(selectedSpaceID == nil)
-    }
-
-    @ViewBuilder
-    private var railCreationMenu: some View {
-        Button("Add Service...") {
-            appState.showAddService = true
-        }
-        .disabled(selectedSpaceID == nil)
-
-        Button("Add Workspace...") {
-            appState.showAddSpace = true
-        }
-    }
-
-    @ViewBuilder
-    private func workspaceContextMenu(for space: Space) -> some View {
-        Toggle("Mute Workspace", isOn: Binding(
-            get: { space.isMutedEffective },
-            set: { appState.setWorkspaceMuted($0, for: space.id) }
-        ))
-
-        Divider()
-
-        Button("Add Service…") {
-            selectedSpaceID = space.id
-            appState.showAddService = true
-        }
-
-        Button("Edit Workspace…") {
-            editingSpace = space
-        }
-
-        if liveSpaces.count > 1 {
-            Divider()
-            Button("Delete Workspace", role: .destructive) {
-                confirmingDeleteSpace = space
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func serviceContextMenu(for link: SpaceServiceLink) -> some View {
-        Button("Edit Service…") {
-            editingService = link.service
-        }
-
-        Toggle("Mute Notifications", isOn: Binding(
-            get: { link.service.isMuted },
-            set: { newValue in
-                appState.setServiceMuted(newValue, for: link.service.id)
-            }
-        ))
-
-        if let media = appState.webViewPool.mediaCaptureStates[link.service.id],
-           media.micActive || media.micMuted {
-            Button(media.micMuted ? "Unmute Microphone" : "Mute Microphone") {
-                appState.webViewPool.setMicrophoneMuted(
-                    !media.micMuted,
-                    for: link.service.id
-                )
-            }
-        }
-
-        Divider()
-
-        Button("Open in Safari") {
-            openInDefaultBrowser(link.service)
-        }
-
-        Divider()
-
-        if appState.webViewPool.hasWebView(for: link.service.id) {
-            Button("Hibernate") {
-                appState.webViewPool.hibernate(link.service.id)
-                if selectedServiceID == link.service.id {
-                    selectedServiceID = nil
-                }
-            }
-        }
-
-        Divider()
-        Button("Change Icon...") {
-            appState.pickCustomIcon(for: link.service.id)
-        }
-        if link.service.customIconData != nil {
-            Button("Reset Icon") {
-                appState.resetIcon(for: link.service.id)
-            }
-        }
-        Divider()
-        Menu("Move to Space") {
-            let targets = eligibleSpaces(for: link.service)
-            ForEach(targets) { space in
-                Button {
-                    appState.moveService(
-                        linkID: link.id,
-                        to: space.id,
-                        followToSpace: false
-                    )
-                } label: {
-                    Text("\(space.emoji)  \(space.name)")
-                }
-                .accessibilityLabel(space.name)
-            }
-            if !targets.isEmpty {
-                Divider()
-            }
-            Button("New Space…") {
-                movingToNewSpace = link
-            }
-        }
-        Button("Remove from this space") {
-            removeFromSpace(link: link)
-        }
-        Divider()
-        Button("Delete service entirely", role: .destructive) {
-            confirmingDelete = link
-        }
-    }
-
-    /// Opens the service's current page in the system default browser,
-    /// preferring the live WKWebView's URL over the catalog/home URL so
-    /// the user lands where they actually were.
-    private func openInDefaultBrowser(_ service: ServiceInstance) {
-        let liveURL = appState.webViewPool.liveWebView(for: service.id)?.url
-        let target = liveURL ?? URL(string: service.url)
-        if let target {
-            WebViewCoordinator.openExternally(target)
-        }
-    }
-
-    /// Spaces the service can be moved into: every space except the ones it's
-    /// already in. Membership is read from the reliable `allLinks` query, not the
-    /// service's inverse `spaceLinks` relationship, which can be stale.
-    private func eligibleSpaces(for service: ServiceInstance) -> [Space] {
-        let memberIDs = Set(
-            allLinks
-                .filter { $0.modelContext != nil && $0.service.modelContext != nil && $0.space.modelContext != nil && $0.service.id == service.id }
-                .map { $0.space.id }
-        )
-        let eligible = Set(SpaceMove.eligibleSpaceIDs(allSpaceIDs: spaces.map(\.id), memberSpaceIDs: memberIDs))
-        return spaces.filter { eligible.contains($0.id) }
-    }
-
-    /// The view only fixes up selection. `AppState.removeLink` owns the
-    /// decision to delete the service, the save, and the teardown order.
-    private func removeFromSpace(link: SpaceServiceLink) {
-        if selectedServiceID == link.service.id && selectedSpaceID == link.space.id {
-            selectedServiceID = nil
-        }
-        appState.removeLink(link.id)
     }
 
 }
