@@ -80,6 +80,11 @@ final class AppModel {
     func connect(to delegate: AppDelegate) {
         let mode = appState.preferencesStore.appPresenceMode
         presenceController.connect(to: delegate, initialMode: mode)
+        islandPanelController.onServiceRequested = {
+            [weak self, weak delegate] serviceID in
+            self?.appState.notificationManager.routeServiceRequest(serviceID)
+            delegate?.bringMainWindowForward()
+        }
         delegate.startAfterLaunch = { [weak self] in
             guard let self else { return }
             self.appState.start()

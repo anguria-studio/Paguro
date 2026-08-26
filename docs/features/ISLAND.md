@@ -85,6 +85,12 @@ Application shutdown closes the panel and rejects later events.
 The panel must not take keyboard focus in the collapsed state.
 The expanded state can take focus after an explicit user action.
 
+The collapsed state does not receive pointer events before the expanded state
+is available. A visible alert receives pointer events. Clicking the alert opens
+the exact service account through the shared notification navigation path. It
+then starts the normal dismissal transition. A queued alert keeps its own full
+display time.
+
 The panel must not cover a system camera privacy indicator.
 The final hardware test must verify this condition.
 

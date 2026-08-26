@@ -121,6 +121,36 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(scheduler.pendingDelays, [.seconds(12)])
     }
 
+    func testOpeningAnAlertRequestsItsServiceAndStartsDismissal() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+        let event = try makeEvent(number: 1)
+        var requestedServiceIDs: [UUID] = []
+        controller.onServiceRequested = { requestedServiceIDs.append($0) }
+
+        controller.present(panelContent(for: event))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.primaryAction?()
+
+        XCTAssertEqual(requestedServiceIDs, [event.serviceID])
+        XCTAssertEqual(controller.state.phase, .dismissed)
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
+    }
+
+    func testCollapsedIslandHasNoPointerAction() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+
+        XCTAssertNil(renderer.shows.last?.primaryAction)
+    }
+
     func testVisibleIslandHidesOffNotchAndReturnsOnNotchedScreen() async {
         let renderer = RecordingIslandPanelRenderer()
         let monitor = RecordingIslandScreenChangeMonitor()
@@ -363,6 +393,7 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
         let state: NotificationIslandState
         let content: NotificationIslandPanelContent?
         let placement: NotificationIslandPlacement
+        let primaryAction: NotificationIslandPanelAction?
     }
 
     private(set) var shows: [Show] = []
@@ -372,10 +403,16 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
     func show(
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
-        placement: NotificationIslandPlacement
+        placement: NotificationIslandPlacement,
+        primaryAction: NotificationIslandPanelAction?
     ) {
         shows.append(
-            Show(state: state, content: content, placement: placement)
+            Show(
+                state: state,
+                content: content,
+                placement: placement,
+                primaryAction: primaryAction
+            )
         )
     }
 

@@ -165,6 +165,9 @@ system route is also on.
 The island destination is optional in the router. It stays unavailable until
 Atoll installs an island presenter and selects a notched display.
 
+Clicking an island alert uses the same service-account navigation path as a
+macOS notification. The island does not create a second service-selection path.
+
 macOS always uses the Atoll app icon as the sender identity for a native
 notification. Public notification APIs do not let Atoll replace that icon for
 each service.

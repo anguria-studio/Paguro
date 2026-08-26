@@ -9,13 +9,17 @@ struct NotificationIslandPanelContent: Equatable {
     let serviceIconURL: URL?
 }
 
+/// Runs the one pointer action that the current island state permits.
+typealias NotificationIslandPanelAction = @MainActor () -> Void
+
 /// Separates island state coordination from the AppKit panel.
 @MainActor
 protocol NotificationIslandPanelRendering: AnyObject {
     func show(
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
-        placement: NotificationIslandPlacement
+        placement: NotificationIslandPlacement,
+        primaryAction: NotificationIslandPanelAction?
     )
 
     func hide()
@@ -75,6 +79,7 @@ private final class TaskNotificationIslandScheduledAction:
 @MainActor
 final class IslandPanelController {
     private(set) var state: NotificationIslandState = .hidden
+    var onServiceRequested: (@MainActor (UUID) -> Void)?
     var canPresentIsland: Bool {
         selectedScreen?.hasCameraHousing == true
     }
@@ -156,6 +161,16 @@ final class IslandPanelController {
         cancelDismissalAction()
         apply(.finishDismissal)
         scheduleAlertDismissalIfNeeded()
+    }
+
+    func openCurrentService() {
+        guard !hasStopped,
+              state.phase == .alert,
+              let serviceID = state.currentEvent?.serviceID else {
+            return
+        }
+        onServiceRequested?(serviceID)
+        dismissCurrent()
     }
 
     func hide() {
@@ -287,8 +302,18 @@ final class IslandPanelController {
         renderer.show(
             state: state,
             content: content,
-            placement: placement
+            placement: placement,
+            primaryAction: primaryAction
         )
+    }
+
+    private var primaryAction: NotificationIslandPanelAction? {
+        guard state.phase == .alert, state.currentEvent != nil else {
+            return nil
+        }
+        return { [weak self] in
+            self?.openCurrentService()
+        }
     }
 
     private func desiredSize(
@@ -366,17 +391,20 @@ private final class AppKitNotificationIslandPanelRenderer:
     func show(
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
-        placement: NotificationIslandPlacement
+        placement: NotificationIslandPlacement,
+        primaryAction: NotificationIslandPanelAction?
     ) {
         let panel = panel ?? makePanel()
         panel.contentView = NSHostingView(
             rootView: NotificationIslandPanelView(
                 state: state,
-                content: content
+                content: content,
+                primaryAction: primaryAction
             )
         )
         panel.setFrame(placement.frame.appKitRect, display: true)
         panel.hasShadow = false
+        panel.ignoresMouseEvents = primaryAction == nil
         panel.orderFrontRegardless()
     }
 
@@ -402,6 +430,7 @@ private final class AppKitNotificationIslandPanelRenderer:
         panel.backgroundColor = .clear
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
+        panel.becomesKeyOnlyIfNeeded = true
         panel.level = .statusBar
         panel.collectionBehavior = [
             .canJoinAllSpaces,
@@ -416,6 +445,7 @@ private final class AppKitNotificationIslandPanelRenderer:
 private struct NotificationIslandPanelView: View {
     let state: NotificationIslandState
     let content: NotificationIslandPanelContent?
+    let primaryAction: NotificationIslandPanelAction?
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -423,43 +453,16 @@ private struct NotificationIslandPanelView: View {
 
     var body: some View {
         Group {
-            if let content {
-                HStack(spacing: 12) {
-                    serviceIcon(for: content)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(content.serviceLabel)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(content.event.title)
-                            .font(.headline)
-                            .lineLimit(1)
-                        if let body = content.event.body {
-                            Text(body)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-
-                    Spacer(minLength: 8)
-
-                    if let countLabel = NotificationIslandCounterLabel.text(
-                        for: state.pendingCount
-                    ) {
-                        Text(countLabel)
-                            .font(.caption.monospacedDigit())
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(.quaternary, in: .capsule)
-                    }
+            if let primaryAction {
+                Button(action: primaryAction) {
+                    panelContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(shape)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .buttonStyle(.plain)
+                .help(openHelp)
             } else {
-                Image(systemName: "bell.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                panelContent
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -469,6 +472,48 @@ private struct NotificationIslandPanelView: View {
         .glassEffect(.regular, in: shape)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var panelContent: some View {
+        if let content {
+            HStack(spacing: 12) {
+                serviceIcon(for: content)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(content.serviceLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(content.event.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                    if let body = content.event.body {
+                        Text(body)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if let countLabel = NotificationIslandCounterLabel.text(
+                    for: state.pendingCount
+                ) {
+                    Text(countLabel)
+                        .font(.caption.monospacedDigit())
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.quaternary, in: .capsule)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        } else {
+            Image(systemName: "bell.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder
@@ -493,6 +538,11 @@ private struct NotificationIslandPanelView: View {
             return "\(content.serviceLabel), \(content.event.title), \(body)"
         }
         return "\(content.serviceLabel), \(content.event.title)"
+    }
+
+    private var openHelp: String {
+        guard let content else { return "Open notification" }
+        return "Open \(content.serviceLabel)"
     }
 }
 

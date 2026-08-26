@@ -122,6 +122,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// Activates Atoll and shows its existing main window after an external action.
+    func bringMainWindowForward() {
+        Self.prepareToShowWindow()
+        mainWindow?.makeKeyAndOrderFront(nil)
+    }
+
     private func observeWindows() {
         let center = NotificationCenter.default
         center.addObserver(
