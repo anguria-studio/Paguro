@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import AtollCore
 
 /// The spaces and services `seedDefaultDataIfNeeded` writes on a genuine fresh
 /// install. Shared with `StoreContent.looksLikeUntouchedSeed` so the seeder and
@@ -31,39 +32,16 @@ enum DefaultSeed {
     }
 }
 
-/// What a store holds. Read from a raw SQLite file for a backup, or from the
-/// open container for the live store. `Hashable` because `StoreCandidate`
-/// carries one and tests compare values directly; ranking is done by
-/// `holdsMore(than:)` below and by `StoreInventory.isRankedAbove(_:_:)`, not by
-/// `Comparable` conformance — this type has none.
-struct StoreContent: Hashable, Sendable {
-    let spaces: Int
-    let services: Int
-    let links: Int
-    /// Space names and service labels, used only to recognize the untouched
-    /// default seed. Order is not significant; both are compared as multisets.
-    let spaceNames: [String]
-    let serviceLabels: [String]
-
-    var isEmpty: Bool { spaces == 0 && services == 0 }
-
-    /// Whether this store holds more than `other`: more services, or the same
-    /// services spread over more spaces. The single comparison the ranking and
-    /// both offer triggers share, so "more complete" means one thing everywhere.
-    func holdsMore(than other: StoreContent) -> Bool {
-        if services != other.services { return services > other.services }
-        return spaces > other.spaces
-    }
-
+extension StoreContent {
     /// True only when the store is exactly what `seedDefaultDataIfNeeded`
     /// writes: the two seeded spaces, the seven seeded services, nothing added,
     /// nothing renamed. A store like this holds nothing of the user's, which is
     /// what makes it safe to preselect a backup over.
     var looksLikeUntouchedSeed: Bool {
-        spaces == DefaultSeed.spaces.count
-            && services == DefaultSeed.allServiceLabels.count
-            && spaceNames.sorted() == DefaultSeed.spaces.map(\.name).sorted()
-            && serviceLabels.sorted() == DefaultSeed.allServiceLabels.sorted()
+        matchesUntouchedSeed(
+            spaceNames: DefaultSeed.spaces.map(\.name),
+            serviceLabels: DefaultSeed.allServiceLabels
+        )
     }
 }
 
@@ -220,48 +198,6 @@ enum StoreInventory {
     }
 }
 
-/// One store the user could be running on: the live file, or a backup Atoll
-/// kept. `content` is nil when the file could not be read. `Hashable` for
-/// equality in tests and set-backed lookups; the picker's `List` binds
-/// selection to `StoreCandidate.ID` (a plain `String`), not to the candidate
-/// itself — see `selectionID` in `StoreRecoveryView`.
-struct StoreCandidate: Hashable, Sendable, Identifiable {
-    enum Kind: Hashable, Sendable {
-        /// The store the app is running on now.
-        case live
-        /// A pre-update snapshot. Version is the build it preceded, when the
-        /// filename parses.
-        case snapshot(version: String?)
-        /// The store set aside by an earlier *automatic* restore
-        /// (`StoreRepair.restoreFromSnapshot`).
-        case prerestore
-        /// The store set aside before dangling-link repair. Damaged by
-        /// definition, so never preselected.
-        case corrupt
-        /// The store set aside by `StoreRepair.applyPendingRestore` just
-        /// before putting the user's deliberately chosen backup in place.
-        /// Its own family, separate from `.prerestore`: `restoreFromSnapshot`
-        /// tests for the presence of any `.prerestore-`-prefixed file as its
-        /// "already backed up" sentinel, and a deliberate restore's aside must
-        /// never satisfy that check.
-        case prepick
-    }
-
-    let url: URL
-    let kind: Kind
-    let takenAt: Date?
-    let content: StoreContent?
-    let isDamaged: Bool
-
-    var id: String { url.path }
-
-    /// Whether this can be restored from: a backup (not the live store) whose
-    /// content is known and whose file is intact.
-    var isRestorable: Bool {
-        kind != .live && content != nil && !isDamaged
-    }
-}
-
 /// The picker row's two display strings. Hoisted out of `StoreRecoveryView` so
 /// the label matrix — five kinds, singular/plural counts, the unknown-date and
 /// nil-content fallbacks, the damaged marker, and the live row's own rule — is
@@ -323,30 +259,11 @@ extension StoreCandidate {
 }
 
 extension StoreInventory {
-    /// The four backup families, all of which are copies of the user's own
-    /// store and so all worth offering. An enum, not bare strings, so the
-    /// switch in `candidates(for:liveContent:)` is exhaustive: adding a family
-    /// here without giving it a `StoreCandidate.Kind` case is a compile error,
-    /// not a silent fall-through to `.corrupt`.
-    private enum BackupFamily: String, CaseIterable {
-        case snapshot = ".snapshot-"
-        case prerestore = ".prerestore-"
-        case corrupt = ".corrupt-"
-        case prepick = ".prepick-"
-    }
-
-    /// Filename infixes of the backup families, derived from `BackupFamily` so
-    /// there is exactly one list of them. Not `private`: `StoreRepair
-    /// .validatedRestoreName` reuses this rather than keeping its own
-    /// hand-written literal, so a new family added to `BackupFamily` can't
-    /// silently fail to be validated.
-    static var backupInfixes: [String] { BackupFamily.allCases.map(\.rawValue) }
-
     /// Every candidate for `storeURL`: the live store (whose content the caller
     /// supplies, since it is already open) plus each backup sibling, ordered
-    /// most-complete-first (see `isRankedAbove`). Unreadable and damaged files
-    /// are included so the user can see they exist, but sort to the bottom of
-    /// the backups; the live row always leads regardless of ranking.
+    /// most-complete-first (see `StoreRecoveryPolicy.isRankedAbove`). Unreadable
+    /// and damaged files are included so the user can see they exist, but sort
+    /// to the bottom of the backups. The live row always leads.
     static func candidates(for storeURL: URL, liveContent: StoreContent?) -> [StoreCandidate] {
         let live = StoreCandidate(
             url: storeURL,
@@ -364,11 +281,11 @@ extension StoreInventory {
 
         var backups: [StoreCandidate] = []
         for name in names where name.hasSuffix(".bak") {
-            guard let infix = backupInfixes.first(where: { name.hasPrefix(base + $0) }),
-                  let family = BackupFamily(rawValue: infix) else { continue }
+            guard let infix = StoreRecoveryPolicy.backupInfixes.first(where: { name.hasPrefix(base + $0) }),
+                  let family = StoreBackupFamily(rawValue: infix) else { continue }
             let url = dir.appending(path: name)
-            // Shared with StoreRepair rather than reimplemented; see the task's
-            // "Reuse, not duplication" note.
+            // StoreRepair owns the filename timestamp parser because it creates
+            // the same backup names.
             let parsed = StoreRepair.stampAndVersion(name, prefix: base + infix)
             let kind: StoreCandidate.Kind
             switch family {
@@ -388,155 +305,9 @@ extension StoreInventory {
             ))
         }
         // Most-complete-first, the same rule the picker uses to choose a
-        // winner — not filename order, which put the always-damaged
-        // `.corrupt-` family directly under "Current" and buried the newest
-        // snapshot at the bottom (review Finding 4).
-        backups.sort(by: isRankedAbove)
+        // winner. Filename order can place damaged repairs before intact
+        // snapshots, so it is not a safe recovery order.
+        backups.sort(by: StoreRecoveryPolicy.isRankedAbove)
         return [live] + backups
-    }
-
-}
-
-extension StoreInventory {
-    /// Whether `lhs` ranks above `rhs` for display and selection: restorable
-    /// candidates always outrank non-restorable ones (unreadable or damaged),
-    /// and among restorable candidates, more services wins, then more spaces,
-    /// then more links, then the more recent one — and finally, when even that
-    /// ties, the path.
-    ///
-    /// Shared by `best(among:)`, which picks the single winner, and
-    /// `candidates(for:liveContent:)`, which orders the whole displayed list —
-    /// so "more complete" means the same thing wherever a candidate is ranked,
-    /// and a damaged `.corrupt-` backup can never sort above a good
-    /// `.snapshot-` the way a plain filename sort did.
-    ///
-    /// The path tiebreak makes this a total order rather than merely a ranking.
-    /// `sorted(by:)` is not stable and `best(among:)` takes the first element of
-    /// a sort, so leaving fully tied candidates "equivalent" handed the outcome
-    /// to whatever order `contentsOfDirectory` returned: the sheet's rows could
-    /// come back in a different order each time it opened, and the preselected
-    /// winner — and with it the decline key — could change between launches.
-    /// Paths are unique per candidate (`id` is the path), so this settles every
-    /// remaining tie. It never overrides a real difference in content; it only
-    /// decides between candidates that are equal on every key that matters.
-    static func isRankedAbove(_ lhs: StoreCandidate, _ rhs: StoreCandidate) -> Bool {
-        switch (lhs.isRestorable, rhs.isRestorable) {
-        case (true, false): return true
-        case (false, true): return false
-        // Neither can be restored from, so nothing separates them but the path.
-        case (false, false): return lhs.url.path < rhs.url.path
-        case (true, true): break
-        }
-        // Both restorable, so both have non-nil content by definition.
-        let l = lhs.content!
-        let r = rhs.content!
-        if l.services != r.services { return l.services > r.services }
-        if l.spaces != r.spaces { return l.spaces > r.spaces }
-        if l.links != r.links { return l.links > r.links }
-        let lhsTaken = lhs.takenAt ?? .distantPast
-        let rhsTaken = rhs.takenAt ?? .distantPast
-        if lhsTaken != rhsTaken { return lhsTaken > rhsTaken }
-        return lhs.url.path < rhs.url.path
-    }
-
-    /// The fullest restorable candidate: most services, then most spaces, then
-    /// most links, then the most recent, and — because `isRankedAbove` is a total
-    /// order — the same one every time even when candidates tie on all of those.
-    /// Excludes the live store, damaged files, and files whose content is
-    /// unknown.
-    static func best(among candidates: [StoreCandidate]) -> StoreCandidate? {
-        candidates
-            .filter(\.isRestorable)
-            .sorted(by: isRankedAbove)
-            .first
-    }
-
-    /// The candidate to preselect in the picker, or nil to make the user choose.
-    ///
-    /// Deliberately narrower than `best`. Preselecting is only safe when the live
-    /// store holds nothing of the user's: empty, unreadable, or the untouched
-    /// seed. When they still have their own spaces, restoring a fuller but older
-    /// backup would discard everything they did since, and only they can weigh
-    /// that. A `.corrupt` backup is never preselected because that store was
-    /// damaged when it was set aside — but that only rules out `.corrupt`
-    /// itself, not preselection outright: the next-best non-corrupt candidate is
-    /// still considered, since preselection only runs when the live store holds
-    /// nothing of the user's, which is exactly when handing back "nothing
-    /// selected" is worst.
-    static func preselection(among candidates: [StoreCandidate], liveContent: StoreContent?) -> StoreCandidate? {
-        let liveHoldsUsersData = liveContent.map { !$0.isEmpty && !$0.looksLikeUntouchedSeed } ?? false
-        guard !liveHoldsUsersData else { return nil }
-        guard let winner = best(among: candidates.filter { $0.kind != .corrupt }) else { return nil }
-        // Nothing to gain from a backup that holds no more than what is there.
-        if let live = liveContent, let content = winner.content, !content.holdsMore(than: live) { return nil }
-        return winner
-    }
-}
-
-/// Why Atoll is offering to restore.
-enum StoreRecoveryOffer: Equatable, Sendable {
-    /// The live store holds less than Atoll recorded for it: some of the
-    /// user's data went missing between launches.
-    case belowRecord
-    /// There is no record to compare against and the live store holds nothing
-    /// of the user's, so there is nothing to weigh against restoring.
-    case nothingToLose
-}
-
-extension StoreInventory {
-    /// Whether to offer a restore, and why.
-    ///
-    /// Two conditions always hold: a backup exists holding more than the live
-    /// store, and the user has not already declined this same pairing. Then one
-    /// of two triggers fires.
-    ///
-    /// Trigger 2 is not redundant. Someone who lost their spaces on 1.5.14 or
-    /// earlier has no record on their first launch of a build that writes one,
-    /// and their store holds the seed, so trigger 1 can never fire for them.
-    /// Without trigger 2 this feature would miss the user who reported the bug.
-    static func offer(
-        liveContent: StoreContent?,
-        best: StoreCandidate?,
-        record: StoreContent?,
-        declinedKeys: Set<String>
-    ) -> StoreRecoveryOffer? {
-        guard let best, let backup = best.content, best.isRestorable else { return nil }
-        // A backup has to actually cover the gap. An unreadable live store
-        // counts as covered: anything readable beats nothing.
-        if let live = liveContent, !backup.holdsMore(than: live) { return nil }
-        if declinedKeys.contains(declineKey(live: liveContent, candidate: best)) { return nil }
-
-        if let record, let live = liveContent, record.holdsMore(than: live) { return .belowRecord }
-        if let record, liveContent == nil, !record.isEmpty { return .belowRecord }
-
-        let liveHoldsUsersData = liveContent.map { !$0.isEmpty && !$0.looksLikeUntouchedSeed } ?? false
-        if !liveHoldsUsersData { return .nothingToLose }
-        return nil
-    }
-
-    /// Identifies one pairing of backup and live state, so declining is
-    /// remembered for that pairing only. When either side changes, Atoll may
-    /// ask again, which is what makes a stale decline self-correcting.
-    static func declineKey(live: StoreContent?, candidate: StoreCandidate) -> String {
-        let liveSignature = live.map { "\($0.spaces)-\($0.services)-\($0.links)" } ?? "unknown"
-        return "\(candidate.url.lastPathComponent)|\(liveSignature)"
-    }
-
-    /// The record's string form, kept readable so `defaults read` shows
-    /// something meaningful during support.
-    static func encodeRecord(_ content: StoreContent) -> String {
-        "\(content.spaces)-\(content.services)-\(content.links)"
-    }
-
-    /// Parses `encodeRecord`'s output. Anything else is treated as no record,
-    /// never as an empty store.
-    static func decodeRecord(_ raw: String?) -> StoreContent? {
-        guard let raw else { return nil }
-        let parts = raw.split(separator: "-").map(String.init)
-        guard parts.count == 3,
-              let spaces = Int(parts[0]),
-              let services = Int(parts[1]),
-              let links = Int(parts[2]) else { return nil }
-        return StoreContent(spaces: spaces, services: services, links: links, spaceNames: [], serviceLabels: [])
     }
 }

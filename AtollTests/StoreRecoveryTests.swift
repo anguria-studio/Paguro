@@ -2,6 +2,7 @@ import XCTest
 import Foundation
 import SwiftData
 import SQLite3
+import AtollCore
 @testable import Atoll
 
 final class StoreRecoveryTests: XCTestCase {
@@ -392,19 +393,6 @@ final class StoreRecoveryTests: XCTestCase {
 
     // MARK: - Store content and the default-seed fingerprint
 
-    /// `holdsMore` ranks by services first, then spaces, and is false for equal
-    /// content — the comparison both the ranking and the offer rule depend on.
-    func testHoldsMoreRanksServicesThenSpaces() {
-        let big = StoreContent(spaces: 4, services: 13, links: 13, spaceNames: [], serviceLabels: [])
-        let fewerServices = StoreContent(spaces: 9, services: 12, links: 12, spaceNames: [], serviceLabels: [])
-        let sameServicesFewerSpaces = StoreContent(spaces: 2, services: 13, links: 13, spaceNames: [], serviceLabels: [])
-
-        XCTAssertTrue(big.holdsMore(than: fewerServices), "more services wins even with fewer spaces")
-        XCTAssertTrue(big.holdsMore(than: sameServicesFewerSpaces), "equal services falls through to spaces")
-        XCTAssertFalse(big.holdsMore(than: big), "equal content is not more")
-        XCTAssertFalse(fewerServices.holdsMore(than: big))
-    }
-
     /// The fingerprint must match the seed exactly and nothing else.
     func testUntouchedSeedFingerprint() {
         let seed = StoreContent(
@@ -712,296 +700,6 @@ final class StoreRecoveryTests: XCTestCase {
         )
     }
 
-    /// Ranking takes the fullest restorable backup, breaks ties on recency, and
-    /// ignores the live store, damaged files, and unreadable files.
-    func testBestCandidateRanksContentThenRecency() {
-        let dir = URL(fileURLWithPath: "/tmp/ranking")
-        func candidate(
-            _ name: String,
-            _ kind: StoreCandidate.Kind,
-            spaces: Int,
-            services: Int,
-            at stamp: TimeInterval,
-            damaged: Bool = false,
-            unknown: Bool = false
-        ) -> StoreCandidate {
-            StoreCandidate(
-                url: dir.appendingPathComponent(name),
-                kind: kind,
-                takenAt: Date(timeIntervalSince1970: stamp),
-                content: unknown ? nil : StoreContent(spaces: spaces, services: services, links: services, spaceNames: [], serviceLabels: []),
-                isDamaged: damaged
-            )
-        }
-
-        let fullOld = candidate("a", .snapshot(version: "1.5.11+20"), spaces: 4, services: 13, at: 1_000)
-        let thinNew = candidate("b", .snapshot(version: "1.5.14+23"), spaces: 2, services: 7, at: 9_000)
-        let fullNewer = candidate("c", .prerestore, spaces: 4, services: 13, at: 5_000)
-        let live = candidate("live", .live, spaces: 9, services: 99, at: 9_999)
-        let damaged = candidate("d", .snapshot(version: nil), spaces: 8, services: 40, at: 9_500, damaged: true)
-        let unknown = candidate("e", .snapshot(version: nil), spaces: 0, services: 0, at: 9_600, unknown: true)
-
-        let best = StoreInventory.best(among: [fullOld, thinNew, fullNewer, live, damaged, unknown])
-        XCTAssertEqual(best, fullNewer, "equal content must break the tie on recency, and live/damaged/unknown are excluded")
-
-        XCTAssertEqual(
-            StoreInventory.best(among: [thinNew, fullOld]),
-            fullOld,
-            "more content beats more recent"
-        )
-        XCTAssertNil(StoreInventory.best(among: [live, damaged, unknown]), "nothing restorable means no winner")
-    }
-
-    /// Two candidates tying on all four ranking keys must still have one settled
-    /// order. `sorted(by:)` is not stable, and `best(among:)` takes the first of
-    /// a sort, so a comparator that calls tied candidates equivalent hands the
-    /// decision to whatever order `contentsOfDirectory` happened to return: the
-    /// sheet's rows could shuffle between openings, and the preselected winner
-    /// (and with it the decline key) could change launch to launch. The old
-    /// filename sort was at least deterministic; the tiebreak below restores
-    /// that without giving up ranking by completeness.
-    func testRankingBreaksTiesDeterministicallyOnFilename() {
-        let dir = URL(fileURLWithPath: "/tmp/ranking-ties")
-        func candidate(_ name: String, _ kind: StoreCandidate.Kind) -> StoreCandidate {
-            StoreCandidate(
-                url: dir.appendingPathComponent(name),
-                kind: kind,
-                takenAt: Date(timeIntervalSince1970: 1_700_000_000),
-                content: StoreContent(spaces: 2, services: 7, links: 7, spaceNames: [], serviceLabels: []),
-                isDamaged: false
-            )
-        }
-        // Same spaces, same services, same links, same instant — every ranking
-        // key ties, so only the filename can separate them.
-        let a = candidate("store.sqlite.prepick-1700000000.bak", .prepick)
-        let b = candidate("store.sqlite.snapshot-1700000000-1.0.0.bak", .snapshot(version: "1.0.0"))
-
-        XCTAssertNotEqual(
-            StoreInventory.isRankedAbove(a, b), StoreInventory.isRankedAbove(b, a),
-            "candidates tying on every key must still rank one above the other, not compare as equivalent"
-        )
-        XCTAssertEqual(
-            StoreInventory.best(among: [a, b]), StoreInventory.best(among: [b, a]),
-            "the winner must not depend on the order the directory listing happened to produce"
-        )
-        XCTAssertEqual(
-            [a, b].sorted(by: StoreInventory.isRankedAbove).map(\.id),
-            [b, a].sorted(by: StoreInventory.isRankedAbove).map(\.id),
-            "the displayed order must be the same whichever way the list arrives"
-        )
-    }
-
-    /// Preselection is narrower than ranking: it only fires when the live store
-    /// holds nothing of the user's, and never picks a corrupt-family backup.
-    func testPreselectionOnlyWhenLiveStoreHoldsNothingOfTheUsers() {
-        let dir = URL(fileURLWithPath: "/tmp/preselect")
-        let backup = StoreCandidate(
-            url: dir.appendingPathComponent("s.bak"),
-            kind: .snapshot(version: "1.5.11+20"),
-            takenAt: Date(timeIntervalSince1970: 1_000),
-            content: StoreContent(spaces: 4, services: 13, links: 13, spaceNames: [], serviceLabels: []),
-            isDamaged: false
-        )
-        let corruptBackup = StoreCandidate(
-            url: dir.appendingPathComponent("c.bak"),
-            kind: .corrupt,
-            takenAt: Date(timeIntervalSince1970: 2_000),
-            content: StoreContent(spaces: 9, services: 40, links: 40, spaceNames: [], serviceLabels: []),
-            isDamaged: false
-        )
-        let empty = StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
-        let seeded = StoreContent(
-            spaces: 2, services: 7, links: 7,
-            spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: DefaultSeed.allServiceLabels
-        )
-        let usersOwn = StoreContent(spaces: 3, services: 10, links: 10, spaceNames: ["Home", "Work", "Side"], serviceLabels: [])
-
-        XCTAssertEqual(StoreInventory.preselection(among: [backup], liveContent: empty), backup, "empty live store: preselect")
-        XCTAssertEqual(StoreInventory.preselection(among: [backup], liveContent: seeded), backup, "seeded live store: preselect")
-        XCTAssertEqual(StoreInventory.preselection(among: [backup], liveContent: nil), backup, "unreadable live store: preselect")
-        XCTAssertNil(
-            StoreInventory.preselection(among: [backup], liveContent: usersOwn),
-            "the user's own data must never be silently preselected over"
-        )
-        XCTAssertNil(
-            StoreInventory.preselection(among: [corruptBackup], liveContent: empty),
-            "a corrupt-family backup is never preselected"
-        )
-
-        // An empty but valid backup cannot be preselected: it holds no more than
-        // the live store, even when both are empty.
-        let emptyBackup = StoreCandidate(
-            url: dir.appendingPathComponent("empty.bak"),
-            kind: .snapshot(version: "1.5.14"),
-            takenAt: Date(timeIntervalSince1970: 8_000),
-            content: empty,
-            isDamaged: false
-        )
-        XCTAssertNil(
-            StoreInventory.preselection(among: [emptyBackup], liveContent: empty),
-            "empty backup holds no more than empty live store and is not preselected"
-        )
-    }
-
-    /// Review Finding 6 (Tier 2): a `.corrupt` winner must not suppress
-    /// preselection outright — the next-best non-corrupt candidate should be
-    /// offered instead. Preselection only ever runs when the live store holds
-    /// nothing of the user's, which is exactly when handing back "nothing
-    /// selected" (a disabled button) is worst.
-    func testPreselectionFallsThroughPastACorruptWinnerToTheNextBest() {
-        let dir = URL(fileURLWithPath: "/tmp/preselect-fallthrough")
-        // The fullest candidate overall is corrupt, so without the fallthrough
-        // fix `best(among:)` would pick it and preselection would bail entirely.
-        let corruptWinner = StoreCandidate(
-            url: dir.appendingPathComponent("c.bak"),
-            kind: .corrupt,
-            takenAt: Date(timeIntervalSince1970: 5_000),
-            content: StoreContent(spaces: 9, services: 40, links: 40, spaceNames: [], serviceLabels: []),
-            isDamaged: false
-        )
-        let nextBest = StoreCandidate(
-            url: dir.appendingPathComponent("s.bak"),
-            kind: .snapshot(version: "1.5.11+20"),
-            takenAt: Date(timeIntervalSince1970: 1_000),
-            content: StoreContent(spaces: 4, services: 13, links: 13, spaceNames: [], serviceLabels: []),
-            isDamaged: false
-        )
-        let empty = StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
-
-        XCTAssertEqual(
-            StoreInventory.preselection(among: [corruptWinner, nextBest], liveContent: empty),
-            nextBest,
-            "a corrupt winner must fall through to the next-best non-corrupt candidate, not suppress preselection entirely"
-        )
-    }
-
-    /// The offer rule: two triggers, and the case that must stay silent.
-    func testOfferRuleTriggersAndSilence() {
-        let dir = URL(fileURLWithPath: "/tmp/offer")
-        let backup = StoreCandidate(
-            url: dir.appendingPathComponent("s.bak"),
-            kind: .snapshot(version: "1.5.11+20"),
-            takenAt: Date(timeIntervalSince1970: 1_000),
-            content: StoreContent(spaces: 4, services: 13, links: 13, spaceNames: [], serviceLabels: []),
-            isDamaged: false
-        )
-        let seeded = StoreContent(
-            spaces: 2, services: 7, links: 7,
-            spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: DefaultSeed.allServiceLabels
-        )
-        let partial = StoreContent(spaces: 1, services: 4, links: 4, spaceNames: ["Home"], serviceLabels: [])
-        let record = StoreContent(spaces: 4, services: 13, links: 13, spaceNames: [], serviceLabels: [])
-
-        // Trigger 1: below the record, with a backup that covers the gap.
-        XCTAssertEqual(
-            StoreInventory.offer(liveContent: partial, best: backup, record: record, declinedKeys: []),
-            .belowRecord
-        )
-
-        // Trigger 2: no record yet, and the live store is the untouched seed.
-        // This is the already-lost user's first launch on a build that records.
-        XCTAssertEqual(
-            StoreInventory.offer(liveContent: seeded, best: backup, record: nil, declinedKeys: []),
-            .nothingToLose
-        )
-
-        // The case that must stay silent: the user deleted spaces on purpose, so
-        // the record matches what is there, and their store is their own.
-        XCTAssertNil(
-            StoreInventory.offer(liveContent: partial, best: backup, record: partial, declinedKeys: []),
-            "a store matching its record is not loss, even with a fuller backup"
-        )
-
-        // No backup that holds more means nothing to offer.
-        let thin = StoreCandidate(
-            url: dir.appendingPathComponent("t.bak"),
-            kind: .snapshot(version: nil),
-            takenAt: nil,
-            content: StoreContent(spaces: 1, services: 2, links: 2, spaceNames: [], serviceLabels: []),
-            isDamaged: false
-        )
-        XCTAssertNil(StoreInventory.offer(liveContent: partial, best: thin, record: record, declinedKeys: []))
-        XCTAssertNil(StoreInventory.offer(liveContent: partial, best: nil, record: record, declinedKeys: []))
-
-        // A remembered decline silences the same pairing.
-        let key = StoreInventory.declineKey(live: partial, candidate: backup)
-        XCTAssertNil(
-            StoreInventory.offer(liveContent: partial, best: backup, record: record, declinedKeys: [key]),
-            "a declined pairing must not ask again"
-        )
-        // A different live state is a different pairing, so it may ask again.
-        XCTAssertNotNil(
-            StoreInventory.offer(liveContent: seeded, best: backup, record: record, declinedKeys: [key])
-        )
-
-        // An unreadable live store (liveContent: nil) but a record on file: the
-        // record branch for unknown live content fires directly.
-        XCTAssertEqual(
-            StoreInventory.offer(liveContent: nil, best: backup, record: record, declinedKeys: []),
-            .belowRecord
-        )
-
-        // An unreadable live store and no record: this pins current behavior.
-        // "Unknown" is deliberately treated as "nothing to lose" here, because
-        // the outcome is an offer the user can decline, not an automatic action.
-        XCTAssertEqual(
-            StoreInventory.offer(liveContent: nil, best: backup, record: nil, declinedKeys: []),
-            .nothingToLose,
-            "an unreadable live store with no record is treated as nothing to lose here, since the result is a declinable offer, not an automatic restore"
-        )
-
-        // The coverage bypass: with liveContent nil there is nothing to compare
-        // against, so even `thin` -- which fails the "holds more" gate against a
-        // concrete live store above -- is not suppressed by that gate here.
-        XCTAssertEqual(
-            StoreInventory.offer(liveContent: nil, best: thin, record: nil, declinedKeys: []),
-            .nothingToLose,
-            "an unknown live store means there is nothing to compare against, so the coverage gate must not suppress even a thin backup"
-        )
-    }
-
-    /// The record round-trips through the string form kept in UserDefaults.
-    func testContentRecordRoundTrip() throws {
-        let content = StoreContent(spaces: 4, services: 13, links: 13, spaceNames: [], serviceLabels: [])
-        let encoded = StoreInventory.encodeRecord(content)
-        let decoded = try XCTUnwrap(StoreInventory.decodeRecord(encoded))
-        XCTAssertEqual(decoded.spaces, 4)
-        XCTAssertEqual(decoded.services, 13)
-        XCTAssertEqual(decoded.links, 13)
-
-        XCTAssertNil(StoreInventory.decodeRecord("garbage"), "an unparseable record is no record")
-        XCTAssertNil(StoreInventory.decodeRecord("4-13"), "a short record is no record")
-        XCTAssertNil(StoreInventory.decodeRecord(""))
-    }
-
-    /// The pending filename comes from UserDefaults, which is external input, so
-    /// it must be validated before any file operation uses it.
-    func testValidatedRestoreNameRejectsAnythingUnexpected() {
-        let store = "default.store"
-        XCTAssertEqual(
-            StoreRepair.validatedRestoreName("default.store.snapshot-1700000000-1.5.11+20.bak", storeName: store),
-            "default.store.snapshot-1700000000-1.5.11+20.bak"
-        )
-        XCTAssertEqual(
-            StoreRepair.validatedRestoreName("default.store.prerestore-1700000000.bak", storeName: store),
-            "default.store.prerestore-1700000000.bak"
-        )
-        XCTAssertEqual(
-            StoreRepair.validatedRestoreName("default.store.prepick-1700000000.bak", storeName: store),
-            "default.store.prepick-1700000000.bak",
-            "the prepick family (a prior deliberate restore's aside) must itself be walkable-back-from"
-        )
-        XCTAssertNil(StoreRepair.validatedRestoreName("../../etc/passwd", storeName: store), "no traversal")
-        XCTAssertNil(StoreRepair.validatedRestoreName("/tmp/default.store.snapshot-1.bak", storeName: store), "no absolute paths")
-        XCTAssertNil(StoreRepair.validatedRestoreName("default.store.snapshot-1/../x.bak", storeName: store), "no separators")
-        XCTAssertNil(StoreRepair.validatedRestoreName("default.store", storeName: store), "the live store is not a backup")
-        XCTAssertNil(StoreRepair.validatedRestoreName("other.store.snapshot-1.bak", storeName: store), "must belong to this store")
-        XCTAssertNil(StoreRepair.validatedRestoreName("default.store.snapshot-1.txt", storeName: store), "must be a .bak")
-        XCTAssertNil(StoreRepair.validatedRestoreName("", storeName: store))
-    }
-
     /// Applying a pending restore must copy the chosen backup into place, always
     /// set the current store aside first, and clear the key so a crash cannot
     /// leave it looping.
@@ -1136,7 +834,10 @@ final class StoreRecoveryTests: XCTestCase {
         // Validly named for this store, but never written to disk.
         let missingName = "store.sqlite.snapshot-1700009999-1.9.9.bak"
         XCTAssertNotNil(
-            StoreRepair.validatedRestoreName(missingName, storeName: storeURL.lastPathComponent),
+            StoreRecoveryPolicy.validatedRestoreName(
+                missingName,
+                storeName: storeURL.lastPathComponent
+            ),
             "precondition: the name itself must pass validation"
         )
         XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent(missingName).path))
@@ -1470,15 +1171,25 @@ final class StoreRecoveryTests: XCTestCase {
 
         let live = StoreInventory.readContent(at: storeURL)
         let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
-        let best = StoreInventory.best(among: candidates)
+        let best = StoreRecoveryPolicy.best(among: candidates)
         let record = StoreContent(spaces: 4, services: 0, links: 0, spaceNames: [], serviceLabels: [])
 
         XCTAssertEqual(
-            StoreInventory.offer(liveContent: live, best: best, record: record, declinedKeys: []),
+            StoreRecoveryPolicy.offer(
+                liveContent: live,
+                liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false,
+                best: best,
+                record: record,
+                declinedKeys: []
+            ),
             .belowRecord
         )
         XCTAssertEqual(
-            StoreInventory.preselection(among: candidates, liveContent: live)?.content?.spaces,
+            StoreRecoveryPolicy.preselection(
+                among: candidates,
+                liveContent: live,
+                liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false
+            )?.content?.spaces,
             4,
             "the 4-space snapshot must be preselected over an emptied live store"
         )
@@ -1542,7 +1253,10 @@ final class StoreRecoveryTests: XCTestCase {
                 isDamaged: false
             )
             XCTAssertEqual(
-                StoreRepair.validatedRestoreName(candidate.url.lastPathComponent, storeName: storeURL.lastPathComponent),
+                StoreRecoveryPolicy.validatedRestoreName(
+                    candidate.url.lastPathComponent,
+                    storeName: storeURL.lastPathComponent
+                ),
                 name,
                 "a candidate the picker can show must be one the launch path accepts"
             )

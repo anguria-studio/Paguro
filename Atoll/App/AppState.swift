@@ -1748,60 +1748,6 @@ final class AppState {
         }
     }
 
-    /// Why an open attempt was unusable — drives `recoveryPlan`.
-    enum UnusableKind: Equatable {
-        /// Opened fine but held zero spaces while the user had data: the
-        /// migration rewrote the on-disk file empty. Restoring is pure gain.
-        case emptiedWithHistory
-        /// Open threw, or the store still held dangling links after repair. The
-        /// on-disk file was NOT rewritten, so it may still hold the real data.
-        case openFailed
-    }
-
-    /// What to do after an open found the store unusable, when no restore has run
-    /// yet. Pure, so the data-safety rules are unit-testable without provoking a
-    /// real SwiftData failure.
-    enum Recovery: Equatable {
-        /// Run temporary (in-memory), leaving the on-disk store and snapshots
-        /// untouched. Keeps the durable flag so a later launch never reseeds.
-        case preserveInMemory
-        /// Nothing on disk to recover (no file, no usable snapshot): clear the
-        /// stale flag and let a fresh store seed normally.
-        case freshStart
-    }
-
-    /// Decides recovery for an unusable open.
-    ///
-    /// The load-bearing rule: NEVER overwrite a store that still has rows on disk
-    /// (`before > 0`). An open can fail transiently — a lingering file lock, a
-    /// dangling-link false positive — while the data is perfectly intact, and
-    /// rolling it back to an older snapshot would lose the newest changes. Only
-    /// restore when the on-disk store is empty (the migration rewrote it) or
-    /// absent (nothing to lose). `fileExisted` separates "no file" (a possible
-    /// fresh start) from "file present but empty" (preserve, don't reseed).
-    static func recoveryPlan(
-        kind: UnusableKind,
-        before: Int?,
-        fileExisted: Bool
-    ) -> (attemptRestore: Bool, ifNoRestore: Recovery) {
-        switch kind {
-        case .emptiedWithHistory:
-            return (true, fileExisted ? .preserveInMemory : .freshStart)
-        case .openFailed:
-            if (before ?? 0) > 0 {
-                // Data on disk we couldn't open — leave it entirely alone.
-                return (false, .preserveInMemory)
-            }
-            // before == nil here means the read-only probe couldn't read the file
-            // either (not just "no rows"), so a present-but-unreadable file is
-            // treated as restorable: restoreFromSnapshot copies the current triple
-            // aside to `.prerestore-*` first, so nothing is destroyed even if it
-            // held data. `caller` only clears the flag / seeds when no usable
-            // backup exists.
-            return (true, fileExisted ? .preserveInMemory : .freshStart)
-        }
-    }
-
     /// Opens the persistent store and, if it is unusable, automatically restores
     /// the newest usable pre-migration snapshot and reopens **once**. It never
     /// overwrites a store that still has data on disk, never deletes the user's
@@ -1829,7 +1775,7 @@ final class AppState {
         let hadHistory = (before ?? 0) > 0 || defaults.bool(forKey: hasEverHadDataKey)
         if (before ?? 0) > 0 { markHasData(defaults) }
 
-        let kind: UnusableKind
+        let kind: StoreUnusableKind
         switch tryOpen(schema: schema, config: config, hadHistory: hadHistory) {
         case .usable(let opened):
             if ((try? opened.mainContext.fetchCount(FetchDescriptor<Space>())) ?? 0) > 0 {
@@ -1842,7 +1788,11 @@ final class AppState {
             kind = .openFailed
         }
 
-        let plan = recoveryPlan(kind: kind, before: before, fileExisted: fileExisted)
+        let plan = StoreRecoveryPolicy.recoveryPlan(
+            kind: kind,
+            before: before,
+            fileExisted: fileExisted
+        )
         // Whether a usable backup EXISTS matters more than whether the restore
         // ultimately succeeds: we must never clear the durable flag and reseed
         // while a usable backup sits on disk. So look it up up front and branch on
@@ -2099,7 +2049,7 @@ final class AppState {
             isInMemoryFallback: isStoreInMemoryFallback,
             restoreScheduled: defaults.string(forKey: StoreRepair.pendingRestoreKey) != nil
         ), let content else { return }
-        defaults.set(StoreInventory.encodeRecord(content), forKey: Self.contentRecordKey)
+        defaults.set(StoreRecoveryPolicy.encodeRecord(content), forKey: Self.contentRecordKey)
     }
 
     /// The live store's content right now, accounting for the in-memory
@@ -2123,17 +2073,23 @@ final class AppState {
     func evaluateStoreRecovery(storeURL: URL, defaults: UserDefaults = .standard) {
         let live = currentLiveContent()
         let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
-        let best = StoreInventory.best(among: candidates)
+        let best = StoreRecoveryPolicy.best(among: candidates)
         let declined = Set(defaults.stringArray(forKey: Self.declinedRestoresKey) ?? [])
+        let liveMatchesSeed = live?.looksLikeUntouchedSeed ?? false
 
         storeCandidates = candidates
-        storeRecoveryOffer = StoreInventory.offer(
+        storeRecoveryOffer = StoreRecoveryPolicy.offer(
             liveContent: live,
+            liveMatchesUntouchedSeed: liveMatchesSeed,
             best: best,
-            record: StoreInventory.decodeRecord(defaults.string(forKey: Self.contentRecordKey)),
+            record: StoreRecoveryPolicy.decodeRecord(defaults.string(forKey: Self.contentRecordKey)),
             declinedKeys: declined
         )
-        preselectedCandidate = StoreInventory.preselection(among: candidates, liveContent: live)
+        preselectedCandidate = StoreRecoveryPolicy.preselection(
+            among: candidates,
+            liveContent: live,
+            liveMatchesUntouchedSeed: liveMatchesSeed
+        )
         if let offer = storeRecoveryOffer {
             // Expected, user-facing behavior, not a fault — an offer being up
             // is normal operation for this feature, so this stays out of
@@ -2158,7 +2114,11 @@ final class AppState {
         let live = currentLiveContent()
         let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
         storeCandidates = candidates
-        preselectedCandidate = StoreInventory.preselection(among: candidates, liveContent: live)
+        preselectedCandidate = StoreRecoveryPolicy.preselection(
+            among: candidates,
+            liveContent: live,
+            liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false
+        )
     }
 
     /// Remembers that the user said no to this pairing, and drops the offer.
@@ -2172,9 +2132,9 @@ final class AppState {
     /// key it produced would never match the one `offer(...)` checks on a
     /// later launch, and the decline would silently fail to stick.
     func declineStoreRecovery(defaults: UserDefaults = .standard) {
-        if let best = StoreInventory.best(among: storeCandidates) {
+        if let best = StoreRecoveryPolicy.best(among: storeCandidates) {
             let liveContent = storeCandidates.first(where: { $0.kind == .live })?.content
-            let key = StoreInventory.declineKey(live: liveContent, candidate: best)
+            let key = StoreRecoveryPolicy.declineKey(live: liveContent, candidate: best)
             var declined = defaults.stringArray(forKey: Self.declinedRestoresKey) ?? []
             if !declined.contains(key) {
                 declined.append(key)
@@ -2204,7 +2164,7 @@ final class AppState {
         defaults: UserDefaults
     ) -> Bool {
         guard candidate.isRestorable else { return false }
-        guard let name = StoreRepair.validatedRestoreName(
+        guard let name = StoreRecoveryPolicy.validatedRestoreName(
             candidate.url.lastPathComponent,
             storeName: storeName
         ) else {

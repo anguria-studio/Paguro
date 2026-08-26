@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import AtollCore
 
 /// One-time, launch-time repair for stores corrupted by a build that shipped
 /// before `Space.serviceLinks` declared its inverse. Without the inverse the
@@ -430,25 +431,6 @@ enum StoreRepair {
     /// container faults deleted models and traps.
     static let pendingRestoreKey = "atoll.pendingRestore"
 
-    /// Validates a pending restore filename. The value comes from UserDefaults,
-    /// which is outside the app's control, so it is treated as untrusted: it must
-    /// be a plain filename (no separators, no traversal) belonging to this store
-    /// and naming one of the four backup families.
-    static func validatedRestoreName(_ name: String, storeName: String) -> String? {
-        guard !name.isEmpty,
-              !name.contains("/"),
-              !name.contains(".."),
-              name.hasSuffix(".bak") else { return nil }
-        // Derived from `StoreInventory.BackupFamily` rather than a hand-written
-        // literal — everything else in the family chain (`BackupFamily` → the
-        // `Kind` switch → the `displayTitle` switch) is compiler-enforced
-        // exhaustive; this used to be the one exception, so a fifth family
-        // could be enumerated and offered by the picker yet silently rejected
-        // here at the next launch.
-        guard StoreInventory.backupInfixes.contains(where: { name.hasPrefix(storeName + $0) }) else { return nil }
-        return name
-    }
-
     /// Puts the user's chosen backup in place, if one is waiting. Returns whether
     /// a restore actually happened.
     ///
@@ -495,7 +477,10 @@ enum StoreRepair {
         guard let raw = defaults.string(forKey: pendingRestoreKey) else { return false }
         defaults.removeObject(forKey: pendingRestoreKey)
 
-        guard let name = validatedRestoreName(raw, storeName: storeURL.lastPathComponent) else {
+        guard let name = StoreRecoveryPolicy.validatedRestoreName(
+            raw,
+            storeName: storeURL.lastPathComponent
+        ) else {
             AppLogger.dataStore.error("Pending restore name rejected; ignoring it")
             return false
         }

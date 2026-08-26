@@ -489,39 +489,6 @@ final class StoreIntegrityTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: AppState.hasEverHadDataKey), "the flag must NOT be cleared when a backup was restored")
     }
 
-    /// The pure recovery-decision truth table — the heart of the data-safety
-    /// guarantees, testable without provoking a real SwiftData failure.
-    func testRecoveryPlanNeverOverwritesLiveDataAndFreshStartsOnlyWhenNoFile() {
-        // Emptied-with-history: the on-disk file was rewritten empty, so restore.
-        let emptiedWithFile = AppState.recoveryPlan(kind: .emptiedWithHistory, before: 4, fileExisted: true)
-        XCTAssertTrue(emptiedWithFile.attemptRestore)
-        XCTAssertEqual(emptiedWithFile.ifNoRestore, .preserveInMemory, "a file that existed must be preserved, never reseeded")
-
-        // Stale flag but no file at all → a fresh start is correct, not a brick.
-        XCTAssertEqual(
-            AppState.recoveryPlan(kind: .emptiedWithHistory, before: nil, fileExisted: false).ifNoRestore,
-            .freshStart
-        )
-
-        // Open FAILED while data is on disk → never touch it (the HIGH-severity
-        // regression: a transient open failure must not roll back to an older
-        // snapshot and lose the newest data).
-        let failedWithData = AppState.recoveryPlan(kind: .openFailed, before: 5, fileExisted: true)
-        XCTAssertFalse(failedWithData.attemptRestore, "must not overwrite a store that still has rows on disk")
-        XCTAssertEqual(failedWithData.ifNoRestore, .preserveInMemory)
-
-        // Open failed on an empty file → safe to restore, preserve if it existed.
-        let failedEmpty = AppState.recoveryPlan(kind: .openFailed, before: 0, fileExisted: true)
-        XCTAssertTrue(failedEmpty.attemptRestore)
-        XCTAssertEqual(failedEmpty.ifNoRestore, .preserveInMemory)
-
-        // Open failed with no file → fresh start allowed.
-        XCTAssertEqual(
-            AppState.recoveryPlan(kind: .openFailed, before: nil, fileExisted: false).ifNoRestore,
-            .freshStart
-        )
-    }
-
     /// Prune must never delete the newest USABLE snapshot, even when a run of
     /// newer empty snapshots pushes it past the keep window — otherwise the only
     /// copy of real data is destroyed after a few post-loss version bumps.

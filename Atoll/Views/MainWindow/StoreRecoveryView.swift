@@ -1,4 +1,5 @@
 import SwiftUI
+import AtollCore
 
 /// Lists every store Atoll could put back: the live one and each backup it
 /// kept. The user picks; nothing is written until they do.
