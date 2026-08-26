@@ -98,7 +98,7 @@ struct AtollApp: App {
                 Button(MicrophoneMutePresentation.menuTitle(
                     activeCount: appState.webViewPool.activeMicrophoneCount
                 )) {
-                    appState.muteActiveMicrophones()
+                    appState.mediaPermissions.muteActiveMicrophones()
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
                 .disabled(appState.webViewPool.activeMicrophoneCount == 0)

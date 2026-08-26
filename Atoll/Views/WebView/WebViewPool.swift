@@ -108,8 +108,8 @@ final class WebViewPool {
     /// Called whenever a service's web view is torn down for ANY reason — full
     /// hibernation, rebuild (recreateWebView), LRU eviction, or removal — i.e. the
     /// single `teardownWebView` chokepoint. Distinct from `onServiceRemoved`
-    /// (permanent deletion only); used to invalidate a pending media prompt whose
-    /// web view is going away.
+    /// (permanent deletion only). `MediaPermissionCoordinator` uses it to deny a
+    /// pending request whose web view is going away.
     var onServiceTornDown: ((UUID) -> Void)?
 
     /// Wired up at AppState init and applied to every coordinator the pool
@@ -119,10 +119,8 @@ final class WebViewPool {
     /// service's "open links in Atoll" choice.
     var externalLinkHandler: ((URL, UUID?) -> Void)?
 
-    /// Wired up at AppState init and applied to every coordinator. Resolves a
-    /// camera/microphone capture request to a WebKit decision from the persisted
-    /// per-service policy. The pool is a pass-through — it owns neither the policy
-    /// nor the prompt UI.
+    /// Set by `MediaPermissionCoordinator` and applied to every web coordinator.
+    /// The pool is a pass-through. It owns neither policy nor prompt UI.
     var mediaCapturePolicyProvider: ((UUID, WKMediaCaptureType, WKFrameInfo) async -> WKPermissionDecision)?
 
     /// Called after a service has been preloaded (web view created and load

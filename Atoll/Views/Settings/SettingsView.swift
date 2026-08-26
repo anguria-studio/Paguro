@@ -531,8 +531,8 @@ struct PrivacySettingsView: View {
 
             Section("Camera & Microphone") {
                 Picker("Camera", selection: Binding(
-                    get: { appState.defaultCameraPolicy },
-                    set: { appState.setDefaultCameraPolicy($0) }
+                    get: { appState.mediaPermissions.defaultCameraPolicy },
+                    set: { appState.mediaPermissions.setDefaultCameraPolicy($0) }
                 )) {
                     ForEach(MediaPermissionPolicy.allCases, id: \.self) { policy in
                         Text(policy.displayName).tag(policy)
@@ -541,8 +541,8 @@ struct PrivacySettingsView: View {
                 .pickerStyle(.segmented)
 
                 Picker("Microphone", selection: Binding(
-                    get: { appState.defaultMicrophonePolicy },
-                    set: { appState.setDefaultMicrophonePolicy($0) }
+                    get: { appState.mediaPermissions.defaultMicrophonePolicy },
+                    set: { appState.mediaPermissions.setDefaultMicrophonePolicy($0) }
                 )) {
                     ForEach(MediaPermissionPolicy.allCases, id: \.self) { policy in
                         Text(policy.displayName).tag(policy)

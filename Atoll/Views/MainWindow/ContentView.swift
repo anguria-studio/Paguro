@@ -83,7 +83,7 @@ struct ContentView: View {
                 .accessibilityLabel("Offline")
             }
 
-            if let feedback = appState.microphoneActionFeedback {
+            if let feedback = appState.mediaPermissions.microphoneActionFeedback {
                 NoticeStrip(severity: .info, systemImage: "mic.slash.fill") {
                     Text(feedback)
                         .font(.caption)
@@ -217,28 +217,34 @@ struct ContentView: View {
             StoreRecoveryView()
         }
         .alert(
-            appState.pendingMediaRequest?.title ?? "",
+            appState.mediaPermissions.pendingRequest?.title ?? "",
             isPresented: Binding(
-                get: { appState.pendingMediaRequest != nil },
+                get: { appState.mediaPermissions.pendingRequest != nil },
                 set: { _ in }   // dismissal always routes through a button below
             ),
-            presenting: appState.pendingMediaRequest
+            presenting: appState.mediaPermissions.pendingRequest
         ) { request in
-            Button("Allow") { appState.answerMediaRequest(request.id, allow: true) }
-            Button("Don't Allow", role: .cancel) { appState.answerMediaRequest(request.id, allow: false) }
+            Button("Allow") { appState.mediaPermissions.answerRequest(request.id, allow: true) }
+            Button("Don't Allow", role: .cancel) {
+                appState.mediaPermissions.answerRequest(request.id, allow: false)
+            }
         } message: { request in
             Text(request.message)
         }
         .alert(
-            "Always appear active in \(appState.presencePrompt?.serviceLabel ?? "")?",
+            "Always appear active in \(appState.mediaPermissions.presencePrompt?.serviceLabel ?? "")?",
             isPresented: Binding(
-                get: { appState.presencePrompt != nil },
+                get: { appState.mediaPermissions.presencePrompt != nil },
                 set: { _ in }   // dismissal always routes through a button below
             ),
-            presenting: appState.presencePrompt
+            presenting: appState.mediaPermissions.presencePrompt
         ) { prompt in
-            Button("Always Appear Active") { appState.answerPresencePrompt(prompt.id, enable: true) }
-            Button("Not Now", role: .cancel) { appState.answerPresencePrompt(prompt.id, enable: false) }
+            Button("Always Appear Active") {
+                appState.mediaPermissions.answerPresencePrompt(prompt.id, enable: true)
+            }
+            Button("Not Now", role: .cancel) {
+                appState.mediaPermissions.answerPresencePrompt(prompt.id, enable: false)
+            }
         } message: { prompt in
             Text("\(prompt.serviceLabel) shows you as away when its window isn't focused. Turn this on to stay active even while you work in other apps. You can change it later in the service's settings. It may hold back some of its notifications while Atoll is in the background.")
         }

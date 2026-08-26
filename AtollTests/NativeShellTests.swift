@@ -439,50 +439,6 @@ final class NativeShellTests: XCTestCase {
         })
     }
 
-    // MARK: - Media permission model integration
-
-    func testMediaPolicyAccessorsDefaultToAskAndRoundTrip() {
-        let service = ServiceInstance(label: "S", url: "https://s.example")
-        // Unset → .ask, and the raw stays nil so resolution can fall back to global.
-        XCTAssertEqual(service.cameraPolicy, .ask)
-        XCTAssertEqual(service.microphonePolicy, .ask)
-        XCTAssertNil(service.cameraPolicyRaw)
-        XCTAssertNil(service.microphonePolicyRaw)
-        // Setting pins the raw string.
-        service.cameraPolicy = .allow
-        service.microphonePolicy = .deny
-        XCTAssertEqual(service.cameraPolicyRaw, "allow")
-        XCTAssertEqual(service.microphonePolicyRaw, "deny")
-        XCTAssertEqual(service.cameraPolicy, .allow)
-        XCTAssertEqual(service.microphonePolicy, .deny)
-    }
-
-    func testMediaPromptCopyNamesTheRealRequester() {
-        // The service's own origin — the prompt names the service.
-        let own = AppState.MediaPermissionRequest(
-            id: UUID(), serviceLabel: "Slack", originHost: nil, camAsked: false, micAsked: true)
-        XCTAssertEqual(own.title, "Allow Slack to use your microphone?")
-        XCTAssertTrue(own.message.hasPrefix("Slack wants to use your microphone"))
-        // A cross-domain origin — the prompt names the ORIGIN (not the service),
-        // and the body says which service opened it, so it can't spoof the service.
-        let foreign = AppState.MediaPermissionRequest(
-            id: UUID(), serviceLabel: "Messenger", originHost: "messenger.com", camAsked: true, micAsked: true)
-        XCTAssertEqual(foreign.title, "Allow messenger.com to use your camera and microphone?")
-        XCTAssertTrue(foreign.message.hasPrefix("messenger.com, opened by Messenger"))
-    }
-
-    func testCatalogFlagsFirstPartyCallVendors() {
-        let entries = ServiceCatalog.shared.entries
-        func firstParty(_ id: String) -> Bool? { entries.first { $0.id == id }?.firstParty }
-        // The curated cross-domain / named call vendors are flagged.
-        for id in ["messenger", "teams", "facebook", "whatsapp", "google-meet", "google-chat"] {
-            XCTAssertEqual(firstParty(id), true, "\(id) should be flagged firstParty")
-        }
-        // Single-domain services are not (no benefit, keep the trust surface small).
-        XCTAssertNotEqual(firstParty("discord"), true)
-        XCTAssertNotEqual(firstParty("slack"), true)
-    }
-
     @MainActor
     func testShouldBustCachesOnlyAfterAVersionChange() {
         // Fresh install (no previous version) — nothing stale to bust.

@@ -61,6 +61,7 @@ The main services and startup adapters are:
 - `AppState` for application and feature state.
 - `StoreLoader` for SwiftData migration, integrity checks, and launch recovery.
 - `PreferencesStore` for the single loaded preferences row and typed commits.
+- `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.

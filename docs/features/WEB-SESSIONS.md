@@ -113,7 +113,9 @@ If direct download access fails, use a save panel and a security-scoped URL.
 ## Camera and microphone
 
 The service asks through the WebKit UI delegate.
-Atoll then applies its app and service policy.
+`MediaPermissionCoordinator` then applies the app and service policy.
+It serializes native prompts and denies a pending request when its web view
+closes or the application locks.
 
 The system permission prompt remains the final authority.
 Atoll must handle denial without a loop.

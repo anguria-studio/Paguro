@@ -190,9 +190,11 @@ struct EditServiceSheet: View {
             // else the global default), so what's shown is what applies. Saving
             // pins it on the service (consistent with the web-appearance picker).
             cameraPolicy = MediaPermissionResolver.effectivePolicy(
-                serviceRaw: service.cameraPolicyRaw, globalRaw: appState.defaultCameraPolicy.rawValue)
+                serviceRaw: service.cameraPolicyRaw,
+                globalRaw: appState.mediaPermissions.defaultCameraPolicy.rawValue)
             microphonePolicy = MediaPermissionResolver.effectivePolicy(
-                serviceRaw: service.microphonePolicyRaw, globalRaw: appState.defaultMicrophonePolicy.rawValue)
+                serviceRaw: service.microphonePolicyRaw,
+                globalRaw: appState.mediaPermissions.defaultMicrophonePolicy.rawValue)
             initialCameraPolicy = cameraPolicy
             initialMicrophonePolicy = microphonePolicy
         }
