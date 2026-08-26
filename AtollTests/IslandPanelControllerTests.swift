@@ -134,21 +134,61 @@ final class IslandPanelControllerTests: XCTestCase {
 
         controller.present(panelContent(for: event))
         await waitForShow(in: renderer)
-        renderer.shows.last?.primaryAction?()
+        renderer.shows.last?.actions.primary?()
 
         XCTAssertEqual(requestedServiceIDs, [event.serviceID])
         XCTAssertEqual(controller.state.phase, .dismissed)
+        XCTAssertTrue(controller.state.recentEvents.isEmpty)
         XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
     }
 
-    func testCollapsedIslandHasNoPointerAction() async {
+    func testCollapsedIslandOpensTheExpandedState() async {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)
 
         controller.showCollapsed()
         await waitForShow(in: renderer)
+        renderer.shows.last?.actions.primary?()
 
-        XCTAssertNil(renderer.shows.last?.primaryAction)
+        XCTAssertEqual(controller.state.phase, .expanded)
+        XCTAssertNotNil(renderer.shows.last?.actions.collapse)
+        XCTAssertNotNil(renderer.shows.last?.actions.openEvent)
+    }
+
+    func testExpandedIslandKeepsAndOpensARecentEvent() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+        let event = try makeEvent(number: 1)
+        var requestedServiceIDs: [UUID] = []
+        controller.onServiceRequested = { requestedServiceIDs.append($0) }
+
+        controller.present(panelContent(for: event))
+        await waitForShow(in: renderer)
+        scheduler.fireNext()
+        scheduler.fireNext()
+        renderer.shows.last?.actions.primary?()
+        renderer.shows.last?.actions.openEvent?(event.id)
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertTrue(renderer.shows.last?.recentContents.isEmpty == true)
+        XCTAssertEqual(requestedServiceIDs, [event.serviceID])
+    }
+
+    func testClosingExpandedIslandReturnsToCollapsed() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.primary?()
+        renderer.shows.last?.actions.collapse?()
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertNotNil(renderer.shows.last?.actions.primary)
     }
 
     func testVisibleIslandHidesOffNotchAndReturnsOnNotchedScreen() async {
@@ -392,8 +432,9 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
     struct Show {
         let state: NotificationIslandState
         let content: NotificationIslandPanelContent?
+        let recentContents: [NotificationIslandPanelContent]
         let placement: NotificationIslandPlacement
-        let primaryAction: NotificationIslandPanelAction?
+        let actions: NotificationIslandPanelActions
     }
 
     private(set) var shows: [Show] = []
@@ -403,15 +444,17 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
     func show(
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
+        recentContents: [NotificationIslandPanelContent],
         placement: NotificationIslandPlacement,
-        primaryAction: NotificationIslandPanelAction?
+        actions: NotificationIslandPanelActions
     ) {
         shows.append(
             Show(
                 state: state,
                 content: content,
+                recentContents: recentContents,
                 placement: placement,
-                primaryAction: primaryAction
+                actions: actions
             )
         )
     }

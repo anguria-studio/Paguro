@@ -32,6 +32,10 @@ If the queue is full, it removes the oldest pending event and keeps the new even
 The counter still counts every additional event while the current alert is visible.
 It shows `99+` when the count is greater than 99.
 When the current alert ends, Atoll continues with the four most recent previews.
+The newest pending preview appears next. An older pending preview must not delay
+a newer one.
+The recent list keeps the four newest received events after their alerts end.
+It is also in memory only. Hiding or stopping the island clears this list.
 The state clears all event content when Atoll stops.
 
 ## Product states
@@ -40,6 +44,7 @@ The state clears all event content when Atoll stops.
 
 The collapsed state is quiet.
 It can show the active service and a small unread signal.
+Clicking it opens the expanded state.
 
 ### Alert
 
@@ -57,7 +62,18 @@ Equal events must not restart the timer without limit.
 ### Expanded
 
 The expanded state shows recent events and controls.
-The user opens this state with a click or keyboard action.
+The user opens this state by clicking the collapsed island.
+The expanded panel takes keyboard focus after this explicit action.
+Escape and the close button return it to the collapsed state.
+The newest recent event receives initial focus when one exists.
+Tab moves between the recent-event buttons and the close button.
+Return activates the focused button.
+
+The first expanded view shows up to four recent events. Each event is a native
+button with a service name, event title, time, and optional body. Activating a
+button opens the exact service account through the shared notification route
+and closes the expanded panel. It also removes that event from the recent list
+and the pending preview queue.
 
 The first controls can include these actions:
 
@@ -85,11 +101,11 @@ Application shutdown closes the panel and rejects later events.
 The panel must not take keyboard focus in the collapsed state.
 The expanded state can take focus after an explicit user action.
 
-The collapsed state does not receive pointer events before the expanded state
-is available. A visible alert receives pointer events. Clicking the alert opens
-the exact service account through the shared notification navigation path. It
-then starts the normal dismissal transition. A queued alert keeps its own full
-display time.
+The collapsed state receives pointer events because the expanded state is
+available. A visible alert also receives pointer events. Clicking the alert
+opens the exact service account through the shared notification navigation
+path. It removes the alert from the recent list and then starts the normal
+dismissal transition. A queued alert keeps its own full display time.
 
 The panel must not cover a system camera privacy indicator.
 The final hardware test must verify this condition.

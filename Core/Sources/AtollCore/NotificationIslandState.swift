@@ -1,3 +1,5 @@
+import Foundation
+
 /// The visible state of the notification island.
 public enum NotificationIslandPhase: Equatable, Sendable {
     case hidden
@@ -14,6 +16,7 @@ public enum NotificationIslandAction: Equatable, Sendable {
     case receive(NotificationEvent)
     case expand
     case collapse
+    case removeRecentEvent(UUID)
     case dismissCurrent
     case finishDismissal
     case stop
@@ -24,12 +27,14 @@ public struct NotificationIslandState: Equatable, Sendable {
     public let phase: NotificationIslandPhase
     public let currentEvent: NotificationEvent?
     public let queuedEvents: [NotificationEvent]
+    public let recentEvents: [NotificationEvent]
     public let pendingCount: Int
 
     public static let hidden = NotificationIslandState(
         phase: .hidden,
         currentEvent: nil,
         queuedEvents: [],
+        recentEvents: [],
         pendingCount: 0
     )
 
@@ -37,11 +42,13 @@ public struct NotificationIslandState: Equatable, Sendable {
         phase: NotificationIslandPhase,
         currentEvent: NotificationEvent?,
         queuedEvents: [NotificationEvent],
+        recentEvents: [NotificationEvent],
         pendingCount: Int
     ) {
         self.phase = phase
         self.currentEvent = currentEvent
         self.queuedEvents = queuedEvents
+        self.recentEvents = recentEvents
         self.pendingCount = max(0, pendingCount)
     }
 }
@@ -62,11 +69,17 @@ public enum NotificationIslandCounterLabel {
 /// Applies deterministic island state and queue rules.
 public struct NotificationIslandReducer: Sendable {
     public static let defaultMaximumQueuedEvents = 4
+    public static let defaultMaximumRecentEvents = 4
 
     public let maximumQueuedEvents: Int
+    public let maximumRecentEvents: Int
 
-    public init(maximumQueuedEvents: Int = defaultMaximumQueuedEvents) {
+    public init(
+        maximumQueuedEvents: Int = defaultMaximumQueuedEvents,
+        maximumRecentEvents: Int = defaultMaximumRecentEvents
+    ) {
         self.maximumQueuedEvents = max(0, maximumQueuedEvents)
+        self.maximumRecentEvents = max(0, maximumRecentEvents)
     }
 
     public func reduce(
@@ -84,6 +97,8 @@ public struct NotificationIslandReducer: Sendable {
             return expand(state)
         case .collapse:
             return collapse(state)
+        case let .removeRecentEvent(eventID):
+            return removeRecentEvent(eventID, from: state)
         case .dismissCurrent:
             return dismissCurrent(in: state)
         case .finishDismissal:
@@ -106,13 +121,18 @@ public struct NotificationIslandReducer: Sendable {
             let phase: NotificationIslandPhase = state.phase == .expanded
                 ? .expanded
                 : .alert
-            return makeState(phase: phase, currentEvent: event)
+            return makeState(
+                phase: phase,
+                currentEvent: event,
+                recentEvents: recent(event, after: state.recentEvents)
+            )
         }
 
         return makeState(
             phase: state.phase,
             currentEvent: state.currentEvent,
             queuedEvents: queue(event, after: state.queuedEvents),
+            recentEvents: recent(event, after: state.recentEvents),
             pendingCount: incremented(state.pendingCount)
         )
     }
@@ -127,6 +147,7 @@ public struct NotificationIslandReducer: Sendable {
             phase: .expanded,
             currentEvent: state.currentEvent,
             queuedEvents: state.queuedEvents,
+            recentEvents: state.recentEvents,
             pendingCount: state.pendingCount
         )
     }
@@ -139,6 +160,7 @@ public struct NotificationIslandReducer: Sendable {
             phase: state.currentEvent == nil ? .collapsed : .alert,
             currentEvent: state.currentEvent,
             queuedEvents: state.queuedEvents,
+            recentEvents: state.recentEvents,
             pendingCount: state.pendingCount
         )
     }
@@ -150,13 +172,32 @@ public struct NotificationIslandReducer: Sendable {
             return state
         }
         guard state.currentEvent != nil else {
-            return makeState(phase: .collapsed)
+            return makeState(
+                phase: .collapsed,
+                recentEvents: state.recentEvents
+            )
         }
         return makeState(
             phase: .dismissed,
             currentEvent: state.currentEvent,
             queuedEvents: state.queuedEvents,
+            recentEvents: state.recentEvents,
             pendingCount: state.pendingCount
+        )
+    }
+
+    private func removeRecentEvent(
+        _ eventID: UUID,
+        from state: NotificationIslandState
+    ) -> NotificationIslandState {
+        let queuedEvents = state.queuedEvents.filter { $0.id != eventID }
+        let removedPendingCount = state.queuedEvents.count - queuedEvents.count
+        return makeState(
+            phase: state.phase,
+            currentEvent: state.currentEvent,
+            queuedEvents: queuedEvents,
+            recentEvents: state.recentEvents.filter { $0.id != eventID },
+            pendingCount: max(0, state.pendingCount - removedPendingCount)
         )
     }
 
@@ -165,12 +206,16 @@ public struct NotificationIslandReducer: Sendable {
     ) -> NotificationIslandState {
         guard state.phase == .dismissed else { return state }
         guard let nextEvent = state.queuedEvents.first else {
-            return makeState(phase: .collapsed)
+            return makeState(
+                phase: .collapsed,
+                recentEvents: state.recentEvents
+            )
         }
         return makeState(
             phase: .alert,
             currentEvent: nextEvent,
             queuedEvents: Array(state.queuedEvents.dropFirst()),
+            recentEvents: state.recentEvents,
             pendingCount: max(0, state.queuedEvents.count - 1)
         )
     }
@@ -180,25 +225,31 @@ public struct NotificationIslandReducer: Sendable {
         after existingEvents: [NotificationEvent]
     ) -> [NotificationEvent] {
         guard maximumQueuedEvents > 0 else { return [] }
+        return Array(([event] + existingEvents).prefix(maximumQueuedEvents))
+    }
 
-        var result = existingEvents
-        if result.count == maximumQueuedEvents {
-            result.removeFirst()
-        }
-        result.append(event)
-        return result
+    private func recent(
+        _ event: NotificationEvent,
+        after existingEvents: [NotificationEvent]
+    ) -> [NotificationEvent] {
+        guard maximumRecentEvents > 0 else { return [] }
+
+        let olderEvents = existingEvents.filter { $0.id != event.id }
+        return Array(([event] + olderEvents).prefix(maximumRecentEvents))
     }
 
     private func makeState(
         phase: NotificationIslandPhase,
         currentEvent: NotificationEvent? = nil,
         queuedEvents: [NotificationEvent] = [],
+        recentEvents: [NotificationEvent] = [],
         pendingCount: Int = 0
     ) -> NotificationIslandState {
         NotificationIslandState(
             phase: phase,
             currentEvent: currentEvent,
             queuedEvents: queuedEvents,
+            recentEvents: recentEvents,
             pendingCount: pendingCount
         )
     }

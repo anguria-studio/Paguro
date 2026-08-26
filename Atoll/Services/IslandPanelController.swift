@@ -12,14 +12,32 @@ struct NotificationIslandPanelContent: Equatable {
 /// Runs the one pointer action that the current island state permits.
 typealias NotificationIslandPanelAction = @MainActor () -> Void
 
+/// Keeps panel controls separate from notification state and display content.
+struct NotificationIslandPanelActions {
+    let primary: NotificationIslandPanelAction?
+    let collapse: NotificationIslandPanelAction?
+    let openEvent: (@MainActor (UUID) -> Void)?
+
+    var acceptsPointerEvents: Bool {
+        primary != nil || collapse != nil || openEvent != nil
+    }
+
+    static let none = NotificationIslandPanelActions(
+        primary: nil,
+        collapse: nil,
+        openEvent: nil
+    )
+}
+
 /// Separates island state coordination from the AppKit panel.
 @MainActor
 protocol NotificationIslandPanelRendering: AnyObject {
     func show(
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
+        recentContents: [NotificationIslandPanelContent],
         placement: NotificationIslandPlacement,
-        primaryAction: NotificationIslandPanelAction?
+        actions: NotificationIslandPanelActions
     )
 
     func hide()
@@ -166,11 +184,26 @@ final class IslandPanelController {
     func openCurrentService() {
         guard !hasStopped,
               state.phase == .alert,
-              let serviceID = state.currentEvent?.serviceID else {
+              let event = state.currentEvent else {
             return
         }
-        onServiceRequested?(serviceID)
+        onServiceRequested?(event.serviceID)
+        apply(.removeRecentEvent(event.id))
         dismissCurrent()
+    }
+
+    func openRecentEvent(_ eventID: UUID) {
+        guard !hasStopped,
+              state.phase == .expanded,
+              let event = state.recentEvents.first(where: { $0.id == eventID })
+        else { return }
+        onServiceRequested?(event.serviceID)
+        apply(.removeRecentEvent(eventID))
+        if state.currentEvent?.id == eventID {
+            dismissCurrent()
+        } else {
+            collapse()
+        }
     }
 
     func hide() {
@@ -299,20 +332,42 @@ final class IslandPanelController {
         let content = state.currentEvent.flatMap { event in
             contentByEventID[event.id]
         }
+        let recentContents = state.recentEvents.compactMap { event in
+            contentByEventID[event.id]
+        }
         renderer.show(
             state: state,
             content: content,
+            recentContents: recentContents,
             placement: placement,
-            primaryAction: primaryAction
+            actions: panelActions
         )
     }
 
-    private var primaryAction: NotificationIslandPanelAction? {
-        guard state.phase == .alert, state.currentEvent != nil else {
-            return nil
-        }
-        return { [weak self] in
-            self?.openCurrentService()
+    private var panelActions: NotificationIslandPanelActions {
+        switch state.phase {
+        case .collapsed:
+            return NotificationIslandPanelActions(
+                primary: { [weak self] in self?.expand() },
+                collapse: nil,
+                openEvent: nil
+            )
+        case .alert where state.currentEvent != nil:
+            return NotificationIslandPanelActions(
+                primary: { [weak self] in self?.openCurrentService() },
+                collapse: nil,
+                openEvent: nil
+            )
+        case .expanded:
+            return NotificationIslandPanelActions(
+                primary: nil,
+                collapse: { [weak self] in self?.collapse() },
+                openEvent: { [weak self] eventID in
+                    self?.openRecentEvent(eventID)
+                }
+            )
+        case .hidden, .alert, .dismissed:
+            return .none
         }
     }
 
@@ -331,7 +386,7 @@ final class IslandPanelController {
         case .alert, .dismissed:
             return IslandScreenSize(width: 360, height: 96)
         case .expanded:
-            return IslandScreenSize(width: 420, height: 300)
+            return IslandScreenSize(width: 420, height: 360)
         }
     }
 
@@ -339,6 +394,7 @@ final class IslandPanelController {
         let eventIDs = [state.currentEvent]
             .compactMap { $0?.id }
             + state.queuedEvents.map(\.id)
+            + state.recentEvents.map(\.id)
         let retainedEventIDs = Set(eventIDs)
         contentByEventID = contentByEventID.filter { eventID, _ in
             retainedEventIDs.contains(eventID)
@@ -386,26 +442,37 @@ final class IslandNotificationPresenter: NotificationEventPresenting {
 private final class AppKitNotificationIslandPanelRenderer:
     NotificationIslandPanelRendering
 {
-    private var panel: NSPanel?
+    private var panel: NotificationIslandPanel?
 
     func show(
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
+        recentContents: [NotificationIslandPanelContent],
         placement: NotificationIslandPlacement,
-        primaryAction: NotificationIslandPanelAction?
+        actions: NotificationIslandPanelActions
     ) {
         let panel = panel ?? makePanel()
         panel.contentView = NSHostingView(
             rootView: NotificationIslandPanelView(
                 state: state,
                 content: content,
-                primaryAction: primaryAction
+                recentContents: recentContents,
+                actions: actions
             )
         )
         panel.setFrame(placement.frame.appKitRect, display: true)
         panel.hasShadow = false
-        panel.ignoresMouseEvents = primaryAction == nil
-        panel.orderFrontRegardless()
+        panel.ignoresMouseEvents = !actions.acceptsPointerEvents
+        if state.phase != .expanded, panel.isKeyWindow {
+            panel.resignKey()
+        }
+        panel.acceptsKeyWindow = state.phase == .expanded
+        panel.becomesKeyOnlyIfNeeded = state.phase != .expanded
+        if state.phase == .expanded {
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
     }
 
     func hide() {
@@ -418,8 +485,8 @@ private final class AppKitNotificationIslandPanelRenderer:
         panel = nil
     }
 
-    private func makePanel() -> NSPanel {
-        let panel = NSPanel(
+    private func makePanel() -> NotificationIslandPanel {
+        let panel = NotificationIslandPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -442,10 +509,26 @@ private final class AppKitNotificationIslandPanelRenderer:
     }
 }
 
+/// Accepts keyboard focus only after the user opens the expanded island.
+private final class NotificationIslandPanel: NSPanel {
+    var acceptsKeyWindow = false
+
+    override var canBecomeKey: Bool { acceptsKeyWindow }
+    override var canBecomeMain: Bool { false }
+}
+
 private struct NotificationIslandPanelView: View {
+    private enum FocusTarget: Hashable {
+        case close
+        case event(UUID)
+    }
+
     let state: NotificationIslandState
     let content: NotificationIslandPanelContent?
-    let primaryAction: NotificationIslandPanelAction?
+    let recentContents: [NotificationIslandPanelContent]
+    let actions: NotificationIslandPanelActions
+
+    @FocusState private var focusedControl: FocusTarget?
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -453,16 +536,10 @@ private struct NotificationIslandPanelView: View {
 
     var body: some View {
         Group {
-            if let primaryAction {
-                Button(action: primaryAction) {
-                    panelContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(shape)
-                }
-                .buttonStyle(.plain)
-                .help(openHelp)
+            if state.phase == .expanded {
+                expandedContent
             } else {
-                panelContent
+                compactContent
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -470,15 +547,34 @@ private struct NotificationIslandPanelView: View {
             shape.fill(.black)
         }
         .glassEffect(.regular, in: shape)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
+        .onExitCommand {
+            actions.collapse?()
+        }
     }
 
     @ViewBuilder
-    private var panelContent: some View {
+    private var compactContent: some View {
+        if let primaryAction = actions.primary {
+            Button(action: primaryAction) {
+                compactLabel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(shape)
+            }
+            .buttonStyle(.plain)
+            .help(openHelp)
+            .accessibilityLabel(compactAccessibilityLabel)
+        } else {
+            compactLabel
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(compactAccessibilityLabel)
+        }
+    }
+
+    @ViewBuilder
+    private var compactLabel: some View {
         if let content {
             HStack(spacing: 12) {
-                serviceIcon(for: content)
+                serviceIcon(for: content, size: 34)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(content.serviceLabel)
@@ -516,23 +612,135 @@ private struct NotificationIslandPanelView: View {
         }
     }
 
+    private var expandedContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Text("Recent notifications")
+                    .font(.headline)
+
+                Spacer(minLength: 8)
+
+                Button(action: { actions.collapse?() }) {
+                    Image(systemName: "xmark")
+                        .frame(width: 28, height: 28)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .focusable()
+                .focused($focusedControl, equals: .close)
+                .background(
+                    focusedControl == .close
+                        ? Color.white.opacity(0.22)
+                        : Color.white.opacity(0.10),
+                    in: .circle
+                )
+                .help("Close recent notifications")
+                .accessibilityLabel("Close recent notifications")
+            }
+
+            if recentContents.isEmpty {
+                ContentUnavailableView(
+                    "No Recent Notifications",
+                    systemImage: "bell.slash",
+                    description: Text("New Atoll alerts appear here.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(recentContents, id: \.event.id) { recentContent in
+                        recentEventButton(recentContent)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .onAppear {
+            focusFirstExpandedControl()
+        }
+        .onKeyPress(.return) {
+            activateFocusedControl() ? .handled : .ignored
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Atoll recent notifications")
+    }
+
+    private func recentEventButton(
+        _ recentContent: NotificationIslandPanelContent
+    ) -> some View {
+        Button {
+            actions.openEvent?(recentContent.event.id)
+        } label: {
+            HStack(spacing: 10) {
+                serviceIcon(for: recentContent, size: 30)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(recentContent.serviceLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(recentContent.event.receivedAt, style: .time)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Text(recentContent.event.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                    if let body = recentContent.event.body {
+                        Text(body)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(.rect(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .focusable()
+        .focused(
+            $focusedControl,
+            equals: .event(recentContent.event.id)
+        )
+        .background(
+            focusedControl == .event(recentContent.event.id)
+                ? Color.white.opacity(0.22)
+                : Color.white.opacity(0.10),
+            in: .rect(cornerRadius: 12)
+        )
+        .help("Open \(recentContent.serviceLabel)")
+        .accessibilityLabel(recentAccessibilityLabel(for: recentContent))
+    }
+
     @ViewBuilder
-    private func serviceIcon(for content: NotificationIslandPanelContent) -> some View {
+    private func serviceIcon(
+        for content: NotificationIslandPanelContent,
+        size: CGFloat
+    ) -> some View {
         if let iconURL = content.serviceIconURL,
            let image = NSImage(contentsOf: iconURL) {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 34, height: 34)
-                .clipShape(.rect(cornerRadius: 8))
+                .frame(width: size, height: size)
+                .clipShape(.rect(cornerRadius: size / 4))
         } else {
             Image(systemName: "bell.fill")
-                .frame(width: 34, height: 34)
-                .background(.quaternary, in: .rect(cornerRadius: 8))
+                .frame(width: size, height: size)
+                .background(.quaternary, in: .rect(cornerRadius: size / 4))
         }
     }
 
-    private var accessibilityLabel: String {
+    private var compactAccessibilityLabel: String {
         guard let content else { return "Atoll notification island" }
         if let body = content.event.body {
             return "\(content.serviceLabel), \(content.event.title), \(body)"
@@ -541,8 +749,42 @@ private struct NotificationIslandPanelView: View {
     }
 
     private var openHelp: String {
-        guard let content else { return "Open notification" }
+        guard let content else { return "Open recent notifications" }
         return "Open \(content.serviceLabel)"
+    }
+
+    private func recentAccessibilityLabel(
+        for content: NotificationIslandPanelContent
+    ) -> String {
+        if let body = content.event.body {
+            return "\(content.serviceLabel), \(content.event.title), \(body)"
+        }
+        return "\(content.serviceLabel), \(content.event.title)"
+    }
+
+    private func focusFirstExpandedControl() {
+        let target = recentContents.first.map {
+            FocusTarget.event($0.event.id)
+        } ?? .close
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(40))
+            focusedControl = target
+        }
+    }
+
+    private func activateFocusedControl() -> Bool {
+        switch focusedControl {
+        case .close:
+            guard let collapse = actions.collapse else { return false }
+            collapse()
+            return true
+        case let .event(eventID):
+            guard let openEvent = actions.openEvent else { return false }
+            openEvent(eventID)
+            return true
+        case nil:
+            return false
+        }
     }
 }
 

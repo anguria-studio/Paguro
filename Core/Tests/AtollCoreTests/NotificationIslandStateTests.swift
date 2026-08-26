@@ -12,6 +12,7 @@ struct NotificationIslandStateTests {
         #expect(state.phase == .collapsed)
         #expect(state.currentEvent == nil)
         #expect(state.queuedEvents.isEmpty)
+        #expect(state.recentEvents.isEmpty)
     }
 
     @Test
@@ -22,6 +23,7 @@ struct NotificationIslandStateTests {
 
         #expect(state.phase == .alert)
         #expect(state.currentEvent == event)
+        #expect(state.recentEvents == [event])
         #expect(state.pendingCount == 0)
     }
 
@@ -36,6 +38,7 @@ struct NotificationIslandStateTests {
         #expect(state.phase == .alert)
         #expect(state.currentEvent == firstEvent)
         #expect(state.queuedEvents == [secondEvent])
+        #expect(state.recentEvents == [secondEvent, firstEvent])
     }
 
     @Test
@@ -80,6 +83,42 @@ struct NotificationIslandStateTests {
         #expect(state.phase == .collapsed)
         #expect(state.currentEvent == nil)
         #expect(state.queuedEvents.isEmpty)
+        #expect(state.recentEvents == [event])
+    }
+
+    @Test
+    func recentHistoryKeepsTheFourNewestEvents() throws {
+        var state = NotificationIslandState.hidden
+
+        for number in 1...6 {
+            state = reducer.reduce(
+                state,
+                action: .receive(try makeEvent(number: number))
+            )
+        }
+
+        #expect(state.recentEvents.map(\.title) == [
+            "Event 6",
+            "Event 5",
+            "Event 4",
+            "Event 3"
+        ])
+    }
+
+    @Test
+    func recentHistoryCanBeDisabledIndependently() throws {
+        let reducer = NotificationIslandReducer(
+            maximumQueuedEvents: 2,
+            maximumRecentEvents: 0
+        )
+
+        let state = reducer.reduce(
+            .hidden,
+            action: .receive(try makeEvent(number: 1))
+        )
+
+        #expect(state.currentEvent != nil)
+        #expect(state.recentEvents.isEmpty)
     }
 
     @Test
@@ -96,7 +135,7 @@ struct NotificationIslandStateTests {
         state = limitedReducer.reduce(state, action: .receive(fourthEvent))
 
         #expect(state.currentEvent == firstEvent)
-        #expect(state.queuedEvents == [thirdEvent, fourthEvent])
+        #expect(state.queuedEvents == [fourthEvent, thirdEvent])
         #expect(state.pendingCount == 3)
     }
 
@@ -116,7 +155,7 @@ struct NotificationIslandStateTests {
         }
 
         #expect(state.pendingCount == 7)
-        #expect(state.queuedEvents.map(\.title) == ["Event 7", "Event 8"])
+        #expect(state.queuedEvents.map(\.title) == ["Event 8", "Event 7"])
     }
 
     @Test
@@ -136,8 +175,44 @@ struct NotificationIslandStateTests {
         state = limitedReducer.reduce(state, action: .dismissCurrent)
         state = limitedReducer.reduce(state, action: .finishDismissal)
 
-        #expect(state.currentEvent?.title == "Event 4")
-        #expect(state.queuedEvents.map(\.title) == ["Event 5"])
+        #expect(state.currentEvent?.title == "Event 5")
+        #expect(state.queuedEvents.map(\.title) == ["Event 4"])
+        #expect(state.pendingCount == 1)
+    }
+
+    @Test
+    func newestPendingEventAppearsAfterTheCurrentAlert() throws {
+        let firstEvent = try makeEvent(number: 1)
+        let secondEvent = try makeEvent(number: 2)
+        let thirdEvent = try makeEvent(number: 3)
+        var state = reducer.reduce(.hidden, action: .receive(firstEvent))
+        state = reducer.reduce(state, action: .receive(secondEvent))
+        state = reducer.reduce(state, action: .receive(thirdEvent))
+
+        state = reducer.reduce(state, action: .dismissCurrent)
+        state = reducer.reduce(state, action: .finishDismissal)
+
+        #expect(state.currentEvent == thirdEvent)
+        #expect(state.queuedEvents == [secondEvent])
+    }
+
+    @Test
+    func removingARecentEventAlsoRemovesItsPendingPreview() throws {
+        let firstEvent = try makeEvent(number: 1)
+        let secondEvent = try makeEvent(number: 2)
+        let thirdEvent = try makeEvent(number: 3)
+        var state = reducer.reduce(.hidden, action: .receive(firstEvent))
+        state = reducer.reduce(state, action: .receive(secondEvent))
+        state = reducer.reduce(state, action: .receive(thirdEvent))
+
+        state = reducer.reduce(
+            state,
+            action: .removeRecentEvent(secondEvent.id)
+        )
+
+        #expect(state.currentEvent == firstEvent)
+        #expect(state.queuedEvents == [thirdEvent])
+        #expect(state.recentEvents == [thirdEvent, firstEvent])
         #expect(state.pendingCount == 1)
     }
 
