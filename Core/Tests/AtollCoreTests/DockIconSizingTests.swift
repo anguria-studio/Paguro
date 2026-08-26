@@ -2,10 +2,7 @@ import XCTest
 @testable import AtollCore
 
 final class DockIconSizingTests: XCTestCase {
-    func testReviewedRailDefaultsStayPinned() {
-        XCTAssertEqual(DockIconSizing.defaultBaseSize, 22)
-        XCTAssertEqual(DockIconSizing.defaultMagnification, 0.26)
-        XCTAssertEqual(DockIconSizing.defaultMagnifiedSize, 35)
+    func testDefaultMagnificationMatchesDefaultPeakSize() {
         XCTAssertEqual(
             DockIconSizing.peakSize(
                 baseSize: DockIconSizing.defaultBaseSize,

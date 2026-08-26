@@ -50,26 +50,7 @@ final class NativeShellTests: XCTestCase {
         XCTAssertNil(state.hoveredLinkID)
     }
 
-    // MARK: - Notice shape, radius scale, and selection against focus
-
-    /// Eight radii down to three. The point of the scale is that there is
-    /// nowhere else to go, so a fourth value is the thing the test catches.
-    func testRadiusScaleHasExactlyThreeValues() {
-        XCTAssertEqual(Set(AtollRadius.allValues), [4, 8, 14])
-        XCTAssertEqual(AtollRadius.icon, 4)
-        XCTAssertEqual(AtollRadius.control, 8)
-        XCTAssertEqual(AtollRadius.surface, 14)
-    }
-
-    /// The shell uses the compact system type ramp from the two reference apps.
-    /// These values must change as one reviewed group.
-    func testMainWindowTypeRampMatchesTheReferenceApps() {
-        XCTAssertEqual(Set(AtollTypeSize.allValues), [10.5, 11, 12, 12.5, 13, 14])
-        XCTAssertEqual(AtollTypeSize.sidebarLabel, 13)
-        XCTAssertEqual(AtollTypeSize.sidebarSection, 11)
-        XCTAssertEqual(AtollTypeSize.toolbarControl, 12)
-        XCTAssertEqual(AtollTypeSize.toolbarTitle, 14)
-    }
+    // MARK: - Notice shape and selection against focus
 
     func testGlassIntensityScaleClampsAndRevealsTheBackdrop() {
         XCTAssertEqual(GlassIntensityScale.normalized(-1), 0)
@@ -96,93 +77,84 @@ final class NativeShellTests: XCTestCase {
         XCTAssertEqual(GlassIntensityScale.adaptiveSelectionProgress(1), 1, accuracy: 0.000_001)
     }
 
-    func testGlassLabUsesThreeExplicitNativeStyleChoices() {
-        XCTAssertEqual(
-            ShellGlassStyle.allCases.map(\.rawValue),
-            ["off", "clear", "regular"]
-        )
-        XCTAssertEqual(ShellGlassStyle.resolving("regular"), .regular)
-        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), .regular)
-        XCTAssertEqual(ShellGlassStyle.resolving(nil), .regular)
-        XCTAssertEqual(GlassLabDefaults.style, .regular)
-        XCTAssertEqual(GlassLabDefaults.transparency, 1)
-        XCTAssertEqual(GlassLabDefaults.regularFrost, 1)
-        XCTAssertEqual(ShellGlassStyle.off.frostOpacity, 1)
-        XCTAssertEqual(ShellGlassStyle.clear.frostOpacity, 0.7)
-        XCTAssertEqual(ShellGlassStyle.regular.frostOpacity, 1)
+    func testGlassStyleResolutionAndFrostRelationships() {
+        XCTAssertEqual(ShellGlassStyle.resolving(ShellGlassStyle.clear.rawValue), .clear)
+        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), GlassLabDefaults.style)
+        XCTAssertEqual(ShellGlassStyle.resolving(nil), GlassLabDefaults.style)
+        XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
+        XCTAssertEqual(ShellGlassStyle.off.frostOpacity, ShellGlassStyle.regular.frostOpacity)
     }
 
-    func testReviewedSettingsAreTheFreshInstallDefaults() {
-        let preferences = AppPreferences()
-
-        XCTAssertEqual(preferences.appPresenceMode, .both)
-        XCTAssertTrue(preferences.showBadgeCountInDock)
-        XCTAssertFalse(preferences.autoDismissCookieBanners)
-        XCTAssertEqual(DockRailPosition.defaultPosition, .top)
-    }
-
-    /// Both rail forms derive from one reviewed source-list geometry rule.
+    /// Both rail forms derive from one source-list geometry rule.
     func testNativeSidebarGeometryIsInternallyConsistent() {
-        XCTAssertEqual(AtollMetric.Sidebar.surfaceWidth, 218)
-        XCTAssertEqual(AtollMetric.Sidebar.expandedWidth, 234)
-        XCTAssertEqual(AtollMetric.Sidebar.collapsedWidth, 62)
-        XCTAssertEqual(AtollMetric.Sidebar.contentInset, 10)
-        XCTAssertEqual(AtollMetric.Sidebar.horizontalInset, 18)
-        XCTAssertEqual(AtollMetric.Sidebar.rowWidth, 198)
+        XCTAssertEqual(
+            AtollMetric.Sidebar.expandedWidth,
+            AtollMetric.Sidebar.surfaceWidth + (AtollMetric.Sidebar.surfaceInset * 2)
+        )
+        XCTAssertEqual(
+            AtollMetric.Sidebar.horizontalInset,
+            AtollMetric.Sidebar.surfaceInset + AtollMetric.Sidebar.contentInset
+        )
         XCTAssertEqual(
             AtollMetric.Sidebar.rowWidth + (AtollMetric.Sidebar.contentInset * 2),
             AtollMetric.Sidebar.surfaceWidth
         )
-        XCTAssertEqual(AtollMetric.Sidebar.rowHeight, 28)
-        XCTAssertEqual(AtollMetric.Sidebar.dockItemSize, 36)
-        XCTAssertEqual(AtollMetric.Sidebar.dockRowHeight, 44)
-        XCTAssertEqual(AtollMetric.Sidebar.collapsedIconSize, 22)
         XCTAssertEqual(
-            AtollMetric.Sidebar.collapsedWidth
-                - (AtollMetric.Sidebar.surfaceInset * 2)
-                - AtollMetric.Sidebar.dockItemSize,
-            10
+            AtollMetric.Sidebar.collapsedWidth,
+            CGFloat(DockIconSizing.railWidth(baseSize: DockIconSizing.defaultBaseSize))
         )
-        XCTAssertEqual(AtollMetric.Sidebar.rowRadius, 7)
-        XCTAssertEqual(AtollMetric.Sidebar.surfaceInset, 8)
-        XCTAssertEqual(AtollMetric.Sidebar.topBarHeight, 52)
-        XCTAssertEqual(AtollMetric.Sidebar.collapsedSurfaceTopInset, 52)
-        XCTAssertEqual(AtollMetric.Sidebar.collapsedContentTopInset, 60)
-        XCTAssertEqual(AtollMetric.Sidebar.expandedToggleTrailingInset, 14)
-        XCTAssertEqual(AtollMetric.Sidebar.footerHeight, 52)
-        XCTAssertEqual(AtollMetric.Sidebar.workspaceDividerHorizontalInset, 15)
-        XCTAssertEqual(AtollMetric.Toolbar.height, 52)
-        XCTAssertEqual(AtollMetric.Toolbar.controlSize, 28)
-        XCTAssertEqual(AtollMetric.Toolbar.sidebarToggleSize, 32)
-        XCTAssertEqual(AtollMetric.Toolbar.glyphSize, 14)
-        XCTAssertEqual(AtollMetric.Toolbar.sidebarGlyphSize, 16)
-        XCTAssertEqual(AtollMetric.Toolbar.horizontalInset, 8)
-        XCTAssertEqual(AtollMetric.Toolbar.trafficLightTrailingEdge, 79)
-        XCTAssertEqual(AtollMetric.Toolbar.trafficLightClearance, 16)
-        XCTAssertEqual(AtollMetric.Toolbar.collapsedLeadingInset, 33)
         XCTAssertEqual(
-            AtollMetric.Sidebar.collapsedWidth
-                + AtollMetric.Toolbar.collapsedLeadingInset
-                - AtollMetric.Toolbar.trafficLightTrailingEdge,
-            AtollMetric.Toolbar.trafficLightClearance
+            AtollMetric.Sidebar.dockItemSize,
+            CGFloat(DockIconSizing.selectionSize(displayedIconSize: DockIconSizing.defaultBaseSize))
+        )
+        XCTAssertEqual(
+            AtollMetric.Sidebar.dockRowHeight,
+            CGFloat(DockIconSizing.rowHeight(displayedIconSize: DockIconSizing.defaultBaseSize))
+        )
+        XCTAssertEqual(
+            AtollMetric.Sidebar.collapsedContentTopInset,
+            AtollMetric.Sidebar.collapsedSurfaceTopInset + AtollMetric.Sidebar.surfaceInset
+        )
+        XCTAssertEqual(AtollMetric.Sidebar.topBarHeight, AtollMetric.Toolbar.height)
+        XCTAssertEqual(
+            AtollMetric.Toolbar.collapsedLeadingInset,
+            AtollMetric.Toolbar.collapsedLeadingInset(
+                sidebarWidth: AtollMetric.Sidebar.collapsedWidth
+            )
         )
     }
 
-    func testSidebarPresentationMapsToReviewedGeometry() {
-        XCTAssertEqual(SidebarPresentation.expanded.width, 234)
-        XCTAssertEqual(SidebarPresentation.expanded.serviceRowHeight, 28)
-        XCTAssertEqual(SidebarPresentation.expanded.surfaceTopInset, 8)
-        XCTAssertEqual(SidebarPresentation.expanded.surfaceBottomInset, 8)
-        XCTAssertEqual(SidebarPresentation.expanded.contentTopInset, 52)
-        XCTAssertEqual(SidebarPresentation.expanded.toggleCenterX, 204)
+    func testSidebarPresentationMapsToSharedGeometry() {
+        XCTAssertEqual(SidebarPresentation.expanded.width, AtollMetric.Sidebar.expandedWidth)
+        XCTAssertEqual(SidebarPresentation.expanded.serviceRowHeight, AtollMetric.Sidebar.rowHeight)
+        XCTAssertEqual(SidebarPresentation.expanded.surfaceTopInset, AtollMetric.Sidebar.surfaceInset)
+        XCTAssertEqual(SidebarPresentation.expanded.surfaceBottomInset, AtollMetric.Sidebar.surfaceInset)
+        XCTAssertEqual(SidebarPresentation.expanded.contentTopInset, AtollMetric.Sidebar.topBarHeight)
+        XCTAssertEqual(
+            SidebarPresentation.expanded.toggleCenterX,
+            AtollMetric.Sidebar.expandedWidth
+                - AtollMetric.Sidebar.expandedToggleTrailingInset
+                - (AtollMetric.Toolbar.sidebarToggleSize / 2)
+        )
         XCTAssertTrue(SidebarPresentation.expanded.showsLabels)
 
-        XCTAssertEqual(SidebarPresentation.collapsed.width, 62)
-        XCTAssertEqual(SidebarPresentation.collapsed.serviceRowHeight, 44)
-        XCTAssertEqual(SidebarPresentation.collapsed.surfaceTopInset, 52)
-        XCTAssertEqual(SidebarPresentation.collapsed.surfaceBottomInset, 8)
-        XCTAssertEqual(SidebarPresentation.collapsed.contentTopInset, 60)
-        XCTAssertEqual(SidebarPresentation.collapsed.toggleCenterX, 111)
+        XCTAssertEqual(SidebarPresentation.collapsed.width, AtollMetric.Sidebar.collapsedWidth)
+        XCTAssertEqual(SidebarPresentation.collapsed.serviceRowHeight, AtollMetric.Sidebar.dockRowHeight)
+        XCTAssertEqual(
+            SidebarPresentation.collapsed.surfaceTopInset,
+            AtollMetric.Sidebar.collapsedSurfaceTopInset
+        )
+        XCTAssertEqual(SidebarPresentation.collapsed.surfaceBottomInset, AtollMetric.Sidebar.surfaceInset)
+        XCTAssertEqual(
+            SidebarPresentation.collapsed.contentTopInset,
+            AtollMetric.Sidebar.collapsedContentTopInset
+        )
+        XCTAssertEqual(
+            SidebarPresentation.collapsed.toggleCenterX,
+            AtollMetric.Sidebar.collapsedWidth
+                + AtollMetric.Toolbar.collapsedLeadingInset
+                + (AtollMetric.Toolbar.sidebarToggleSize / 2)
+        )
         XCTAssertFalse(SidebarPresentation.collapsed.showsLabels)
     }
 

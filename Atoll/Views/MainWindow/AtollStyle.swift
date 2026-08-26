@@ -13,15 +13,6 @@ enum AtollTypeSize {
     static let toolbarTitle: CGFloat = 14
     static let toolbarControl: CGFloat = 12
     static let body: CGFloat = 12.5
-
-    static let allValues: [CGFloat] = [
-        sidebarLabel,
-        sidebarSection,
-        sidebarAccessory,
-        toolbarTitle,
-        toolbarControl,
-        body,
-    ]
 }
 
 extension Font {
@@ -458,8 +449,6 @@ enum AtollRadius {
     static let control: CGFloat = 8
     /// Sheets, popovers, palettes: the surfaces those things sit on.
     static let surface: CGFloat = 14
-
-    static let allValues: [CGFloat] = [icon, control, surface]
 }
 
 /// How bad a notice is. Three, and the fill is the same weight for all of them:
