@@ -43,6 +43,7 @@ final class InAppBrowserWindow: NSObject, WKNavigationDelegate, WKUIDelegate {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
         webView = WKWebView(frame: size, configuration: config)
+        webView.customUserAgent = UserAgentProvider.safariDefault
         window = NSWindow(
             contentRect: size,
             styleMask: [.titled, .closable, .resizable, .miniaturizable],

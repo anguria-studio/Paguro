@@ -50,6 +50,8 @@ Otherwise mark the service as limited.
 Every service view uses the desktop Safari value from `UserAgentProvider` when
 the service has no stored override. This avoids an app-specific token and lets
 services provide the same web app that they provide to Safari.
+Authentication popups inherit the opener value. External in-app browser
+windows use the desktop default.
 
 A catalog entry can supply a service-specific override when Atoll creates the
 service. The Mobile view setting stores Atoll's Mobile Safari value as the

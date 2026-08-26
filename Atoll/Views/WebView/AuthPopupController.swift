@@ -54,6 +54,7 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
 
         // The supplied configuration shares the opener's website data store.
         let popup = WKWebView(frame: .zero, configuration: configuration)
+        popup.customUserAgent = opener.customUserAgent ?? UserAgentProvider.safariDefault
         popup.navigationDelegate = navigationDelegate
         popup.uiDelegate = uiDelegate
 
