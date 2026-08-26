@@ -56,7 +56,6 @@ targets:
         INFOPLIST_FILE: Atoll/Info.plist
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_LSUIElement: NO
-        INFOPLIST_KEY_NSUserNotificationsUsageDescription: "Atoll shows notifications from the web services that you add."
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll.debug
