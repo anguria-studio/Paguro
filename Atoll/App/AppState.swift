@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 import WebKit
 import LocalAuthentication
-import UniformTypeIdentifiers
 import AtollCore
 
 /// How `AppState` ended up with its `ModelContainer` at launch — drives the
@@ -1850,23 +1849,12 @@ final class AppState {
 
     func pickCustomIcon(for serviceID: UUID) {
         guard let service = currentServiceInstance(id: serviceID) else { return }
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.message = "Choose an icon for \(service.label)"
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessed { url.stopAccessingSecurityScopedResource() }
-        }
-
         let context = modelContainer.mainContext
         do {
-            let raw = try Data(contentsOf: url, options: .mappedIfSafe)
-            let normalized = try ServiceIconImageProcessor.normalizedPNG(from: raw)
-            _ = try Self.setCustomIconData(normalized, for: serviceID, in: context)
+            guard let data = try ServiceIconFilePicker.pickImageData(
+                message: "Choose an icon for \(service.label)"
+            ) else { return }
+            _ = try Self.setCustomIconData(data, for: serviceID, in: context)
         } catch {
             context.rollback()
             AppLogger.ui.error("Failed to set custom icon: \(error.localizedDescription)")

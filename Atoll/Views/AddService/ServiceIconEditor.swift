@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 import AtollCore
 
 /// Edits the icon bytes that are saved with one service.
@@ -139,21 +138,11 @@ struct ServiceIconEditor: View {
         fetchTask?.cancel()
         isFetching = false
 
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.message = "Choose an icon for \(label)"
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessed { url.stopAccessingSecurityScopedResource() }
-        }
-
         do {
-            let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            customIconData = try ServiceIconImageProcessor.normalizedPNG(from: data)
+            guard let data = try ServiceIconFilePicker.pickImageData(
+                message: "Choose an icon for \(label)"
+            ) else { return }
+            customIconData = data
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
