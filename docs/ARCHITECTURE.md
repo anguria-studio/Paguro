@@ -76,7 +76,8 @@ The main services and startup adapters are:
 - `WebDialogPresenter` for file pickers and page dialogs.
 - `WebDownloadHandler` for download lifetime, destinations, and cancellation.
 - `ErrorPage` for escaped local WebKit recovery pages.
-- `NotificationManager` for notification polling and macOS delivery.
+- `NotificationManager` for WebKit badge polling and notification authorization.
+- `NotificationPresenter` for validated native notification requests and delivery.
 - `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
 - `AppPresenceController` for Dock and menu-bar behavior.
 

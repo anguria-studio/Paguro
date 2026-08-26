@@ -1,5 +1,4 @@
 import WebKit
-import UserNotifications
 import os
 import AtollCore
 
@@ -39,10 +38,14 @@ final class UserScriptManager {
         let notifyOSCheck = isServiceNotifyingOS
         let dndCheck = isDoNotDisturbActive
         let serviceIconURL = NotificationAttachmentStore.prepareServiceIcon(for: instance)
-        let handler = NotificationMessageHandler(
+        let presenter = NotificationPresenter(
             serviceID: instance.id,
             serviceLabel: instance.label,
-            serviceIconURL: serviceIconURL,
+            serviceIconURL: serviceIconURL
+        )
+        let handler = NotificationMessageHandler(
+            serviceID: instance.id,
+            presenter: presenter,
             isMutedCheck: { id in
                 mutedCheck?(id) ?? false
             },
@@ -413,23 +416,20 @@ final class UserScriptManager {
 
 final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unchecked Sendable {
     let serviceID: UUID
-    let serviceLabel: String
-    let serviceIconURL: URL?
+    let presenter: NotificationPresenter
     let isMutedCheck: @Sendable (UUID) -> Bool
     let notifyOSCheck: @Sendable (UUID) -> Bool
     let isDoNotDisturbCheck: @Sendable () -> Bool
 
     init(
         serviceID: UUID,
-        serviceLabel: String,
-        serviceIconURL: URL?,
+        presenter: NotificationPresenter,
         isMutedCheck: @escaping @Sendable (UUID) -> Bool,
         notifyOSCheck: @escaping @Sendable (UUID) -> Bool,
         isDoNotDisturbCheck: @escaping @Sendable () -> Bool
     ) {
         self.serviceID = serviceID
-        self.serviceLabel = serviceLabel
-        self.serviceIconURL = serviceIconURL
+        self.presenter = presenter
         self.isMutedCheck = isMutedCheck
         self.notifyOSCheck = notifyOSCheck
         self.isDoNotDisturbCheck = isDoNotDisturbCheck
@@ -509,39 +509,11 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
             return
         }
 
-        let content = NativeNotificationContentBuilder.makeContent(
+        presenter.present(
             payload: payload,
-            serviceID: serviceID,
-            serviceLabel: serviceLabel,
-            serviceIconURL: serviceIconURL
+            requestID: requestID,
+            traceID: traceID
         )
-
-        let request = UNNotificationRequest(
-            identifier: requestID,
-            content: content,
-            trigger: nil
-        )
-        let center = UNUserNotificationCenter.current()
-        #if DEBUG
-        if CompatibilityFixture.isEnabled() {
-            center.getNotificationSettings { settings in
-                AppLogger.notifications.info(
-                    "Notification trace \(traceID, privacy: .public): center settings authorization=\(settings.authorizationStatus.rawValue, privacy: .public) alerts=\(settings.alertSetting.rawValue, privacy: .public) sounds=\(settings.soundSetting.rawValue, privacy: .public)"
-                )
-            }
-        }
-        #endif
-        center.add(request) { error in
-            if let error {
-                AppLogger.notifications.error(
-                    "Notification trace \(traceID, privacy: .public): center add failed: \(error.localizedDescription, privacy: .public)"
-                )
-            } else {
-                AppLogger.notifications.info(
-                    "Notification trace \(traceID, privacy: .public): center accepted request"
-                )
-            }
-        }
     }
 }
 

@@ -159,6 +159,34 @@ final class NotificationBridgeTests: XCTestCase {
         XCTAssertEqual(content.userInfo["serviceID"] as? String, service.id.uuidString)
     }
 
+    @MainActor
+    func testNotificationPresenterBuildsARequestForItsService() {
+        let serviceID = UUID()
+        let presenter = NotificationPresenter(
+            serviceID: serviceID,
+            serviceLabel: "Slack",
+            serviceIconURL: nil
+        )
+        let payload = NotificationPayload(
+            title: "New message",
+            body: "A short body",
+            icon: "",
+            tag: "message-1",
+            serviceID: serviceID.uuidString
+        )
+
+        let request = presenter.makeRequest(
+            payload: payload,
+            identifier: "request-1"
+        )
+
+        XCTAssertEqual(request.identifier, "request-1")
+        XCTAssertNil(request.trigger)
+        XCTAssertEqual(request.content.title, "New message")
+        XCTAssertEqual(request.content.subtitle, "Slack")
+        XCTAssertEqual(request.content.userInfo["serviceID"] as? String, serviceID.uuidString)
+    }
+
     /// A fresh install has nothing at either path, and must simply open in the
     /// app's folder without any of the move machinery running.
     func testRelocationOnAFreshInstallOpensInTheAppsFolder() throws {

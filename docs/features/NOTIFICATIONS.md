@@ -14,8 +14,10 @@ Atoll therefore uses a small set of signal sources.
 
 `NotificationRuntime` owns manual and scheduled Do Not Disturb, badge-polling
 lifecycle, sleep and network suspension, and notification or menu-bar click
-routing. `NotificationManager` owns WebKit badge polling and macOS delivery.
-Detection and presentation remain separate from this lifecycle controller.
+routing. `NotificationManager` owns WebKit badge polling and notification
+authorization. `NotificationPresenter` builds and delivers native notification
+requests after the page bridge validates their payloads. Detection and
+presentation remain separate from this lifecycle controller.
 
 ## Signal sources
 
