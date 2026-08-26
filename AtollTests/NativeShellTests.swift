@@ -50,7 +50,7 @@ final class NativeShellTests: XCTestCase {
         XCTAssertNil(state.hoveredLinkID)
     }
 
-    // MARK: - Notice shape, radius scale, selection against focus (build step 7)
+    // MARK: - Notice shape, radius scale, and selection against focus
 
     /// Eight radii down to three. The point of the scale is that there is
     /// nowhere else to go, so a fourth value is the thing the test catches.
@@ -235,7 +235,7 @@ final class NativeShellTests: XCTestCase {
         )
     }
 
-    // MARK: - Space header and palette (build step 4)
+    // MARK: - Space header and palette
 
     /// The palette labels its rows ⌘1 upward. Only the first nine get a digit —
     /// there is no ⌘0 row, and a tenth space is reached by arrow or click.

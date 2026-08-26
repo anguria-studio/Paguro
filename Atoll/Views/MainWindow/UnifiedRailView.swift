@@ -5,18 +5,13 @@ import AtollCore
 /// One rail, in either axis, holding the current space as its header and that
 /// space's services under it.
 ///
-/// This is build step 5 of concept C, and it replaces two views rather than
-/// bending either into shape: `ServiceSidebarView` drew the services in two
-/// axes and `SpaceStripView` drew a second rail of spaces beside it. Dropping
-/// the second rail is what the concept buys — 161 points of chrome back in the
-/// vertical layout, a whole 34 point bar in the horizontal one — and it is why
-/// `hybrid` and `topBars` collapsed into a single layout: with one rail there
-/// are only two arrangements left, on the left or along the top.
+/// The unified rail replaces separate service and space rails. It recovers 161
+/// points in the vertical layout and 34 points in the horizontal layout. A
+/// single rail has two arrangements: on the left or along the top.
 ///
-/// Everything the audit rated severity 0 came across untouched: the reorder
-/// maths (`ServiceReorder`), drag and drop, the arrow keys, the VoiceOver move
-/// actions. The space half of that plumbing now lives in `SpacePaletteView`,
-/// which the header opens.
+/// The rail supports `ServiceReorder`, drag and drop, arrow keys, and VoiceOver
+/// move actions. The related space controls live in `SpacePaletteView`, which
+/// the header opens.
 struct UnifiedRailView: View {
     @Binding var selectedSpaceID: UUID?
     @Binding var selectedServiceID: UUID?

@@ -47,13 +47,9 @@ enum SpacePalette {
 
 /// The space switcher the rail header opens.
 ///
-/// Concept C takes the always-visible space rail away, so this is where the
-/// other spaces live: a list with the emoji, the name, how many services are in
-/// it, and its aggregate unread count. Two things that were free on the old
-/// rail are paid for here, and both are kept rather than dropped —
-/// drag-to-reorder and the per-space context menu — because `SpaceStripView`
-/// goes away at build step 5 and this is their new home. The reorder maths is
-/// `ServiceReorder`, moved across untouched.
+/// The other spaces live here as a list with the emoji, name, service count,
+/// and aggregate unread count. The palette also supports drag-to-reorder and a
+/// context menu for each space. The reorder rules come from `ServiceReorder`.
 ///
 /// The owner presents it, and owns any sheet it asks for:
 ///

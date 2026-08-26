@@ -203,9 +203,9 @@ final class StoreRecoveryTests: XCTestCase {
     }
 
     /// The incident path. Write a store at the 1.5.11 shape, reopen it at the
-    /// current shape through the plan, and assert every row and field survives —
+    /// current shape through the migration plan, and assert every row and field survives —
     /// with the fields added after 1.5.11 defaulting correctly. Proves the stage
-    /// mapping is lossless (not that the field race is gone — see the plan).
+    /// mapping is lossless. It does not test concurrent store access.
     @MainActor
     func testMigratesFrom1_5_11PreservingAllData() throws {
         let dir = FileManager.default.temporaryDirectory
@@ -624,7 +624,7 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertFalse(unreadable.isRestorable, "unknown content is never restorable")
     }
 
-    /// Review Finding 4: the displayed list must rank backups by completeness
+    /// The displayed list must rank backups by completeness
     /// (the same rule `best(among:)` uses), not by filename. A `.corrupt-`
     /// backup — damaged by definition, so it can never be preselected — must
     /// never sort above a `.snapshot-` holding more content just because
@@ -853,8 +853,8 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertTrue(anyAsideFiles.isEmpty, "a missing source must return before any aside copy is made")
     }
 
-    /// Review Finding 1: `copyTriple`'s `Bool` return is the mechanism the fix
-    /// depends on, so it is tested directly rather than only indirectly through
+    /// `copyTriple` reports whether the restore copy succeeded, so it is tested
+    /// directly rather than only indirectly through
     /// `applyPendingRestore`. A real copy into an existing directory succeeds;
     /// a destination inside a directory that does not exist cannot be written
     /// to, so `copyItem` throws and this must report failure, not silently
@@ -882,7 +882,7 @@ final class StoreRecoveryTests: XCTestCase {
         )
     }
 
-    /// Review Finding 1, the false-success half. The apply step's `removeItem`
+    /// A failed removal must not produce a false success. The apply step's `removeItem`
     /// on the live store's own main file is made to fail here by setting the
     /// `uchg` (immutable) flag, which blocks deletion even for the file's
     /// owner (verified empirically on this filesystem: `FileManager
@@ -1013,7 +1013,7 @@ final class StoreRecoveryTests: XCTestCase {
         )
     }
 
-    /// Review Finding 1's own case: the aside copy itself failing. No
+    /// The restore must stop when the aside copy fails. No
     /// `FileManager` seam is needed to reach it -- a containing directory the
     /// process cannot write to blocks every copy into it while leaving the store
     /// perfectly readable (reads need only `r-x`). Nothing may touch the live
@@ -1607,7 +1607,7 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(candidate.displayDetail, "date unknown — 2 spaces, 5 services")
     }
 
-    /// Review Finding 5: a backup that is empty but readable — all-zero
+    /// A backup that is empty but readable — all-zero
     /// content — is still restorable, so its detail line must say exactly what
     /// it holds, not something that reads like "can't be read". This string is
     /// the only thing telling a user they are about to restore over good data
@@ -1649,7 +1649,7 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(candidate.displayDetail, "\(when) — 1 space, 2 services — damaged")
     }
 
-    /// Review Finding 4: the live row's `takenAt` is the store file's mtime,
+    /// The live row's `takenAt` is the store file's mtime,
     /// not a real snapshot stamp, and under WAL journaling that can trail the
     /// store's actual last write — showing it invites restoring the wrong
     /// copy. The live row must omit the date and show counts only, with or

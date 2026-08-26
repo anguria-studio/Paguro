@@ -15,9 +15,8 @@ enum AppPresenceMode: String, Codable {
 
 /// Where the rail sits relative to the web content.
 ///
-/// Two cases, not three. Three existed because two rails can be arranged three
-/// ways; concept C drops the second rail, and with one rail there are only two
-/// arrangements left. `hybrid` is retired and its users are mapped onto
+/// The single rail has two possible arrangements. `hybrid` is retired and its
+/// users are mapped onto
 /// `topBars` — see `resolving(_:)`, which is the only correct way to read a
 /// stored value.
 enum RailLayout: String, Codable, CaseIterable {

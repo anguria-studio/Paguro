@@ -260,10 +260,8 @@ struct ContentView: View {
     /// Arranges the rail and the web content per the chosen layout: the rail
     /// down the left, or along the top as a bar of tabs.
     ///
-    /// One rail, so two arrangements. The three-way choice this used to make
-    /// only existed because there were two rails to arrange, and concept C put
-    /// the space on the rail as its header instead of giving it a rail of its
-    /// own.
+    /// The single rail supports two arrangements. The current space is the rail
+    /// header instead of having a separate rail.
     @ViewBuilder
     private func mainLayout(
         spaceSelection: Binding<UUID?>,

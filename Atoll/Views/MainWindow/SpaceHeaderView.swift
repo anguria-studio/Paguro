@@ -35,11 +35,8 @@ enum WorkspaceSectionHeader {
 /// The current space, drawn as a header on the service rail, and the click
 /// target that opens the switcher.
 ///
-/// This is the half of concept C that pays for dropping the second rail: the
-/// space stops being a column of unlabelled emoji (`SpaceButton.verticalCell`,
-/// the audit's severity 3 finding) and becomes one named row that says where
-/// you are. The other spaces are one click away in `SpacePaletteView` rather
-/// than always on screen, which is the price recorded with the pick.
+/// The current space is a named row instead of an unlabelled emoji. The other
+/// spaces are available in `SpacePaletteView` rather than always on screen.
 ///
 /// The vertical header uses the same width and inset as each service row. The
 /// horizontal header stays 150 by 32 points so a space change does not move the
