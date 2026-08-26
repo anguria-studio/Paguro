@@ -149,6 +149,14 @@ settings once for both destinations. `AtollCore` returns a deterministic route
 plan. The default plan selects only the system notification route. The page
 message handler no longer calls a platform presenter directly.
 
+Settings has separate controls for macOS notifications and island alerts.
+The system route is on by default. The island route is off by default.
+The user can turn on either route, both routes, or neither route. These local
+route choices use `UserDefaults` and do not change service session data.
+
+The global system-route control applies before each per-service macOS control.
+A service produces a macOS notification only when both controls are on.
+
 The island destination is optional in the router. It stays unavailable until
 Atoll installs an island presenter. An unavailable island destination does not
 block an enabled system notification.

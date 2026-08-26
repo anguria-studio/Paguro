@@ -79,6 +79,9 @@ The main services and startup adapters are:
 - `NotificationManager` for WebKit badge polling and notification authorization.
 - `NotificationPresenter` for validated native notification requests and delivery.
 - `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
+- `NotificationRouteSettings` for the enabled system and island presentation routes.
+- `SystemScreenGeometryProvider` for current public `NSScreen` values.
+- `IslandPanelController` for optional island state, placement, and panel lifetime.
 - `AppPresenceController` for Dock and menu-bar behavior.
 
 The main rail and service-add sheets send model mutation intents to `AppState`.
@@ -91,11 +94,13 @@ model applies its runtime side effects.
 `ShellPreferences` keeps the shell settings in one value. It preserves the
 existing storage split: layout and appearance use `PreferencesStore`; glass,
 icon-rail, and workspace-view settings use `UserDefaults`.
+`NotificationRouteSettings` also uses `UserDefaults`. A route setting does not
+change the SwiftData model or service account data.
 
 The planned `SessionStoreManager` and `NotificationPipeline` will replace the
 current managers when their runtime phases start. The planned `IslandStore`
-and `IslandPanelController` will remain optional services. The backlog tracks
-these changes.
+and the current `IslandPanelController` remain optional services. The backlog
+tracks these changes.
 
 ## App lifecycle
 
@@ -174,6 +179,8 @@ parts, and a shared event type in `AtollCore` for the island.
 
 The island does not detect notifications.
 It only presents events from the notification pipeline.
+`NotificationIslandTiming` keeps its deterministic alert times in `AtollCore`.
+The panel controller owns the cancellable transition schedule.
 
 See [Notification system](features/NOTIFICATIONS.md).
 

@@ -286,15 +286,45 @@ struct NotificationSettingsView: View {
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         Form {
+            Section("Presentation") {
+                Toggle("Show macOS notifications", isOn: Binding(
+                    get: {
+                        appModel.notificationRouteSettings.isSystemRouteEnabled
+                    },
+                    set: { appModel.setSystemNotificationRouteEnabled($0) }
+                ))
+
+                Toggle("Show island alerts", isOn: Binding(
+                    get: {
+                        appModel.notificationRouteSettings.isIslandRouteEnabled
+                    },
+                    set: { appModel.setIslandNotificationRouteEnabled($0) }
+                ))
+
+                Text("You can use either route or both routes. Service mute and Do Not Disturb apply to both routes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                #if DEBUG
+                Button("Show Test Island Alert") {
+                    appModel.showIslandPreview(for: activeService)
+                }
+                .disabled(
+                    !appModel.notificationRouteSettings.isIslandRouteEnabled
+                )
+                #endif
+            }
+
             Section {
                 Toggle("Do Not Disturb", isOn: Binding(
                     get: { appState.doNotDisturb },
                     set: { appState.doNotDisturb = $0 }
                 ))
-                Text("Silences notification banners. Unread badges remain visible.")
+                Text("Silences notification alerts. Unread badges remain visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -307,13 +337,18 @@ struct NotificationSettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     serviceTable
-                    Text("Turning a service off silences its banners and badge — mute is the master switch.")
+                    Text("Turning a service off silences its alerts and badge — mute is the master switch.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var activeService: ServiceInstance? {
+        guard let serviceID = appState.selectedServiceID else { return nil }
+        return services.first { $0.id == serviceID }
     }
 
     private var serviceTable: some View {
@@ -375,7 +410,10 @@ struct NotificationSettingsView: View {
             Toggle("", isOn: macOSBinding(service))
                 .labelsHidden()
                 .toggleStyle(.checkbox)
-                .disabled(service.isMuted)
+                .disabled(
+                    service.isMuted
+                        || !appModel.notificationRouteSettings.isSystemRouteEnabled
+                )
                 .accessibilityLabel("macOS notifications for \(service.label)")
 
             Toggle("", isOn: badgeBinding(service))

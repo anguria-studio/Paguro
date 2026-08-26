@@ -4,13 +4,20 @@ import WebKit
 @MainActor
 final class UserScriptManager {
     private var messageHandlers: [UUID: NotificationMessageHandler] = [:]
+    private let islandPanelController: IslandPanelController?
 
     var isServiceMuted: (@MainActor (UUID) -> Bool)?
     /// Per-service "forward notifications to macOS" flag. Defaults to true when
     /// unset, preserving behavior for services that predate the toggle.
     var isServiceNotifyingOS: (@MainActor (UUID) -> Bool)?
+    var isSystemNotificationsEnabled: (@MainActor () -> Bool)?
+    var isIslandNotificationsEnabled: (@MainActor (UUID) -> Bool)?
     var isDoNotDisturbActive: (@MainActor () -> Bool)?
     var autoDismissCookieBanners = AppPreferenceDefaults.autoDismissCookieBanners
+
+    init(islandPanelController: IslandPanelController? = nil) {
+        self.islandPanelController = islandPanelController
+    }
 
     /// Full setup for a freshly built web view: the message handlers (added once)
     /// plus all user scripts.
@@ -35,19 +42,32 @@ final class UserScriptManager {
     func installHandlers(for instance: ServiceInstance, on controller: WKUserContentController) {
         let mutedCheck = isServiceMuted
         let notifyOSCheck = isServiceNotifyingOS
+        let systemCheck = isSystemNotificationsEnabled
+        let islandCheck = isIslandNotificationsEnabled
         let dndCheck = isDoNotDisturbActive
         let serviceIconURL = NotificationAttachmentStore.prepareServiceIcon(for: instance)
         let presenter = NotificationPresenter(
             serviceLabel: instance.label,
             serviceIconURL: serviceIconURL
         )
+        let islandPresenter = islandPanelController.map { controller in
+            IslandNotificationPresenter(
+                controller: controller,
+                serviceLabel: instance.label,
+                serviceIconURL: serviceIconURL
+            )
+        }
         let presentationRouter = NotificationPresentationRouter(
             systemPresenter: presenter,
+            islandPresenter: islandPresenter,
             isMutedCheck: { id in
                 mutedCheck?(id) ?? false
             },
             isSystemEnabledCheck: { id in
-                notifyOSCheck?(id) ?? true
+                (systemCheck?() ?? true) && (notifyOSCheck?(id) ?? true)
+            },
+            isIslandEnabledCheck: { id in
+                islandCheck?(id) ?? false
             },
             isDoNotDisturbCheck: {
                 dndCheck?() ?? false

@@ -10,6 +10,8 @@ enum DefaultsKey {
     static let iconRailPosition = "Atoll.iconRailPosition"
     static let workspaceViewMode = "Atoll.workspaceViewMode"
     static let retiredBackdropFrostIntensity = "Atoll.backdropFrostIntensity"
+    static let systemNotificationRouteEnabled = "Atoll.systemNotificationRouteEnabled"
+    static let islandNotificationRouteEnabled = "Atoll.islandNotificationRouteEnabled"
 
     static let recentEmojis = "recentEmojis"
     static let sidebarCollapsed = "Atoll.sidebarCollapsed"
