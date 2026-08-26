@@ -6,6 +6,21 @@ import AtollCore
 @testable import Atoll
 
 final class WebRuntimeTests: XCTestCase {
+    @MainActor
+    func testCoordinatorExposesWebDialogDelegateMethods() {
+        let coordinator = WebViewCoordinator()
+        let selectors = [
+            "webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:",
+            "webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:",
+            "webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:",
+            "webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:"
+        ]
+
+        for selectorName in selectors {
+            XCTAssertTrue(coordinator.responds(to: NSSelectorFromString(selectorName)), selectorName)
+        }
+    }
+
     // MARK: - WebContent crash backoff
 
     func testCrashBackoffStopsAfterRepeatedCrashes() {

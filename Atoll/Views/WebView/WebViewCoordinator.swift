@@ -8,6 +8,7 @@ import AtollCore
 final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     private let downloadHandler = WebDownloadHandler()
+    private let dialogPresenter = WebDialogPresenter()
 
     private var popupWebView: WKWebView?
     private var popupWindow: NSWindow?
@@ -575,30 +576,11 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping @MainActor ([URL]?) -> Void
     ) {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = parameters.allowsDirectories
-        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        panel.resolvesAliases = true
-
-        // WebKit hangs the page's `<input type=file>` until `completionHandler`
-        // fires exactly once. Route it through a one-shot latch so it can't fire
-        // twice and — crucially — so the page is released even if the host window
-        // closes while the sheet is open, in which case the sheet's own handler
-        // may never run and the input would hang forever.
-        let session = FilePickerSession(completionHandler)
-        let handleResponse: (NSApplication.ModalResponse) -> Void = { response in
-            session.finish(response == .OK ? panel.urls : nil)
-        }
-
-        // Attach as a sheet to the web view's window when we have one; fall back
-        // to a standalone modal panel otherwise (e.g. an OAuth popup web view).
-        if let window = webView.window {
-            session.observeClose(of: window)
-            panel.beginSheetModal(for: window, completionHandler: handleResponse)
-        } else {
-            panel.begin(completionHandler: handleResponse)
-        }
+        dialogPresenter.presentOpenPanel(
+            with: parameters,
+            over: webView,
+            completion: completionHandler
+        )
     }
 
     // MARK: - Media Capture (camera / microphone) permission
@@ -659,12 +641,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping @MainActor () -> Void
     ) {
-        AppLogger.webView.info("JS alert panel")
-        let alert = NSAlert()
-        alert.messageText = message
-        alert.addButton(withTitle: "OK")
-        let session = JSDialogSession(cancelValue: (), completionHandler)
-        present(alert, over: webView, session: session) { _ in () }
+        dialogPresenter.presentAlert(message: message, over: webView, completion: completionHandler)
     }
 
     /// Presents a native OK / Cancel panel for `window.confirm()`. Returns `true`
@@ -677,13 +654,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping @MainActor (Bool) -> Void
     ) {
-        AppLogger.webView.info("JS confirm panel")
-        let alert = NSAlert()
-        alert.messageText = message
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        let session = JSDialogSession(cancelValue: false, completionHandler)
-        present(alert, over: webView, session: session) { $0 == .alertFirstButtonReturn }
+        dialogPresenter.presentConfirm(message: message, over: webView, completion: completionHandler)
     }
 
     /// Presents a native text-input panel for `window.prompt()`. Returns the
@@ -697,43 +668,12 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping @MainActor (String?) -> Void
     ) {
-        AppLogger.webView.info("JS text-input panel")
-        let alert = NSAlert()
-        alert.messageText = prompt
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        field.stringValue = defaultText ?? ""
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-
-        let session = JSDialogSession(cancelValue: String?.none, completionHandler)
-        present(alert, over: webView, session: session) { response in
-            response == .alertFirstButtonReturn ? field.stringValue : nil
-        }
-    }
-
-    /// Runs `alert` as a sheet on the web view's window when there is one, falling
-    /// back to an app-modal panel otherwise (e.g. an OAuth popup web view). The
-    /// session guarantees the page's completion handler fires exactly once — on a
-    /// button press or, for a sheet, if the host window closes first — mirroring
-    /// the file-picker path. `map` turns the modal response into the value the
-    /// page's handler expects.
-    private func present<T>(
-        _ alert: NSAlert,
-        over webView: WKWebView,
-        session: JSDialogSession<T>,
-        map: @escaping (NSApplication.ModalResponse) -> T
-    ) {
-        if let window = webView.window {
-            session.observeClose(of: window)
-            alert.beginSheetModal(for: window) { response in
-                session.finish(map(response))
-            }
-        } else {
-            session.finish(map(alert.runModal()))
-        }
+        dialogPresenter.presentPrompt(
+            prompt: prompt,
+            defaultText: defaultText,
+            over: webView,
+            completion: completionHandler
+        )
     }
 
     // MARK: - Context Menu
@@ -761,85 +701,4 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         downloadHandler.track(download)
     }
 
-}
-
-/// Drives a file-open panel to a single completion. WebKit hangs the page's
-/// `<input type=file>` until the handler fires exactly once, so this guarantees
-/// it fires — on selection, cancel, or the host window closing first — and never
-/// twice. `@MainActor` (hence Sendable) so the close observer can hold it.
-@MainActor
-private final class FilePickerSession {
-    private var completion: (@MainActor ([URL]?) -> Void)?
-    private var closeObserver: NSObjectProtocol?
-
-    init(_ completion: @escaping @MainActor ([URL]?) -> Void) {
-        self.completion = completion
-    }
-
-    /// Fires the completion with nil if `window` closes before the panel does,
-    /// releasing the page's file input instead of leaving it hung.
-    func observeClose(of window: NSWindow) {
-        closeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            // The .main queue delivers this on the main thread, so assuming main
-            // isolation to reach the @MainActor method is safe here.
-            MainActor.assumeIsolated { self?.finish(nil) }
-        }
-    }
-
-    /// Idempotent: the first call fires the handler and detaches the observer;
-    /// later calls are no-ops.
-    func finish(_ urls: [URL]?) {
-        guard let completion else { return }
-        self.completion = nil
-        if let closeObserver {
-            NotificationCenter.default.removeObserver(closeObserver)
-            self.closeObserver = nil
-        }
-        completion(urls)
-    }
-}
-
-/// Drives a JavaScript dialog (`alert` / `confirm` / `prompt`) to a single
-/// completion. WebKit blocks the page's script until the handler fires exactly
-/// once, so this guarantees it fires — on a button press or the host window
-/// closing first — and never twice. `cancelValue` is what a window-close-first
-/// resolves to (`()` for alert, `false` for confirm, nil for prompt). `@MainActor`
-/// (hence Sendable) so the close observer can hold it.
-@MainActor
-private final class JSDialogSession<T> {
-    private var completion: (@MainActor (T) -> Void)?
-    private var closeObserver: NSObjectProtocol?
-    private let cancelValue: T
-
-    init(cancelValue: T, _ completion: @escaping @MainActor (T) -> Void) {
-        self.cancelValue = cancelValue
-        self.completion = completion
-    }
-
-    /// Fires the completion with `cancelValue` if `window` closes before the sheet
-    /// resolves, releasing the page's blocked script instead of leaving it hung.
-    func observeClose(of window: NSWindow) {
-        closeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            // The .main queue delivers this on the main thread, so assuming main
-            // isolation to reach the @MainActor method is safe here.
-            MainActor.assumeIsolated { self?.finish(self?.cancelValue) }
-        }
-    }
-
-    /// Idempotent: the first call fires the handler and detaches the observer;
-    /// later calls are no-ops. `value` is nil only on the close path above, where
-    /// it falls back to `cancelValue`.
-    func finish(_ value: T?) {
-        guard let completion else { return }
-        self.completion = nil
-        if let closeObserver {
-            NotificationCenter.default.removeObserver(closeObserver)
-            self.closeObserver = nil
-        }
-        completion(value ?? cancelValue)
-    }
 }

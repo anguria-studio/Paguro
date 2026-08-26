@@ -72,6 +72,7 @@ The main services and startup adapters are:
 - `HibernationScheduler` for idle sweeps and immediate-hibernation grace tasks.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
+- `WebDialogPresenter` for file pickers and page dialogs.
 - `WebDownloadHandler` for download lifetime, destinations, and cancellation.
 - `NotificationManager` for notification polling and macOS delivery.
 - `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
