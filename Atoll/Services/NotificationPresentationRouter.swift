@@ -19,6 +19,7 @@ final class NotificationPresentationRouter {
     private let isMutedCheck: @MainActor (UUID) -> Bool
     private let isSystemEnabledCheck: @MainActor (UUID) -> Bool
     private let isIslandEnabledCheck: @MainActor (UUID) -> Bool
+    private let isIslandAvailableCheck: @MainActor () -> Bool
     private let isDoNotDisturbCheck: @MainActor () -> Bool
 
     init(
@@ -27,6 +28,7 @@ final class NotificationPresentationRouter {
         isMutedCheck: @escaping @MainActor (UUID) -> Bool,
         isSystemEnabledCheck: @escaping @MainActor (UUID) -> Bool,
         isIslandEnabledCheck: @escaping @MainActor (UUID) -> Bool = { _ in false },
+        isIslandAvailableCheck: @escaping @MainActor () -> Bool = { true },
         isDoNotDisturbCheck: @escaping @MainActor () -> Bool
     ) {
         self.systemPresenter = systemPresenter
@@ -34,6 +36,7 @@ final class NotificationPresentationRouter {
         self.isMutedCheck = isMutedCheck
         self.isSystemEnabledCheck = isSystemEnabledCheck
         self.isIslandEnabledCheck = isIslandEnabledCheck
+        self.isIslandAvailableCheck = isIslandAvailableCheck
         self.isDoNotDisturbCheck = isDoNotDisturbCheck
     }
 
@@ -43,9 +46,11 @@ final class NotificationPresentationRouter {
         traceID: String
     ) {
         let wantsIsland = isIslandEnabledCheck(event.serviceID)
-        if wantsIsland, islandPresenter == nil {
+        let islandIsAvailable = islandPresenter != nil
+            && isIslandAvailableCheck()
+        if wantsIsland, !islandIsAvailable {
             AppLogger.notifications.warning(
-                "Notification trace \(traceID, privacy: .public): island route is enabled but unavailable"
+                "Notification trace \(traceID, privacy: .public): island unavailable; using system fallback"
             )
         }
 
@@ -54,7 +59,8 @@ final class NotificationPresentationRouter {
                 isMuted: isMutedCheck(event.serviceID),
                 isDoNotDisturbActive: isDoNotDisturbCheck(),
                 isSystemNotificationEnabled: isSystemEnabledCheck(event.serviceID),
-                isIslandEnabled: wantsIsland && islandPresenter != nil
+                isIslandEnabled: wantsIsland,
+                isIslandAvailable: islandIsAvailable
             )
         )
 

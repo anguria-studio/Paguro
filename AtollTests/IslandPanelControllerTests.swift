@@ -121,17 +121,97 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(scheduler.pendingDelays, [.seconds(12)])
     }
 
+    func testVisibleIslandHidesOffNotchAndReturnsOnNotchedScreen() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let monitor = RecordingIslandScreenChangeMonitor()
+        let provider = MutableIslandScreenGeometryProvider(
+            snapshot: SimulatedScreenGeometryPreset.notched14Inch.scenario.snapshot
+        )
+        let controller = makeController(
+            renderer: renderer,
+            provider: provider,
+            screenChangeMonitor: monitor
+        )
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+        controller.showCollapsed()
+        XCTAssertEqual(renderer.shows.last?.placement.screenIdentifier, "notched-14-inch")
+        XCTAssertEqual(monitor.startCount, 1)
+
+        provider.snapshot = SimulatedScreenGeometryPreset.externalDisplay
+            .scenario
+            .snapshot
+        let hideCount = renderer.hideCount
+        monitor.sendChange()
+        await waitForHide(after: hideCount, in: renderer)
+
+        XCTAssertFalse(controller.canPresentIsland)
+
+        provider.snapshot = SimulatedScreenGeometryPreset.notched16Inch
+            .scenario
+            .snapshot
+        monitor.sendChange()
+        await waitForPlacement(on: "notched-16-inch", in: renderer)
+
+        XCTAssertTrue(controller.canPresentIsland)
+        XCTAssertEqual(renderer.shows.last?.placement.screenIdentifier, "notched-16-inch")
+    }
+
+    func testHideStopsScreenTracking() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let monitor = RecordingIslandScreenChangeMonitor()
+        let controller = makeController(
+            renderer: renderer,
+            screenChangeMonitor: monitor
+        )
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+        controller.hide()
+        let showCount = renderer.shows.count
+        monitor.sendChange()
+        await Task.yield()
+
+        XCTAssertEqual(monitor.stopCount, 1)
+        XCTAssertEqual(renderer.shows.count, showCount)
+        XCTAssertEqual(controller.state, .hidden)
+    }
+
+    func testStopRemovesScreenTrackingAndRejectsLaterChanges() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let monitor = RecordingIslandScreenChangeMonitor()
+        let controller = makeController(
+            renderer: renderer,
+            screenChangeMonitor: monitor
+        )
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+        controller.stop()
+        let showCount = renderer.shows.count
+        monitor.sendChange()
+        await Task.yield()
+
+        XCTAssertEqual(monitor.stopCount, 1)
+        XCTAssertEqual(renderer.shows.count, showCount)
+        XCTAssertEqual(renderer.stopCount, 1)
+    }
+
     private func makeController(
         renderer: RecordingIslandPanelRenderer,
+        provider: (any ScreenGeometryProvider)? = nil,
         scheduler: RecordingIslandPanelScheduler? = nil,
+        screenChangeMonitor: RecordingIslandScreenChangeMonitor? = nil,
         isVoiceOverEnabled: Bool = false
     ) -> IslandPanelController {
         IslandPanelController(
-            screenGeometryProvider: SimulatedScreenGeometryProvider(
+            screenGeometryProvider: provider ?? SimulatedScreenGeometryProvider(
                 preset: .notched14Inch
             ),
             renderer: renderer,
             scheduler: scheduler,
+            screenChangeMonitor: screenChangeMonitor,
             isVoiceOverEnabled: { isVoiceOverEnabled }
         )
     }
@@ -163,6 +243,59 @@ final class IslandPanelControllerTests: XCTestCase {
         for _ in 0..<20 where renderer.shows.isEmpty {
             await Task.yield()
         }
+    }
+
+    private func waitForPlacement(
+        on screenIdentifier: String,
+        in renderer: RecordingIslandPanelRenderer
+    ) async {
+        for _ in 0..<20
+        where renderer.shows.last?.placement.screenIdentifier != screenIdentifier {
+            await Task.yield()
+        }
+    }
+
+    private func waitForHide(
+        after previousCount: Int,
+        in renderer: RecordingIslandPanelRenderer
+    ) async {
+        for _ in 0..<20 where renderer.hideCount == previousCount {
+            await Task.yield()
+        }
+    }
+}
+
+@MainActor
+private final class MutableIslandScreenGeometryProvider: ScreenGeometryProvider {
+    var snapshot: IslandScreenSnapshot
+
+    init(snapshot: IslandScreenSnapshot) {
+        self.snapshot = snapshot
+    }
+
+    func currentSnapshot() async -> IslandScreenSnapshot {
+        snapshot
+    }
+}
+
+@MainActor
+private final class RecordingIslandScreenChangeMonitor: IslandScreenChangeMonitoring {
+    private var onChange: (@MainActor () -> Void)?
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    func start(onChange: @escaping @MainActor () -> Void) {
+        self.onChange = onChange
+        startCount += 1
+    }
+
+    func stop() {
+        onChange = nil
+        stopCount += 1
+    }
+
+    func sendChange() {
+        onChange?()
     }
 }
 

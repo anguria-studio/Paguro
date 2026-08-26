@@ -38,24 +38,20 @@ struct IslandScreenGeometryTests {
     }
 
     @Test
-    func standardPlacementFloatsInsideTheVisibleFrame() throws {
+    func standardDisplayHasNoIslandPlacement() {
         let screen = selectedScreen(for: .externalDisplay)
-        let placement = try #require(
+
+        #expect(
             NotificationIslandGeometryPolicy.placement(
                 on: screen,
                 desiredSize: IslandScreenSize(width: 360, height: 120)
-            )
+            ) == nil
         )
-
-        #expect(placement.style == .floating)
-        #expect(placement.frame.midX == screen.visibleFrame.midX)
-        #expect(placement.frame.maxY == screen.visibleFrame.maxY - 8)
-        #expect(placement.frame.minY >= screen.visibleFrame.minY)
     }
 
     @Test
     func oversizedPlacementStaysInsideItsScreenBounds() throws {
-        let screen = selectedScreen(for: .nonNotchedLaptop)
+        let screen = selectedScreen(for: .notched14Inch)
         let placement = try #require(
             NotificationIslandGeometryPolicy.placement(
                 on: screen,
@@ -63,10 +59,10 @@ struct IslandScreenGeometryTests {
             )
         )
 
-        #expect(placement.frame.minX == screen.visibleFrame.minX + 8)
-        #expect(placement.frame.maxX == screen.visibleFrame.maxX - 8)
-        #expect(placement.frame.minY == screen.visibleFrame.minY + 8)
-        #expect(placement.frame.maxY == screen.visibleFrame.maxY - 8)
+        #expect(placement.frame.minX == screen.frame.minX + 8)
+        #expect(placement.frame.maxX == screen.frame.maxX - 8)
+        #expect(placement.frame.minY == screen.frame.minY)
+        #expect(placement.frame.maxY == screen.frame.maxY)
     }
 
     @Test

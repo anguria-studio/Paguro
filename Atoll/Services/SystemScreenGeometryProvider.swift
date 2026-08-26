@@ -13,7 +13,12 @@ final class SystemScreenGeometryProvider: ScreenGeometryProvider {
     init(
         screensResolver: @escaping ScreensResolver = { NSScreen.screens },
         activeScreenResolver: @escaping ActiveScreenResolver = {
-            NSApp.mainWindow?.screen ?? NSApp.keyWindow?.screen
+            NSApp.windows.first(where: { window in
+                window.isVisible && (
+                    window.identifier?.rawValue == "main"
+                        || (window.canBecomeMain && window.title == "Atoll")
+                )
+            })?.screen
         }
     ) {
         self.screensResolver = screensResolver

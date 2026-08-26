@@ -154,7 +154,6 @@ public protocol ScreenGeometryProvider: Sendable {
 /// The form that the island uses for one display.
 public enum NotificationIslandPlacementStyle: Equatable, Sendable {
     case cameraHousing
-    case floating
 }
 
 /// A resolved island panel frame for one display.
@@ -174,7 +173,7 @@ public struct NotificationIslandPlacement: Equatable, Sendable {
     }
 }
 
-/// Pure placement rules for notched and standard displays.
+/// Pure placement rules for a display with a camera housing.
 public enum NotificationIslandGeometryPolicy {
     public static let defaultScreenMargin: Double = 8
 
@@ -185,29 +184,16 @@ public enum NotificationIslandGeometryPolicy {
     ) -> NotificationIslandPlacement? {
         guard desiredSize.width > 0, desiredSize.height > 0 else { return nil }
 
-        let margin = max(0, screenMargin)
-        if let housingFrame = screen.cameraHousingFrame {
-            let frame = topAttachedFrame(
-                around: housingFrame,
-                in: screen.frame,
-                desiredSize: desiredSize,
-                horizontalMargin: margin
-            )
-            return NotificationIslandPlacement(
-                screenIdentifier: screen.identifier,
-                style: .cameraHousing,
-                frame: frame
-            )
-        }
-
-        let frame = floatingFrame(
-            in: screen.visibleFrame,
+        guard let housingFrame = screen.cameraHousingFrame else { return nil }
+        let frame = topAttachedFrame(
+            around: housingFrame,
+            in: screen.frame,
             desiredSize: desiredSize,
-            margin: margin
+            horizontalMargin: max(0, screenMargin)
         )
         return NotificationIslandPlacement(
             screenIdentifier: screen.identifier,
-            style: .floating,
+            style: .cameraHousing,
             frame: frame
         )
     }
@@ -231,24 +217,6 @@ public enum NotificationIslandGeometryPolicy {
         return IslandScreenRect(
             x: x,
             y: screenFrame.maxY - height,
-            width: width,
-            height: height
-        )
-    }
-
-    private static func floatingFrame(
-        in visibleFrame: IslandScreenRect,
-        desiredSize: IslandScreenSize,
-        margin: Double
-    ) -> IslandScreenRect {
-        let availableWidth = max(0, visibleFrame.size.width - (margin * 2))
-        let availableHeight = max(0, visibleFrame.size.height - (margin * 2))
-        let width = min(desiredSize.width, availableWidth)
-        let height = min(desiredSize.height, availableHeight)
-
-        return IslandScreenRect(
-            x: visibleFrame.midX - (width / 2),
-            y: visibleFrame.maxY - margin - height,
             width: width,
             height: height
         )

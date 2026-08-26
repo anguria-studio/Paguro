@@ -69,6 +69,10 @@ final class UserScriptManager {
             isIslandEnabledCheck: { id in
                 islandCheck?(id) ?? false
             },
+            isIslandAvailableCheck: {
+                [weak islandPanelController = islandPanelController] in
+                islandPanelController?.canPresentIsland ?? false
+            },
             isDoNotDisturbCheck: {
                 dndCheck?() ?? false
             }

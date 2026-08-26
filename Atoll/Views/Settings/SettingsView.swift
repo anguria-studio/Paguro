@@ -298,14 +298,14 @@ struct NotificationSettingsView: View {
                     set: { appModel.setSystemNotificationRouteEnabled($0) }
                 ))
 
-                Toggle("Show island alerts", isOn: Binding(
+                Toggle("Show island alerts on notched displays", isOn: Binding(
                     get: {
                         appModel.notificationRouteSettings.isIslandRouteEnabled
                     },
                     set: { appModel.setIslandNotificationRouteEnabled($0) }
                 ))
 
-                Text("You can use either route or both routes. Service mute and Do Not Disturb apply to both routes.")
+                Text("On a display without a notch, island alerts use macOS notifications. Service mute and Do Not Disturb apply to both routes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

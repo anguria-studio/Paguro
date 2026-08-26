@@ -39,6 +39,27 @@ struct NotificationPresentationPolicyTests {
     }
 
     @Test
+    func unavailableIslandFallsBackToOneSystemNotification() {
+        let islandOnlyPlan = NotificationPresentationPolicy.plan(
+            for: NotificationPresentationOptions(
+                isSystemNotificationEnabled: false,
+                isIslandEnabled: true,
+                isIslandAvailable: false
+            )
+        )
+        let bothRoutesPlan = NotificationPresentationPolicy.plan(
+            for: NotificationPresentationOptions(
+                isSystemNotificationEnabled: true,
+                isIslandEnabled: true,
+                isIslandAvailable: false
+            )
+        )
+
+        #expect(islandOnlyPlan.routes == [.systemNotification])
+        #expect(bothRoutesPlan.routes == [.systemNotification])
+    }
+
+    @Test
     func muteTakesPriorityOverAllRoutes() {
         let plan = NotificationPresentationPolicy.plan(
             for: NotificationPresentationOptions(

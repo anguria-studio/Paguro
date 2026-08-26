@@ -157,9 +157,13 @@ route choices use `UserDefaults` and do not change service session data.
 The global system-route control applies before each per-service macOS control.
 A service produces a macOS notification only when both controls are on.
 
+The island route requires a camera housing on the selected display.
+When the display has no camera housing, an enabled island route falls back to
+one macOS notification. The fallback does not create a duplicate when the
+system route is also on.
+
 The island destination is optional in the router. It stays unavailable until
-Atoll installs an island presenter. An unavailable island destination does not
-block an enabled system notification.
+Atoll installs an island presenter and selects a notched display.
 
 macOS always uses the Atoll app icon as the sender identity for a native
 notification. Public notification APIs do not let Atoll replace that icon for

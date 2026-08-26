@@ -32,6 +32,19 @@ final class IslandScreenGeometryConfigurationTests: XCTestCase {
         )
     }
 
+    func testReadsTheDebugFakeNotchArgument() {
+        XCTAssertTrue(
+            IslandScreenGeometryConfiguration.usesFakeNotch(
+                arguments: ["Atoll", "--atoll-fake-notch"]
+            )
+        )
+        XCTAssertFalse(
+            IslandScreenGeometryConfiguration.usesFakeNotch(
+                arguments: ["Atoll"]
+            )
+        )
+    }
+
     @MainActor
     func testFactoryUsesTheSimulatedProviderForADebugPreset() async {
         let provider = IslandScreenGeometryConfiguration.makeProvider(
@@ -59,6 +72,22 @@ final class IslandScreenGeometryConfigurationTests: XCTestCase {
         let snapshot = await provider.currentSnapshot()
 
         XCTAssertEqual(snapshot, expectedSnapshot)
+    }
+
+    @MainActor
+    func testFactoryAddsAFakeNotchToTheSelectedRealGeometry() async {
+        let baseSnapshot = SimulatedScreenGeometryPreset.externalDisplay
+            .scenario
+            .snapshot
+        let provider = IslandScreenGeometryConfiguration.makeProvider(
+            arguments: ["Atoll", "--atoll-fake-notch"],
+            systemProvider: FixedScreenGeometryProvider(snapshot: baseSnapshot)
+        )
+
+        let snapshot = await provider.currentSnapshot()
+
+        XCTAssertTrue(snapshot.selectedScreen?.hasCameraHousing == true)
+        XCTAssertEqual(snapshot.selectedScreen?.frame, baseSnapshot.selectedScreen?.frame)
     }
 }
 

@@ -96,13 +96,25 @@ Feature code must not read `NSScreen` directly.
 `IslandScreenGeometry` keeps the values in global screen coordinates.
 `NotificationIslandGeometryPolicy` centers the notched form on the camera
 housing and attaches it to the top screen edge.
-On a standard display, the policy centers a floating form inside the visible
-screen frame.
+It returns no island placement for a display without a camera housing.
 
 `SystemScreenGeometryProvider` reads a fresh `NSScreen` snapshot on request.
-It uses the active Atoll window display when one exists.
+It uses the visible main Atoll window display when one exists.
 It otherwise uses the primary display whose frame starts at the global origin.
 It does not cache screen values.
+
+`IslandScreenChangeMonitor` observes public AppKit notifications while the
+island is visible. It requests a new geometry snapshot after these changes:
+
+- the main Atoll window moves to another display;
+- a display connects, disconnects, or changes resolution;
+- the backing scale changes;
+- the main window enters or leaves full screen;
+- the active Space changes;
+- the Mac wakes from sleep.
+
+The monitor ignores the island panel's own movement.
+It removes all observers when the user disables the island or quits Atoll.
 
 The system provider uses these values:
 
@@ -140,6 +152,11 @@ The preset values are stable strings such as `notched-14-inch` and
 `two-display-arrangement`.
 Release builds ignore the simulation argument.
 
+The **Atoll Island Preview** scheme uses `--atoll-fake-notch`.
+This argument keeps the real display frame and adds a simulated camera housing
+to its top edge. It gives a non-notched development Mac a stable manual test
+path. Release builds ignore this argument.
+
 Debug Notification settings include a test-alert action.
 This action lets a person review the island without waiting for a service event.
 It uses the active service name and icon when you select a service.
@@ -147,15 +164,17 @@ Release builds do not include this action.
 
 ## Non-notched displays
 
-A non-notched display uses a floating form near the menu bar.
-It must look intentional and must not imitate missing hardware.
+A non-notched display does not show the island.
+When the island route is on, the notification router uses one normal macOS
+notification as the fallback. This fallback also applies when the user turns
+off the separate system-notification route.
 
-The user can disable the floating form.
-Native system notifications remain available.
+This rule prevents a permanent fake island on standard and external displays.
 
 ## Multiple displays
 
-The island follows the display that contains the active Atoll window.
+The island follows the display that contains the active Atoll window when that
+display has a camera housing.
 When no Atoll window is active, it uses the configured primary display.
 
 The panel must move after these changes:

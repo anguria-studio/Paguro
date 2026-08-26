@@ -75,11 +75,15 @@ private final class TaskNotificationIslandScheduledAction:
 @MainActor
 final class IslandPanelController {
     private(set) var state: NotificationIslandState = .hidden
+    var canPresentIsland: Bool {
+        selectedScreen?.hasCameraHousing == true
+    }
 
     private let screenGeometryProvider: any ScreenGeometryProvider
     private let renderer: any NotificationIslandPanelRendering
     private let reducer: NotificationIslandReducer
     private let scheduler: any NotificationIslandScheduling
+    private let screenChangeMonitor: any IslandScreenChangeMonitoring
     private let timing: NotificationIslandTiming
     private let isVoiceOverEnabled: @MainActor () -> Bool
     private var contentByEventID: [UUID: NotificationIslandPanelContent] = [:]
@@ -87,6 +91,7 @@ final class IslandPanelController {
     private var geometryTask: Task<Void, Never>?
     private var alertAction: (any NotificationIslandScheduledAction)?
     private var dismissalAction: (any NotificationIslandScheduledAction)?
+    private var isTrackingGeometryChanges = false
     private var hasStopped = false
 
     init(
@@ -94,6 +99,7 @@ final class IslandPanelController {
         renderer: (any NotificationIslandPanelRendering)? = nil,
         reducer: NotificationIslandReducer = NotificationIslandReducer(),
         scheduler: (any NotificationIslandScheduling)? = nil,
+        screenChangeMonitor: (any IslandScreenChangeMonitoring)? = nil,
         timing: NotificationIslandTiming = .standard,
         isVoiceOverEnabled: @escaping @MainActor () -> Bool = {
             NSWorkspace.shared.isVoiceOverEnabled
@@ -103,12 +109,15 @@ final class IslandPanelController {
         self.renderer = renderer ?? AppKitNotificationIslandPanelRenderer()
         self.reducer = reducer
         self.scheduler = scheduler ?? TaskNotificationIslandScheduler()
+        self.screenChangeMonitor = screenChangeMonitor
+            ?? IslandScreenChangeMonitor()
         self.timing = timing
         self.isVoiceOverEnabled = isVoiceOverEnabled
     }
 
     func present(_ content: NotificationIslandPanelContent) {
         guard !hasStopped else { return }
+        startGeometryTracking()
         let previousEventID = state.currentEvent?.id
         contentByEventID[content.event.id] = content
         apply(.receive(content.event))
@@ -120,6 +129,7 @@ final class IslandPanelController {
 
     func showCollapsed() {
         guard !hasStopped else { return }
+        startGeometryTracking()
         apply(.showCollapsed)
         refreshScreenGeometry()
     }
@@ -150,6 +160,7 @@ final class IslandPanelController {
 
     func hide() {
         cancelScheduledActions()
+        stopGeometryTracking()
         apply(.hide)
     }
 
@@ -157,12 +168,27 @@ final class IslandPanelController {
         guard !hasStopped else { return }
         hasStopped = true
         cancelScheduledActions()
-        geometryTask?.cancel()
-        geometryTask = nil
-        selectedScreen = nil
+        stopGeometryTracking()
         state = reducer.reduce(state, action: .stop)
         contentByEventID.removeAll()
         renderer.stop()
+    }
+
+    private func startGeometryTracking() {
+        guard !isTrackingGeometryChanges else { return }
+        isTrackingGeometryChanges = true
+        screenChangeMonitor.start { [weak self] in
+            self?.refreshScreenGeometry()
+        }
+    }
+
+    private func stopGeometryTracking() {
+        guard isTrackingGeometryChanges else { return }
+        isTrackingGeometryChanges = false
+        screenChangeMonitor.stop()
+        geometryTask?.cancel()
+        geometryTask = nil
+        selectedScreen = nil
     }
 
     private func scheduleAlertDismissalIfNeeded() {
@@ -242,6 +268,10 @@ final class IslandPanelController {
             return
         }
         guard let selectedScreen else { return }
+        guard selectedScreen.hasCameraHousing else {
+            renderer.hide()
+            return
+        }
         let size = desiredSize(for: state.phase, on: selectedScreen)
         guard let placement = NotificationIslandGeometryPolicy.placement(
             on: selectedScreen,
@@ -342,12 +372,11 @@ private final class AppKitNotificationIslandPanelRenderer:
         panel.contentView = NSHostingView(
             rootView: NotificationIslandPanelView(
                 state: state,
-                content: content,
-                placementStyle: placement.style
+                content: content
             )
         )
         panel.setFrame(placement.frame.appKitRect, display: true)
-        panel.hasShadow = placement.style == .floating
+        panel.hasShadow = false
         panel.orderFrontRegardless()
     }
 
@@ -387,7 +416,6 @@ private final class AppKitNotificationIslandPanelRenderer:
 private struct NotificationIslandPanelView: View {
     let state: NotificationIslandState
     let content: NotificationIslandPanelContent?
-    let placementStyle: NotificationIslandPlacementStyle
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -436,7 +464,7 @@ private struct NotificationIslandPanelView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            shape.fill(placementStyle == .cameraHousing ? .black : .clear)
+            shape.fill(.black)
         }
         .glassEffect(.regular, in: shape)
         .accessibilityElement(children: .combine)

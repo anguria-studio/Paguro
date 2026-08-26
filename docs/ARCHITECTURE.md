@@ -81,6 +81,7 @@ The main services and startup adapters are:
 - `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
 - `NotificationRouteSettings` for the enabled system and island presentation routes.
 - `SystemScreenGeometryProvider` for current public `NSScreen` values.
+- `IslandScreenChangeMonitor` for public display, window, Space, and wake events.
 - `IslandPanelController` for optional island state, placement, and panel lifetime.
 - `AppPresenceController` for Dock and menu-bar behavior.
 

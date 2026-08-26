@@ -86,6 +86,15 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
+  Atoll Island Preview:
+    build:
+      targets:
+        Atoll: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "--atoll-fake-notch": true
+
   Atoll Compatibility:
     build:
       targets:

@@ -17,17 +17,20 @@ public struct NotificationPresentationOptions: Equatable, Sendable {
     public let isDoNotDisturbActive: Bool
     public let isSystemNotificationEnabled: Bool
     public let isIslandEnabled: Bool
+    public let isIslandAvailable: Bool
 
     public init(
         isMuted: Bool = false,
         isDoNotDisturbActive: Bool = false,
         isSystemNotificationEnabled: Bool = true,
-        isIslandEnabled: Bool = false
+        isIslandEnabled: Bool = false,
+        isIslandAvailable: Bool = true
     ) {
         self.isMuted = isMuted
         self.isDoNotDisturbActive = isDoNotDisturbActive
         self.isSystemNotificationEnabled = isSystemNotificationEnabled
         self.isIslandEnabled = isIslandEnabled
+        self.isIslandAvailable = isIslandAvailable
     }
 }
 
@@ -61,10 +64,12 @@ public enum NotificationPresentationPolicy {
         }
 
         var routes: [NotificationPresentationRoute] = []
-        if options.isSystemNotificationEnabled {
+        let needsSystemFallback = options.isIslandEnabled
+            && !options.isIslandAvailable
+        if options.isSystemNotificationEnabled || needsSystemFallback {
             routes.append(.systemNotification)
         }
-        if options.isIslandEnabled {
+        if options.isIslandEnabled && options.isIslandAvailable {
             routes.append(.island)
         }
 
