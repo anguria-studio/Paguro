@@ -6,11 +6,9 @@ import XCTest
 /// `UNNotificationAttachment` moves its file into the notification store.
 /// Every notification must get its own copy of the service icon, or only the
 /// first notification per web-view lifetime carries the icon.
-@MainActor
 final class NotificationAttachmentTests: XCTestCase {
-    private var iconURL: URL!
-
-    override func setUpWithError() throws {
+    @MainActor
+    private func makeIconURL() throws -> URL {
         let image = NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in
             NSColor.systemTeal.setFill()
             rect.fill()
@@ -20,12 +18,13 @@ final class NotificationAttachmentTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("atoll-attachment-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        iconURL = directory.appendingPathComponent("icon.png")
+        let iconURL = directory.appendingPathComponent("icon.png")
         try png.write(to: iconURL)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return iconURL
     }
 
-    private func makeContent() -> UNMutableNotificationContent {
+    private func makeContent(iconURL: URL) -> UNMutableNotificationContent {
         let payload = NotificationPayload(
             title: "New message",
             body: "Body",
@@ -41,22 +40,28 @@ final class NotificationAttachmentTests: XCTestCase {
         )
     }
 
-    func testEveryNotificationCarriesTheIcon() {
-        let first = makeContent()
-        let second = makeContent()
+    @MainActor
+    func testEveryNotificationCarriesTheIcon() throws {
+        let iconURL = try makeIconURL()
+        let first = makeContent(iconURL: iconURL)
+        let second = makeContent(iconURL: iconURL)
         XCTAssertEqual(first.attachments.count, 1, "First notification carries the icon")
         XCTAssertEqual(second.attachments.count, 1, "Second notification still carries the icon")
     }
 
-    func testThePreparedIconFileSurvivesAttachment() {
-        _ = makeContent()
+    @MainActor
+    func testThePreparedIconFileSurvivesAttachment() throws {
+        let iconURL = try makeIconURL()
+        _ = makeContent(iconURL: iconURL)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: iconURL.path),
             "The shared per-service icon must not be consumed by the attachment"
         )
     }
 
+    @MainActor
     func testDisposableCopiesAreDistinctFiles() throws {
+        let iconURL = try makeIconURL()
         let first = try NotificationAttachmentStore.disposableCopy(of: iconURL)
         let second = try NotificationAttachmentStore.disposableCopy(of: iconURL)
         addTeardownBlock {

@@ -1,26 +1,19 @@
 import XCTest
-import AppKit
-import SwiftData
-import SQLite3
-import JavaScriptCore
-import WebKit
+import Foundation
 @testable import Atoll
 
-extension AtollTests {
+final class SessionRuntimeTests: XCTestCase {
     // MARK: - Keeping chat services live outside the active space
-
-    func makeService(label: String, catalogID: String?) -> ServiceInstance {
-        ServiceInstance(label: label, url: "https://example.com", catalogEntryID: catalogID)
-    }
 
     /// A chat service the active-space preload doesn't cover must still be kept
     /// live — it is the only way it can post a notification banner. A non-chat
     /// service must not be, and one already covered must not be preloaded twice.
+    @MainActor
     func testChatServicesOutsideTheActiveSpaceAreKeptLive() {
-        let slack = makeService(label: "Slack", catalogID: "slack")
-        let coveredSlack = makeService(label: "Slack (this space)", catalogID: "slack")
-        let reddit = makeService(label: "Reddit", catalogID: "reddit")
-        let custom = makeService(label: "Custom chat", catalogID: nil)
+        let slack = ModelFixtures.service(label: "Slack", catalogID: "slack")
+        let coveredSlack = ModelFixtures.service(label: "Slack (this space)", catalogID: "slack")
+        let reddit = ModelFixtures.service(label: "Reddit", catalogID: "reddit")
+        let custom = ModelFixtures.service(label: "Custom chat", catalogID: nil)
 
         let chosen = AppState.criticalServicesToKeepLive(
             among: [slack, coveredSlack, reddit, custom],
@@ -34,8 +27,9 @@ extension AtollTests {
     /// with many chat services would pin every slot in the pool. It must also
     /// pick the SAME ones each launch, or a different set would be kept live
     /// every time the app started.
+    @MainActor
     func testKeepLiveSelectionIsCappedAndStable() {
-        let services = (0..<12).map { makeService(label: "Slack \($0)", catalogID: "slack") }
+        let services = (0..<12).map { ModelFixtures.service(label: "Slack \($0)", catalogID: "slack") }
 
         let first = AppState.criticalServicesToKeepLive(among: services, covered: [], limit: 5)
         XCTAssertEqual(first.count, 5, "the cap must bound how many are kept live")
@@ -100,19 +94,17 @@ extension AtollTests {
 
     /// The signal that gates both destructive reclaim paths. It has to be read
     /// from the raw file before the open path repairs the damage away.
+    @MainActor
     func testHasDanglingLinksSeesDamageAndClearsAfterRepair() throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atoll-damaged-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let storeURL = dir.appendingPathComponent("store.sqlite")
-        defer { try? FileManager.default.removeItem(at: dir) }
+        let sandbox = try StoreSandbox(testCase: self, label: "damaged")
+        let storeURL = sandbox.storeURL
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         XCTAssertFalse(StoreRepair.hasDanglingLinks(at: storeURL), "a healthy store is not damaged")
 
         // A link pointing at a space that isn't there — what a lost Space row
         // leaves behind.
-        _ = try Self.runSQLite(storeURL, """
+        _ = try SQLiteHelpers.run(storeURL, """
             INSERT INTO ZSPACESERVICELINK (Z_PK, Z_ENT, Z_OPT, ZSPACE, ZSERVICE, ZSORTORDER)
             VALUES (9001, 3, 1, 8888, 9999, 0);
             """)

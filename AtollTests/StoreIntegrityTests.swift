@@ -1,12 +1,10 @@
 import XCTest
-import AppKit
+import Foundation
 import SwiftData
-import SQLite3
-import JavaScriptCore
-import WebKit
 @testable import Atoll
 
-extension AtollTests {
+@MainActor
+final class StoreIntegrityTests: XCTestCase {
     // MARK: - Store integrity after deleting a space (repro: "delete second workspace and quit, won't start")
 
     /// Reproduces the reported sequence against a real on-disk store: seed two
@@ -15,17 +13,9 @@ extension AtollTests {
     /// close the container, then reopen it and run the launch-time queries.
     /// A dangling `SpaceServiceLink` or corrupt store would trap here.
     func testDeleteSecondSpaceThenReopenStoreIsClean() throws {
-        let schema = Schema([
-            ServiceInstance.self,
-            Space.self,
-            SpaceServiceLink.self,
-            AppPreferences.self,
-        ])
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atoll-repro-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let storeURL = dir.appendingPathComponent("store.sqlite")
-        defer { try? FileManager.default.removeItem(at: dir) }
+        let schema = Self.storeSchema
+        let sandbox = try StoreSandbox(testCase: self, label: "delete-reopen")
+        let storeURL = sandbox.storeURL
 
         // --- Session 1: seed two spaces, then delete the second ---
         do {
@@ -110,17 +100,10 @@ extension AtollTests {
     /// read that used to trap. If deleting a dangling link faults its dead space,
     /// or the read still traps, this test crashes (SIGTRAP), matching the report.
     func testReapRepairsPreFixDanglingLinkWithoutCrashing() throws {
-        let schema = Schema([
-            ServiceInstance.self,
-            Space.self,
-            SpaceServiceLink.self,
-            AppPreferences.self,
-        ])
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atoll-danglerepair-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let storeURL = dir.appendingPathComponent("store.sqlite")
-        defer { try? FileManager.default.removeItem(at: dir) }
+        let schema = Self.storeSchema
+        let sandbox = try StoreSandbox(testCase: self, label: "dangling-repair")
+        let dir = sandbox.directoryURL
+        let storeURL = sandbox.storeURL
 
         // --- Session 1: seed two spaces with linked services, clean ---
         do {
@@ -145,9 +128,9 @@ extension AtollTests {
 
         // --- Corrupt like a pre-fix build: delete the Work space ROW,
         //     leaving its two links with a dangling ZSPACE foreign key. ---
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE WHERE ZNAME='Work';")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE WHERE ZNAME='Work';")
         func danglingRows() throws -> Int {
-            Int(try Self.runSQLite(
+            Int(try SQLiteHelpers.run(
                 storeURL,
                 "SELECT count(*) FROM ZSPACESERVICELINK WHERE ZSPACE NOT IN (SELECT Z_PK FROM ZSPACE);"
             ).trimmingCharacters(in: .whitespacesAndNewlines)) ?? -1
@@ -202,17 +185,9 @@ extension AtollTests {
     /// fall back to in-memory instead of running on a store that would trap on a
     /// later `.space`/`.service` read.
     func testStoreHasDanglingLinksDetectsAndClears() throws {
-        let schema = Schema([
-            ServiceInstance.self,
-            Space.self,
-            SpaceServiceLink.self,
-            AppPreferences.self,
-        ])
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atoll-gate-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let storeURL = dir.appendingPathComponent("store.sqlite")
-        defer { try? FileManager.default.removeItem(at: dir) }
+        let schema = Self.storeSchema
+        let sandbox = try StoreSandbox(testCase: self, label: "dangling-gate")
+        let storeURL = sandbox.storeURL
 
         do {
             let config = ModelConfiguration(schema: schema, url: storeURL)
@@ -232,7 +207,7 @@ extension AtollTests {
         }
 
         // Corrupt: delete Work's row, leaving its link dangling.
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE WHERE ZNAME='Work';")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE WHERE ZNAME='Work';")
 
         // Detector must flag the corrupted store.
         let corruptConfig = ModelConfiguration(schema: schema, url: storeURL)
@@ -252,17 +227,10 @@ extension AtollTests {
     /// ZSPACE table, and the exact row count otherwise — so a genuine empty
     /// store reads as 0, never nil, and a populated one reads as its count.
     func testSpaceCountDistinguishesMissingUnknownAndPopulated() throws {
-        let schema = Schema([
-            ServiceInstance.self,
-            Space.self,
-            SpaceServiceLink.self,
-            AppPreferences.self,
-        ])
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atoll-spacecount-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let storeURL = dir.appendingPathComponent("store.sqlite")
-        defer { try? FileManager.default.removeItem(at: dir) }
+        let schema = Self.storeSchema
+        let sandbox = try StoreSandbox(testCase: self, label: "space-count")
+        let dir = sandbox.directoryURL
+        let storeURL = sandbox.storeURL
 
         // No file yet → unknown, not zero.
         XCTAssertNil(StoreRepair.spaceCount(at: storeURL), "missing store must read as nil (unknown)")
@@ -281,12 +249,12 @@ extension AtollTests {
         // Emptied on disk → 0, NOT nil: the table still exists, so the count is
         // known to be zero. This is the case that must NOT look like a fresh
         // install to init (nil), or the seed would overwrite the store.
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 0, "emptied store must read as 0, not nil")
 
         // A file with no ZSPACE table → unknown (nil), never guessed as zero.
         let alienURL = dir.appendingPathComponent("alien.sqlite")
-        try Self.runSQLite(alienURL, "CREATE TABLE ZOTHER (x INTEGER);")
+        try SQLiteHelpers.run(alienURL, "CREATE TABLE ZOTHER (x INTEGER);")
         XCTAssertNil(StoreRepair.spaceCount(at: alienURL), "unrecognized schema must read as nil")
     }
 
@@ -296,139 +264,7 @@ extension AtollTests {
     /// schema so it matches `AtollMigrationPlan`'s latest, the same shape
     /// `loadContainer` opens in production.
     static var storeSchema: Schema {
-        Schema(versionedSchema: AtollSchemaVCurrent.self)
-    }
-
-    /// Creates a store at `url` with `spaces` populated spaces and returns only
-    /// once the file is genuinely free for raw ops. Spaces-only keeps the store
-    /// free of links, so no dangling-link machinery is involved.
-    ///
-    /// The write and the wait are separate calls on purpose: `container` has to
-    /// go out of scope before anything can wait on its connection closing, and
-    /// it only does that when `writeFixture` returns.
-    func makePopulatedStore(at url: URL, spaces: Int) throws {
-        try Self.writeFixture(at: url, spaces: spaces)
-        try Self.settleStore(at: url)
-    }
-
-    /// Writes the fixture rows and lets its container go out of scope.
-    static func writeFixture(at url: URL, spaces: Int) throws {
-        let config = ModelConfiguration(schema: storeSchema, url: url)
-        let container = try ModelContainer(for: storeSchema, configurations: [config])
-        let ctx = container.mainContext
-        for i in 0..<spaces {
-            ctx.insert(Space(name: "S\(i)", emoji: "🏠", sortOrder: i))
-        }
-        try ctx.save()
-    }
-
-    enum FixtureError: Error, CustomStringConvertible {
-        case storeNeverSettled(String, String)
-
-        var description: String {
-            switch self {
-            case let .storeNeverSettled(name, detail):
-                return "fixture store \(name) never came free: \(detail)"
-            }
-        }
-    }
-
-    /// Blocks until nothing else holds the store at `url`, then folds its WAL
-    /// into the main database file.
-    ///
-    /// SwiftData exposes no way to close a `ModelContainer`. Its SQLite
-    /// connection goes away when the container deallocates, and ARC promises
-    /// nothing about when that happens — so a fixture helper that just returns
-    /// leaves every caller racing that close. Two tests here lost that race:
-    /// one saw `PRAGMA journal_mode=WAL` come back `SQLITE_BUSY` because the
-    /// container still held a transaction, and one copied the store while rows
-    /// were still only in the `-wal`, producing a main file that read as empty
-    /// and was judged an unusable snapshot.
-    ///
-    /// `BEGIN EXCLUSIVE` is the check because it is the one statement that can
-    /// only succeed when this process holds the file alone. The checkpoint that
-    /// follows is what makes a copy of the main file *alone* carry every
-    /// committed row, which is the shape `StoreRepair.snapshot` produces and
-    /// several tests then read back.
-    ///
-    /// The wait turns the run loop rather than sleeping: the container is torn
-    /// down by work scheduled on this very thread, so a bare `usleep` would
-    /// starve exactly what it is waiting for.
-    static func settleStore(at url: URL, timeout: TimeInterval = 10) throws {
-        let deadline = Date().addingTimeInterval(timeout)
-        var lastDetail = "not attempted"
-
-        repeat {
-            var db: OpaquePointer?
-            if sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db {
-                sqlite3_busy_timeout(db, 250)
-                let locked = sqlite3_exec(db, "BEGIN EXCLUSIVE; COMMIT;", nil, nil, nil)
-                if locked == SQLITE_OK {
-                    sqlite3_exec(db, "PRAGMA wal_checkpoint(TRUNCATE);", nil, nil, nil)
-                    sqlite3_close(db)
-                    return
-                }
-                lastDetail = "BEGIN EXCLUSIVE returned \(locked)"
-                sqlite3_close(db)
-            } else {
-                lastDetail = "could not open read-write"
-                if let db { sqlite3_close(db) }
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
-        } while Date() < deadline
-
-        throw FixtureError.storeNeverSettled(url.lastPathComponent, lastDetail)
-    }
-
-    /// Inserts `count` spaces into an existing store by raw SQL, so a fixture can
-    /// be reshaped without reopening a container. `Z_PK` is assigned explicitly
-    /// because Core Data's `Z_PRIMARYKEY` bookkeeping is not maintained here;
-    /// these fixtures are only ever read back by raw SQLite.
-    static func insertSpaces(_ url: URL, count: Int) throws {
-        let entity = try runSQLite(url, "SELECT Z_ENT FROM ZSPACE LIMIT 1;")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let ent = entity.isEmpty ? "1" : entity
-        for i in 0..<count {
-            _ = try runSQLite(url, """
-                INSERT INTO ZSPACE (Z_PK, Z_ENT, Z_OPT, ZNAME, ZEMOJI, ZSORTORDER)
-                VALUES (\(1000 + i), \(ent), 1, 'S\(i)', '🏠', \(i));
-                """)
-        }
-    }
-
-    /// Writes the untouched default seed shape into an existing store by raw SQL:
-    /// the two seeded space names and the seven seeded service labels.
-    static func insertSeedShape(_ url: URL) throws {
-        let spaceEnt = try runSQLite(url, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'Space';")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let serviceEnt = try runSQLite(url, "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'ServiceInstance';")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        for (i, entry) in DefaultSeed.spaces.enumerated() {
-            _ = try runSQLite(url, """
-                INSERT INTO ZSPACE (Z_PK, Z_ENT, Z_OPT, ZNAME, ZEMOJI, ZSORTORDER)
-                VALUES (\(2000 + i), \(spaceEnt.isEmpty ? "1" : spaceEnt), 1, '\(entry.name)', '\(entry.emoji)', \(i));
-                """)
-        }
-        for (i, label) in DefaultSeed.allServiceLabels.enumerated() {
-            _ = try runSQLite(url, """
-                INSERT INTO ZSERVICEINSTANCE (Z_PK, Z_ENT, Z_OPT, ZLABEL, ZURL)
-                VALUES (\(3000 + i), \(serviceEnt.isEmpty ? "2" : serviceEnt), 1, '\(label)', 'https://example.com');
-                """)
-        }
-    }
-
-    /// Copies the store triple — main file plus `-wal`/`-shm` when present —
-    /// from `source` to `destination`, mirroring what `StoreRepair.snapshot`
-    /// does in production. A prerestore/corrupt fixture built from a bare
-    /// single-file copy would miss a live store's `-wal` sibling and so
-    /// misrepresent what a real backup looks like.
-    static func copyStoreTriple(from source: URL, to destination: URL) throws {
-        let fm = FileManager.default
-        for suffix in ["", "-wal", "-shm"] {
-            let src = URL(fileURLWithPath: source.path + suffix)
-            guard fm.fileExists(atPath: src.path) else { continue }
-            try fm.copyItem(at: src, to: URL(fileURLWithPath: destination.path + suffix))
-        }
+        ModelFixtures.storeSchema
     }
 
     /// `newestRestorableSnapshot` must skip empty and corrupt snapshots and
@@ -441,11 +277,11 @@ extension AtollTests {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         // Good store → snapshot it as the OLDEST.
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
 
         // Empty the store → snapshot it as a NEWER but empty snapshot.
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
         StoreRepair.snapshot(at: storeURL, stamp: "1700000500-1.1.0")
 
         // A NEWEST but corrupt snapshot file (not a database).
@@ -473,7 +309,7 @@ extension AtollTests {
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
 
         // Strip the snapshot's own `-wal`/`-shm` siblings, regardless of
@@ -504,9 +340,9 @@ extension AtollTests {
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 0, "precondition: store emptied")
 
         let candidate = try XCTUnwrap(StoreRepair.newestRestorableSnapshot(for: storeURL))
@@ -539,9 +375,9 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 4)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 4)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
         defaults.set(true, forKey: AppState.hasEverHadDataKey)   // user has had data
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
@@ -585,8 +421,8 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")   // emptied, but no snapshot taken
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")   // emptied, but no snapshot taken
         defaults.set(true, forKey: AppState.hasEverHadDataKey)
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
@@ -610,7 +446,7 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         XCTAssertFalse(defaults.bool(forKey: AppState.hasEverHadDataKey), "precondition: flag not yet set")
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
@@ -636,7 +472,7 @@ extension AtollTests {
 
         // Build a usable snapshot, then remove the store file entirely so only the
         // backup remains (a store-deleted-but-snapshots-kept situation).
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
         for suffix in ["", "-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
@@ -697,9 +533,9 @@ extension AtollTests {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         // One good snapshot (oldest), then several newer EMPTY snapshots.
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
         for stamp in ["1700000100-1.1.0", "1700000200-1.2.0", "1700000300-1.3.0", "1700000400-1.4.0"] {
             StoreRepair.snapshot(at: storeURL, stamp: stamp)
         }
@@ -730,17 +566,17 @@ extension AtollTests {
         // dropped, so `readContent` (which requires all three tables) reads it
         // as UNKNOWN — not empty, not seed-shaped, just unreadable — while
         // `snapshotHasUsableData` (ZSPACE + integrity check only) still passes it.
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
         let genuineSnapshot = dir.appendingPathComponent("store.sqlite.snapshot-1700000000-1.0.0.bak")
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: genuineSnapshot.path + suffix))
         }
-        _ = try Self.runSQLite(genuineSnapshot, "DROP TABLE ZSPACESERVICELINK;")
+        _ = try SQLiteHelpers.run(genuineSnapshot, "DROP TABLE ZSPACESERVICELINK;")
 
         // Then several newer, genuinely EMPTY snapshots — no data at all, so
         // they must never be mistaken for something worth protecting.
-        try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
         for stamp in ["1700000100-1.1.0", "1700000200-1.2.0", "1700000300-1.3.0", "1700000400-1.4.0"] {
             StoreRepair.snapshot(at: storeURL, stamp: stamp)
         }
@@ -765,13 +601,13 @@ extension AtollTests {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         // Oldest snapshot: the user's own 5 spaces.
-        try makePopulatedStore(at: storeURL, spaces: 5)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 5)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.5.11+20")
 
         // Then four newer snapshots of a seed-shaped store, as four updates
         // after the loss would produce.
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSeedShape(storeURL)
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSeedShape(storeURL)
         for (i, version) in ["1.5.12+21", "1.5.13+22", "1.5.14+23", "1.5.15+24"].enumerated() {
             StoreRepair.snapshot(at: storeURL, stamp: "17000005\(i)0-\(version)")
         }
@@ -799,7 +635,7 @@ extension AtollTests {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
 
         // Five asides, oldest first. Pruning is filename bookkeeping — it never
         // reads a candidate's contents — so stand-in bytes are the honest
@@ -855,18 +691,4 @@ extension AtollTests {
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 0)
     }
 
-    /// Runs one SQL statement against a SwiftData store via the sqlite3 CLI and
-    /// returns stdout. Used to manufacture on-disk corruption a fixed schema
-    /// can't produce through the normal delete path.
-    static func runSQLite(_ url: URL, _ sql: String) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = [url.path, sql]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try process.run()
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
-    }
 }

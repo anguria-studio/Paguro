@@ -5,11 +5,13 @@ import XCTest
 
 @MainActor
 final class DataStoreManagerTests: XCTestCase {
-    private static let accountAIdentifier = UUID(uuidString: "A7011000-0000-4000-8000-000000000001")!
-    private static let accountBIdentifier = UUID(uuidString: "A7011000-0000-4000-8000-000000000002")!
-
-    func testManagerUsesAndCachesTheAccountIdentifier() {
+    func testManagerUsesAndCachesTheAccountIdentifier() async throws {
         let identifier = UUID()
+        exerciseManagerCache(identifier: identifier)
+        try await WKWebsiteDataStore.remove(forIdentifier: identifier)
+    }
+
+    private func exerciseManagerCache(identifier: UUID) {
         let service = ServiceInstance(
             label: "Fixture account",
             url: "https://localhost:8443",
@@ -22,16 +24,52 @@ final class DataStoreManagerTests: XCTestCase {
 
         XCTAssertEqual(first.identifier, identifier)
         XCTAssertTrue(first === second, "one manager must reuse one store object for an account")
+        manager.evict(identifier: identifier)
     }
 
     func testSameOriginAccountsStaySeparateAfterManagerRecreation() async throws {
+        let accountAIdentifier = UUID()
+        let accountBIdentifier = UUID()
+
+        let exerciseResult: Result<Void, Error>
+        do {
+            try await exerciseAccountIsolation(
+                accountAIdentifier: accountAIdentifier,
+                accountBIdentifier: accountBIdentifier
+            )
+            exerciseResult = .success(())
+        } catch {
+            exerciseResult = .failure(error)
+        }
+
+        var cleanupError: Error?
+        do {
+            try await WKWebsiteDataStore.remove(forIdentifier: accountAIdentifier)
+        } catch {
+            cleanupError = error
+        }
+        do {
+            try await WKWebsiteDataStore.remove(forIdentifier: accountBIdentifier)
+        } catch {
+            cleanupError = cleanupError ?? error
+        }
+        try exerciseResult.get()
+        if let cleanupError {
+            throw cleanupError
+        }
+    }
+
+    private func exerciseAccountIsolation(
+        accountAIdentifier: UUID,
+        accountBIdentifier: UUID
+    ) async throws {
         let cookieName = "atoll-isolation-\(UUID().uuidString)"
         let accountAValue = "account-a"
         let accountBValue = "account-b"
 
         let firstManager = DataStoreManager()
-        let firstAccountA = firstManager.dataStore(forIdentifier: Self.accountAIdentifier)
-        let firstAccountB = firstManager.dataStore(forIdentifier: Self.accountBIdentifier)
+        let firstAccountA = firstManager.dataStore(forIdentifier: accountAIdentifier)
+        let firstAccountB = firstManager.dataStore(forIdentifier: accountBIdentifier)
 
         let accountACookie = try XCTUnwrap(Self.markerCookie(name: cookieName, value: accountAValue))
         let accountBCookie = try XCTUnwrap(Self.markerCookie(name: cookieName, value: accountBValue))
@@ -45,11 +83,11 @@ final class DataStoreManagerTests: XCTestCase {
 
         // A new manager models the application rebuilding its service graph after launch.
         let relaunchedManager = DataStoreManager()
-        let relaunchedAccountA = relaunchedManager.dataStore(forIdentifier: Self.accountAIdentifier)
-        let relaunchedAccountB = relaunchedManager.dataStore(forIdentifier: Self.accountBIdentifier)
+        let relaunchedAccountA = relaunchedManager.dataStore(forIdentifier: accountAIdentifier)
+        let relaunchedAccountB = relaunchedManager.dataStore(forIdentifier: accountBIdentifier)
 
-        XCTAssertEqual(relaunchedAccountA.identifier, Self.accountAIdentifier)
-        XCTAssertEqual(relaunchedAccountB.identifier, Self.accountBIdentifier)
+        XCTAssertEqual(relaunchedAccountA.identifier, accountAIdentifier)
+        XCTAssertEqual(relaunchedAccountB.identifier, accountBIdentifier)
         let relaunchedAccountAMarker = await markerValue(named: cookieName, in: relaunchedAccountA)
         let relaunchedAccountBMarker = await markerValue(named: cookieName, in: relaunchedAccountB)
         XCTAssertEqual(relaunchedAccountAMarker, accountAValue)
@@ -66,6 +104,10 @@ final class DataStoreManagerTests: XCTestCase {
         )
 
         await deleteCookie(accountBCookie, from: relaunchedAccountB.httpCookieStore)
+        firstManager.evict(identifier: accountAIdentifier)
+        firstManager.evict(identifier: accountBIdentifier)
+        relaunchedManager.evict(identifier: accountAIdentifier)
+        relaunchedManager.evict(identifier: accountBIdentifier)
     }
 
     private static func markerCookie(name: String, value: String) -> HTTPCookie? {

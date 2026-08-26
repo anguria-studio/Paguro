@@ -1,12 +1,10 @@
 import XCTest
 import AppKit
-import SwiftData
-import SQLite3
 import JavaScriptCore
 import WebKit
 @testable import Atoll
 
-extension AtollTests {
+final class WebRuntimeTests: XCTestCase {
     // MARK: - WebContent crash backoff
 
     func testCrashBackoffStopsAfterRepeatedCrashes() {
@@ -176,6 +174,7 @@ extension AtollTests {
 
     // MARK: - EmojiPickerView.emojiToPromote
 
+    @MainActor
     func testEmojiToPromotePromotesEmojiFromSearchField() {
         // A single emoji picked from the system Character Viewer lands as the
         // selection rather than a search query.
@@ -191,6 +190,7 @@ extension AtollTests {
         XCTAssertEqual(EmojiPickerView.emojiToPromote(from: "😀😃"), "😃")
     }
 
+    @MainActor
     func testEmojiToPromoteLeavesKeywordSearchesAlone() {
         // Ordinary text must keep filtering the grid, not get promoted.
         XCTAssertNil(EmojiPickerView.emojiToPromote(from: "smile"))
@@ -281,6 +281,7 @@ extension AtollTests {
         XCTAssertFalse(off.staysActiveInBackgroundEffective)
     }
 
+    @MainActor
     func testFocusOverrideScriptFakesFocusAndSwallowsBlur() {
         let script = UserScriptManager.makeFocusOverrideScript()
         // hasFocus() must report true so a presence check reads active. It's
@@ -308,12 +309,12 @@ extension AtollTests {
         XCTAssertNil(catalog.entry(for: "gmail")?.presenceSensitive)
     }
 
-    func testCatalogEntryDecodesWithoutPresenceKey() {
+    func testCatalogEntryDecodesWithoutPresenceKey() throws {
         // Entries predating the key must still decode, with presenceSensitive nil.
         let json = """
         [{"id":"x","name":"X","url":"https://x.test","icon":"x","category":"Other","badgeJS":null,"userAgent":null,"description":"d"}]
-        """.data(using: .utf8)!
-        let entries = try! JSONDecoder().decode([ServiceCatalogEntry].self, from: json)
+        """
+        let entries = try JSONDecoder().decode([ServiceCatalogEntry].self, from: Data(json.utf8))
         XCTAssertNil(entries[0].presenceSensitive)
     }
 
@@ -899,6 +900,7 @@ extension AtollTests {
         )
     }
 
+    @MainActor
     func testNativeWebAppearanceDrivesPrefersColorScheme() async throws {
         let html = """
         <html><body><div role="main">ready</div></body></html>
@@ -1051,6 +1053,7 @@ extension AtollTests {
     /// Waits for the fixture's own markup, not `document.readyState` — the initial
     /// empty document reads "complete" before `loadHTMLString` has replaced it, so
     /// polling readyState races through and every query comes back empty.
+    @MainActor
     func waitForFixture(_ webView: WKWebView) async throws {
         for _ in 0..<100 {
             let mains = try? await webView.evaluateJavaScript("document.querySelectorAll('div[role=main]').length") as? Int
@@ -1060,6 +1063,7 @@ extension AtollTests {
         XCTFail("Fake Gmail page never finished loading")
     }
 
+    @MainActor
     func testGmailBadgeInRealWebViewIgnoresCachedRowsFromOtherLabels() async throws {
         // The JSC tests above check the expression's logic; this one runs it
         // through the real path — WebKit's engine, the catalog string, and
@@ -1082,6 +1086,7 @@ extension AtollTests {
         XCTAssertEqual(badgeManager.badgeCount(for: serviceID), 2, "the badge should report the inbox's 2, not the page's 101")
     }
 
+    @MainActor
     func testGmailBadgeInRealWebViewWorksInAZeroFrameWebView() async throws {
         // The offscreen badge fetcher builds its web view with a .zero frame, where
         // layout-dependent reads like offsetParent can't be trusted. The nav-label

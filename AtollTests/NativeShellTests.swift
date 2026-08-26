@@ -1,12 +1,8 @@
 import XCTest
-import AppKit
 import SwiftData
-import SQLite3
-import JavaScriptCore
-import WebKit
 @testable import Atoll
 
-extension AtollTests {
+final class NativeShellTests: XCTestCase {
     // MARK: - Notice shape, radius scale, selection against focus (build step 7)
 
     /// Eight radii down to three. The point of the scale is that there is
@@ -343,29 +339,9 @@ extension AtollTests {
 
     // MARK: - Notification grouping by space
 
-    /// A fresh in-memory store. `NotificationGrouping.grouped` now skips links
-    /// whose service has no `modelContext` (a dangling or never-inserted model),
-    /// so these tests must use live, inserted models rather than detached ones.
-    /// Returns the container — the caller must hold it for the test's duration;
-    /// using only its `mainContext` after the container deallocates crashes.
-    func makeGroupingContainer() throws -> ModelContainer {
-        try ModelContainer(
-            for: Space.self, ServiceInstance.self, SpaceServiceLink.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-    }
-
-    /// Links an already-inserted service to an already-inserted space by
-    /// inserting a join row; SwiftData maintains both relationship sides.
-    @discardableResult
-    func link(_ service: ServiceInstance, to space: Space, sortOrder: Int, in ctx: ModelContext) -> SpaceServiceLink {
-        let link = SpaceServiceLink(sortOrder: sortOrder, space: space, service: service)
-        ctx.insert(link)
-        return link
-    }
-
+    @MainActor
     func testNotificationGroupingIsFlatAndHeaderlessWhenNoSpacesHaveMembers() throws {
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let ctx = container.mainContext
         let a = ServiceInstance(label: "Zulip", url: "https://z.example")
         let b = ServiceInstance(label: "Asana", url: "https://a.example")
@@ -383,8 +359,9 @@ extension AtollTests {
         XCTAssertEqual(result.groups[0].services.map(\.label), ["Asana", "Zulip"])
     }
 
+    @MainActor
     func testNotificationGroupingFollowsSpaceOrderThenLinkOrder() throws {
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let ctx = container.mainContext
         let work = Space(name: "Work", emoji: "🏢", sortOrder: 0)
         let play = Space(name: "Play", emoji: "🎮", sortOrder: 1)
@@ -394,9 +371,9 @@ extension AtollTests {
         [work, play].forEach(ctx.insert)
         [slack, gmail, discord].forEach(ctx.insert)
         // Add gmail first but at a higher sortOrder to prove link order wins.
-        link(gmail, to: work, sortOrder: 1, in: ctx)
-        link(slack, to: work, sortOrder: 0, in: ctx)
-        link(discord, to: play, sortOrder: 0, in: ctx)
+        ModelFixtures.link(gmail, to: work, sortOrder: 1, in: ctx)
+        ModelFixtures.link(slack, to: work, sortOrder: 0, in: ctx)
+        ModelFixtures.link(discord, to: play, sortOrder: 0, in: ctx)
         try ctx.save()
 
         let result = NotificationGrouping.grouped(spaces: [work, play], services: [slack, gmail, discord])
@@ -407,8 +384,9 @@ extension AtollTests {
         XCTAssertEqual(result.groups[1].services.map(\.label), ["Discord"])
     }
 
+    @MainActor
     func testNotificationGroupingPutsUngroupedServicesInTrailingBucket() throws {
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let ctx = container.mainContext
         let work = Space(name: "Work", emoji: "🏢", sortOrder: 0)
         let slack = ServiceInstance(label: "Slack", url: "https://s.example")
@@ -416,7 +394,7 @@ extension AtollTests {
         let loose1 = ServiceInstance(label: "Figma", url: "https://f.example")
         ctx.insert(work)
         [slack, loose2, loose1].forEach(ctx.insert)
-        link(slack, to: work, sortOrder: 0, in: ctx)
+        ModelFixtures.link(slack, to: work, sortOrder: 0, in: ctx)
         try ctx.save()
 
         let result = NotificationGrouping.grouped(spaces: [work], services: [slack, loose2, loose1])
@@ -428,15 +406,16 @@ extension AtollTests {
         XCTAssertEqual(result.groups[1].services.map(\.label), ["Figma", "Notion"])
     }
 
+    @MainActor
     func testNotificationGroupingSkipsSpacesWithNoServices() throws {
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let ctx = container.mainContext
         let full = Space(name: "Full", emoji: "📥", sortOrder: 0)
         let empty = Space(name: "Empty", emoji: "📭", sortOrder: 1)
         let slack = ServiceInstance(label: "Slack", url: "https://s.example")
         [full, empty].forEach(ctx.insert)
         ctx.insert(slack)
-        link(slack, to: full, sortOrder: 0, in: ctx)
+        ModelFixtures.link(slack, to: full, sortOrder: 0, in: ctx)
         try ctx.save()
 
         let result = NotificationGrouping.grouped(spaces: [full, empty], services: [slack])
@@ -444,16 +423,17 @@ extension AtollTests {
         XCTAssertEqual(result.groups.map { $0.space?.name }, ["Full"])
     }
 
+    @MainActor
     func testNotificationGroupingRepeatsServiceInEachSpace() throws {
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let ctx = container.mainContext
         let home = Space(name: "Home", emoji: "🏠", sortOrder: 0)
         let design = Space(name: "Design", emoji: "🎨", sortOrder: 1)
         let slack = ServiceInstance(label: "Slack", url: "https://s.example")
         [home, design].forEach(ctx.insert)
         ctx.insert(slack)
-        link(slack, to: home, sortOrder: 0, in: ctx)
-        link(slack, to: design, sortOrder: 0, in: ctx)
+        ModelFixtures.link(slack, to: home, sortOrder: 0, in: ctx)
+        ModelFixtures.link(slack, to: design, sortOrder: 0, in: ctx)
         try ctx.save()
 
         let result = NotificationGrouping.grouped(spaces: [home, design], services: [slack])
@@ -470,15 +450,16 @@ extension AtollTests {
     /// Exercises the dangling-link guard: a link whose service has no
     /// `modelContext` (a deleted or never-inserted model — the crash class the
     /// guard exists for) must be skipped, not grouped or trapped on.
+    @MainActor
     func testNotificationGroupingSkipsLinkWhoseServiceIsDetached() throws {
         // A live space with a real, inserted, linked service.
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let ctx = container.mainContext
         let live = Space(name: "Live", emoji: "✅", sortOrder: 0)
         let alpha = ServiceInstance(label: "Alpha", url: "https://a.example")
         ctx.insert(live)
         ctx.insert(alpha)
-        link(alpha, to: live, sortOrder: 0, in: ctx)
+        ModelFixtures.link(alpha, to: live, sortOrder: 0, in: ctx)
         try ctx.save()
 
         // A detached space whose link points at a never-inserted service — the
@@ -536,6 +517,7 @@ extension AtollTests {
     /// against a real in-memory store: repointing a link's `space` relocates the
     /// service between spaces (the source space loses it, the target gains it at
     /// the tail) and never leaves the service with zero or duplicate links.
+    @MainActor
     func testMoveServiceRelocatesLinkBetweenSpacesAtTail() throws {
         let container = try ModelContainer(
             for: Space.self, ServiceInstance.self, SpaceServiceLink.self,
@@ -680,6 +662,7 @@ extension AtollTests {
         XCTAssertTrue(foreign.message.hasPrefix("messenger.com, opened by Messenger"))
     }
 
+    @MainActor
     func testForeignCaptureOutcomeGrantsSilentlyOnlyForFirstPartyAllow() {
         // A first-party vendor pinned to Allow, calling from a foreign MAIN-frame
         // origin (Messenger: facebook.com → messenger.com): silent grant, the
@@ -728,6 +711,7 @@ extension AtollTests {
         XCTAssertNotEqual(firstParty("slack"), true)
     }
 
+    @MainActor
     func testShouldBustCachesOnlyAfterAVersionChange() {
         // Fresh install (no previous version) — nothing stale to bust.
         XCTAssertFalse(AppState.shouldBustCachesOnLaunch(previousVersion: nil, currentVersion: "1.5.3"))

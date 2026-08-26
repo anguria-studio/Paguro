@@ -1,12 +1,8 @@
 import XCTest
 import AppKit
-import SwiftData
-import SQLite3
-import JavaScriptCore
-import WebKit
 @testable import Atoll
 
-extension AtollTests {
+final class ServiceAndIconTests: XCTestCase {
     func testServiceInstanceCreation() {
         let service = ServiceInstance(
             label: "Test Gmail",
@@ -27,14 +23,15 @@ extension AtollTests {
         XCTAssertTrue(space.serviceLinks.isEmpty)
     }
 
+    @MainActor
     func testWorkspaceMuteCascadesToItsServices() throws {
-        let container = try makeGroupingContainer()
+        let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext
         let space = Space(name: "Work", emoji: "🏢")
         let service = ServiceInstance(label: "Slack", url: "https://app.slack.com")
         context.insert(space)
         context.insert(service)
-        link(service, to: space, sortOrder: 0, in: context)
+        ModelFixtures.link(service, to: space, sortOrder: 0, in: context)
         try context.save()
 
         XCTAssertFalse(service.isEffectivelyMuted)
@@ -44,12 +41,12 @@ extension AtollTests {
         XCTAssertFalse(service.isEffectivelyMuted)
     }
 
-    func testServiceCatalogParsing() {
+    func testServiceCatalogParsing() throws {
         let json = """
         [{"id":"gmail","name":"Gmail","url":"https://mail.google.com","icon":"gmail-icon","category":"Email","badgeJS":null,"userAgent":null,"description":"Google email"}]
-        """.data(using: .utf8)!
+        """
 
-        let entries = try! JSONDecoder().decode([ServiceCatalogEntry].self, from: json)
+        let entries = try JSONDecoder().decode([ServiceCatalogEntry].self, from: Data(json.utf8))
         XCTAssertEqual(entries.count, 1)
         XCTAssertEqual(entries[0].id, "gmail")
         XCTAssertEqual(entries[0].category, "Email")
@@ -62,6 +59,7 @@ extension AtollTests {
         XCTAssertEqual(NotificationManager.extractBadgeCount(from: "No badges here"), 0)
     }
 
+    @MainActor
     func testCustomServiceInputValidation() {
         XCTAssertEqual(
             AddServiceSheet.validatedCustomServiceInput(label: "  Docs  ", url: " HTTPS://example.com/app "),
@@ -137,6 +135,7 @@ extension AtollTests {
         )
     }
 
+    @MainActor
     func testServiceIconImageProcessorNormalizesAndLimitsDimensions() throws {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -160,6 +159,7 @@ extension AtollTests {
         XCTAssertEqual(result.pixelsHigh, 128)
     }
 
+    @MainActor
     func testServiceIconImageProcessorRejectsUnsafeInput() {
         XCTAssertThrowsError(
             try ServiceIconImageProcessor.normalizedPNG(from: Data([0, 1, 2, 3]))

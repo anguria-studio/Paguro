@@ -1,12 +1,14 @@
 import XCTest
-import AppKit
+import Foundation
 import SwiftData
 import SQLite3
-import JavaScriptCore
-import WebKit
 @testable import Atoll
 
-extension AtollTests {
+final class StoreRecoveryTests: XCTestCase {
+    static var storeSchema: Schema {
+        ModelFixtures.storeSchema
+    }
+
     // MARK: - Store pre-migration snapshots
 
     /// Makes a throwaway directory holding a fake `default.store` triple and
@@ -203,6 +205,7 @@ extension AtollTests {
     /// current shape through the plan, and assert every row and field survives —
     /// with the fields added after 1.5.11 defaulting correctly. Proves the stage
     /// mapping is lossless (not that the field race is gone — see the plan).
+    @MainActor
     func testMigratesFrom1_5_11PreservingAllData() throws {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "atoll-migr-\(UUID().uuidString)")
@@ -300,6 +303,7 @@ extension AtollTests {
     /// The second stage (1.5.12 → current). A 1.5.12 store already has
     /// `stayActiveInBackground`; it must survive, and only the hibernation fields
     /// should arrive as nil.
+    @MainActor
     func testMigratesFrom1_5_12PreservingAllData() throws {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "atoll-migr-\(UUID().uuidString)")
@@ -342,6 +346,7 @@ extension AtollTests {
     /// (which would strand every existing user in the in-memory fallback). Locks
     /// in CI what the local real-snapshot check proved by hand. (macOS 14.0 still
     /// needs its own device pass — the migration race is OS-specific.)
+    @MainActor
     func testMigratesFromPlainSchemaProductionStore() throws {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "atoll-migr-\(UUID().uuidString)")
@@ -427,6 +432,7 @@ extension AtollTests {
     /// The fingerprint must recognize a store built from the seed lists the
     /// seeder uses. If someone edits one seed list and not the fingerprint, this
     /// goes red.
+    @MainActor
     func testSeededStoreIsFingerprintedAsSeed() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-seedprint-\(UUID().uuidString)", isDirectory: true)
@@ -466,6 +472,7 @@ extension AtollTests {
     /// Reading a store file must report its real counts and return nil
     /// (unknown) rather than zero for anything it cannot read. WAL visibility
     /// is covered separately, by `testReadContentSeesCommittedRowsStillInTheWAL`.
+    @MainActor
     func testReadContentCountsRowsAndDistinguishesUnknown() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-readcontent-\(UUID().uuidString)", isDirectory: true)
@@ -473,7 +480,7 @@ extension AtollTests {
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         let content = try XCTUnwrap(StoreInventory.readContent(at: storeURL))
         XCTAssertEqual(content.spaces, 3)
         XCTAssertEqual(content.services, 0, "makePopulatedStore inserts spaces only")
@@ -489,7 +496,7 @@ extension AtollTests {
 
         // A database with an unrecognized schema is unknown, never zero.
         let alien = dir.appendingPathComponent("alien.sqlite")
-        _ = try Self.runSQLite(alien, "CREATE TABLE ZOTHER (x INTEGER);")
+        _ = try SQLiteHelpers.run(alien, "CREATE TABLE ZOTHER (x INTEGER);")
         XCTAssertNil(StoreInventory.readContent(at: alien))
     }
 
@@ -509,6 +516,7 @@ extension AtollTests {
     /// fallback (which only applies when no `-wal` sibling exists) must not
     /// engage here; if `readContent` ever used `immutable=1` while a `-wal`
     /// with real rows is present, this goes red.
+    @MainActor
     func testReadContentSeesCommittedRowsStillInTheWAL() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-wal-\(UUID().uuidString)", isDirectory: true)
@@ -516,7 +524,7 @@ extension AtollTests {
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
 
         // A second, writable connection, held open for the rest of the test.
         // The last connection to close is what triggers SQLite's
@@ -576,6 +584,7 @@ extension AtollTests {
 
     /// Enumeration must find all four backup families plus the live store,
     /// parse stamps, and mark an unreadable file as unknown rather than empty.
+    @MainActor
     func testCandidateEnumerationCoversAllBackupFamilies() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-inventory-\(UUID().uuidString)", isDirectory: true)
@@ -586,19 +595,19 @@ extension AtollTests {
         // Live store with 1 space; a 4-space snapshot; a 2-space prerestore; a
         // 3-space corrupt-family backup; a 5-space prepick-family backup (the
         // aside `applyPendingRestore` writes); and one unreadable snapshot.
-        try makePopulatedStore(at: storeURL, spaces: 4)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 4)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.5.11+20")
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 2)
-        try Self.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.prerestore-1700000500.bak"))
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 3)
-        try Self.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.corrupt-1700000600.bak"))
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 5)
-        try Self.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.prepick-1700000700.bak"))
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 1)
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 2)
+        try ModelFixtures.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.prerestore-1700000500.bak"))
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 3)
+        try ModelFixtures.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.corrupt-1700000600.bak"))
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 5)
+        try ModelFixtures.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.prepick-1700000700.bak"))
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 1)
         try "not a database".write(
             to: dir.appendingPathComponent("store.sqlite.snapshot-1700000900-1.5.12+21.bak"),
             atomically: true,
@@ -632,6 +641,7 @@ extension AtollTests {
     /// backup — damaged by definition, so it can never be preselected — must
     /// never sort above a `.snapshot-` holding more content just because
     /// ".corrupt-" sorts before ".snapshot-" lexically.
+    @MainActor
     func testCandidatesOrdersBackupsByCompletenessNotFilename() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-order-\(UUID().uuidString)", isDirectory: true)
@@ -642,11 +652,11 @@ extension AtollTests {
         // A fuller snapshot (5 spaces) and a thinner corrupt-family backup (1
         // space). Alphabetically ".corrupt-" < ".snapshot-", so a filename sort
         // would put the corrupt one first; completeness must not.
-        try makePopulatedStore(at: storeURL, spaces: 5)
-        try Self.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.snapshot-1700000000-1.5.11+20.bak"))
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 1)
-        try Self.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.corrupt-1700000600.bak"))
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 5)
+        try ModelFixtures.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.snapshot-1700000000-1.5.11+20.bak"))
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 1)
+        try ModelFixtures.copyStoreTriple(from: storeURL, to: dir.appendingPathComponent("store.sqlite.corrupt-1700000600.bak"))
 
         let live = try XCTUnwrap(StoreInventory.readContent(at: storeURL))
         let found = StoreInventory.candidates(for: storeURL, liveContent: live)
@@ -670,6 +680,7 @@ extension AtollTests {
     /// this task found, reachable in production through both readers that
     /// share `StoreInventory.openReadOnly`. Regression guard: this must fail
     /// if the fallback is removed.
+    @MainActor
     func testMainFileOnlyWALBackupIsReadableThroughBothReaders() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-walonly-\(UUID().uuidString)", isDirectory: true)
@@ -677,7 +688,7 @@ extension AtollTests {
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         // Strip any `-wal`/`-shm` siblings explicitly, so the fixture is a
         // WAL-mode-headed main file with no siblings regardless of exactly
         // when SQLite's own checkpoint-on-close removed them.
@@ -994,6 +1005,7 @@ extension AtollTests {
     /// Applying a pending restore must copy the chosen backup into place, always
     /// set the current store aside first, and clear the key so a crash cannot
     /// leave it looping.
+    @MainActor
     func testApplyPendingRestoreCopiesAndAlwaysBacksUp() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-pending-\(UUID().uuidString)", isDirectory: true)
@@ -1004,10 +1016,10 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 4)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 4)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 1)
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 1)
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 1, "precondition: live store thinned out")
 
         defaults.set("store.sqlite.snapshot-1700000000-1.0.0.bak", forKey: StoreRepair.pendingRestoreKey)
@@ -1048,6 +1060,7 @@ extension AtollTests {
     /// the old main file while leaving that foreign `-wal` in place — and
     /// SQLite does not bind a WAL to a specific database, so the next open
     /// would replay those frames onto the wrong store.
+    @MainActor
     func testApplyPendingRestoreRevertsWithoutLeavingAForeignWAL() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-revert-\(UUID().uuidString)", isDirectory: true)
@@ -1060,7 +1073,7 @@ extension AtollTests {
 
         // The live store, in the normal post-clean-shutdown shape: real data,
         // no `-wal`/`-shm` siblings. This is what the aside copy will capture.
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
         }
@@ -1106,6 +1119,7 @@ extension AtollTests {
     /// no longer on disk. This must return false, clear the key so it can't
     /// loop, and leave the live store completely untouched — no aside copy, no
     /// partial write.
+    @MainActor
     func testApplyPendingRestoreMissingSourceLeavesStoreUntouched() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-missing-\(UUID().uuidString)", isDirectory: true)
@@ -1116,7 +1130,7 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         let before = try XCTUnwrap(StoreRepair.spaceCount(at: storeURL))
 
         // Validly named for this store, but never written to disk.
@@ -1179,6 +1193,7 @@ extension AtollTests {
     /// afterward — and it did, because it was untouched — so this reported
     /// success having changed nothing. `copyTriple`'s return value now catches
     /// this directly.
+    @MainActor
     func testApplyPendingRestoreReportsFailureWhenTheLiveFileResistsRemoval() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-uchg-\(UUID().uuidString)", isDirectory: true)
@@ -1201,7 +1216,7 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
         }
@@ -1246,6 +1261,7 @@ extension AtollTests {
     /// refused it on every launch forever, because the pending key is cleared
     /// before the file work: the user picks a backup, the app restarts, nothing
     /// happens, and there is nothing left to retry.
+    @MainActor
     func testApplyPendingRestoreWorksWhenTheLiveStoreCannotBeRead() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-unreadable-live-\(UUID().uuidString)", isDirectory: true)
@@ -1256,7 +1272,7 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
         }
@@ -1309,6 +1325,7 @@ extension AtollTests {
     /// this test green. The discriminating case is
     /// `testApplyPendingRestoreRefusesWhenOnlyTheAsidesWALFailsToCopy` below,
     /// where the directory stays writable and only the aside is incomplete.
+    @MainActor
     func testApplyPendingRestoreRefusesWhenTheAsideCannotBeWritten() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-aside-fail-\(UUID().uuidString)", isDirectory: true)
@@ -1324,11 +1341,11 @@ extension AtollTests {
 
         // A 2-space backup and a 1-space live store, so a restore that wrongly
         // went ahead would be visible in the count afterward.
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         StoreRepair.snapshot(at: storeURL, stamp: "1700004000-1.0.0")
         let snapshotName = "store.sqlite.snapshot-1700004000-1.0.0.bak"
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 1)
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 1)
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
         }
@@ -1371,6 +1388,7 @@ extension AtollTests {
     /// committed-but-uncheckpointed rows the live `-wal` holds, a readability
     /// check waves it through, and the apply then deletes that `-wal` -- real
     /// data loss, of exactly the kind the finding was about.
+    @MainActor
     func testApplyPendingRestoreRefusesWhenOnlyTheAsidesWALFailsToCopy() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-aside-partial-\(UUID().uuidString)", isDirectory: true)
@@ -1385,11 +1403,11 @@ extension AtollTests {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: storeURL, spaces: 2)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         StoreRepair.snapshot(at: storeURL, stamp: "1700005000-1.0.0")
         let snapshotName = "store.sqlite.snapshot-1700005000-1.0.0.bak"
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
-        try Self.insertSpaces(storeURL, count: 1)
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
+        try ModelFixtures.insertSpaces(storeURL, count: 1)
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
         }
@@ -1438,6 +1456,7 @@ extension AtollTests {
     /// End to end through AppState's own helpers: a store thinned out below its
     /// record, with a fuller backup present, must produce an offer whose
     /// preselected candidate is that backup.
+    @MainActor
     func testEvaluateStoreRecoveryOffersTheFullestBackup() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("atoll-evaluate-\(UUID().uuidString)", isDirectory: true)
@@ -1445,9 +1464,9 @@ extension AtollTests {
         let storeURL = dir.appendingPathComponent("store.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try makePopulatedStore(at: storeURL, spaces: 4)
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 4)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.5.11+20")
-        _ = try Self.runSQLite(storeURL, "DELETE FROM ZSPACE;")
+        _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
 
         let live = StoreInventory.readContent(at: storeURL)
         let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
@@ -1472,6 +1491,7 @@ extension AtollTests {
     /// the offer-outstanding and restore-scheduled guards stop it from being
     /// recorded over while an offer (or an already-accepted pick) about that
     /// very loss is still live.
+    @MainActor
     func testShouldRecordContentGuardsNilEmptyFallbackOutstandingOfferAndScheduledRestore() {
         let partialLoss = StoreContent(spaces: 0, services: 5, links: 5, spaceNames: [], serviceLabels: [])
         let empty = StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
@@ -1778,35 +1798,23 @@ extension AtollTests {
 
     // MARK: - Moving the store out of the shared default path
 
-    /// A scratch pair of folders standing in for `Application Support` and the
-    /// `Atoll` folder inside it.
-    func makeRelocationDirs(_ label: String) throws -> (support: URL, legacy: URL, scoped: URL) {
-        let support = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("atoll-\(label)-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-        return (
-            support,
-            support.appendingPathComponent("default.store"),
-            support.appendingPathComponent("Atoll").appendingPathComponent("default.store")
-        )
-    }
-
     /// Stands in for the store another app leaves at the shared path. Modelled
     /// on the real thing: Bartender 6's store has one entity, `WidgetSettings`,
     /// and none of Atoll's tables.
     static func makeForeignStore(at url: URL) throws {
-        _ = try runSQLite(url, """
+        _ = try SQLiteHelpers.run(url, """
             CREATE TABLE ZWIDGETSETTINGS (Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, ZTITLE VARCHAR);
             """)
     }
 
     /// The ordinary upgrade: Atoll's own store and its backups move into the
     /// app's folder, and the old path is left clean.
+    @MainActor
     func testRelocationMovesOurStoreAndItsBackupsIntoTheAppsFolder() throws {
-        let (support, legacy, scoped) = try makeRelocationDirs("relocate-ours")
+        let (support, legacy, scoped) = try StoreSandbox.relocationDirectories(label: "relocate-ours")
         defer { try? FileManager.default.removeItem(at: support) }
 
-        try makePopulatedStore(at: legacy, spaces: 3)
+        try ModelFixtures.makePopulatedStore(at: legacy, spaces: 3)
         StoreRepair.snapshot(at: legacy, stamp: "1700000000-1.0.0")
 
         XCTAssertEqual(StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped), scoped)
@@ -1826,13 +1834,14 @@ extension AtollTests {
     /// sitting at the shared path. It must be left exactly where it is —
     /// moving or migrating it would destroy that app's data the same way it
     /// destroyed Atoll's — while Atoll's own backups still come along.
+    @MainActor
     func testRelocationLeavesAnotherAppsStoreAloneAndTakesOnlyTheBackups() throws {
-        let (support, legacy, scoped) = try makeRelocationDirs("relocate-foreign")
+        let (support, legacy, scoped) = try StoreSandbox.relocationDirectories(label: "relocate-foreign")
         defer { try? FileManager.default.removeItem(at: support) }
 
         // Build a Atoll store, snapshot it, then replace the live file with a
         // foreign one — precisely what the collision leaves on disk.
-        try makePopulatedStore(at: legacy, spaces: 4)
+        try ModelFixtures.makePopulatedStore(at: legacy, spaces: 4)
         StoreRepair.snapshot(at: legacy, stamp: "1700000000-1.0.0")
         for suffix in ["", "-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: legacy.path + suffix))
@@ -1842,7 +1851,7 @@ extension AtollTests {
         XCTAssertEqual(StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped), scoped)
         XCTAssertTrue(FileManager.default.fileExists(atPath: legacy.path), "the other app's store must be left in place")
         XCTAssertEqual(
-            try Self.runSQLite(legacy, "SELECT count(*) FROM sqlite_master WHERE name = 'ZWIDGETSETTINGS';")
+            try SQLiteHelpers.run(legacy, "SELECT count(*) FROM sqlite_master WHERE name = 'ZWIDGETSETTINGS';")
                 .trimmingCharacters(in: .whitespacesAndNewlines),
             "1",
             "the other app's schema must be untouched"
@@ -1858,14 +1867,15 @@ extension AtollTests {
     /// foreign store, then open. The user has had data, there is no live store
     /// at the new path, and the snapshot that moved with it must be restored
     /// rather than seeded over.
+    @MainActor
     func testRelocatingPastAForeignStoreThenOpeningRestoresTheUsersData() throws {
-        let (support, legacy, scoped) = try makeRelocationDirs("relocate-recover")
+        let (support, legacy, scoped) = try StoreSandbox.relocationDirectories(label: "relocate-recover")
         defer { try? FileManager.default.removeItem(at: support) }
         let suite = "atoll-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        try makePopulatedStore(at: legacy, spaces: 4)
+        try ModelFixtures.makePopulatedStore(at: legacy, spaces: 4)
         StoreRepair.snapshot(at: legacy, stamp: "1700000000-1.0.0")
         for suffix in ["", "-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: legacy.path + suffix))
@@ -1889,13 +1899,14 @@ extension AtollTests {
     /// Once moved, the old path is never read again. An older build of Atoll
     /// run in between could leave a store there, and importing it would
     /// overwrite newer data with older.
+    @MainActor
     func testRelocationIgnoresTheOldPathOnceTheAppsFolderHasAStore() throws {
-        let (support, legacy, scoped) = try makeRelocationDirs("relocate-idempotent")
+        let (support, legacy, scoped) = try StoreSandbox.relocationDirectories(label: "relocate-idempotent")
         defer { try? FileManager.default.removeItem(at: support) }
 
         try FileManager.default.createDirectory(at: scoped.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try makePopulatedStore(at: scoped, spaces: 1)
-        try makePopulatedStore(at: legacy, spaces: 9)
+        try ModelFixtures.makePopulatedStore(at: scoped, spaces: 1)
+        try ModelFixtures.makePopulatedStore(at: legacy, spaces: 9)
 
         XCTAssertEqual(StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped), scoped)
         XCTAssertEqual(StoreRepair.spaceCount(at: scoped), 1, "the store already in place must win")

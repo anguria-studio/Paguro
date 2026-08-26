@@ -1,12 +1,10 @@
 import XCTest
 import AppKit
-import SwiftData
-import SQLite3
 import JavaScriptCore
 import WebKit
 @testable import Atoll
 
-extension AtollTests {
+final class NotificationBridgeTests: XCTestCase {
     // MARK: - The notification interception script
 
     /// Pulls the injected notification script out of a configured controller.
@@ -15,7 +13,7 @@ extension AtollTests {
         let manager = UserScriptManager()
         let controller = WKUserContentController()
         manager.installUserScripts(
-            for: makeService(label: "Slack", catalogID: "slack"),
+            for: ModelFixtures.service(label: "Slack", catalogID: "slack"),
             customCSS: nil,
             stayActiveInBackground: false,
             on: controller
@@ -29,6 +27,7 @@ extension AtollTests {
     /// The shim replaces `window.Notification`, so it has to keep the API it
     /// replaced: instances must still satisfy `instanceof`, and the statics the
     /// original carried must survive. The first version dropped both.
+    @MainActor
     func testNotificationShimKeepsPrototypeAndStatics() throws {
         let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
         var posted: [String] = []
@@ -71,6 +70,7 @@ extension AtollTests {
     /// The path that was not covered at all. Web apps raise notifications
     /// through the service worker registration rather than the constructor, so
     /// without this they never reached Atoll.
+    @MainActor
     func testNotificationShimForwardsServiceWorkerNotifications() throws {
         let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
         var posted: [String] = []
@@ -99,6 +99,7 @@ extension AtollTests {
 
     /// A page that has torn the bridge down must not take the site's own
     /// notification call with it.
+    @MainActor
     func testNotificationShimSurvivesAMissingBridge() throws {
         let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
         context.evaluateScript("""
@@ -132,7 +133,7 @@ extension AtollTests {
             bitsPerPixel: 0
         ))
         let iconData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-        let service = makeService(label: "Slack", catalogID: nil)
+        let service = ModelFixtures.service(label: "Slack", catalogID: nil)
         service.customIconData = iconData
         let iconURL = try XCTUnwrap(NotificationAttachmentStore.prepareServiceIcon(for: service))
 
@@ -160,7 +161,7 @@ extension AtollTests {
     /// A fresh install has nothing at either path, and must simply open in the
     /// app's folder without any of the move machinery running.
     func testRelocationOnAFreshInstallOpensInTheAppsFolder() throws {
-        let (support, legacy, scoped) = try makeRelocationDirs("relocate-fresh")
+        let (support, legacy, scoped) = try StoreSandbox.relocationDirectories(label: "relocate-fresh")
         defer { try? FileManager.default.removeItem(at: support) }
 
         XCTAssertEqual(StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped), scoped)

@@ -1,12 +1,7 @@
 import XCTest
-import AppKit
-import SwiftData
-import SQLite3
-import JavaScriptCore
-import WebKit
 @testable import Atoll
 
-extension AtollTests {
+final class NotificationPolicyTests: XCTestCase {
     // MARK: - BadgeManager
 
     @MainActor
