@@ -1154,9 +1154,8 @@ final class StoreRecoveryTests: XCTestCase {
         )
     }
 
-    /// End to end through AppState's own helpers: a store thinned out below its
-    /// record, with a fuller backup present, must produce an offer whose
-    /// preselected candidate is that backup.
+    /// A store thinned below its record, with a fuller backup present, must
+    /// produce an offer whose preselected candidate is that backup.
     @MainActor
     func testEvaluateStoreRecoveryOffersTheFullestBackup() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -1195,9 +1194,8 @@ final class StoreRecoveryTests: XCTestCase {
         )
     }
 
-    /// Pins the five independent guards `recordStoreContent` relies on, without
-    /// standing up a live `AppState` (the suite deliberately never constructs
-    /// one). A store that lost all its spaces but kept its services is the
+    /// Pins the five independent guards that protect content history. A store
+    /// that lost all its spaces but kept its services is the
     /// partial-loss shape that matters most here: it is not `isEmpty`, so only
     /// the offer-outstanding and restore-scheduled guards stop it from being
     /// recorded over while an offer (or an already-accepted pick) about that
@@ -1208,29 +1206,183 @@ final class StoreRecoveryTests: XCTestCase {
         let empty = StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
 
         XCTAssertFalse(
-            AppState.shouldRecordContent(nil, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: false),
+            StoreRecoveryCoordinator.shouldRecordContent(nil, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: false),
             "unreadable (nil) content is unknown, never recorded as if it were empty"
         )
         XCTAssertFalse(
-            AppState.shouldRecordContent(empty, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: false),
+            StoreRecoveryCoordinator.shouldRecordContent(empty, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: false),
             "an empty store must never overwrite the record"
         )
         XCTAssertFalse(
-            AppState.shouldRecordContent(partialLoss, offerOutstanding: true, isInMemoryFallback: false, restoreScheduled: false),
+            StoreRecoveryCoordinator.shouldRecordContent(partialLoss, offerOutstanding: true, isInMemoryFallback: false, restoreScheduled: false),
             "a partial-loss store with an offer still outstanding must not be recorded over"
         )
         XCTAssertTrue(
-            AppState.shouldRecordContent(partialLoss, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: false),
+            StoreRecoveryCoordinator.shouldRecordContent(partialLoss, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: false),
             "the same partial-loss store, once no offer is outstanding (including right after a decline), must record normally"
         )
         XCTAssertFalse(
-            AppState.shouldRecordContent(partialLoss, offerOutstanding: false, isInMemoryFallback: true, restoreScheduled: false),
+            StoreRecoveryCoordinator.shouldRecordContent(partialLoss, offerOutstanding: false, isInMemoryFallback: true, restoreScheduled: false),
             "the in-memory-fallback container is a throwaway; its content must never be recorded"
         )
         XCTAssertFalse(
-            AppState.shouldRecordContent(partialLoss, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: true),
-            "review Finding 3: a restore waiting to apply at the next launch must not have the store's about-to-change shape recorded over the evidence of loss"
+            StoreRecoveryCoordinator.shouldRecordContent(partialLoss, offerOutstanding: false, isInMemoryFallback: false, restoreScheduled: true),
+            "a restore waiting for the next launch must preserve the evidence of loss"
         )
+    }
+
+    @MainActor
+    func testCoordinatorMapsLaunchOutcomeToBannerAndCleanupSafety() throws {
+        let container = try makeRecoveryContainer()
+        let storeURL = URL(fileURLWithPath: "/tmp/atoll-recovery/default.store")
+
+        let clean = StoreRecoveryCoordinator(
+            context: container.mainContext,
+            storeURL: storeURL,
+            outcome: .openedClean,
+            wasDamagedAtLaunch: false
+        )
+        XCTAssertNil(clean.banner)
+        XCTAssertTrue(clean.isSafeToReclaim)
+
+        let damaged = StoreRecoveryCoordinator(
+            context: container.mainContext,
+            storeURL: storeURL,
+            outcome: .openedClean,
+            wasDamagedAtLaunch: true
+        )
+        XCTAssertFalse(damaged.isSafeToReclaim)
+
+        let restored = StoreRecoveryCoordinator(
+            context: container.mainContext,
+            storeURL: storeURL,
+            outcome: .restoredFromSnapshot(version: "1.0", takenAt: nil),
+            wasDamagedAtLaunch: false
+        )
+        XCTAssertEqual(restored.banner?.isDismissible, true)
+        XCTAssertFalse(restored.isSafeToReclaim)
+        restored.dismissBanner()
+        XCTAssertNil(restored.banner)
+
+        let fallback = StoreRecoveryCoordinator(
+            context: container.mainContext,
+            storeURL: storeURL,
+            outcome: .inMemoryFallback(reason: "test"),
+            wasDamagedAtLaunch: false
+        )
+        XCTAssertEqual(fallback.banner?.folderURL, storeURL.deletingLastPathComponent())
+        XCTAssertEqual(fallback.banner?.isDismissible, false)
+        XCTAssertFalse(fallback.isSafeToReclaim)
+        fallback.dismissBanner()
+        XCTAssertNotNil(fallback.banner, "an active temporary-storage warning must stay visible")
+    }
+
+    @MainActor
+    func testCoordinatorReadsTheStoreFileInsteadOfTemporaryContainerDuringFallback() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("atoll-coordinator-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("default.store")
+        try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 3)
+        StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0")
+        try SQLiteHelpers.run(
+            storeURL,
+            "DELETE FROM ZSPACE WHERE Z_PK NOT IN (SELECT Z_PK FROM ZSPACE LIMIT 1);"
+        )
+
+        let suite = "atoll-test-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(
+            StoreRecoveryPolicy.encodeRecord(StoreContent(
+                spaces: 3,
+                services: 0,
+                links: 0,
+                spaceNames: [],
+                serviceLabels: []
+            )),
+            forKey: StoreRecoveryCoordinator.contentRecordKey
+        )
+        let container = try makeRecoveryContainer()
+        let coordinator = StoreRecoveryCoordinator(
+            context: container.mainContext,
+            storeURL: storeURL,
+            outcome: .inMemoryFallback(reason: "test"),
+            wasDamagedAtLaunch: false,
+            defaults: defaults
+        )
+
+        coordinator.evaluateOffer()
+
+        let live = try XCTUnwrap(coordinator.candidates.first { $0.kind == .live })
+        XCTAssertEqual(live.content?.spaces, 1)
+        XCTAssertEqual(coordinator.offer, .belowRecord)
+        XCTAssertEqual(
+            StoreRecoveryPolicy.best(among: coordinator.candidates)?.content?.spaces,
+            3
+        )
+        XCTAssertNil(
+            coordinator.preselectedCandidate,
+            "a readable live store with user data must require an explicit choice"
+        )
+
+        coordinator.declineOffer()
+        XCTAssertNil(coordinator.offer)
+        XCTAssertEqual(
+            defaults.stringArray(forKey: StoreRecoveryCoordinator.declinedRestoresKey)?.count,
+            1
+        )
+        coordinator.evaluateOffer()
+        XCTAssertNil(coordinator.offer, "the same declined pairing must stay dismissed")
+    }
+
+    @MainActor
+    func testCoordinatorArmsAndQuitsOnceAfterValidRestoreChoice() throws {
+        let suite = "atoll-test-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = try makeRecoveryContainer()
+        let storeURL = URL(fileURLWithPath: "/tmp/atoll-recovery/default.store")
+        var armCount = 0
+        var quitCount = 0
+        let coordinator = StoreRecoveryCoordinator(
+            context: container.mainContext,
+            storeURL: storeURL,
+            outcome: .openedClean,
+            wasDamagedAtLaunch: false,
+            defaults: defaults,
+            armRelaunch: {
+                armCount += 1
+                return true
+            },
+            quit: { quitCount += 1 }
+        )
+        let name = "default.store.snapshot-1700000000-1.0.bak"
+        let candidate = StoreCandidate(
+            url: storeURL.deletingLastPathComponent().appendingPathComponent(name),
+            kind: .snapshot(version: "1.0"),
+            takenAt: nil,
+            content: StoreContent(
+                spaces: 2,
+                services: 3,
+                links: 3,
+                spaceNames: [],
+                serviceLabels: []
+            ),
+            isDamaged: false
+        )
+
+        XCTAssertTrue(coordinator.chooseRestore(candidate))
+        XCTAssertEqual(armCount, 1)
+        XCTAssertTrue(coordinator.isRestartArmed)
+        XCTAssertEqual(defaults.string(forKey: StoreRepair.pendingRestoreKey), name)
+
+        coordinator.quitForScheduledRestore()
+        coordinator.quitForScheduledRestore()
+
+        XCTAssertEqual(quitCount, 1)
+        XCTAssertFalse(coordinator.isRestartArmed)
     }
 
     /// The filename a choice writes must be one the launch path will accept.
@@ -1300,11 +1452,8 @@ final class StoreRecoveryTests: XCTestCase {
         )
     }
 
-    /// `scheduleRestore` is the guards-plus-write half of `chooseStoreRestore`,
-    /// hoisted out to a `nonisolated static` so it's testable without building
-    /// an `AppState` (the suite deliberately never does). A restorable
-    /// candidate whose filename belongs to this store must write exactly the
-    /// name the launch path (`StoreRepair.applyPendingRestore`) will look for.
+    /// A restorable candidate whose filename belongs to this store must write
+    /// exactly the name the launch path will look for.
     func testScheduleRestoreWritesValidNameForRestorableCandidate() {
         let suite = "atoll-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -1320,7 +1469,7 @@ final class StoreRecoveryTests: XCTestCase {
             isDamaged: false
         )
 
-        XCTAssertTrue(AppState.scheduleRestore(candidate, storeName: storeURL.lastPathComponent, defaults: defaults))
+        XCTAssertTrue(StoreRecoveryCoordinator.scheduleRestore(candidate, storeName: storeURL.lastPathComponent, defaults: defaults))
         XCTAssertEqual(
             defaults.string(forKey: StoreRepair.pendingRestoreKey),
             name,
@@ -1347,7 +1496,7 @@ final class StoreRecoveryTests: XCTestCase {
             isDamaged: true
         )
 
-        XCTAssertFalse(AppState.scheduleRestore(damagedCandidate, storeName: storeURL.lastPathComponent, defaults: defaults))
+        XCTAssertFalse(StoreRecoveryCoordinator.scheduleRestore(damagedCandidate, storeName: storeURL.lastPathComponent, defaults: defaults))
         XCTAssertNil(
             defaults.string(forKey: StoreRepair.pendingRestoreKey),
             "a damaged candidate must not schedule a restore"
@@ -1372,10 +1521,21 @@ final class StoreRecoveryTests: XCTestCase {
             isDamaged: false
         )
 
-        XCTAssertFalse(AppState.scheduleRestore(candidate, storeName: storeURL.lastPathComponent, defaults: defaults))
+        XCTAssertFalse(StoreRecoveryCoordinator.scheduleRestore(candidate, storeName: storeURL.lastPathComponent, defaults: defaults))
         XCTAssertNil(
             defaults.string(forKey: StoreRepair.pendingRestoreKey),
             "a filename that doesn't belong to this store must not schedule a restore"
+        )
+    }
+
+    @MainActor
+    private func makeRecoveryContainer() throws -> ModelContainer {
+        try ModelContainer(
+            for: ServiceInstance.self,
+            Space.self,
+            SpaceServiceLink.self,
+            AppPreferences.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
     }
 

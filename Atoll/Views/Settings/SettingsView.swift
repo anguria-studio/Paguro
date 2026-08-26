@@ -59,7 +59,7 @@ struct GeneralSettingsView: View {
     @Environment(AppModel.self) private var appModel
     // Settings is its own scene (`Settings { … }` in AtollApp), separate from
     // `Window("Atoll", id: "main")`. The recovery sheet is only attached to
-    // the main window, so setting `isShowingStoreRecovery` from here alone
+    // the main window, so setting the recovery picker state from here alone
     // would attach it behind Settings — or, if the user had closed the main
     // window (the MenuBarExtra keeps the app alive), attach it to nothing at
     // all, latching the flag `true` with no sheet visible. `openWindow(id:)`
@@ -258,7 +258,7 @@ struct GeneralSettingsView: View {
                     Button("Restore from a backup…") {
                         AppDelegate.prepareToShowWindow()
                         openWindow(id: "main")
-                        appState.isShowingStoreRecovery = true
+                        appState.storeRecovery.isShowingPicker = true
                     }
                 }
             }

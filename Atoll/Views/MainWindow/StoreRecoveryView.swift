@@ -17,14 +17,12 @@ struct StoreRecoveryView: View {
     /// entirely rather than relying on `.tag` being honored.
     @State private var selectionID: StoreCandidate.ID?
 
-    /// Shown when the restore could not be started. Amended in after Task 9's
-    /// review: `chooseStoreRestore` returns false if spawning the relaunch
-    /// fails, and dismissing the sheet on that path told the user their restore
-    /// had been applied when nothing had happened.
+    /// Shown when the restore cannot start. Keep the sheet open because the
+    /// user still needs an accurate result and a manual restart instruction.
     @State private var failureMessage: String?
 
     private var selectedCandidate: StoreCandidate? {
-        appState.storeCandidates.first { $0.id == selectionID }
+        appState.storeRecovery.candidates.first { $0.id == selectionID }
     }
 
     var body: some View {
@@ -36,7 +34,7 @@ struct StoreRecoveryView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            List(appState.storeCandidates, selection: $selectionID) { candidate in
+            List(appState.storeRecovery.candidates, selection: $selectionID) { candidate in
                 row(for: candidate)
             }
             .frame(minHeight: 200)
@@ -49,7 +47,7 @@ struct StoreRecoveryView: View {
             }
 
             HStack {
-                if let folder = appState.storeCandidates.first?.url.deletingLastPathComponent() {
+                if let folder = appState.storeRecovery.candidates.first?.url.deletingLastPathComponent() {
                     Button("Reveal in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([folder])
                     }
@@ -59,7 +57,7 @@ struct StoreRecoveryView: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Restore and Restart") {
                     guard let selectedCandidate else { return }
-                    guard appState.chooseStoreRestore(selectedCandidate) else {
+                    guard appState.storeRecovery.chooseRestore(selectedCandidate) else {
                         failureMessage = "Atoll could not restart itself. Quit and open it again to put this backup back."
                         return
                     }
@@ -75,11 +73,10 @@ struct StoreRecoveryView: View {
         .padding(20)
         .frame(width: 520)
         .onAppear {
-            // The Settings entry point can open this sheet long after launch,
-            // when `evaluateStoreRecovery`'s one-time snapshot of the live
-            // store is stale — refresh before reading either list below.
-            appState.refreshStoreCandidates()
-            selectionID = appState.preselectedCandidate?.id
+            // Settings can open this sheet long after launch. Refresh the live
+            // row and preselection before presenting them.
+            appState.storeRecovery.refreshCandidates()
+            selectionID = appState.storeRecovery.preselectedCandidate?.id
         }
     }
 

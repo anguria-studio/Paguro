@@ -3,7 +3,7 @@ import SwiftData
 import AtollCore
 
 /// How the application obtained its model container at launch.
-/// `AppState` uses this value to select the recovery banner.
+/// `StoreRecoveryCoordinator` uses this value to select the recovery banner.
 enum StoreLoadOutcome: Equatable {
     /// The on-disk store opened normally. No banner is required.
     case openedClean

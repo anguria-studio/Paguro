@@ -10,6 +10,7 @@ final class AppState {
     let modelContainer: ModelContainer
     let preferencesStore: PreferencesStore
     let mediaPermissions: MediaPermissionCoordinator
+    let storeRecovery: StoreRecoveryCoordinator
     let webViewPool: WebViewPool
     let contentBlocker: ContentBlockerManager
     let dataStoreManager: DataStoreManager
@@ -155,110 +156,6 @@ final class AppState {
     /// Idle minutes before auto-hibernation fires. Loaded from `PreferencesStore`.
     var autoHibernateIdleMinutes = 10
 
-    /// Non-nil when the persistent store failed and we fell back to in-memory storage.
-    /// The UI should display a warning banner when this is set.
-    private(set) var storeError: String?
-
-    /// On-disk location of the persistent store that failed to open. Lets the
-    /// UI offer a "Reveal in Finder" action so the user can back up or remove
-    /// the file themselves — we never delete it for them.
-    ///
-    /// NOT the general-purpose "where is the store" accessor: this is the
-    /// *directory*, not the file, and it is set only on the `.inMemoryFallback`
-    /// path below — it stays nil after `.openedClean`. `refreshStoreCandidates`
-    /// needs the store's file path unconditionally, which is what `storeURL`
-    /// (just below) is for.
-    private(set) var storeFileURL: URL?
-
-    /// The live store's full file path, in every launch outcome — unlike
-    /// `storeFileURL` above. Kept so `refreshStoreCandidates` can re-read the
-    /// current store at any later time without needing `config` to still be in
-    /// scope.
-    private let storeURL: URL
-
-    /// The live store's filename, used to check a chosen backup belongs to this
-    /// store. Both debug and release currently name the file "default.store" —
-    /// it's the *directory* that differs between them (see `init` below), not
-    /// the filename — but this is read from the actual `ModelConfiguration`
-    /// rather than hardcoded, so a future change to either branch's filename
-    /// can't silently drift out of sync with what `chooseStoreRestore` checks
-    /// candidates against. Assigned once in `init`, like `storeURL` beside it.
-    private let storeFileName: String
-
-    /// Whether the store banner is a dismissible notice (an automatic recovery
-    /// succeeded) rather than a standing warning (running on temporary storage).
-    /// The UI shows a close button only when this is true.
-    private(set) var storeErrorDismissible = false
-
-    /// The spaces, services, and links the store last held, written after a
-    /// clean open and again at termination. A store that comes up below this
-    /// lost data between launches; a user who deletes spaces lowers it on the
-    /// way out, so their own housekeeping never looks like loss.
-    static let contentRecordKey = "atoll.lastKnownContent"
-
-    /// Pairings of backup and live state the user has already declined, so a
-    /// declined offer does not come back every launch.
-    static let declinedRestoresKey = "atoll.declinedRestores"
-
-    /// Bound on how many declined pairings `declineStoreRecovery` keeps, so a
-    /// long-lived install cannot grow this list without end.
-    static let maxDeclinedRestores = 20
-
-    /// Why Atoll is offering to restore a backup, or nil when it is not.
-    private(set) var storeRecoveryOffer: StoreRecoveryOffer?
-
-    /// Every store the user could restore from, including the live one.
-    private(set) var storeCandidates: [StoreCandidate] = []
-
-    /// The candidate the picker starts on, or nil when the user must choose.
-    private(set) var preselectedCandidate: StoreCandidate?
-
-    /// Whether the picker sheet is up.
-    var isShowingStoreRecovery = false
-
-    /// Whether the user picked a backup and Atoll owes them a restart. Set
-    /// when the pick is scheduled and the relaunch poller is armed; read once
-    /// the sheet has closed, since the quit cannot happen while it is up. See
-    /// `quitForScheduledRestore`.
-    private(set) var isRestoreRestartArmed = false
-
-    /// Whether `init` fell back to a throwaway in-memory container because the
-    /// real store was unusable. While this is true, the container's counts are
-    /// not the user's store — reading `.spaces`/`.services` from it can show an
-    /// empty or freshly-seeded shape that has nothing to do with what actually
-    /// sits on disk. `evaluateStoreRecovery` and `recordStoreContent` both
-    /// branch on this so neither one mistakes the temporary container for the
-    /// real thing.
-    private(set) var isStoreInMemoryFallback = false
-
-    /// Whether the store arrived at this launch already holding dangling join
-    /// rows — the signature of a store damaged between sessions. Read from the
-    /// raw file before anything opens or repairs it.
-    private let storeWasDamagedAtLaunch: Bool
-
-    /// Whether this launch's container came from an automatic restore.
-    private let storeWasRestoredAtLaunch: Bool
-
-    /// Whether it is safe to run the *irreversible* reclamation this launch:
-    /// deleting service rows that belong to no space, and wiping the on-disk
-    /// website data (cookies, logins) of stores nothing points at.
-    ///
-    /// Both of those are correct on a healthy store and destructive on a damaged
-    /// one, and the two escalate into each other. `repairDanglingLinks` deletes
-    /// join rows whose space row is missing; every service that lived only in
-    /// that space is then linkless, so `reapOrphanedServices` deletes it and
-    /// tombstones its data store — turning a store problem that the recovery
-    /// picker could have undone into a permanent logout. Restoring a backup can
-    /// produce the same shape for a launch.
-    ///
-    /// So neither runs on a launch where the store was damaged, restored, or
-    /// replaced by the in-memory fallback. Nothing is lost by waiting: an
-    /// invisible orphan row costs nothing to carry, the user gets the recovery
-    /// banner instead, and the next clean launch reclaims it.
-    private var isSafeToReclaim: Bool {
-        !isStoreInMemoryFallback && !storeWasDamagedAtLaunch && !storeWasRestoredAtLaunch
-    }
-
     init(
         dataStoreManager: DataStoreManager,
         userScriptManager: UserScriptManager,
@@ -290,9 +187,6 @@ final class AppState {
         #else
         let config = ModelConfiguration(schema: schema, url: StoreRelocation.resolveStoreURL())
         #endif
-        self.storeFileName = config.url.lastPathComponent
-        self.storeURL = config.url
-
         // A restore the user picked last session, applied before anything opens
         // the store.
         StoreRepair.applyPendingRestore(at: config.url)
@@ -306,8 +200,8 @@ final class AppState {
 
         // Note the store's condition BEFORE the open path repairs it — once
         // `tryOpen` has run `repairDanglingLinks`, the damage is gone and the
-        // evidence with it. See `isSafeToReclaim`.
-        self.storeWasDamagedAtLaunch = StoreRepair.hasDanglingLinks(at: config.url)
+        // evidence with it. The recovery coordinator keeps this launch state.
+        let storeWasDamagedAtLaunch = StoreRepair.hasDanglingLinks(at: config.url)
 
         // Open the store, self-healing an emptied or unusable store from the
         // newest usable pre-migration snapshot. The outcome drives the banner.
@@ -320,37 +214,12 @@ final class AppState {
             preferencesStore: preferencesStore,
             webViewPool: webViewPool
         )
-        if case .restoredFromSnapshot = outcome {
-            self.storeWasRestoredAtLaunch = true
-        } else {
-            self.storeWasRestoredAtLaunch = false
-        }
-
-        switch outcome {
-        case .openedClean:
-            break
-        case .restoredFromSnapshot(_, let takenAt):
-            let when: String
-            if let takenAt {
-                let f = DateFormatter()
-                f.dateStyle = .medium
-                f.timeStyle = .short
-                when = " taken \(f.string(from: takenAt))"
-            } else {
-                when = ""
-            }
-            self.storeError = "Atoll recovered your data from an automatic backup\(when)."
-            self.storeErrorDismissible = true
-        case .inMemoryFallback:
-            // Point at the containing folder, not just the store file: after a
-            // migration that emptied the store the file itself holds nothing, and
-            // the recoverable copies are the `.snapshot-*.bak` siblings Atoll
-            // writes before every update. Changes won't be saved (in-memory), so
-            // the user can quit, restore a snapshot, and relaunch without loss.
-            self.storeError = "Your saved data couldn't be loaded, so Atoll is running with temporary storage — changes won't be saved. Atoll keeps automatic backups from before each update; your data folder (with those backups) is at: \(config.url.deletingLastPathComponent().path)"
-            self.storeFileURL = config.url.deletingLastPathComponent()
-            self.isStoreInMemoryFallback = true
-        }
+        self.storeRecovery = StoreRecoveryCoordinator(
+            context: loadedContainer.mainContext,
+            storeURL: config.url,
+            outcome: outcome,
+            wasDamagedAtLaunch: storeWasDamagedAtLaunch
+        )
 
         self.dataStoreManager = dataStoreManager
         self.userScriptManager = userScriptManager
@@ -426,11 +295,10 @@ final class AppState {
         reclaimUnreferencedDataStores()
         cleanUpOrphanedDataStores()
 
-        // Record what the store holds, then decide whether a fuller backup is
-        // worth offering. Order matters: recording first would hide the very
-        // shortfall the offer looks for, so evaluate first.
-        evaluateStoreRecovery(storeURL: config.url)
-        recordStoreContent()
+        // Evaluate before recording. Recording first could hide the shortfall
+        // that produces a recovery offer.
+        storeRecovery.evaluateOffer()
+        storeRecovery.recordContent()
     }
 
     /// Stops process-lifetime work and saves the final selection before AppKit
@@ -469,7 +337,7 @@ final class AppState {
         defaultCenterTokens.removeAll()
 
         saveWindowState()
-        recordStoreContent()
+        storeRecovery.recordContent()
         await Task.yield()
     }
 
@@ -1773,280 +1641,6 @@ final class AppState {
         cleanUpOrphanedDataStores()
     }
 
-    /// Clears the store banner. Only offered for the dismissible recovery notice;
-    /// the temporary-storage warning stays put because it reflects an ongoing
-    /// "changes won't be saved" state.
-    func dismissStoreBanner() {
-        storeError = nil
-    }
-
-    // MARK: - Store recovery picker
-
-    /// What the live store holds right now, read from the open container.
-    /// Cheaper and more accurate than a second SQLite read, which would miss
-    /// anything not yet checkpointed.
-    ///
-    /// Only meaningful while `modelContainer` is the real store. While
-    /// `isStoreInMemoryFallback` is true this reads the throwaway in-memory
-    /// container instead — empty, or freshly reseeded — which has nothing to
-    /// do with what actually sits on disk. `evaluateStoreRecovery` and
-    /// `recordStoreContent` both branch around that case rather than trusting
-    /// this call blindly.
-    func liveStoreContent() -> StoreContent? {
-        let context = modelContainer.mainContext
-        do {
-            return StoreContent(
-                spaces: try context.fetchCount(FetchDescriptor<Space>()),
-                services: try context.fetchCount(FetchDescriptor<ServiceInstance>()),
-                links: try context.fetchCount(FetchDescriptor<SpaceServiceLink>()),
-                spaceNames: try context.fetch(FetchDescriptor<Space>()).map(\.name),
-                serviceLabels: try context.fetch(FetchDescriptor<ServiceInstance>()).map(\.label)
-            )
-        } catch {
-            AppLogger.dataStore.error("Could not read live store content: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    /// Whether `recordStoreContent` should write a new record right now. Pure
-    /// and `static` so each guard is directly testable without standing up a
-    /// live `AppState` (which the test suite deliberately never does).
-    ///
-    /// Five things independently block a write:
-    /// - `content == nil`: the store couldn't be read; unknown is never
-    ///   recorded as empty.
-    /// - `content.isEmpty`: writing an empty record would erase the evidence
-    ///   the offer depends on and silence the feature for good.
-    /// - `isInMemoryFallback`: the running container is a throwaway, so its
-    ///   counts are not the user's store — recording them would stamp a
-    ///   seed-shaped (or empty) record over the real history.
-    /// - `offerOutstanding`: an offer is computed by comparing the live store
-    ///   against the CURRENT record. A store that lost every space but kept
-    ///   its services is not `isEmpty`, so without this guard the record would
-    ///   be overwritten with that diminished shape moments after the offer was
-    ///   computed from it — and a crash, or a quit before the picker is
-    ///   answered, would then lose the evidence permanently, with no decline
-    ///   ever recorded either. Recording is correct again as soon as the offer
-    ///   is gone, including right after the user declines it: the decline key
-    ///   already suppresses that exact pairing from firing again.
-    /// - `restoreScheduled`: a restore the user just picked is waiting to apply
-    ///   at the next launch (`StoreRepair.pendingRestoreKey` is set). The store
-    ///   is about to change out from under this content, so recording its
-    ///   current shape is never worth doing — and without this guard, clearing
-    ///   `storeRecoveryOffer` on a successful pick would let a partial-loss
-    ///   store's diminished content overwrite the record before the restore
-    ///   actually applies: if that restore then failed to take effect, the
-    ///   record would agree with the diminished store, and the banner that
-    ///   depends on the mismatch would never come back. On the ordinary path
-    ///   `NSApp.terminate(nil)` never returns, so the offer is never actually
-    ///   cleared before `willTerminate` fires — this guard is what keeps that
-    ///   correct on purpose rather than by that accident, for whenever
-    ///   termination is deferred or cancelled. `applyPendingRestore` clears the
-    ///   pending key at the top of the next `init`, so the launch-time record
-    ///   write right after is unaffected.
-    static func shouldRecordContent(
-        _ content: StoreContent?,
-        offerOutstanding: Bool,
-        isInMemoryFallback: Bool,
-        restoreScheduled: Bool
-    ) -> Bool {
-        guard !isInMemoryFallback else { return false }
-        guard !offerOutstanding else { return false }
-        guard !restoreScheduled else { return false }
-        guard let content, !content.isEmpty else { return false }
-        return true
-    }
-
-    /// Records what the store holds, so a later launch can tell loss from
-    /// housekeeping. Called after a clean open and again at termination; a hard
-    /// crash can leave it stale, which costs at most one declinable offer. See
-    /// `shouldRecordContent` for the guards that decide whether this actually
-    /// writes — at launch of a healthy store no offer is outstanding, so
-    /// termination recording proceeds normally and a user's own housekeeping
-    /// (deleting a space mid-session) still lowers the record rather than
-    /// looking like loss on the next launch.
-    func recordStoreContent(defaults: UserDefaults = .standard) {
-        let content = liveStoreContent()
-        guard Self.shouldRecordContent(
-            content,
-            offerOutstanding: storeRecoveryOffer != nil,
-            isInMemoryFallback: isStoreInMemoryFallback,
-            restoreScheduled: defaults.string(forKey: StoreRepair.pendingRestoreKey) != nil
-        ), let content else { return }
-        defaults.set(StoreRecoveryPolicy.encodeRecord(content), forKey: Self.contentRecordKey)
-    }
-
-    /// The live store's content right now, accounting for the in-memory
-    /// fallback: `liveStoreContent()` alone would report the throwaway
-    /// container's shape, not what actually sits on disk. Shared by
-    /// `evaluateStoreRecovery` (at launch) and `refreshStoreCandidates` (any
-    /// time after), so the fallback-aware rule can't drift between the two.
-    private func currentLiveContent() -> StoreContent? {
-        isStoreInMemoryFallback ? StoreInventory.readContent(at: storeURL) : liveStoreContent()
-    }
-
-    /// Works out whether to offer a restore and prepares the picker's contents.
-    ///
-    /// While `isStoreInMemoryFallback` is true, `liveStoreContent()` reflects
-    /// the throwaway container, not the real store that failed to open — a
-    /// store that merely failed to open (rather than being genuinely empty)
-    /// would then wrongly show as empty in the picker, and a fuller backup
-    /// could be preselected over data that is still intact on disk. Read the
-    /// actual file instead in that case; an unreadable result is passed
-    /// through as unknown (nil), never substituted with zero.
-    func evaluateStoreRecovery(storeURL: URL, defaults: UserDefaults = .standard) {
-        let live = currentLiveContent()
-        let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
-        let best = StoreRecoveryPolicy.best(among: candidates)
-        let declined = Set(defaults.stringArray(forKey: Self.declinedRestoresKey) ?? [])
-        let liveMatchesSeed = live?.looksLikeUntouchedSeed ?? false
-
-        storeCandidates = candidates
-        storeRecoveryOffer = StoreRecoveryPolicy.offer(
-            liveContent: live,
-            liveMatchesUntouchedSeed: liveMatchesSeed,
-            best: best,
-            record: StoreRecoveryPolicy.decodeRecord(defaults.string(forKey: Self.contentRecordKey)),
-            declinedKeys: declined
-        )
-        preselectedCandidate = StoreRecoveryPolicy.preselection(
-            among: candidates,
-            liveContent: live,
-            liveMatchesUntouchedSeed: liveMatchesSeed
-        )
-        if let offer = storeRecoveryOffer {
-            // Expected, user-facing behavior, not a fault — an offer being up
-            // is normal operation for this feature, so this stays out of
-            // `.error` to avoid manufacturing noise on a data-safety path that
-            // support already watches closely.
-            AppLogger.dataStore.notice("Offering a store restore (\(String(describing: offer))); candidates=\(candidates.count)")
-        }
-    }
-
-    /// Re-reads the candidates so the sheet never shows launch-time counts.
-    /// `evaluateStoreRecovery` runs once, at the end of `init`; the Settings
-    /// entry point can open the picker hours later, after the live store has
-    /// changed, so its "Your data now" row would otherwise still show what the
-    /// store held at launch — the wrong-comparison mistake this feature exists
-    /// to prevent. Call before reading `storeCandidates`/`preselectedCandidate`.
-    ///
-    /// Deliberately does NOT touch `storeRecoveryOffer`: the banner reflects
-    /// what was true at launch, and recomputing the offer here could raise or
-    /// clear a banner behind the sheet the user did not ask this call to
-    /// change. Decline bookkeeping is untouched for the same reason.
-    func refreshStoreCandidates() {
-        let live = currentLiveContent()
-        let candidates = StoreInventory.candidates(for: storeURL, liveContent: live)
-        storeCandidates = candidates
-        preselectedCandidate = StoreRecoveryPolicy.preselection(
-            among: candidates,
-            liveContent: live,
-            liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false
-        )
-    }
-
-    /// Remembers that the user said no to this pairing, and drops the offer.
-    ///
-    /// Uses the live candidate already computed into `storeCandidates` by
-    /// `evaluateStoreRecovery` rather than calling `liveStoreContent()` again:
-    /// that candidate's content is the fallback-aware value `offer(...)`
-    /// itself was checked against, so the decline key matches exactly. Calling
-    /// `liveStoreContent()` fresh here would read the wrong source in the
-    /// in-memory-fallback case (the throwaway container, not the file), so the
-    /// key it produced would never match the one `offer(...)` checks on a
-    /// later launch, and the decline would silently fail to stick.
-    func declineStoreRecovery(defaults: UserDefaults = .standard) {
-        if let best = StoreRecoveryPolicy.best(among: storeCandidates) {
-            let liveContent = storeCandidates.first(where: { $0.kind == .live })?.content
-            let key = StoreRecoveryPolicy.declineKey(live: liveContent, candidate: best)
-            var declined = defaults.stringArray(forKey: Self.declinedRestoresKey) ?? []
-            if !declined.contains(key) {
-                declined.append(key)
-                defaults.set(Array(declined.suffix(Self.maxDeclinedRestores)), forKey: Self.declinedRestoresKey)
-            }
-        }
-        storeRecoveryOffer = nil
-    }
-
-    /// Validates a chosen candidate and writes its pending-restore key —
-    /// everything `chooseStoreRestore` needs done before the process-level
-    /// relaunch, and nothing more. Hoisted out of that instance method (and
-    /// `nonisolated`, since it touches only its arguments, `StoreRepair`, and
-    /// `AppLogger`, none of them main-actor state) so this is directly
-    /// testable without building an `AppState` — the suite deliberately never
-    /// does, and `chooseStoreRestore` itself is unreachable from a test because
-    /// it needs a live instance's `storeFileName`.
-    ///
-    /// Returns whether the key was written. Both guards below leave `defaults`
-    /// completely untouched on failure: a candidate that fails `isRestorable`
-    /// (the live store, a damaged file, or one whose content couldn't be
-    /// read), or one whose filename `validatedRestoreName` rejects.
-    @discardableResult
-    nonisolated static func scheduleRestore(
-        _ candidate: StoreCandidate,
-        storeName: String,
-        defaults: UserDefaults
-    ) -> Bool {
-        guard candidate.isRestorable else { return false }
-        guard let name = StoreRecoveryPolicy.validatedRestoreName(
-            candidate.url.lastPathComponent,
-            storeName: storeName
-        ) else {
-            AppLogger.dataStore.error("Refusing to schedule a restore from an unexpected filename")
-            return false
-        }
-        defaults.set(name, forKey: StoreRepair.pendingRestoreKey)
-        AppLogger.dataStore.info("Scheduled a restore from \(name)")
-        return true
-    }
-
-    /// Records the user's pick and restarts so it can be applied before the
-    /// store opens.
-    ///
-    /// Returns false in two different cases, and only the second leaves
-    /// something written: `scheduleRestore` rejecting the pick writes nothing,
-    /// but a written key whose relaunch then fails to spawn is deliberately
-    /// left in place — `StoreRepair.applyPendingRestore` re-checks the key on
-    /// every launch, so the restore still happens the next time the user opens
-    /// Atoll by hand, and throwing the key away here would be strictly worse.
-    /// `storeRecoveryOffer` is cleared only when both steps succeed, so a spawn
-    /// failure leaves the offer (and whatever sheet is bound to it) in place
-    /// for the caller to report rather than silently dismissing it as if the
-    /// restore had actually started.
-    ///
-    /// This only *arms* the restart. The quit itself waits for the picker's
-    /// sheet to be dismissed, because AppKit refuses to terminate through an
-    /// attached sheet and drops the request rather than deferring it — see
-    /// `quitForScheduledRestore`. Arming still happens here, while the sheet is
-    /// up, so a spawn failure can be reported in it.
-    @discardableResult
-    func chooseStoreRestore(_ candidate: StoreCandidate, defaults: UserDefaults = .standard) -> Bool {
-        guard Self.scheduleRestore(candidate, storeName: storeFileName, defaults: defaults) else { return false }
-        guard AppRelauncher.armRelaunch() else {
-            AppLogger.dataStore.error("Restore was scheduled but the relaunch could not be spawned; it will still apply on the next launch")
-            return false
-        }
-        storeRecoveryOffer = nil
-        isRestoreRestartArmed = true
-        return true
-    }
-
-    /// Quits if the user picked a backup, called once the picker's sheet has
-    /// closed.
-    ///
-    /// Split from `chooseStoreRestore` because quitting from inside the sheet
-    /// silently did nothing: AppKit will not terminate while a sheet is
-    /// attached, so the app stayed up, the relaunch poller expired on its own
-    /// bound, and the restore only landed whenever the user next opened Atoll
-    /// by hand. The flag matters as much as the timing — this runs on every
-    /// dismissal of that sheet, including Cancel, and must quit only when a
-    /// restore is actually waiting.
-    func quitForScheduledRestore() {
-        guard isRestoreRestartArmed else { return }
-        isRestoreRestartArmed = false
-        AppRelauncher.quit()
-    }
-
     /// Safety net for crash-mid-delete (or stores written by a build that
     /// predates `deleteSpace`'s reclaim logic): deletes any `ServiceInstance`
     /// that no longer belongs to any space and schedules its data store for
@@ -2054,8 +1648,9 @@ final class AppState {
     private func reapOrphanedServices() {
         // A store that arrived damaged, was restored, or isn't the real store at
         // all can present a perfectly healthy service as linkless. Deleting it
-        // here would wipe its cookies for good. See `isSafeToReclaim`.
-        guard isSafeToReclaim else {
+        // here would wipe its cookies for good. Use the recovery coordinator's
+        // launch-safety result.
+        guard storeRecovery.isSafeToReclaim else {
             AppLogger.dataStore.info("Skipping the orphan reap: the store was damaged, restored, or is the in-memory fallback")
             return
         }
@@ -2223,11 +1818,11 @@ final class AppState {
     /// old store keeps their cookies on disk indefinitely. Nothing reclaimed
     /// them, because nothing ever tombstoned them.
     ///
-    /// Gated on `isSafeToReclaim` for the same reason as the orphan reap, and
+    /// Gated on the recovery coordinator for the same reason as the orphan reap, and
     /// this one is the more dangerous of the two: on a launch where the store
     /// came up empty or seeded, every real store would read as unreferenced.
     private func reclaimUnreferencedDataStores() {
-        guard isSafeToReclaim else { return }
+        guard storeRecovery.isSafeToReclaim else { return }
         guard let dir = Self.websiteDataStoreDirectory(bundleID: Bundle.main.bundleIdentifier),
               let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
 

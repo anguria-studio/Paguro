@@ -40,8 +40,8 @@ enum AppRelauncher {
     /// running app".
     ///
     /// `@MainActor` because it reads the main-actor-isolated `NSApp` global;
-    /// the sole caller (`AppState.chooseStoreRestore`) is already `@MainActor`,
-    /// so this adds no new constraint at the call site.
+    /// the sole caller (`StoreRecoveryCoordinator`) is already `@MainActor`, so
+    /// this adds no new constraint at the call site.
     ///
     /// Returns whether the poller was actually spawned. `false` means
     /// `Process.run()` itself failed (logged) and nothing was scheduled; the

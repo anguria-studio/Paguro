@@ -19,6 +19,10 @@ The notification manager installs its macOS notification delegate while the
 composition root initializes the application state. This timing allows a
 notification action that launches Atoll to wait until navigation is ready.
 
+`StoreLoader` opens or repairs the SwiftData store.
+`StoreRecoveryCoordinator` then prepares any recovery notice and backup picker.
+It applies a selected backup only after restart, before the store opens again.
+
 ## Window behavior
 
 A normal launch uses regular activation. A login-item launch starts in
@@ -59,7 +63,8 @@ Shutdown is idempotent. It performs these actions:
    that hibernation already removed.
 5. Stop and release every live web view.
 6. Remove notification observers.
-7. Save the selected space and service, then record store content.
+7. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
+   record the store content.
 
 The process has no helper that continues after termination.
 

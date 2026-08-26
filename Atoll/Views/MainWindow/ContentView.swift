@@ -11,35 +11,33 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var state = appState
+        @Bindable var recovery = appState.storeRecovery
 
         VStack(spacing: 0) {
-            // Three notices, one shape. They used to be two raw SwiftUI yellows
-            // and a solid red bar, which read as three unrelated designs stacked
-            // on each other. `NoticeStrip` carries the severity in the icon and
-            // the rule under the strip, and carries the window-drag handle every
-            // one of them needs.
-            if let error = appState.storeError {
+            // All notices share one shape. `NoticeStrip` carries severity in the
+            // icon and lower rule, plus the window-drag handle each notice needs.
+            if let banner = recovery.banner {
                 NoticeStrip(severity: .error) {
-                    Text(error)
+                    Text(banner.message)
                         .font(.caption)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                     Spacer()
-                    if let url = appState.storeFileURL {
+                    if let url = banner.folderURL {
                         Button("Reveal in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([url])
                         }
                         .font(.caption)
                     }
-                    if appState.storeRecoveryOffer != nil {
+                    if recovery.offer != nil {
                         Button("Review backups…") {
-                            appState.isShowingStoreRecovery = true
+                            recovery.isShowingPicker = true
                         }
                         .font(.caption)
                     }
-                    if appState.storeErrorDismissible {
+                    if banner.isDismissible {
                         Button {
-                            appState.dismissStoreBanner()
+                            recovery.dismissBanner()
                         } label: {
                             Image(systemName: "xmark")
                         }
@@ -50,21 +48,23 @@ struct ContentView: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Warning: \(error)")
+                .accessibilityLabel("Warning: \(banner.message)")
             }
 
-            if appState.storeError == nil, appState.storeRecoveryOffer != nil {
+            if recovery.banner == nil, recovery.offer != nil {
                 NoticeStrip(severity: .info) {
                     Text("Atoll has a backup with more of your spaces and services than it can see now.")
                         .font(.caption)
                         .lineLimit(2)
                     Spacer()
-                    Button("Review backups…") { appState.isShowingStoreRecovery = true }
-                        .font(.caption)
-                    Button("Not now") { appState.declineStoreRecovery() }
+                    Button("Review backups…") {
+                        recovery.isShowingPicker = true
+                    }
+                    .font(.caption)
+                    Button("Not now") { recovery.declineOffer() }
                         .font(.caption)
                 }
-                // No .accessibilityLabel override here, unlike the storeError
+                // No accessibility-label override here, unlike the warning
                 // banner above: an explicit label replaces what `.combine`
                 // would otherwise speak, and on this banner the buttons ARE
                 // the point — overriding would drop "Review backups…" and
@@ -208,11 +208,11 @@ struct ContentView: View {
                 .environment(appState)
                 .modelContainer(appState.modelContainer)
         }
-        .sheet(isPresented: $state.isShowingStoreRecovery, onDismiss: {
+        .sheet(isPresented: $recovery.isShowingPicker, onDismiss: {
             // Only quits when the user actually picked a backup. It has to
             // happen here rather than in the button: a quit requested while
             // this sheet is still attached is refused and dropped.
-            appState.quitForScheduledRestore()
+            recovery.quitForScheduledRestore()
         }) {
             StoreRecoveryView()
         }
