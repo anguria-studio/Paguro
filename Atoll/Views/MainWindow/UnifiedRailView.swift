@@ -49,10 +49,6 @@ struct UnifiedRailView: View {
     /// each cell's `.focused`, so a click or Tab that focuses a cell records it
     /// here and the arrow keys move relative to it.
     @FocusState private var focusedLinkID: UUID?
-    /// The horizontal bar: a 32 point header and 32 point tabs with 5 points
-    /// clear above and below. The drawn frame says 42.
-    static let barHeight: CGFloat = 42
-
     private var liveSpaces: [Space] {
         spaces.filter { $0.modelContext != nil }
     }
@@ -173,7 +169,23 @@ struct UnifiedRailView: View {
         if axis == .vertical {
             verticalBody
         } else {
-            horizontalBody
+            let links = filteredLinks
+            HorizontalRailView(
+                links: links,
+                selectedSpaceID: selectedSpaceID,
+                selectedServiceID: selectedServiceID,
+                showsSpaceSwitcher: showsSpaceSwitcher,
+                contentInset: contentInset,
+                dockMagnification: dockMagnification,
+                spaceHeader: { spaceHeader },
+                serviceCell: { link, dockLayout in
+                    serviceRow(
+                        for: link,
+                        workspaceLinks: links,
+                        dockLayout: dockLayout
+                    )
+                }
+            )
         }
     }
 
@@ -394,44 +406,6 @@ struct UnifiedRailView: View {
         }
     }
 
-    private var horizontalBody: some View {
-        HStack(spacing: 8) {
-            if showsSpaceSwitcher {
-                spaceHeader
-                    // 72 points of traffic light, then 8, puts the header at x 80.
-                    .padding(.leading, 8 + contentInset)
-
-                Divider().frame(width: 1, height: 20)
-            } else {
-                // The workspace control is gone, but service tabs must still
-                // start after the traffic lights.
-                Color.clear
-                    .frame(width: contentInset)
-                    .accessibilityHidden(true)
-            }
-
-            tabStrip
-
-            // Empty stretch between the tabs and the service controls. It draws
-            // nothing and takes no hit of its own, so a click here falls through
-            // to the window-drag handle behind the row.
-            Spacer(minLength: 40)
-
-            // Service controls live at the far right of the bar.
-            WebContentActions(webViewState: appState.webViewState)
-                .padding(.trailing, 10)
-        }
-        .frame(height: Self.barHeight)
-        // The OS window drag is off in the bar layout, so tab drags reorder
-        // instead of moving the window (see WindowChromeConfigurator). A
-        // full-width drag handle behind the row restores "click any empty part
-        // of the bar to move the window": the header, tabs and service controls sit
-        // in front and take their own clicks, and every empty area falls through
-        // to here.
-        .background(WindowDragHandle())
-        .atollMaterialBackground(.regularMaterial)
-    }
-
     // MARK: - The space header, and the palette it opens
 
     private var showsSpaceSwitcher: Bool {
@@ -478,58 +452,6 @@ struct UnifiedRailView: View {
         }
     }
 
-    /// The tab strip hugs its content when the tabs fit — leaving the rest of the
-    /// bar as draggable empty space — and scrolls only when there are too many to
-    /// fit. `ViewThatFits` picks the plain (hugging) row first and falls back to
-    /// the scrolling row, which is deterministic where measuring the content
-    /// width and capping the scroll view was not.
-    private var tabStrip: some View {
-        ViewThatFits(in: .horizontal) {
-            tabRow
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    tabRow
-                }
-                // Keep the active service visible when it's selected off-screen
-                // (⌘1–9, quick switcher, or a routed link).
-                .onChange(of: selectedServiceID) { _, newID in
-                    guard let newID else { return }
-                    if reduceMotion {
-                        proxy.scrollTo(newID, anchor: .center)
-                    } else {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(newID, anchor: .center)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// The row of service tabs plus the add button. A plain `HStack` (not lazy)
-    /// so `ViewThatFits` can measure its width to decide whether the tabs fit.
-    /// The traffic-light inset is spent by the header now, so this starts flush.
-    private var tabRow: some View {
-        let links = filteredLinks
-        let dockLayout = dockMagnification.layout(
-            linkIDs: links.map(\.id),
-            baseSize: appState.iconRailBaseSize,
-            magnifiedSize: appState.iconRailMagnifiedSize,
-            magnificationEnabled: false,
-            isCollapsed: false
-        )
-
-        return HStack(spacing: 4) {
-            ForEach(links) { link in
-                serviceRow(for: link, workspaceLinks: links, dockLayout: dockLayout)
-                    .id(link.service.id)
-            }
-            addServiceButton
-        }
-        .padding(.trailing, 8)
-        .padding(.vertical, 2)
-    }
-
     // MARK: - Service cells
 
     private func serviceRow(
@@ -571,37 +493,20 @@ struct UnifiedRailView: View {
         ))
     }
 
-    /// The vertical rail uses a small native bordered action. The horizontal bar
-    /// has no width to spare, so it stays a plain plus.
-    @ViewBuilder
+    /// The expanded vertical rail uses a small native bordered action.
     private var addServiceButton: some View {
-        if axis == .vertical {
-            Button {
-                appState.showAddService = true
-            } label: {
-                Label("Add service", systemImage: "plus")
-                    .font(.atollToolbarControl)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .frame(width: ServiceRowView.rowWidth)
-            .help("Add service")
-            .disabled(selectedSpaceID == nil)
-        } else {
-            Button {
-                appState.showAddService = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 36, height: ServiceRowView.tabHeight)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Add service")
-            .accessibilityLabel("Add service")
-            .disabled(selectedSpaceID == nil)
+        Button {
+            appState.showAddService = true
+        } label: {
+            Label("Add service", systemImage: "plus")
+                .font(.atollToolbarControl)
+                .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .frame(width: ServiceRowView.rowWidth)
+        .help("Add service")
+        .disabled(selectedSpaceID == nil)
     }
 
     @ViewBuilder
