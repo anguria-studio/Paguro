@@ -1,4 +1,5 @@
 import SwiftUI
+import AtollCore
 
 /// The spoken label for the space header. Split out from the view so the words
 /// can be pinned by a test, the same way `ServiceAccessibility` is.
@@ -91,10 +92,12 @@ struct SpaceHeaderView: View {
 
     private var content: some View {
         HStack(spacing: Self.gutter) {
-            Text(emoji)
-                .font(.system(size: axis == .vertical ? 11 : 15))
-                .opacity(isMuted ? 0.5 : 1.0)
-                .accessibilityHidden(true)
+            if let emoji = WorkspaceEmoji.displayValue(emoji) {
+                Text(emoji)
+                    .font(.system(size: axis == .vertical ? 11 : 15))
+                    .opacity(isMuted ? 0.5 : 1.0)
+                    .accessibilityHidden(true)
+            }
 
             Text(displayName)
                 .font(axis == .vertical ? .atollSidebarSection : .atollSidebarLabelSelected)
@@ -172,10 +175,12 @@ struct WorkspaceSectionHeaderView: View {
                     .frame(width: AtollMetric.Sidebar.expandedIconSize)
                     .accessibilityHidden(true)
 
-                Text(emoji)
-                    .font(.system(size: 11))
-                    .opacity(isMuted ? 0.5 : 1)
-                    .accessibilityHidden(true)
+                if let emoji = WorkspaceEmoji.displayValue(emoji) {
+                    Text(emoji)
+                        .font(.system(size: 11))
+                        .opacity(isMuted ? 0.5 : 1)
+                        .accessibilityHidden(true)
+                }
 
                 Text(workspaceName)
                     .font(.atollSidebarSection)

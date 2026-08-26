@@ -23,7 +23,7 @@ struct EmojiPickerView: View {
             searchField
             categoryTabs
             emojiGrid
-            systemPickerButton
+            pickerActions
         }
         // The system Character Viewer ("More Emoji…") inserts the chosen emoji
         // into the first responder — which is the search field. Detect when the
@@ -166,21 +166,39 @@ struct EmojiPickerView: View {
         }
     }
 
-    private var systemPickerButton: some View {
-        Button {
-            NSApp.orderFrontCharacterPalette(nil)
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "character.book.closed")
-                    .font(.system(size: 10))
-                Text("More Emoji…")
-                    .font(.system(size: 11))
+    private var pickerActions: some View {
+        HStack {
+            Button {
+                selectedEmoji = ""
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 10))
+                    Text("No Emoji")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selectedEmoji.isEmpty ? .isSelected : [])
+
+            Spacer()
+
+            Button {
+                NSApp.orderFrontCharacterPalette(nil)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "character.book.closed")
+                        .font(.system(size: 10))
+                    Text("More Emoji…")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("More Emoji")
+            .accessibilityHint("Opens the system character palette")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("More Emoji")
-        .accessibilityHint("Opens the system character palette")
     }
 
     private func addToRecents(_ emoji: String) {

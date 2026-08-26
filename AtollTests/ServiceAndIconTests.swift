@@ -23,6 +23,14 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertTrue(space.serviceLinks.isEmpty)
     }
 
+    func testSpaceCanOmitEmoji() {
+        let space = Space(name: "Plain")
+
+        XCTAssertEqual(space.emoji, "")
+        XCTAssertNil(space.displayEmoji)
+        XCTAssertEqual(space.displayNameWithEmoji, "Plain")
+    }
+
     @MainActor
     func testWorkspaceMuteCascadesToItsServices() throws {
         let container = try ModelFixtures.groupingContainer()

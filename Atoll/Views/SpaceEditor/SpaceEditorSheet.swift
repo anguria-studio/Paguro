@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AtollCore
 
 struct SpaceEditorSheet: View {
     let editingSpace: Space?
@@ -36,12 +37,14 @@ struct SpaceEditorSheet: View {
 
             VStack(spacing: 20) {
                 HStack(spacing: 16) {
-                    Text(selectedEmoji)
-                        .font(.system(size: 40))
+                    emojiPreview
                         .frame(width: 60, height: 60)
                         .background(Color.primary.opacity(0.06))
                         .clipShape(RoundedRectangle(cornerRadius: AtollRadius.surface))
-                        .accessibilityLabel("Selected emoji: \(selectedEmoji)")
+                        .accessibilityLabel(
+                            WorkspaceEmoji.displayValue(selectedEmoji).map { "Selected emoji: \($0)" }
+                                ?? "No emoji selected"
+                        )
                         .accessibilityHint("Use the picker below to change")
 
                     TextField("Workspace name", text: $name, prompt: Text("Work, Personal, etc."))
@@ -90,10 +93,14 @@ struct SpaceEditorSheet: View {
         var createdSpace: Space?
         if let space = editingSpace {
             space.name = trimmed
-            space.emoji = selectedEmoji
+            space.emoji = WorkspaceEmoji.storedValue(selectedEmoji)
         } else {
             let nextOrder = (spaces.map(\.sortOrder).max() ?? -1) + 1
-            let space = Space(name: trimmed, emoji: selectedEmoji, sortOrder: nextOrder)
+            let space = Space(
+                name: trimmed,
+                emoji: WorkspaceEmoji.storedValue(selectedEmoji),
+                sortOrder: nextOrder
+            )
             modelContext.insert(space)
             createdSpace = space
         }
@@ -110,6 +117,18 @@ struct SpaceEditorSheet: View {
             onCreate?(createdSpace)
         }
         dismiss()
+    }
+
+    @ViewBuilder
+    private var emojiPreview: some View {
+        if let emoji = WorkspaceEmoji.displayValue(selectedEmoji) {
+            Text(emoji)
+                .font(.system(size: 40))
+        } else {
+            Image(systemName: "minus")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.tertiary)
+        }
     }
 
     private func deleteSpace(_ space: Space) {

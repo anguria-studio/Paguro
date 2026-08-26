@@ -101,7 +101,7 @@ extension UnifiedRailView {
                         followToSpace: false
                     )
                 } label: {
-                    Text("\(space.emoji)  \(space.name)")
+                    Text(space.displayNameWithEmoji)
                 }
                 .accessibilityLabel(space.name)
             }

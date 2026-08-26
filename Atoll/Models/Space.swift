@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import AtollCore
 
 @Model
 final class Space {
@@ -28,7 +29,7 @@ final class Space {
     init(
         id: UUID = UUID(),
         name: String,
-        emoji: String,
+        emoji: String = "",
         sortOrder: Int = 0,
         isMuted: Bool = false
     ) {
@@ -44,4 +45,10 @@ final class Space {
     /// Materialises the storage-optional `isMuted` flag into a plain Bool
     /// (nil → false). Use this everywhere except direct writes.
     var isMutedEffective: Bool { isMuted ?? false }
+
+    var displayEmoji: String? { WorkspaceEmoji.displayValue(emoji) }
+
+    var displayNameWithEmoji: String {
+        WorkspaceEmoji.label(name: name, emoji: emoji)
+    }
 }

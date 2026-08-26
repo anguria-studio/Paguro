@@ -158,7 +158,7 @@ struct SpacePaletteView: View {
             if hovering { highlightedIndex = index }
         }
         .draggable(space.id.uuidString) {
-            Text(space.emoji)
+            Text(space.displayNameWithEmoji)
                 .font(.title3)
                 .padding(6)
                 .atollMaterialBackground(.ultraThickMaterial)
@@ -343,11 +343,17 @@ private struct SpacePaletteRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Text(space.emoji)
-                    .font(.system(size: 16))
-                    .opacity(isMuted ? 0.5 : 1.0)
-                    .frame(width: 20)
-                    .accessibilityHidden(true)
+                Group {
+                    if let emoji = space.displayEmoji {
+                        Text(emoji)
+                            .font(.system(size: 16))
+                    } else {
+                        Color.clear
+                    }
+                }
+                .opacity(isMuted ? 0.5 : 1.0)
+                .frame(width: 20)
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(space.name)

@@ -36,7 +36,7 @@ struct MenuBarView: View {
                         .help("Open \(service.label) in \(space.name)")
                     }
                 } header: {
-                    Text("\(space.emoji) \(space.name)")
+                    Text(space.displayNameWithEmoji)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

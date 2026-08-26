@@ -59,6 +59,8 @@ stay within that workspace. Moving a service between workspaces remains an
 explicit context-menu action. A workspace section menu can add a service to
 that workspace, including when the workspace is empty. The same menu can mute
 the workspace.
+The workspace editor can leave the emoji empty. Atoll then shows the workspace
+name without a replacement symbol or leading space.
 
 Removing a service from a workspace keeps the service when it is also in
 another workspace. When that workspace was its last one, Atoll saves the

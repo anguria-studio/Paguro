@@ -351,12 +351,12 @@ struct NotificationSettingsView: View {
         }
     }
 
-    /// A space's "emoji  name", or "Ungrouped" for services in no space. The
+    /// A space's optional emoji and name, or "Ungrouped" for services in no space. The
     /// same service can appear under several space headers; every row binds to
     /// the same model object, so their toggles stay in sync.
     private func headerTitle(_ group: NotificationGrouping.Group) -> String {
         guard let space = group.space else { return "Ungrouped" }
-        return "\(space.emoji)  \(space.name)"
+        return space.displayNameWithEmoji
     }
 
     @ViewBuilder

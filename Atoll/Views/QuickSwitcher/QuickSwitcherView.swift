@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AtollCore
 
 struct QuickSwitcherView: View {
     @Environment(\.dismiss) private var dismiss
@@ -204,8 +205,10 @@ private struct QuickSwitcherRow: View {
                     .foregroundStyle(.primary)
 
                 HStack(spacing: 4) {
-                    Text(result.spaceEmoji)
-                        .font(.caption2)
+                    if let emoji = WorkspaceEmoji.displayValue(result.spaceEmoji) {
+                        Text(emoji)
+                            .font(.caption2)
+                    }
                     Text(result.spaceName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
