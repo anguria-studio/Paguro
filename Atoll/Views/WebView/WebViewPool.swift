@@ -24,8 +24,8 @@ final class WebViewPool {
     /// catalog category). Exempt from FULL hibernation in both sweeps — the idle
     /// timer and the LRU cap sweep — so a chat app is never torn down and can
     /// keep firing instant alerts. The category lives in the catalog, which the
-    /// pool doesn't own, so `AppState` classifies via the `isNotificationCritical`
-    /// closure and the pool caches the result here at load time.
+    /// pool doesn't own, so `HibernationScheduler` classifies through
+    /// `isNotificationCritical` and the pool caches the result here at load time.
     private var notificationCriticalIDs: Set<UUID> = []
 
     /// Services pinned by external callers (e.g. the selected service
@@ -100,9 +100,9 @@ final class WebViewPool {
     var onServiceRemoved: ((UUID) -> Void)?
 
     /// Classifies whether a service must stay live for real-time notifications
-    /// (Messaging category). Set by `AppState`, which owns the catalog. Read at
-    /// load time to populate `notificationCriticalIDs`. Defaults to "not
-    /// critical" when unset, so the pool never over-exempts.
+    /// (Messaging category). Set by `HibernationScheduler` and read at load time
+    /// to populate `notificationCriticalIDs`. Defaults to "not critical" when
+    /// unset, so the pool never over-exempts.
     var isNotificationCritical: ((UUID) -> Bool)?
 
     /// Called whenever a service's web view is torn down for ANY reason — full

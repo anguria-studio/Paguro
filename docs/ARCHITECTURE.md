@@ -65,6 +65,7 @@ The main services and startup adapters are:
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
 - `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.
+- `HibernationScheduler` for idle sweeps and immediate-hibernation grace tasks.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
 - `NotificationManager` for notification polling and macOS delivery.
@@ -113,9 +114,10 @@ It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
 microphone is in use. A download continues after hibernation, because the
 coordinator keeps the download alive until it ends.
-The pool reports service activation and hibernation to `AppState`.
-`AppState` starts active or background badge polling from those lifecycle
-events. SwiftUI views do not start or stop notification polling.
+The pool reports service activation and hibernation through callbacks.
+`HibernationScheduler` owns the hibernate, wake, and removal callbacks and
+forwards polling events to `AppState`. `AppState` starts active or background
+badge polling from those events. SwiftUI views do not start or stop polling.
 
 `WebViewCoordinator` handles these WebKit operations:
 

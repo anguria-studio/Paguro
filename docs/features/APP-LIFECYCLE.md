@@ -22,6 +22,8 @@ notification action that launches Atoll to wait until navigation is ready.
 `StoreLoader` opens or repairs the SwiftData store.
 `StoreRecoveryCoordinator` then prepares any recovery notice and backup picker.
 It applies a selected backup only after restart, before the store opens again.
+`HibernationScheduler` owns idle sweeps and immediate-hibernation grace tasks.
+It cancels all scheduled work before the web-view pool shuts down.
 
 ## Window behavior
 
