@@ -1595,11 +1595,11 @@ final class StoreRecoveryTests: XCTestCase {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: legacy.path + suffix))
         }
         try Self.makeForeignStore(at: legacy)
-        defaults.set(true, forKey: AppState.hasEverHadDataKey)
+        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)
 
         let url = StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped)
         let config = ModelConfiguration(schema: Self.storeSchema, url: url)
-        let (container, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (container, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         guard case .restoredFromSnapshot = outcome else {
             return XCTFail("expected .restoredFromSnapshot, got \(outcome)")

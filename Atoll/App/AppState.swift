@@ -4,21 +4,6 @@ import WebKit
 import LocalAuthentication
 import AtollCore
 
-/// How `AppState` ended up with its `ModelContainer` at launch — drives the
-/// recovery banner. See `AppState.loadContainer`.
-enum StoreLoadOutcome: Equatable {
-    /// The on-disk store opened normally. No banner.
-    case openedClean
-    /// The store was unusable (open failed, or migrated to empty while the user
-    /// had data) and Atoll automatically restored the newest usable
-    /// pre-migration snapshot. Informational, dismissible banner.
-    case restoredFromSnapshot(version: String?, takenAt: Date?)
-    /// The store was unusable and no restore succeeded, so Atoll is running on
-    /// a throwaway in-memory store. Persistent "changes won't be saved" banner;
-    /// the on-disk file and snapshots are left untouched for manual recovery.
-    case inMemoryFallback(reason: String)
-}
-
 @MainActor
 @Observable
 final class AppState {
@@ -280,13 +265,6 @@ final class AppState {
     /// The UI shows a close button only when this is true.
     private(set) var storeErrorDismissible = false
 
-    /// UserDefaults flag, durable across the store being emptied, recording that
-    /// this install has ever held real data. It is what lets `seedDefaultDataIfNeeded`
-    /// tell a genuine fresh install from a store that came up empty after a
-    /// failed migration — the store file itself can't, because a wipe makes it
-    /// look brand new. See `loadContainer`.
-    static let hasEverHadDataKey = "atoll.hasEverHadData"
-
     /// The spaces, services, and links the store last held, written after a
     /// clean open and again at termination. A store that comes up below this
     /// lost data between launches; a user who deletes spaces lowers it on the
@@ -367,7 +345,7 @@ final class AppState {
         networkMonitor: NetworkMonitor
     ) {
         // The current shipping shape, pinned as an explicit `VersionedSchema`.
-        // `loadContainer` opens it through `AtollMigrationPlan`, so an older
+        // `StoreLoader` opens it through `AtollMigrationPlan`, so an older
         // store migrates through named, tested stages instead of inference. See
         // `Atoll/Models/Schema/AtollSchema.swift`.
         let schema = Schema(versionedSchema: AtollSchemaVCurrent.self)
@@ -408,7 +386,7 @@ final class AppState {
 
         // Open the store, self-healing an emptied or unusable store from the
         // newest usable pre-migration snapshot. The outcome drives the banner.
-        let (loadedContainer, outcome) = Self.loadContainer(schema: schema, config: config)
+        let (loadedContainer, outcome) = StoreLoader.load(schema: schema, config: config)
         self.modelContainer = loadedContainer
         self.preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         if case .restoredFromSnapshot = outcome {
@@ -2136,233 +2114,11 @@ final class AppState {
         cleanUpOrphanedDataStores()
     }
 
-    /// Result of a single open attempt, kept separate from the caller so the
-    /// (possibly empty or corrupt) container is released before any file-level
-    /// restore runs — SwiftData holds the SQLite connection until the container
-    /// deallocates, and the retry must not race a live handle.
-    private enum TryOpenResult {
-        case usable(ModelContainer)
-        /// Opened fine but held zero spaces while the user has had data before —
-        /// the signature of a silent migration failure. Divert to restore.
-        case emptiedWithHistory
-        /// Open threw, or the store still held dangling links after repair.
-        case failed
-    }
-
-    /// Marks (once) that this install has held real data, so a later empty store
-    /// is recognized as loss, not a fresh install.
-    private static func markHasData(_ defaults: UserDefaults) {
-        if !defaults.bool(forKey: hasEverHadDataKey) {
-            defaults.set(true, forKey: hasEverHadDataKey)
-        }
-    }
-
-    /// Opens the persistent store and, if it is unusable, automatically restores
-    /// the newest usable pre-migration snapshot and reopens **once**. It never
-    /// overwrites a store that still has data on disk, never deletes the user's
-    /// store, and never seeds over recoverable data. Falls back to a throwaway
-    /// in-memory store when nothing can be restored but data may still exist on
-    /// disk; a genuine fresh start (no file, no snapshot) opens a clean store
-    /// that seeds normally. `defaults` is injectable for tests.
-    ///
-    /// The one-retry cap bounds a genuinely deterministic migration failure
-    /// (restore → reopen → empty again) to a safe in-memory session rather than
-    /// a loop; this class of bug is a race, so the retry usually succeeds.
-    static func loadContainer(
-        schema: Schema,
-        config: ModelConfiguration,
-        defaults: UserDefaults = .standard
-    ) -> (ModelContainer, StoreLoadOutcome) {
-        // "No file" (fresh install / wiped-away store) vs "file present but
-        // empty" (this-launch emptying) need different handling, and the raw
-        // count can't tell them apart (both can read as nil/0), so check the
-        // file directly. The count still catches an existing user whose first
-        // launch on this build empties the store: the flag isn't set yet, but
-        // the on-disk count is > 0.
-        let fileExisted = FileManager.default.fileExists(atPath: config.url.path)
-        let before = StoreRepair.spaceCount(at: config.url)
-        let hadHistory = (before ?? 0) > 0 || defaults.bool(forKey: hasEverHadDataKey)
-        if (before ?? 0) > 0 { markHasData(defaults) }
-
-        let kind: StoreUnusableKind
-        switch tryOpen(schema: schema, config: config, hadHistory: hadHistory) {
-        case .usable(let opened):
-            if ((try? opened.mainContext.fetchCount(FetchDescriptor<Space>())) ?? 0) > 0 {
-                markHasData(defaults)
-            }
-            return (opened, .openedClean)
-        case .emptiedWithHistory:
-            kind = .emptiedWithHistory
-        case .failed:
-            kind = .openFailed
-        }
-
-        let plan = StoreRecoveryPolicy.recoveryPlan(
-            kind: kind,
-            before: before,
-            fileExisted: fileExisted
-        )
-        // Whether a usable backup EXISTS matters more than whether the restore
-        // ultimately succeeds: we must never clear the durable flag and reseed
-        // while a usable backup sits on disk. So look it up up front and branch on
-        // its existence, not just on the restore outcome.
-        let candidate = plan.attemptRestore ? StoreRepair.newestRestorableSnapshot(for: config.url) : nil
-        AppLogger.dataStore.error("Store unusable on open (kind=\(String(describing: kind)), before=\(before.map(String.init) ?? "nil"), fileExisted=\(fileExisted)); attemptRestore=\(plan.attemptRestore), haveBackup=\(candidate != nil)")
-
-        if let candidate {
-            if StoreRepair.restoreFromSnapshot(candidate, to: config.url),
-               case .usable(let reopened) = tryOpen(schema: schema, config: config, hadHistory: true) {
-                markHasData(defaults)
-                AppLogger.dataStore.info("Automatic restore succeeded from backup \(candidate.version ?? "?")")
-                return (reopened, .restoredFromSnapshot(version: candidate.version, takenAt: candidate.takenAt))
-            }
-            // A usable backup exists but the restore/reopen didn't take (a partial
-            // copy, or a deterministic migration that re-empties). NEVER seed over
-            // it: keep the flag and the snapshot untouched and run in-memory so the
-            // next launch retries. Skipping this — reseeding while a good backup
-            // is on disk — would reintroduce the original data-loss bug.
-            AppLogger.dataStore.error("Restore did not take though a usable backup exists; preserving it and running in-memory")
-            return (inMemoryContainer(schema: schema), .inMemoryFallback(reason: "restore failed; usable backup preserved"))
-        }
-
-        // No usable snapshot exists to restore from.
-        switch plan.ifNoRestore {
-        case .freshStart:
-            // Genuinely nothing to recover: no store file existed AND no usable
-            // backup is on disk. Only here is it safe to clear the stale flag and
-            // let a fresh store seed.
-            defaults.set(false, forKey: hasEverHadDataKey)
-            if case .usable(let fresh) = tryOpen(schema: schema, config: config, hadHistory: false) {
-                AppLogger.dataStore.info("No file and nothing to restore; starting fresh")
-                return (fresh, .openedClean)
-            }
-            AppLogger.dataStore.error("Fresh open failed; falling back to in-memory storage")
-            return (inMemoryContainer(schema: schema), .inMemoryFallback(reason: "fresh open failed"))
-        case .preserveInMemory:
-            AppLogger.dataStore.error("No restore performed; running in-memory. On-disk store and snapshots preserved for manual recovery")
-            return (inMemoryContainer(schema: schema), .inMemoryFallback(reason: "store unusable; on-disk data and snapshots preserved"))
-        }
-    }
-
-    /// One open attempt. Repairs dangling links on the raw file first (safe on a
-    /// healthy store), opens, then classifies the result. Wrapped in an
-    /// `autoreleasepool` so the Core Data coordinator and any fetch temporaries
-    /// are released before the caller does file-level restore — SwiftData holds
-    /// the SQLite connection until they drain, and the retry must not race a live
-    /// handle. The container escapes only via `.usable`; the other cases let it
-    /// (and its connection) tear down here.
-    private static func tryOpen(
-        schema: Schema,
-        config: ModelConfiguration,
-        hadHistory: Bool
-    ) -> TryOpenResult {
-        // Repair a store corrupted by a pre-inverse build BEFORE opening it. The
-        // dangling `SpaceServiceLink` rows such a build leaves cannot be removed
-        // once SwiftData faults them, so cleanup happens on the raw file first.
-        StoreRepair.repairDanglingLinks(at: config.url)
-        return autoreleasepool {
-            let opened: ModelContainer
-            do {
-                // Open through the explicit migration plan: SwiftData matches the
-                // store to a declared version and walks the named stages, rather
-                // than inferring the mapping fresh at open time.
-                opened = try ModelContainer(
-                    for: schema,
-                    migrationPlan: AtollMigrationPlan.self,
-                    configurations: [config]
-                )
-            } catch {
-                // The explicit plan could not open the store. Rather than fail
-                // straight to recovery, fall back to plain INFERRED migration —
-                // exactly what shipped before the versioned schema existed. This
-                // makes the plan strictly non-regressive: on an OS where the plan
-                // misbehaves (the macOS 14 migration bugs the design worries
-                // about), or for a store older than the plan's floor, we are never
-                // worse than the previous release. The empty/dangling checks below
-                // and the caller's safety net still guard whatever this opens.
-                AppLogger.dataStore.error("Versioned-plan open failed (\(error.localizedDescription)); retrying with inferred migration")
-                do {
-                    opened = try ModelContainer(for: schema, configurations: [config])
-                } catch {
-                    AppLogger.dataStore.error("Inferred-migration open also failed: \(error.localizedDescription)")
-                    return .failed
-                }
-            }
-            // If any dangling link slipped through repair, a later unguarded
-            // `.space`/`.service` read would fault a deleted model and brick
-            // the app — treat as unusable.
-            if storeHasDanglingLinks(opened) { return .failed }
-            let spaces = (try? opened.mainContext.fetchCount(FetchDescriptor<Space>())) ?? 0
-            // Empty AND we've had data → migration silently emptied it. Don't
-            // run (or seed) on it; the caller restores instead.
-            if spaces == 0 && hadHistory { return .emptiedWithHistory }
-            return .usable(opened)
-        }
-    }
-
-    /// The last-resort in-memory container. Failing to build even this means the
-    /// schema itself is broken and the app cannot run.
-    private static func inMemoryContainer(schema: Schema) -> ModelContainer {
-        let cfg = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        do {
-            return try ModelContainer(for: schema, configurations: [cfg])
-        } catch {
-            AppLogger.dataStore.fault("In-memory model container failed: \(error.localizedDescription)")
-            fatalError("Failed to initialize any model container: \(error.localizedDescription)")
-        }
-    }
-
     /// Clears the store banner. Only offered for the dismissible recovery notice;
     /// the temporary-storage warning stays put because it reflects an ongoing
     /// "changes won't be saved" state.
     func dismissStoreBanner() {
         storeError = nil
-    }
-
-    /// Whether the store still holds any dangling `SpaceServiceLink` — a join
-    /// row whose non-optional `space` or `service` points at a deleted row.
-    /// Reading such a link's relationship faults the deleted model and traps
-    /// ("backing data could no longer be found"), which is the launch/keystroke
-    /// crash `StoreRepair` exists to prevent. `StoreRepair` runs on the raw file
-    /// before the container opens; this is the post-open verification. If it
-    /// returns true, the store is unsafe to run on and `init` falls back to the
-    /// in-memory store rather than let a later unguarded `.space`/`.service`
-    /// read brick the app.
-    ///
-    /// It never touches a dangling relationship: it walks outward only from
-    /// live spaces and services, reading link `id`s (a stored attribute), and
-    /// treats any link not reachable from BOTH sides as dangling.
-    static func storeHasDanglingLinks(_ container: ModelContainer) -> Bool {
-        let context = container.mainContext
-        let links: [SpaceServiceLink]
-        let spaces: [Space]
-        let services: [ServiceInstance]
-        do {
-            links = try context.fetch(FetchDescriptor<SpaceServiceLink>())
-            guard !links.isEmpty else { return false }
-            spaces = try context.fetch(FetchDescriptor<Space>())
-            services = try context.fetch(FetchDescriptor<ServiceInstance>())
-        } catch {
-            // Fail CLOSED: if we can't verify the store is clean, assume it
-            // isn't. Returning false here would open a possibly-corrupt store
-            // live, and the inline `.modelContext` guards are only a backstop —
-            // treating an unverifiable store as unsafe (→ in-memory fallback) is
-            // the safe default.
-            AppLogger.dataStore.error("Dangling-link check failed; treating store as unsafe: \(error.localizedDescription)")
-            return true
-        }
-
-        var reachableFromSpace: Set<UUID> = []
-        for space in spaces {
-            for link in space.serviceLinks { reachableFromSpace.insert(link.id) }
-        }
-        var reachableFromService: Set<UUID> = []
-        for service in services {
-            for link in service.spaceLinks { reachableFromService.insert(link.id) }
-        }
-        return links.contains {
-            !reachableFromSpace.contains($0.id) || !reachableFromService.contains($0.id)
-        }
     }
 
     // MARK: - Store recovery picker
@@ -3443,11 +3199,11 @@ final class AppState {
 
         // Seed defaults ONLY on a genuine fresh install. An empty store while
         // this install has held data before is data loss, not a first launch —
-        // `loadContainer` already tried to restore it, and writing defaults here
+        // `StoreLoader` already tried to restore it, and writing defaults here
         // would overwrite the very store (or its in-memory stand-in) we want to
         // preserve for recovery. This is the guard that turns the original bug
         // from silent, permanent loss into a recoverable, surfaced condition.
-        guard !defaults.bool(forKey: Self.hasEverHadDataKey) else {
+        guard !defaults.bool(forKey: StoreLoader.hasEverHadDataKey) else {
             AppLogger.dataStore.error("Store is empty but this install has had data; skipping seed to avoid overwriting a lost store")
             return false
         }
@@ -3475,7 +3231,7 @@ final class AppState {
         selectedSpaceID = personalSpace.id
         // Record that this install now holds data, so a future empty store is
         // recognized as loss rather than reseeded.
-        Self.markHasData(defaults)
+        StoreLoader.recordHasData(defaults)
         AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
         // `fetchMissingAndStaleFavicons` runs next in `init`. It fetches
         // every icon that has no `faviconFetchedAt`, so one pass covers the

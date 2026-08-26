@@ -216,13 +216,13 @@ final class StoreIntegrityTests: XCTestCase {
         // Detector must flag the corrupted store.
         let corruptConfig = ModelConfiguration(schema: schema, url: storeURL)
         let corrupt = try ModelContainer(for: schema, configurations: [corruptConfig])
-        XCTAssertTrue(AppState.storeHasDanglingLinks(corrupt), "must detect the dangling link")
+        XCTAssertTrue(StoreLoader.storeHasDanglingLinks(corrupt), "must detect the dangling link")
 
         // After repair, the same detector must pass the store.
         StoreRepair.repairDanglingLinks(at: storeURL)
         let repairedConfig = ModelConfiguration(schema: schema, url: storeURL)
         let repaired = try ModelContainer(for: schema, configurations: [repairedConfig])
-        XCTAssertFalse(AppState.storeHasDanglingLinks(repaired), "repaired store must be clean")
+        XCTAssertFalse(StoreLoader.storeHasDanglingLinks(repaired), "repaired store must be clean")
     }
 
     /// `StoreRepair.spaceCount` is what lets `init` tell a fresh install from a
@@ -266,7 +266,7 @@ final class StoreIntegrityTests: XCTestCase {
 
     /// The store schema, shared by the restore tests. Uses the versioned current
     /// schema so it matches `AtollMigrationPlan`'s latest, the same shape
-    /// `loadContainer` opens in production.
+    /// `StoreLoader` opens in production.
     static var storeSchema: Schema {
         ModelFixtures.storeSchema
     }
@@ -382,10 +382,10 @@ final class StoreIntegrityTests: XCTestCase {
         try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 4)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.0.0")
         try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
-        defaults.set(true, forKey: AppState.hasEverHadDataKey)   // user has had data
+        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)   // user has had data
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let (container, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (container, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         guard case .restoredFromSnapshot = outcome else {
             return XCTFail("expected .restoredFromSnapshot, got \(outcome)")
@@ -406,11 +406,11 @@ final class StoreIntegrityTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let (container, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (container, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         XCTAssertEqual(outcome, .openedClean)
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 0)
-        XCTAssertFalse(defaults.bool(forKey: AppState.hasEverHadDataKey), "an empty fresh install hasn't recorded data yet")
+        XCTAssertFalse(defaults.bool(forKey: StoreLoader.hasEverHadDataKey), "an empty fresh install hasn't recorded data yet")
     }
 
     /// Emptied store + history but NO usable snapshot → in-memory fallback, and
@@ -427,10 +427,10 @@ final class StoreIntegrityTests: XCTestCase {
 
         try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
         try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")   // emptied, but no snapshot taken
-        defaults.set(true, forKey: AppState.hasEverHadDataKey)
+        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let (_, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (_, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         guard case .inMemoryFallback = outcome else {
             return XCTFail("expected .inMemoryFallback, got \(outcome)")
@@ -451,14 +451,14 @@ final class StoreIntegrityTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 2)
-        XCTAssertFalse(defaults.bool(forKey: AppState.hasEverHadDataKey), "precondition: flag not yet set")
+        XCTAssertFalse(defaults.bool(forKey: StoreLoader.hasEverHadDataKey), "precondition: flag not yet set")
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let (container, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (container, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         XCTAssertEqual(outcome, .openedClean)
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 2)
-        XCTAssertTrue(defaults.bool(forKey: AppState.hasEverHadDataKey), "opening a populated store must record that data exists")
+        XCTAssertTrue(defaults.bool(forKey: StoreLoader.hasEverHadDataKey), "opening a populated store must record that data exists")
     }
 
     /// When no store file exists but a usable backup does, Atoll must RESTORE
@@ -481,16 +481,16 @@ final class StoreIntegrityTests: XCTestCase {
         for suffix in ["", "-wal", "-shm"] {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: storeURL.path + suffix))
         }
-        defaults.set(true, forKey: AppState.hasEverHadDataKey)   // stale flag, no file
+        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)   // stale flag, no file
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let (container, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (container, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         guard case .restoredFromSnapshot = outcome else {
             return XCTFail("a usable backup must be restored, not reseeded; got \(outcome)")
         }
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 3)
-        XCTAssertTrue(defaults.bool(forKey: AppState.hasEverHadDataKey), "the flag must NOT be cleared when a backup was restored")
+        XCTAssertTrue(defaults.bool(forKey: StoreLoader.hasEverHadDataKey), "the flag must NOT be cleared when a backup was restored")
     }
 
     /// Prune must never delete the newest USABLE snapshot, even when a run of
@@ -652,13 +652,13 @@ final class StoreIntegrityTests: XCTestCase {
         let suite = "atoll-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(true, forKey: AppState.hasEverHadDataKey)   // stale
+        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)   // stale
 
         let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let (container, outcome) = AppState.loadContainer(schema: Self.storeSchema, config: config, defaults: defaults)
+        let (container, outcome) = StoreLoader.load(schema: Self.storeSchema, config: config, defaults: defaults)
 
         XCTAssertEqual(outcome, .openedClean, "no file + nothing to restore must start fresh, not fall to a permanent empty state")
-        XCTAssertFalse(defaults.bool(forKey: AppState.hasEverHadDataKey), "the stale flag must be cleared so the seed can run")
+        XCTAssertFalse(defaults.bool(forKey: StoreLoader.hasEverHadDataKey), "the stale flag must be cleared so the seed can run")
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 0)
     }
 

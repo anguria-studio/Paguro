@@ -119,7 +119,7 @@ enum StoreRepair {
     /// (unrecognized schema). `nil` therefore means "unknown", never "zero": the
     /// caller must not treat it as an empty store.
     ///
-    /// `AppState.loadContainer` uses this to tell a genuine fresh install (no
+    /// `StoreLoader` uses this to tell a genuine fresh install (no
     /// file → `nil`) apart from a store that *had* spaces on disk but came up
     /// empty after opening — the signature of a silent migration failure. The
     /// caller then auto-restores the newest usable snapshot rather than letting
@@ -465,7 +465,7 @@ enum StoreRepair {
     /// untouched.
     ///
     /// If the restored store then fails to migrate on a later launch,
-    /// `loadContainer`'s own auto-restore may kick in and replace it again —
+    /// `StoreLoader` may restore it again during its open retry —
     /// that is intended, not a bug: both this pick's `.bak` source and its
     /// `.prepick-` aside survive untouched, so nothing the user chose is ever
     /// actually lost.

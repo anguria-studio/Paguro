@@ -56,9 +56,10 @@ Use the application model or a feature controller.
 `AppModel` is the application composition root.
 It creates each long-lived service one time.
 
-The main services are:
+The main services and startup adapters are:
 
 - `AppState` for application and feature state.
+- `StoreLoader` for SwiftData migration, integrity checks, and launch recovery.
 - `PreferencesStore` for the single loaded preferences row and typed commits.
 - `DataStoreManager` for WebKit data stores.
 - `WebViewPool` for live and hibernated web views.
