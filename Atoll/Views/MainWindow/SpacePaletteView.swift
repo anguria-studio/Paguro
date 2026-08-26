@@ -17,7 +17,7 @@ enum SpacePalette {
     ///
     /// Returning nil matters as much as returning an index. The digits are
     /// palette-local (decided 2026-08-17): `⌘1`–`⌘9` still switches services
-    /// globally through `KeyboardShortcutManager`, and the palette only borrows
+    /// globally through `KeyboardShortcutCommands`, and the palette only borrows
     /// them while it is open. A digit with no row behind it has to go
     /// unhandled rather than be swallowed.
     static func index(forDigit digit: Int, rowCount: Int) -> Int? {
