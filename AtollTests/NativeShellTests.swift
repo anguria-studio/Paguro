@@ -1,8 +1,55 @@
 import XCTest
 import SwiftData
+import AtollCore
 @testable import Atoll
 
 final class NativeShellTests: XCTestCase {
+    @MainActor
+    func testDockMagnificationBuildsOneIndexedLayout() {
+        let linkIDs = (0..<5).map { _ in UUID() }
+        let state = DockMagnificationState()
+        state.beginHover(for: linkIDs[2])
+
+        let layout = state.layout(
+            linkIDs: linkIDs,
+            baseSize: 22,
+            magnifiedSize: 44,
+            magnificationEnabled: true,
+            isCollapsed: true
+        )
+
+        XCTAssertEqual(layout.iconSize(for: linkIDs[2]), 44)
+        XCTAssertGreaterThan(layout.iconSize(for: linkIDs[1]), layout.iconSize(for: linkIDs[0]))
+        XCTAssertEqual(layout.iconSize(for: linkIDs[1]), layout.iconSize(for: linkIDs[3]))
+        XCTAssertEqual(layout.iconSize(for: UUID()), 22)
+        XCTAssertEqual(
+            layout.stackVerticalOffset,
+            CGFloat(DockIconSizing.stackVerticalOffset(
+                baseSize: 22,
+                magnifiedSize: 44,
+                magnificationEnabled: true,
+                itemCount: linkIDs.count,
+                hoveredIndex: 2
+            ))
+        )
+    }
+
+    @MainActor
+    func testDockMagnificationEntryCancelsAPendingExit() async {
+        let first = UUID()
+        let second = UUID()
+        let state = DockMagnificationState()
+
+        state.beginHover(for: first)
+        state.endHover(for: first, after: .seconds(1))
+        state.beginHover(for: second)
+        await Task.yield()
+
+        XCTAssertEqual(state.hoveredLinkID, second)
+        state.clearHover()
+        XCTAssertNil(state.hoveredLinkID)
+    }
+
     // MARK: - Notice shape, radius scale, selection against focus (build step 7)
 
     /// Eight radii down to three. The point of the scale is that there is

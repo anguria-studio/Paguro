@@ -37,8 +37,7 @@ struct UnifiedRailView: View {
     @State private var confirmingDeleteSpace: Space?
     @State private var confirmingDelete: SpaceServiceLink?
     @State private var editingService: ServiceInstance?
-    @State private var hoveredDockLinkID: UUID?
-    @State private var dockHoverExitTask: Task<Void, Never>?
+    @State private var dockMagnification = DockMagnificationState()
     /// Empty means every workspace starts expanded. Keeping only collapsed IDs
     /// also makes a newly created workspace appear without another state sync.
     @State private var collapsedWorkspaceIDs: Set<UUID> = []
@@ -190,7 +189,15 @@ struct UnifiedRailView: View {
 
     /// A compact source list in expanded form and an icon dock when collapsed.
     private var verticalBody: some View {
-        VStack(spacing: 0) {
+        let dockLayout = dockMagnification.layout(
+            linkIDs: dockLinks.map(\.id),
+            baseSize: appState.iconRailBaseSize,
+            magnifiedSize: appState.iconRailMagnifiedSize,
+            magnificationEnabled: appState.iconRailMagnificationEnabled,
+            isCollapsed: sidebarPresentation == .collapsed
+        )
+
+        return VStack(spacing: 0) {
             Color.clear
                 .frame(height: sidebarPresentation.contentTopInset)
 
@@ -204,17 +211,17 @@ struct UnifiedRailView: View {
             GeometryReader { geometry in
                 ScrollView {
                     LazyVStack(spacing: sidebarPresentation == .expanded ? 2 : 0) {
-                        verticalRailContent
+                        verticalRailContent(dockLayout: dockLayout)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, dockRailTopPadding(viewportHeight: geometry.size.height))
                     .padding(.bottom, sidebarPresentation == .expanded ? 8 : 0)
-                    .offset(y: dockStackVerticalOffset)
+                    .offset(y: dockLayout.stackVerticalOffset)
                     .animation(
                         reduceMotion
                             ? nil
                             : .smooth(duration: AtollMotion.dockMagnificationSeconds),
-                        value: dockStackVerticalOffset
+                        value: dockLayout.stackVerticalOffset
                     )
                 }
                 .scrollClipDisabled(sidebarPresentation == .collapsed)
@@ -282,16 +289,16 @@ struct UnifiedRailView: View {
         )
         .onChange(of: sidebarPresentation) { _, presentation in
             if presentation != .collapsed {
-                clearDockHover()
+                dockMagnification.clearHover()
             }
         }
         .onChange(of: appState.iconRailMagnificationEnabled) { _, enabled in
             if !enabled {
-                clearDockHover()
+                dockMagnification.clearHover()
             }
         }
         .onChange(of: appState.workspaceViewMode) { _, _ in
-            clearDockHover()
+            dockMagnification.clearHover()
         }
         .onChange(of: selectedSpaceID) { _, workspaceID in
             guard showsAllWorkspaces,
@@ -301,7 +308,7 @@ struct UnifiedRailView: View {
             collapsedWorkspaceIDs.remove(workspaceID)
         }
         .onDisappear {
-            clearDockHover()
+            dockMagnification.clearHover()
         }
         .contextMenu {
             railCreationMenu
@@ -309,11 +316,14 @@ struct UnifiedRailView: View {
     }
 
     @ViewBuilder
-    private var verticalRailContent: some View {
+    private func verticalRailContent(
+        dockLayout: DockMagnificationLayout
+    ) -> some View {
         if showsAllWorkspaces && sidebarPresentation == .expanded {
             ForEach(Array(workspaceGroups.enumerated()), id: \.element.id) { index, group in
                 workspaceSection(
                     group,
+                    dockLayout: dockLayout,
                     topSpacing: index == 0
                         ? 0
                         : AtollMetric.Sidebar.workspaceSectionTopSpacing
@@ -331,12 +341,12 @@ struct UnifiedRailView: View {
                         .accessibilityHidden(true)
                 }
                 ForEach(group.links) { link in
-                    serviceRow(for: link)
+                    serviceRow(for: link, dockLayout: dockLayout)
                 }
             }
         } else {
             ForEach(filteredLinks) { link in
-                serviceRow(for: link)
+                serviceRow(for: link, dockLayout: dockLayout)
             }
         }
     }
@@ -344,6 +354,7 @@ struct UnifiedRailView: View {
     @ViewBuilder
     private func workspaceSection(
         _ group: WorkspaceLinkGroup,
+        dockLayout: DockMagnificationLayout,
         topSpacing: CGFloat
     ) -> some View {
         let space = group.space
@@ -379,7 +390,7 @@ struct UnifiedRailView: View {
 
         if isExpanded {
             ForEach(group.links) { link in
-                serviceRow(for: link)
+                serviceRow(for: link, dockLayout: dockLayout)
             }
         }
     }
@@ -500,9 +511,17 @@ struct UnifiedRailView: View {
     /// so `ViewThatFits` can measure its width to decide whether the tabs fit.
     /// The traffic-light inset is spent by the header now, so this starts flush.
     private var tabRow: some View {
-        HStack(spacing: 4) {
+        let dockLayout = dockMagnification.layout(
+            linkIDs: filteredLinks.map(\.id),
+            baseSize: appState.iconRailBaseSize,
+            magnifiedSize: appState.iconRailMagnifiedSize,
+            magnificationEnabled: false,
+            isCollapsed: false
+        )
+
+        return HStack(spacing: 4) {
             ForEach(filteredLinks) { link in
-                serviceRow(for: link)
+                serviceRow(for: link, dockLayout: dockLayout)
                     .id(link.service.id)
             }
             addServiceButton
@@ -514,7 +533,10 @@ struct UnifiedRailView: View {
     // MARK: - Service cells
 
     @ViewBuilder
-    private func serviceRow(for link: SpaceServiceLink) -> some View {
+    private func serviceRow(
+        for link: SpaceServiceLink,
+        dockLayout: DockMagnificationLayout
+    ) -> some View {
         let isSel = selectedServiceID == link.service.id
             && selectedSpaceID == link.space.id
         let badge = appState.badgeManager.badgeCount(for: link.service.id)
@@ -536,7 +558,8 @@ struct UnifiedRailView: View {
             muted: muted,
             media: media,
             health: health,
-            focused: focusedLinkID == link.id
+            focused: focusedLinkID == link.id,
+            dockLayout: dockLayout
         )
             .draggable(link.id.uuidString) {
                 // Custom drag preview. Source-dimming is left to SwiftUI:
@@ -610,9 +633,10 @@ struct UnifiedRailView: View {
         muted: Bool,
         media: WebViewPool.MediaCaptureState?,
         health: ServiceHealth,
-        focused: Bool
+        focused: Bool,
+        dockLayout: DockMagnificationLayout
     ) -> some View {
-        let displayedIconSize = dockIconSize(for: link.id)
+        let displayedIconSize = dockLayout.iconSize(for: link.id)
         let baseIconSize = appState.iconRailBaseSize
         ServiceRowView(
             instance: link.service,
@@ -646,54 +670,20 @@ struct UnifiedRailView: View {
             supplementaryWorkspaceName: duplicateServiceIDs.contains(link.service.id)
                 ? link.space.name
                 : nil,
-            isDockHovered: hoveredDockLinkID == link.id,
-            dockMagnificationActive: hoveredDockLinkID != nil
+            isDockHovered: dockMagnification.hoveredLinkID == link.id,
+            dockMagnificationActive: dockMagnification.hoveredLinkID != nil
                 && appState.iconRailMagnificationEnabled,
             onDockHoverChange: { hovering in
                 if hovering {
-                    beginDockHover(for: link.id)
+                    dockMagnification.beginHover(for: link.id)
                 } else {
-                    endDockHover(for: link.id)
+                    dockMagnification.endHover(for: link.id)
                 }
             },
             isFocused: focused
         ) {
             selectService(link)
         }
-    }
-
-    private func dockIconSize(for linkID: UUID) -> CGFloat {
-        guard sidebarPresentation == .collapsed,
-              let itemIndex = dockLinks.firstIndex(where: { $0.id == linkID })
-        else {
-            return CGFloat(DockIconSizing.baseSize(appState.iconRailBaseSize))
-        }
-
-        let hoveredIndex = hoveredDockLinkID.flatMap { hoveredID in
-            dockLinks.firstIndex(where: { $0.id == hoveredID })
-        }
-        return CGFloat(DockIconSizing.displayedSize(
-            baseSize: appState.iconRailBaseSize,
-            magnifiedSize: appState.iconRailMagnifiedSize,
-            magnificationEnabled: appState.iconRailMagnificationEnabled,
-            itemIndex: itemIndex,
-            hoveredIndex: hoveredIndex
-        ))
-    }
-
-    private var dockStackVerticalOffset: CGFloat {
-        guard sidebarPresentation == .collapsed else { return 0 }
-
-        let hoveredIndex = hoveredDockLinkID.flatMap { hoveredID in
-            dockLinks.firstIndex(where: { $0.id == hoveredID })
-        }
-        return CGFloat(DockIconSizing.stackVerticalOffset(
-            baseSize: appState.iconRailBaseSize,
-            magnifiedSize: appState.iconRailMagnifiedSize,
-            magnificationEnabled: appState.iconRailMagnificationEnabled,
-            itemCount: dockLinks.count,
-            hoveredIndex: hoveredIndex
-        ))
     }
 
     private func dockRailTopPadding(viewportHeight: CGFloat) -> CGFloat {
@@ -709,37 +699,6 @@ struct UnifiedRailView: View {
             additionalContentHeight: Double(dockDividerCount)
                 * Double(AtollMetric.Sidebar.workspaceDividerHeight)
         ))
-    }
-
-    /// A magnified row changes the pointer target while the pointer is still.
-    /// Keep its hover state briefly so the new geometry can settle. Entry stays
-    /// immediate, and entry on any icon cancels the pending exit.
-    private func beginDockHover(for linkID: UUID) {
-        dockHoverExitTask?.cancel()
-        dockHoverExitTask = nil
-        hoveredDockLinkID = linkID
-    }
-
-    private func endDockHover(for linkID: UUID) {
-        guard hoveredDockLinkID == linkID else { return }
-
-        dockHoverExitTask?.cancel()
-        dockHoverExitTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: AtollMotion.dockHoverExitDelay)
-            } catch {
-                return
-            }
-
-            guard hoveredDockLinkID == linkID else { return }
-            hoveredDockLinkID = nil
-        }
-    }
-
-    private func clearDockHover() {
-        dockHoverExitTask?.cancel()
-        dockHoverExitTask = nil
-        hoveredDockLinkID = nil
     }
 
     /// Selects a service and co-locates keyboard focus on its cell, so a click
