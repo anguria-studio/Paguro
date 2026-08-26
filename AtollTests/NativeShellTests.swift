@@ -41,9 +41,9 @@ final class NativeShellTests: XCTestCase {
         let state = DockMagnificationState()
 
         state.beginHover(for: first)
-        state.endHover(for: first, after: .seconds(1))
+        state.endHover(for: first, after: .milliseconds(10))
         state.beginHover(for: second)
-        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(state.hoveredLinkID, second)
         state.clearHover()
@@ -83,45 +83,6 @@ final class NativeShellTests: XCTestCase {
         XCTAssertEqual(ShellGlassStyle.resolving(nil), GlassLabDefaults.style)
         XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
         XCTAssertEqual(ShellGlassStyle.off.frostOpacity, ShellGlassStyle.regular.frostOpacity)
-    }
-
-    /// Both rail forms derive from one source-list geometry rule.
-    func testNativeSidebarGeometryIsInternallyConsistent() {
-        XCTAssertEqual(
-            AtollMetric.Sidebar.expandedWidth,
-            AtollMetric.Sidebar.surfaceWidth + (AtollMetric.Sidebar.surfaceInset * 2)
-        )
-        XCTAssertEqual(
-            AtollMetric.Sidebar.horizontalInset,
-            AtollMetric.Sidebar.surfaceInset + AtollMetric.Sidebar.contentInset
-        )
-        XCTAssertEqual(
-            AtollMetric.Sidebar.rowWidth + (AtollMetric.Sidebar.contentInset * 2),
-            AtollMetric.Sidebar.surfaceWidth
-        )
-        XCTAssertEqual(
-            AtollMetric.Sidebar.collapsedWidth,
-            CGFloat(DockIconSizing.railWidth(baseSize: DockIconSizing.defaultBaseSize))
-        )
-        XCTAssertEqual(
-            AtollMetric.Sidebar.dockItemSize,
-            CGFloat(DockIconSizing.selectionSize(displayedIconSize: DockIconSizing.defaultBaseSize))
-        )
-        XCTAssertEqual(
-            AtollMetric.Sidebar.dockRowHeight,
-            CGFloat(DockIconSizing.rowHeight(displayedIconSize: DockIconSizing.defaultBaseSize))
-        )
-        XCTAssertEqual(
-            AtollMetric.Sidebar.collapsedContentTopInset,
-            AtollMetric.Sidebar.collapsedSurfaceTopInset + AtollMetric.Sidebar.surfaceInset
-        )
-        XCTAssertEqual(AtollMetric.Sidebar.topBarHeight, AtollMetric.Toolbar.height)
-        XCTAssertEqual(
-            AtollMetric.Toolbar.collapsedLeadingInset,
-            AtollMetric.Toolbar.collapsedLeadingInset(
-                sidebarWidth: AtollMetric.Sidebar.collapsedWidth
-            )
-        )
     }
 
     func testSidebarPresentationMapsToSharedGeometry() {

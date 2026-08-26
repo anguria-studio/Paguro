@@ -5,6 +5,29 @@ import AtollCore
 
 final class ShellPreferencesTests: XCTestCase {
     @MainActor
+    func testFreshInstallMatchesDocumentedDefaults() throws {
+        let sandbox = try StoreSandbox(testCase: self, label: "shell-defaults")
+        let row = AppPreferences()
+        let fixture = try makePreferencesStore(row)
+        defer { withExtendedLifetime(fixture.container) {} }
+
+        let preferences = ShellPreferences.load(
+            defaults: sandbox.defaults,
+            preferencesStore: fixture.store
+        )
+
+        XCTAssertEqual(row.appPresenceMode, .both)
+        XCTAssertTrue(row.showBadgeCountInDock)
+        XCTAssertFalse(row.autoDismissCookieBanners)
+        XCTAssertEqual(preferences.appearanceMode, .system)
+        XCTAssertEqual(preferences.railLayout, .sidebar)
+        XCTAssertEqual(preferences.workspaceViewMode, .all)
+        XCTAssertEqual(preferences.iconRailBaseSize, 22)
+        XCTAssertEqual(preferences.iconRailMagnification, 0.26, accuracy: 0.000_001)
+        XCTAssertEqual(preferences.iconRailPosition, .top)
+    }
+
+    @MainActor
     func testLoadCombinesDefaultsAndTransactionalPreferences() throws {
         let sandbox = try StoreSandbox(testCase: self, label: "shell-load")
         let defaults = sandbox.defaults
