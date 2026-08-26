@@ -33,6 +33,7 @@ final class ContentBlockerManager {
     private let adResource: String
     private let annoyanceResource: String
     private var hasStarted = false
+    private var compilationTask: Task<Void, Never>?
 
     init(
         adResource: String = "hagezi-light",
@@ -57,7 +58,15 @@ final class ContentBlockerManager {
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
-        Task { await loadAndCompile() }
+        compilationTask = Task { [weak self] in
+            await self?.loadAndCompile()
+        }
+    }
+
+    func stop() {
+        compilationTask?.cancel()
+        compilationTask = nil
+        onReady = nil
     }
 
     private func loadAndCompile() async {
@@ -68,10 +77,12 @@ final class ContentBlockerManager {
 
         var keptIdentifiers: Set<String> = []
         let ads = await compileResource(store, resource: adResource, prefix: adResource)
+        guard !Task.isCancelled else { return }
         adLists = ads.lists
         keptIdentifiers.formUnion(ads.identifiers)
 
         let annoyances = await compileResource(store, resource: annoyanceResource, prefix: annoyanceResource)
+        guard !Task.isCancelled else { return }
         annoyanceLists = annoyances.lists
         keptIdentifiers.formUnion(annoyances.identifiers)
 
@@ -156,7 +167,11 @@ final class ContentBlockerManager {
     private func cleanUpStaleLists(store: WKContentRuleListStore, prefixes: [String], keeping current: Set<String>) async {
         let existing = await availableIdentifiers(store: store)
         for id in existing where prefixes.contains(where: { id.hasPrefix($0) }) && !current.contains(id) {
-            store.removeContentRuleList(forIdentifier: id) { _ in }
+            do {
+                try await store.removeContentRuleList(forIdentifier: id)
+            } catch {
+                AppLogger.general.error("Failed to remove stale content blocker list \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

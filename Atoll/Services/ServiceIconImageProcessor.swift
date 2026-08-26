@@ -42,6 +42,14 @@ enum ServiceIconImageProcessor {
             throw ServiceIconImageError.invalidImage
         }
 
+        return try normalizedPNG(from: image)
+    }
+
+    static func normalizedPNG(from image: NSImage) throws -> Data {
+        guard image.size.width > 0, image.size.height > 0 else {
+            throw ServiceIconImageError.invalidImage
+        }
+
         let scale = min(1, maximumDimension / max(image.size.width, image.size.height))
         let pixelWidth = max(1, Int((image.size.width * scale).rounded()))
         let pixelHeight = max(1, Int((image.size.height * scale).rounded()))

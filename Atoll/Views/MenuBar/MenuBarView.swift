@@ -45,7 +45,7 @@ struct MenuBarView: View {
             Divider()
 
             Button("Show Atoll") {
-                NSApp.activate(ignoringOtherApps: true)
+                AppDelegate.prepareToShowWindow()
                 if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
                     window.makeKeyAndOrderFront(nil)
                 }
@@ -55,7 +55,7 @@ struct MenuBarView: View {
             // runs as an accessory with no menu bar, so this is the only way
             // back to Settings (e.g. to leave menu-bar-only mode).
             Button("Settings…") {
-                NSApp.activate(ignoringOtherApps: true)
+                AppDelegate.prepareToShowWindow()
                 openSettings()
             }
             .keyboardShortcut(",", modifiers: .command)
@@ -76,7 +76,7 @@ struct MenuBarView: View {
     }
 
     private func activateService(_ serviceID: UUID, inSpace spaceID: UUID) {
-        NSApp.activate(ignoringOtherApps: true)
+        AppDelegate.prepareToShowWindow()
         // Post notification for AppState to handle navigation
         NotificationCenter.default.post(
             name: .menuBarServiceActivated,

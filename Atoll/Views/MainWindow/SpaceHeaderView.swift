@@ -14,6 +14,24 @@ enum SpaceHeader {
     }
 }
 
+/// Accessibility text for one accordion section in the all-workspaces view.
+enum WorkspaceSectionHeader {
+    static func label(
+        workspaceName: String,
+        badgeCount: Int,
+        isMuted: Bool,
+        isExpanded: Bool
+    ) -> String {
+        var parts = [workspaceName]
+        if badgeCount > 0 {
+            parts.append(badgeCount == 1 ? "1 unread" : "\(badgeCount) unread")
+        }
+        if isMuted { parts.append("muted") }
+        parts.append(isExpanded ? "expanded" : "collapsed")
+        return parts.joined(separator: ", ")
+    }
+}
+
 /// The current space, drawn as a header on the service rail, and the click
 /// target that opens the switcher.
 ///
@@ -95,7 +113,9 @@ struct SpaceHeaderView: View {
 
             if badgeCount > 0 {
                 BadgeCountView(count: badgeCount)
-            } else if isMuted {
+            }
+
+            if isMuted {
                 Image(systemName: "bell.slash.fill")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
@@ -131,5 +151,76 @@ struct SpaceHeaderView: View {
             return AnyShapeStyle(AtollColor.Fill.rowHover)
         }
         return AnyShapeStyle(Color.clear)
+    }
+}
+
+/// One workspace disclosure row in the expanded all-workspaces sidebar.
+struct WorkspaceSectionHeaderView: View {
+    let workspaceName: String
+    let emoji: String
+    let badgeCount: Int
+    let isMuted: Bool
+    let isExpanded: Bool
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(AtollColor.Text.tertiary)
+                    // Match the service icon column below this header.
+                    .frame(width: AtollMetric.Sidebar.expandedIconSize)
+                    .accessibilityHidden(true)
+
+                Text(emoji)
+                    .font(.system(size: 11))
+                    .opacity(isMuted ? 0.5 : 1)
+                    .accessibilityHidden(true)
+
+                Text(workspaceName)
+                    .font(.atollSidebarSection)
+                    .foregroundStyle(AtollColor.Text.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 0)
+
+                if badgeCount > 0 {
+                    BadgeCountView(count: badgeCount)
+                }
+
+                if isMuted {
+                    Image(systemName: "bell.slash.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(
+                width: AtollMetric.Sidebar.rowWidth,
+                height: AtollMetric.Sidebar.headerHeight
+            )
+            .background {
+                RoundedRectangle(cornerRadius: AtollMetric.Sidebar.rowRadius)
+                    .fill(isHovering ? AtollColor.Fill.rowHover : Color.clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(isExpanded ? "Collapse \(workspaceName)" : "Expand \(workspaceName)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(WorkspaceSectionHeader.label(
+            workspaceName: workspaceName,
+            badgeCount: badgeCount,
+            isMuted: isMuted,
+            isExpanded: isExpanded
+        ))
+        .accessibilityHint(isExpanded ? "Collapse workspace" : "Expand workspace")
+        .accessibilityAddTraits(.isButton)
     }
 }

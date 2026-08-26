@@ -5,6 +5,12 @@ enum AppPresenceMode: String, Codable {
     case dock
     case menuBar
     case both
+
+    /// The Dock icon stays visible while a main window is closed.
+    var showsDockIcon: Bool { self != .menuBar }
+
+    /// The menu-bar item is present.
+    var showsMenuBarItem: Bool { self != .dock }
 }
 
 /// Where the rail sits relative to the web content.
@@ -59,6 +65,12 @@ enum AppearanceMode: String, Codable, CaseIterable {
         case .dark: return "Always Dark"
         }
     }
+}
+
+enum AppPreferenceDefaults {
+    static let appPresenceMode = AppPresenceMode.both
+    static let showBadgeCountInDock = true
+    static let autoDismissCookieBanners = false
 }
 
 @Model
@@ -139,11 +151,11 @@ final class AppPreferences {
 
     init(
         id: UUID = UUID(),
-        appPresenceMode: AppPresenceMode = .dock,
+        appPresenceMode: AppPresenceMode = AppPreferenceDefaults.appPresenceMode,
         launchAtLogin: Bool = false,
         globalKeyboardShortcutsEnabled: Bool = true,
-        showBadgeCountInDock: Bool = true,
-        autoDismissCookieBanners: Bool = true,
+        showBadgeCountInDock: Bool = AppPreferenceDefaults.showBadgeCountInDock,
+        autoDismissCookieBanners: Bool = AppPreferenceDefaults.autoDismissCookieBanners,
         selectedSpaceID: UUID? = nil,
         selectedServiceID: UUID? = nil,
         defaultZoom: Double? = nil,

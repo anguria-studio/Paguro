@@ -73,7 +73,7 @@ struct WebContentActions: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 6) {
             Button {
                 if webViewState.isLoading {
                     webViewState.webView?.stopLoading()
@@ -84,6 +84,10 @@ struct WebContentActions: View {
                 Image(systemName: webViewState.isLoading ? "xmark" : "arrow.clockwise")
             }
             .buttonStyle(AtollToolbarButtonStyle())
+            .glassEffect(
+                actionGlass,
+                in: .circle
+            )
             .disabled(webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
@@ -94,6 +98,10 @@ struct WebContentActions: View {
                 Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
             }
             .buttonStyle(AtollToolbarButtonStyle(isSelected: appState.doNotDisturb))
+            .glassEffect(
+                actionGlass,
+                in: .circle
+            )
             .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
             .accessibilityLabel(
                 appState.doNotDisturb
@@ -102,18 +110,17 @@ struct WebContentActions: View {
             )
             .accessibilityIdentifier("notifications.globalMute")
         }
-        .padding(3)
-        .glassEffect(
-            .regular
-                .tint(
-                    AtollColor.Fill.glassTint(
-                        intensity: appState.liquidGlassIntensity
-                    )
-                )
-                .interactive(),
-            in: .capsule
-        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Service controls")
+    }
+
+    private var actionGlass: Glass {
+        .regular
+            .tint(
+                AtollColor.Fill.glassTint(
+                    intensity: appState.liquidGlassIntensity
+                )
+            )
+            .interactive()
     }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import WebKit
 import AppKit
+import AtollCore
 
 @MainActor
 @Observable
@@ -58,6 +59,10 @@ final class WebViewPool {
     }
     private(set) var mediaCaptureStates: [UUID: MediaCaptureState] = [:]
     private var mediaObservations: [UUID: [NSKeyValueObservation]] = [:]
+
+    var activeMicrophoneCount: Int {
+        mediaCaptureStates.values.count(where: \.micActive)
+    }
 
     /// Per-service page health, so the rail can mark a service that is still
     /// coming up or that failed — including one you are not looking at, which is
@@ -279,21 +284,16 @@ final class WebViewPool {
 
     /// Preloads web views for multiple services with a staggered delay to avoid
     /// overwhelming the network and CPU on startup.
-    /// Captures references before the loop so deleted SwiftData objects don't
-    /// cause issues across await suspension points.
+    ///
+    /// A service can be deleted during the stagger, and reading a property of
+    /// a deleted `@Model` traps. Each iteration checks that the model is still
+    /// in a context before it reads anything from it.
     func preloadAll(_ instances: [ServiceInstance], delayBetween: Duration = .milliseconds(500)) async {
-        // Snapshot the list before any suspension points — a service could be
-        // deleted during the staggered sleep, and accessing a deleted @Model
-        // object's properties is undefined.
-        struct PreloadEntry { let id: UUID; let instance: ServiceInstance }
-        let entries = instances.map { PreloadEntry(id: $0.id, instance: $0) }
-
-        for entry in entries {
+        for instance in instances {
             guard !Task.isCancelled else { break }
-            guard webViews[entry.id] == nil else { continue }
-            // Verify the model object is still in a valid context before accessing it
-            guard entry.instance.modelContext != nil else { continue }
-            preload(entry.instance)
+            guard instance.modelContext != nil else { continue }
+            guard webViews[instance.id] == nil else { continue }
+            preload(instance)
             try? await Task.sleep(for: delayBetween)
         }
     }
@@ -324,6 +324,36 @@ final class WebViewPool {
         snapshots.removeValue(forKey: instanceID)
     }
 
+    /// Stops every live page, cancels every download, and releases all WebKit
+    /// delegates during process termination. The persistent website data
+    /// stores remain on disk.
+    func shutdown() {
+        WebViewCoordinator.cancelAllDownloads()
+        let serviceIDs = Array(webViews.keys)
+        for serviceID in serviceIDs {
+            teardownWebView(serviceID)
+            userScriptManager.removeHandler(for: serviceID)
+        }
+        suspendedURLs.removeAll()
+        hibernatedServiceIDs.removeAll()
+        pinnedIDs.removeAll()
+        neverHibernateIDs.removeAll()
+        notificationCriticalIDs.removeAll()
+        evictionInFlight.removeAll()
+        activeServiceID = nil
+
+        onServiceHibernated = nil
+        onServiceWoke = nil
+        onServiceSoftHibernated = nil
+        onServiceSoftWoke = nil
+        onServiceRemoved = nil
+        onServiceTornDown = nil
+        onServicePreloaded = nil
+        onNavigationFinished = nil
+        externalLinkHandler = nil
+        mediaCapturePolicyProvider = nil
+    }
+
     func hasWebView(for instanceID: UUID) -> Bool {
         webViews[instanceID] != nil
     }
@@ -332,11 +362,32 @@ final class WebViewPool {
         hibernatedServiceIDs.contains(instanceID)
     }
 
+    /// The URL a service resumes at after full hibernation, or `nil` to resume
+    /// at its home URL.
+    ///
+    /// Only a web page is worth resuming. The error and recovery pages load
+    /// with `loadHTMLString`, so the web view's URL is `about:blank` while one
+    /// is shown; resuming there would show a blank page reported as live.
+    nonisolated static func resumeURLString(from url: URL?) -> String? {
+        guard let url, let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
+        return url.absoluteString
+    }
+
+    private func rememberResumeURL(for instanceID: UUID, of webView: WKWebView) {
+        if let resumeURL = Self.resumeURLString(from: webView.url) {
+            suspendedURLs[instanceID] = resumeURL
+        } else {
+            suspendedURLs.removeValue(forKey: instanceID)
+        }
+    }
+
     /// Manually hibernate a service — fully destroys the web view to reclaim all memory.
-    /// The service reloads its home URL when next accessed.
+    /// The service resumes at its last web page, or at its home URL when it
+    /// showed an error page.
     func hibernate(_ instanceID: UUID) {
         guard let webView = webViews[instanceID] else { return }
-        suspendedURLs[instanceID] = webView.url?.absoluteString ?? ""
+        rememberResumeURL(for: instanceID, of: webView)
         teardownWebView(instanceID)
         hibernatedServiceIDs.insert(instanceID)
         onServiceHibernated?(instanceID)
@@ -437,7 +488,7 @@ final class WebViewPool {
     func recreateWebView(for instanceID: UUID, preserveURL: Bool = true) {
         guard let webView = webViews[instanceID] else { return }
         if preserveURL {
-            suspendedURLs[instanceID] = webView.url?.absoluteString ?? ""
+            rememberResumeURL(for: instanceID, of: webView)
         } else {
             suspendedURLs.removeValue(forKey: instanceID)
         }
@@ -542,18 +593,34 @@ final class WebViewPool {
         guard let webView = webViews[id],
               webView.microphoneCaptureState != WKMediaCaptureState.none else { return }
         webView.setMicrophoneCaptureState(muted ? .muted : .active, completionHandler: nil)
+        recordRequestedMicrophoneState(muted: muted, id: id, webView: webView)
     }
 
     /// Mutes every service whose microphone is currently live. Returns how many
     /// were muted, so a caller can tell when nothing was live.
     @discardableResult
-    func muteAllMicrophones() -> Int {
-        var count = 0
-        for (_, webView) in webViews where webView.microphoneCaptureState == .active {
-            webView.setMicrophoneCaptureState(.muted, completionHandler: nil)
-            count += 1
+    func muteActiveMicrophones() -> Int {
+        let activeIDs = webViews.compactMap { id, webView in
+            webView.microphoneCaptureState == .active ? id : nil
         }
-        return count
+        for id in activeIDs {
+            setMicrophoneMuted(true, for: id)
+        }
+        return activeIDs.count
+    }
+
+    /// Shows the requested state immediately. WebKit KVO reconciles this value
+    /// with the capture device after it applies the host-side change.
+    private func recordRequestedMicrophoneState(
+        muted: Bool,
+        id: UUID,
+        webView: WKWebView
+    ) {
+        var state = mediaCaptureStates[id] ?? MediaCaptureState()
+        state.cameraActive = webView.cameraCaptureState == .active
+        state.micActive = !muted
+        state.micMuted = muted
+        mediaCaptureStates[id] = state
     }
 
     private func teardownWebView(_ instanceID: UUID) {
@@ -746,6 +813,12 @@ final class WebViewPool {
 
         if hasCall {
             AppLogger.webView.info("Skipping hibernation of \(id) — active call detected")
+            return false
+        }
+        // The JS probe sees only WebRTC calls. A live camera or microphone
+        // outside a call (a voice memo, a video preview) must keep the page too.
+        if let capture = mediaCaptureStates[id], capture.isCapturing {
+            AppLogger.webView.info("Skipping hibernation of \(id) — camera or microphone in use")
             return false
         }
 

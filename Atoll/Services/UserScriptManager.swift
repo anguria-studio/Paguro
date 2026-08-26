@@ -19,7 +19,7 @@ final class UserScriptManager {
     /// unset, preserving behavior for services that predate the toggle.
     var isServiceNotifyingOS: (@Sendable (UUID) -> Bool)?
     var isDoNotDisturbActive: (@Sendable () -> Bool)?
-    var autoDismissCookieBanners: Bool = true
+    var autoDismissCookieBanners = AppPreferenceDefaults.autoDismissCookieBanners
 
     /// Full setup for a freshly built web view: the message handlers (added once)
     /// plus all user scripts.
@@ -45,8 +45,11 @@ final class UserScriptManager {
         let mutedCheck = isServiceMuted
         let notifyOSCheck = isServiceNotifyingOS
         let dndCheck = isDoNotDisturbActive
+        let serviceIconURL = NotificationAttachmentStore.prepareServiceIcon(for: instance)
         let handler = NotificationMessageHandler(
             serviceID: instance.id,
+            serviceLabel: instance.label,
+            serviceIconURL: serviceIconURL,
             isMutedCheck: { id in
                 mutedCheck?(id) ?? false
             },
@@ -417,17 +420,23 @@ final class UserScriptManager {
 
 final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unchecked Sendable {
     let serviceID: UUID
+    let serviceLabel: String
+    let serviceIconURL: URL?
     let isMutedCheck: @Sendable (UUID) -> Bool
     let notifyOSCheck: @Sendable (UUID) -> Bool
     let isDoNotDisturbCheck: @Sendable () -> Bool
 
     init(
         serviceID: UUID,
+        serviceLabel: String,
+        serviceIconURL: URL?,
         isMutedCheck: @escaping @Sendable (UUID) -> Bool,
         notifyOSCheck: @escaping @Sendable (UUID) -> Bool,
         isDoNotDisturbCheck: @escaping @Sendable () -> Bool
     ) {
         self.serviceID = serviceID
+        self.serviceLabel = serviceLabel
+        self.serviceIconURL = serviceIconURL
         self.isMutedCheck = isMutedCheck
         self.notifyOSCheck = notifyOSCheck
         self.isDoNotDisturbCheck = isDoNotDisturbCheck
@@ -521,11 +530,12 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
             return
         }
 
-        let content = UNMutableNotificationContent()
-        content.title = payload.title
-        content.body = payload.body
-        content.userInfo = ["serviceID": serviceID.uuidString]
-        content.sound = .default
+        let content = NativeNotificationContentBuilder.makeContent(
+            payload: payload,
+            serviceID: serviceID,
+            serviceLabel: serviceLabel,
+            serviceIconURL: serviceIconURL
+        )
 
         let request = UNNotificationRequest(
             identifier: requestID,

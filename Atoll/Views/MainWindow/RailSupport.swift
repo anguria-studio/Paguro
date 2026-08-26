@@ -52,7 +52,7 @@ private enum WindowBackdropInstaller {
 
 /// The native full-window layers that the Glass Lab controls.
 ///
-/// The fixed frost view obscures background detail. The glass view changes the
+/// The frost view obscures background detail. The glass view changes the
 /// optical style. The tint gives the transparency control exact endpoints.
 private final class WindowBackdropContainerView: NSView {
     private let frostView = NSVisualEffectView()
@@ -67,7 +67,7 @@ private final class WindowBackdropContainerView: NSView {
         frostView.material = .underWindowBackground
         frostView.blendingMode = .behindWindow
         frostView.state = .followsWindowActiveState
-        frostView.alphaValue = CGFloat(GlassLabDefaults.fixedFrost)
+        frostView.alphaValue = GlassLabDefaults.regularFrost
         addSubview(frostView)
 
         glassView.frame = bounds
@@ -91,6 +91,8 @@ private final class WindowBackdropContainerView: NSView {
         glassStyle: ShellGlassStyle,
         transparency: Double
     ) {
+        frostView.alphaValue = glassStyle.frostOpacity
+
         switch glassStyle {
         case .off:
             glassView.isHidden = true

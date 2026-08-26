@@ -2,6 +2,20 @@ import XCTest
 @testable import AtollCore
 
 final class DockIconSizingTests: XCTestCase {
+    func testReviewedRailDefaultsStayPinned() {
+        XCTAssertEqual(DockIconSizing.defaultBaseSize, 22)
+        XCTAssertEqual(DockIconSizing.defaultMagnification, 0.26)
+        XCTAssertEqual(DockIconSizing.defaultMagnifiedSize, 35)
+        XCTAssertEqual(
+            DockIconSizing.peakSize(
+                baseSize: DockIconSizing.defaultBaseSize,
+                magnification: DockIconSizing.defaultMagnification
+            ),
+            DockIconSizing.defaultMagnifiedSize,
+            accuracy: 0.000_001
+        )
+    }
+
     func testBaseSizeClampsToTheRailRange() {
         XCTAssertEqual(DockIconSizing.baseSize(10), 14)
         XCTAssertEqual(DockIconSizing.baseSize(25), 25)
@@ -62,11 +76,11 @@ final class DockIconSizingTests: XCTestCase {
     func testTooltipClearsTheRailAndTheMagnifiedIcon() {
         XCTAssertEqual(
             DockIconSizing.tooltipLeadingOffset(baseSize: 24, displayedIconSize: 24),
-            65
+            63
         )
         XCTAssertEqual(
             DockIconSizing.tooltipLeadingOffset(baseSize: 24, displayedIconSize: 64),
-            85
+            83
         )
     }
 
@@ -88,6 +102,16 @@ final class DockIconSizingTests: XCTestCase {
                 bottomInset: 8
             ),
             0
+        )
+        XCTAssertEqual(
+            DockIconSizing.centeredTopPadding(
+                viewportHeight: 600,
+                itemCount: 5,
+                baseSize: 24,
+                bottomInset: 8,
+                additionalContentHeight: 20
+            ),
+            171
         )
     }
 

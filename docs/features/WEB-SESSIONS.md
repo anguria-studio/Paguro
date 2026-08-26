@@ -53,15 +53,22 @@ Views must not create or retain a second pool.
 The pool can hibernate an inactive service.
 It must first check these conditions:
 
+- the service is not the active service;
 - no active call;
-- no active microphone;
+- no active microphone, including a muted one;
 - no active camera;
-- no active download;
-- no current user interaction;
 - policy permits hibernation.
+
+A download does not block hibernation. The coordinator keeps the download
+alive until it ends, and `Command-Q` cancels it.
+Atoll does not track user interaction inside a page. The pool never hibernates
+the active service, and it restarts the idle timer when the user selects a
+service.
 
 Wake must keep the same data-store identifier.
 Wake must not present old unread state as a new message.
+Wake resumes at the last `http` or `https` page. A service that showed the
+error page when it hibernated resumes at its home URL.
 
 ## Navigation
 
@@ -70,6 +77,18 @@ The result can stay in the service, open in another Atoll service, or open outsi
 
 An unknown custom scheme opens only after an explicit rule accepts it.
 Atoll must not pass an untrusted scheme to the system without review.
+
+A web view loads only `http`, `https`, `about`, `blob`, and `data` URLs.
+The coordinator cancels every other scheme before WebKit tries it.
+A user click on an accepted scheme, such as `mailto:` or `tel:`, opens the
+system handler. The coordinator drops a programmatic navigation to a non-web
+scheme.
+The in-app browser applies the same click rule.
+
+A failed page load shows the error page with a retry action.
+Three failures keep the current page instead.
+They are a load that the user cancelled, a URL that WebKit cannot show, and a
+load that WebKit interrupted to start a download.
 
 ## Popups
 
@@ -94,6 +113,13 @@ Atoll then applies its app and service policy.
 
 The system permission prompt remains the final authority.
 Atoll must handle denial without a loop.
+
+The File menu can mute microphones that are actively capturing audio.
+Atoll disables the action when no microphone is active.
+After the action, Atoll confirms the number of muted microphones and shows a
+muted microphone mark on each affected service.
+The service context menu can mute or unmute an engaged microphone.
+This action does not block a future microphone request.
 
 ## Failure recovery
 

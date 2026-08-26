@@ -5,18 +5,19 @@
 public enum DockIconSizing {
     public static let minimumBaseSize = 14.0
     public static let maximumBaseSize = 44.0
-    public static let defaultBaseSize = 24.0
+    public static let defaultBaseSize = 22.0
 
     public static let minimumMagnifiedSize = 32.0
     public static let maximumMagnifiedSize = 72.0
-    public static let defaultMagnifiedSize = 56.0
+    public static let defaultMagnification = 0.26
+    public static let defaultMagnifiedSize = 35.0
     public static let minimumMagnification = 0.0
     public static let maximumMagnification = 1.0
 
     private static let railHorizontalPadding = 40.0
     private static let selectionPadding = 14.0
     private static let rowPadding = 22.0
-    private static let tooltipGap = 14.0
+    private static let tooltipGap = 12.0
 
     public static func baseSize(_ value: Double) -> Double {
         min(maximumBaseSize, max(minimumBaseSize, value))
@@ -71,13 +72,14 @@ public enum DockIconSizing {
         viewportHeight: Double,
         itemCount: Int,
         baseSize: Double,
-        bottomInset: Double
+        bottomInset: Double,
+        additionalContentHeight: Double = 0
     ) -> Double {
         guard itemCount > 0 else { return 0 }
         let availableHeight = max(0, viewportHeight - bottomInset)
         let stackHeight = Double(itemCount) * rowHeight(
             displayedIconSize: self.baseSize(baseSize)
-        )
+        ) + max(0, additionalContentHeight)
         return max(0, (availableHeight - stackHeight) / 2)
     }
 

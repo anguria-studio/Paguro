@@ -16,7 +16,7 @@ struct SpaceEditorSheet: View {
 
     @State private var name: String = ""
     @State private var selectedEmoji: String = "📁"
-    @State private var showDeleteConfirmation = false
+    @State private var confirmingDeleteSpace: Space?
 
     var isEditing: Bool { editingSpace != nil }
 
@@ -58,18 +58,10 @@ struct SpaceEditorSheet: View {
             HStack {
                 if isEditing {
                     Button("Delete Space", role: .destructive) {
-                        showDeleteConfirmation = true
+                        confirmingDeleteSpace = editingSpace
                     }
-                    .confirmationDialog(
-                        "Delete \(editingSpace?.name ?? "space")?",
-                        isPresented: $showDeleteConfirmation,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Delete", role: .destructive) {
-                            deleteSpace()
-                        }
-                    } message: {
-                        Text("This will permanently delete the space and remove all service links.")
+                    .deleteSpaceConfirmation(space: $confirmingDeleteSpace) { space in
+                        deleteSpace(space)
                     }
                 }
                 Spacer()
@@ -124,8 +116,7 @@ struct SpaceEditorSheet: View {
         dismiss()
     }
 
-    private func deleteSpace() {
-        guard let space = editingSpace else { return }
+    private func deleteSpace(_ space: Space) {
         // Routes through AppState so services orphaned by the deletion are
         // reclaimed and selection is moved off the deleted space.
         appState.deleteSpace(space.id)

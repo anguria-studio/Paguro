@@ -1,0 +1,34 @@
+name: Code quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - atoll/main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the project
+        run: xcodegen generate
+
+      - name: Test AtollCore
+        run: swift test --package-path Core
+
+      - name: Test the compatibility fixture
+        run: scripts/test_compatibility_fixture.sh
+
+      - name: Test the application
+        run: xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug test

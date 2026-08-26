@@ -53,21 +53,22 @@ Use the application model or a feature controller.
 ## Application composition
 
 `AtollApp` creates the SwiftUI scenes.
-`AppModel` will be the application composition root.
-It will create each long-lived service one time.
+`AppModel` is the application composition root.
+It creates each long-lived service one time.
 
 The main services are:
 
-- `SessionStoreManager` for WebKit data stores.
+- `AppState` for application and feature state.
+- `DataStoreManager` for WebKit data stores.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
-- `NotificationPipeline` for validated notification events.
-- `IslandStore` for short-lived island state.
-- `IslandPanelController` for island window placement.
-- `PresenceController` for Dock and menu-bar behavior.
+- `NotificationManager` for notification polling and macOS delivery.
+- `AppPresenceController` for Dock and menu-bar behavior.
 
-Some names describe planned types.
-The backlog tracks their implementation.
+The planned `SessionStoreManager` and `NotificationPipeline` will replace the
+current managers when their runtime phases start. The planned `IslandStore`
+and `IslandPanelController` will remain optional services. The backlog tracks
+these changes.
 
 ## App lifecycle
 
@@ -80,9 +81,14 @@ Configured services can continue to produce notifications.
 `Command-Q` stops the process.
 It also stops every web view, timer, and notification source.
 
-A login launch starts in accessory mode.
+A login launch starts in accessory mode unless the user keeps the Dock icon visible.
 The app enters regular mode when it shows a main window.
-It returns to accessory mode after the last main window closes.
+It returns to accessory mode after the last main window closes unless the user
+keeps the Dock icon visible.
+
+`AppDelegate` delays AppKit termination while `AppModel` stops timers,
+notification sources, network monitors, and web views and saves final state.
+See [Application lifecycle](features/APP-LIFECYCLE.md).
 
 ## Web runtime
 
@@ -92,7 +98,9 @@ The data store keeps cookies and local storage separate from other accounts.
 
 `WebViewPool` limits the number of live web views.
 It can hibernate an inactive service when policy permits this action.
-It must not hibernate a service during a call or download.
+It must not hibernate a service during a call or while the camera or
+microphone is in use. A download continues after hibernation, because the
+coordinator keeps the download alive until it ends.
 
 `WebViewCoordinator` handles these WebKit operations:
 
@@ -115,14 +123,17 @@ web signal
     ↓
 origin and payload validation
     ↓
-NotificationEvent in AtollCore
+mute, notify-OS, and Do Not Disturb policy
     ↓
-deduplication, mute, and quiet-time policy
-    ↓
-island presentation and macOS notification delivery
+macOS notification delivery
     ↓
 safe click route to the service
 ```
+
+The bridge handler validates the frame origin, decodes a small
+`NotificationPayload`, applies the policy, and posts the macOS notification.
+The backlog tracks the split of that handler into detection and presentation
+parts, and a shared event type in `AtollCore` for the island.
 
 The island does not detect notifications.
 It only presents events from the notification pipeline.

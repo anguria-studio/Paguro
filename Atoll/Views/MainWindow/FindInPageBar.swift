@@ -108,10 +108,12 @@ struct FindInPageBar: View {
     }
 
     private func dismiss() {
-        // Clear highlights here rather than in an `onChange(of: isVisible)`:
+        // Clear highlights here, not only in `onChange(of: isVisible)`:
         // flipping `isVisible` makes the parent drop this view in the same
-        // update, so an onChange side effect may never run. The find call is
-        // dispatched to the pooled web view, which outlives this view.
+        // update, so that onChange side effect is not guaranteed to run. The
+        // onChange path still covers a parent that hides the bar directly.
+        // The find call is dispatched to the pooled web view, which outlives
+        // this view.
         clearHighlights()
         isVisible = false
     }

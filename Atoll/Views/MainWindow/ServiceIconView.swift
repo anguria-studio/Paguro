@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Shared colors and helpers for service icons. Centralized so every surface
-/// that draws a service — the rail's `ServiceRowView`, the space chips, the
-/// quick switcher — renders identically and contrast is fixed in one place.
+/// Shared colors and helpers for service icons, so the letter-tile fallback
+/// and its contrast are fixed in one place. `ServiceIconSquare` (rail rows and
+/// space chips) and the service icon editor use it. The quick switcher and the
+/// menu bar still draw their own tiles.
 enum ServiceIconPalette {
     /// Fill colors for the letter-tile fallback. Each is dark enough to clear
     /// WCAG 4.5:1 against the white initial drawn on top (Tailwind 700-class
@@ -155,6 +156,37 @@ struct MediaIndicatorGlyph: View {
     /// mic (a call you've muted yourself into).
     private var tint: Color {
         (micMuted && !cameraActive && !micActive) ? .orange : .green
+    }
+}
+
+/// A mute mark that remains legible over both sidebar surfaces and service
+/// artwork. Compact icon-dock marks use a small contrast shadow instead of a
+/// dark tile. Expanded rows use only the semantic accessory symbol.
+struct MutedNotificationGlyph: View {
+    var isCompact = true
+
+    var body: some View {
+        Image(systemName: "bell.slash.fill")
+            .font(
+                isCompact
+                    ? .system(size: 7, weight: .bold)
+                    : .atollSidebarAccessory
+            )
+            .foregroundStyle(
+                isCompact
+                    ? AnyShapeStyle(.white)
+                    : AnyShapeStyle(AtollColor.Text.tertiary)
+            )
+            .frame(
+                width: isCompact ? 14 : nil,
+                height: isCompact ? 14 : nil
+            )
+            .shadow(
+                color: isCompact ? .black.opacity(0.7) : .clear,
+                radius: isCompact ? 1 : 0,
+                y: isCompact ? 0.5 : 0
+            )
+            .accessibilityHidden(true)
     }
 }
 

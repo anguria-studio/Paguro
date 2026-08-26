@@ -204,6 +204,8 @@ struct EditServiceSheet: View {
                 appState.clearSession(for: service.id)
                 dismiss()
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
         } message: {
             Text("This clears this service's cookies and storage on this Mac. You'll need to sign in again.")
         }

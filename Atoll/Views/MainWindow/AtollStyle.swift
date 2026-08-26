@@ -62,8 +62,16 @@ enum AtollMetric {
         static let horizontalInset: CGFloat = surfaceInset + contentInset
         static let rowWidth: CGFloat = surfaceWidth - (contentInset * 2)
         static let rowHeight: CGFloat = 28
-        static let dockItemSize: CGFloat = 38
-        static let dockRowHeight: CGFloat = 46
+        static let dockItemSize = CGFloat(
+            DockIconSizing.selectionSize(
+                displayedIconSize: DockIconSizing.defaultBaseSize
+            )
+        )
+        static let dockRowHeight = CGFloat(
+            DockIconSizing.rowHeight(
+                displayedIconSize: DockIconSizing.defaultBaseSize
+            )
+        )
         static let headerHeight: CGFloat = 24
         static let rowRadius: CGFloat = 7
         static let expandedIconSize: CGFloat = 18
@@ -74,6 +82,9 @@ enum AtollMetric {
             collapsedSurfaceTopInset + surfaceInset
         static let expandedToggleTrailingInset: CGFloat = 14
         static let footerHeight: CGFloat = 52
+        static let workspaceDividerHeight: CGFloat = 13
+        static let workspaceDividerHorizontalInset: CGFloat = 15
+        static let workspaceSectionTopSpacing: CGFloat = 8
 
         static func collapsedWidth(iconSize: Double) -> CGFloat {
             CGFloat(DockIconSizing.railWidth(baseSize: iconSize))
@@ -127,7 +138,7 @@ enum AtollMotion {
 /// continues to own blur, saturation, and refraction.
 enum GlassIntensityScale {
     static let defaultValue = 0.5
-    static let adaptiveSelectionStart = 0.6
+    static let adaptiveSelectionStart = SidebarSelectionContrastPolicy.highContrastTextThreshold
 
     static func normalized(_ value: Double) -> Double {
         min(1, max(0, value))
@@ -180,21 +191,32 @@ enum ShellGlassStyle: String, CaseIterable {
         }
     }
 
+    var frostOpacity: CGFloat {
+        switch self {
+        case .clear:
+            GlassLabDefaults.regularFrost * 0.7
+        case .off, .regular:
+            GlassLabDefaults.regularFrost
+        }
+    }
+
     static func resolving(_ storedValue: String?) -> Self {
-        storedValue.flatMap(Self.init(rawValue:)) ?? .clear
+        storedValue.flatMap(Self.init(rawValue:)) ?? GlassLabDefaults.style
     }
 }
 
 /// Baseline values for the temporary appearance tuning controls.
 enum GlassLabDefaults {
-    static let style = ShellGlassStyle.clear
-    static let transparency = GlassIntensityScale.defaultValue
-    static let fixedFrost = 1.0
+    static let style = ShellGlassStyle.regular
+    static let transparency = 1.0
+    static let regularFrost: CGFloat = 1.0
 }
 
 enum DockRailPosition: String, CaseIterable {
     case top
     case center
+
+    static let defaultPosition = Self.top
 
     var displayName: String {
         switch self {
@@ -289,6 +311,10 @@ enum AtollColor {
         static let primary = Color(nsColor: .labelColor)
         static let secondary = AtollColor.ink(light: 0.60, dark: 0.62)
         static let tertiary = AtollColor.ink(light: 0.55, dark: 0.52)
+        static let selectedOnGlass = AtollColor.dynamic(
+            light: .black,
+            dark: .white
+        )
     }
 
     enum Fill {
@@ -303,6 +329,10 @@ enum AtollColor {
         static let sidebarSelectedTint = AtollColor.dynamic(
             light: .systemBlue,
             dark: NSColor(displayP3Red: 0.094, green: 0.569, blue: 1, alpha: 1)
+        )
+        static let sidebarRowHover = AtollColor.dynamic(
+            light: .black.withAlphaComponent(0.04),
+            dark: .white.withAlphaComponent(0.08)
         )
         static let rowHover = AtollColor.ink(light: 0.04, dark: 0.03)
         static let control = AtollColor.ink(light: 0.07, dark: 0.09)
@@ -418,14 +448,9 @@ extension View {
     }
 }
 
-/// The three corner radii the app is allowed to draw, and the one notice shape.
-///
-/// Build step 7 of concept C, which is mostly the baseline's own list: eight
-/// radii collapsed to three, three hand-rolled banners collapsed to one, and
-/// keyboard focus given a mark of its own instead of being switched off.
-
-/// Eight values down to three, named by what they wrap rather than by number.
-/// A fourth value is the thing to argue about, not to add quietly.
+/// The three corner radii the app is allowed to draw, named by what they wrap
+/// rather than by number. A fourth value is the thing to argue about, not to
+/// add quietly.
 enum AtollRadius {
     /// Service icons and other small squares.
     static let icon: CGFloat = 4
@@ -566,9 +591,9 @@ struct AtollToolbarButtonStyle: ButtonStyle {
                 isHovering
                     ? AtollColor.Fill.controlHover
                     : (isSelected ? AtollColor.Fill.control : Color.clear),
-                in: RoundedRectangle(cornerRadius: AtollRadius.control)
+                in: Circle()
             )
-            .contentShape(Rectangle())
+            .contentShape(Circle())
             .opacity(configuration.isPressed ? 0.7 : 1)
             .onHover { isHovering = $0 }
     }

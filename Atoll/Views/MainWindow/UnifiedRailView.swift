@@ -39,8 +39,11 @@ struct UnifiedRailView: View {
     @State private var confirmingDeleteSpace: Space?
     @State private var confirmingDelete: SpaceServiceLink?
     @State private var editingService: ServiceInstance?
-    @State private var hoveredDockServiceID: UUID?
+    @State private var hoveredDockLinkID: UUID?
     @State private var dockHoverExitTask: Task<Void, Never>?
+    /// Empty means every workspace starts expanded. Keeping only collapsed IDs
+    /// also makes a newly created workspace appear without another state sync.
+    @State private var collapsedWorkspaceIDs: Set<UUID> = []
     /// The link whose service is being moved into a brand-new space: set when the
     /// user picks "New Space…", it presents the space editor and, on create,
     /// moves the service into the freshly made space.
@@ -48,7 +51,7 @@ struct UnifiedRailView: View {
     /// The service cell that currently holds keyboard focus. Two-way bound to
     /// each cell's `.focused`, so a click or Tab that focuses a cell records it
     /// here and the arrow keys move relative to it.
-    @FocusState private var focusedServiceID: UUID?
+    @FocusState private var focusedLinkID: UUID?
     // Fallback drop midpoints, used only until the first geometry pass records a
     // cell's real size. They are half of what `ServiceRowView` draws: the active
     // sidebar row height and a labelled tab of roughly 120 points. A wrong (too
@@ -63,19 +66,69 @@ struct UnifiedRailView: View {
     /// clear above and below. The drawn frame says 42.
     static let barHeight: CGFloat = 42
 
+    private var liveSpaces: [Space] {
+        spaces.filter { $0.modelContext != nil }
+    }
+
+    private var liveLinks: [SpaceServiceLink] {
+        return allLinks
+            // Guard all three relationships before reading `$0.space.id`: a
+            // deleted relationship would fault the freed model on this render path.
+            .filter {
+                $0.modelContext != nil
+                    && $0.service.modelContext != nil
+                    && $0.space.modelContext != nil
+            }
+    }
+
+    private func links(in workspaceID: UUID) -> [SpaceServiceLink] {
+        liveLinks
+            .filter { $0.space.id == workspaceID }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
     private var filteredLinks: [SpaceServiceLink] {
         guard let spaceID = selectedSpaceID else { return [] }
-        return allLinks
-            // Guard all three relationships before reading `$0.space.id`: a link
-            // whose Space (or service) was deleted would fault the freed model
-            // and trap on this hot render path. Matches `AppState.servicesForSpace`.
-            .filter { $0.modelContext != nil && $0.service.modelContext != nil && $0.space.modelContext != nil && $0.space.id == spaceID }
-            .sorted { $0.sortOrder < $1.sortOrder }
+        return links(in: spaceID)
+    }
+
+    /// All-workspaces is a sidebar presentation. The top-bar layout stays a
+    /// compact current-workspace switcher and service tab strip.
+    private var showsAllWorkspaces: Bool {
+        axis == .vertical
+            && appState.workspaceViewMode == .all
+            && liveSpaces.count > 1
+    }
+
+    private var workspaceGroups: [WorkspaceLinkGroup] {
+        liveSpaces.map { space in
+            WorkspaceLinkGroup(space: space, links: links(in: space.id))
+        }
+    }
+
+    private var dockWorkspaceGroups: [WorkspaceLinkGroup] {
+        workspaceGroups.filter { !$0.links.isEmpty }
+    }
+
+    private var dockLinks: [SpaceServiceLink] {
+        showsAllWorkspaces ? dockWorkspaceGroups.flatMap(\.links) : filteredLinks
+    }
+
+    private var dockDividerCount: Int {
+        showsAllWorkspaces ? max(0, dockWorkspaceGroups.count - 1) : 0
+    }
+
+    private var duplicateServiceIDs: Set<UUID> {
+        guard showsAllWorkspaces else { return [] }
+        let counts = Dictionary(grouping: liveLinks, by: { $0.service.id })
+        return Set(counts.compactMap { serviceID, links in
+            Set(links.map { $0.space.id }).count > 1 ? serviceID : nil
+        })
     }
 
     private var currentSpace: Space? {
         guard let selectedSpaceID else { return nil }
-        return spaces.first { $0.modelContext != nil && $0.id == selectedSpaceID }
+        return liveSpaces.first { $0.id == selectedSpaceID }
     }
 
     // MARK: - Layout
@@ -111,28 +164,16 @@ struct UnifiedRailView: View {
                 }
                 confirmingDelete = nil
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
         } message: {
             Text("This will permanently remove the service and all its data.")
         }
         // Kept on the outside of the service dialog above rather than beside it:
         // two confirmation dialogs bound to one view can race when both are
         // attached at the same level, and only one of these is ever up.
-        .confirmationDialog(
-            "Delete \(confirmingDeleteSpace?.name ?? "space")?",
-            isPresented: Binding(
-                get: { confirmingDeleteSpace != nil },
-                set: { if !$0 { confirmingDeleteSpace = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) {
-                if let space = confirmingDeleteSpace {
-                    appState.deleteSpace(space.id)
-                }
-                confirmingDeleteSpace = nil
-            }
-        } message: {
-            Text("Services in this space won't be deleted, but the space will be removed.")
+        .deleteSpaceConfirmation(space: $confirmingDeleteSpace) { space in
+            appState.deleteSpace(space.id)
         }
     }
 
@@ -151,7 +192,9 @@ struct UnifiedRailView: View {
             Color.clear
                 .frame(height: sidebarPresentation.contentTopInset)
 
-            if sidebarPresentation == .expanded && showsSpaceSwitcher {
+            if sidebarPresentation == .expanded
+                && showsSpaceSwitcher
+                && !showsAllWorkspaces {
                 spaceHeader
                     .padding(.bottom, 7)
             }
@@ -159,9 +202,7 @@ struct UnifiedRailView: View {
             GeometryReader { geometry in
                 ScrollView {
                     LazyVStack(spacing: sidebarPresentation == .expanded ? 2 : 0) {
-                        ForEach(filteredLinks) { link in
-                            serviceRow(for: link)
-                        }
+                        verticalRailContent
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, dockRailTopPadding(viewportHeight: geometry.size.height))
@@ -247,11 +288,97 @@ struct UnifiedRailView: View {
                 clearDockHover()
             }
         }
+        .onChange(of: appState.workspaceViewMode) { _, _ in
+            clearDockHover()
+        }
+        .onChange(of: selectedSpaceID) { _, workspaceID in
+            guard showsAllWorkspaces,
+                  sidebarPresentation == .expanded,
+                  let workspaceID
+            else { return }
+            collapsedWorkspaceIDs.remove(workspaceID)
+        }
         .onDisappear {
             clearDockHover()
         }
         .contextMenu {
             railCreationMenu
+        }
+    }
+
+    @ViewBuilder
+    private var verticalRailContent: some View {
+        if showsAllWorkspaces && sidebarPresentation == .expanded {
+            ForEach(Array(workspaceGroups.enumerated()), id: \.element.id) { index, group in
+                workspaceSection(
+                    group,
+                    topSpacing: index == 0
+                        ? 0
+                        : AtollMetric.Sidebar.workspaceSectionTopSpacing
+                )
+            }
+        } else if showsAllWorkspaces && sidebarPresentation == .collapsed {
+            ForEach(Array(dockWorkspaceGroups.enumerated()), id: \.element.id) { index, group in
+                if index > 0 {
+                    Divider()
+                        .padding(
+                            .horizontal,
+                            AtollMetric.Sidebar.workspaceDividerHorizontalInset
+                        )
+                        .frame(height: AtollMetric.Sidebar.workspaceDividerHeight)
+                        .accessibilityHidden(true)
+                }
+                ForEach(group.links) { link in
+                    serviceRow(for: link)
+                }
+            }
+        } else {
+            ForEach(filteredLinks) { link in
+                serviceRow(for: link)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func workspaceSection(
+        _ group: WorkspaceLinkGroup,
+        topSpacing: CGFloat
+    ) -> some View {
+        let space = group.space
+        let isExpanded = !collapsedWorkspaceIDs.contains(space.id)
+        let workspaceMuted = space.isMutedEffective
+        let showsMutedState = NotificationMutePresentation.showsMutedState(
+            scopeMuted: workspaceMuted,
+            manualGlobalMute: appState.doNotDisturb
+        )
+        let badgeCount = WorkspaceNavigationPolicy.showsAggregateBadge(
+            serviceRowsVisible: isExpanded
+        ) && !workspaceMuted
+            ? appState.badgeManager.aggregateCount(for: group.links.map { $0.service.id })
+            : 0
+
+        WorkspaceSectionHeaderView(
+            workspaceName: space.name,
+            emoji: space.emoji,
+            badgeCount: badgeCount,
+            isMuted: showsMutedState,
+            isExpanded: isExpanded
+        ) {
+            if isExpanded {
+                collapsedWorkspaceIDs.insert(space.id)
+            } else {
+                collapsedWorkspaceIDs.remove(space.id)
+            }
+        }
+        .padding(.top, topSpacing)
+        .contextMenu {
+            workspaceContextMenu(for: space)
+        }
+
+        if isExpanded {
+            ForEach(group.links) { link in
+                serviceRow(for: link)
+            }
         }
     }
 
@@ -296,20 +423,23 @@ struct UnifiedRailView: View {
     // MARK: - The space header, and the palette it opens
 
     private var showsSpaceSwitcher: Bool {
-        SpaceSwitcherVisibility.showsSwitcher(spaceCount: spaces.count)
+        SpaceSwitcherVisibility.showsSwitcher(spaceCount: liveSpaces.count)
     }
 
     private var spaceHeader: some View {
         let space = currentSpace
-        let muted = space?.isMutedEffective ?? false
-        let serviceIDs = space.map { appState.servicesForSpace($0.id).map(\.id) } ?? []
-        let badgeCount = muted ? 0 : appState.badgeManager.aggregateCount(for: serviceIDs)
+        let muted = NotificationMutePresentation.showsMutedState(
+            scopeMuted: space?.isMutedEffective ?? false,
+            manualGlobalMute: appState.doNotDisturb
+        )
 
         return SpaceHeaderView(
             spaceName: space?.name,
             emoji: space?.emoji ?? "🏠",
             axis: axis,
-            badgeCount: badgeCount,
+            // The visible service rows already carry their own badges. A second
+            // total beside the workspace name would repeat the same state.
+            badgeCount: 0,
             isMuted: muted,
             isPaletteOpen: showingPalette
         ) {
@@ -328,6 +458,11 @@ struct UnifiedRailView: View {
             // would render an empty list.
             .environment(appState)
             .modelContainer(appState.modelContainer)
+        }
+        .contextMenu {
+            if let space {
+                workspaceContextMenu(for: space)
+            }
         }
     }
 
@@ -379,15 +514,28 @@ struct UnifiedRailView: View {
     @ViewBuilder
     private func serviceRow(for link: SpaceServiceLink) -> some View {
         let isSel = selectedServiceID == link.service.id
+            && selectedSpaceID == link.space.id
         let badge = appState.badgeManager.badgeCount(for: link.service.id)
         let hibernated = !isSel && appState.webViewPool.isHibernated(link.service.id)
-        let muted = link.service.isEffectivelyMuted
+        let muted = NotificationMutePresentation.showsMutedState(
+            scopeMuted: link.service.isEffectivelyMuted,
+            manualGlobalMute: appState.doNotDisturb
+        )
         let media = appState.webViewPool.mediaCaptureStates[link.service.id]
         // A hibernated service has no page to be healthy or broken, and the moon
         // already says why it is not loaded — so it reports live and draws no dot.
         let health = hibernated ? ServiceHealth.live : appState.webViewPool.health(for: link.service.id)
 
-        cell(for: link, isSelected: isSel, badge: badge, hibernated: hibernated, muted: muted, media: media, health: health, focused: focusedServiceID == link.service.id)
+        cell(
+            for: link,
+            isSelected: isSel,
+            badge: badge,
+            hibernated: hibernated,
+            muted: muted,
+            media: media,
+            health: health,
+            focused: focusedLinkID == link.id
+        )
             .draggable(link.id.uuidString) {
                 // Custom drag preview. Source-dimming is left to SwiftUI:
                 // manually tracking a "dragging" id can't be cleared reliably —
@@ -402,7 +550,12 @@ struct UnifiedRailView: View {
             .dropDestination(for: String.self) { items, location in
                 guard let droppedIDString = items.first,
                       let droppedID = UUID(uuidString: droppedIDString),
-                      droppedID != link.id
+                      droppedID != link.id,
+                      let droppedLink = liveLinks.first(where: { $0.id == droppedID }),
+                      WorkspaceNavigationPolicy.allowsReorder(
+                        sourceWorkspaceID: droppedLink.space.id,
+                        targetWorkspaceID: link.space.id
+                      )
                 else { return false }
                 let placement: ServiceReorderPlacement = {
                     let size = cellSizes[link.id]
@@ -430,7 +583,7 @@ struct UnifiedRailView: View {
             .accessibilityAction(named: "Move down") { moveServiceDown(link) }
             .contextMenu { serviceContextMenu(for: link) }
             .focusable()
-            .focused($focusedServiceID, equals: link.service.id)
+            .focused($focusedLinkID, equals: link.id)
             // The system's rectangular ring stays off, but the signal it used to
             // carry is now drawn by the row itself (`RowMark`): a fill for
             // selection, and a ring only when focus differs from selection.
@@ -439,6 +592,10 @@ struct UnifiedRailView: View {
             .focusEffectDisabled()
             .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow]) { press in
                 handleServiceKey(press, for: link)
+            }
+            .onKeyPress(keys: [.return, .space]) { _ in
+                selectService(link)
+                return .handled
             }
     }
 
@@ -453,7 +610,7 @@ struct UnifiedRailView: View {
         health: ServiceHealth,
         focused: Bool
     ) -> some View {
-        let displayedIconSize = dockIconSize(for: link.service.id)
+        let displayedIconSize = dockIconSize(for: link.id)
         let baseIconSize = appState.iconRailBaseSize
         ServiceRowView(
             instance: link.service,
@@ -467,6 +624,7 @@ struct UnifiedRailView: View {
             micActive: media?.micActive ?? false,
             micMuted: media?.micMuted ?? false,
             health: health,
+            glassStyle: appState.liquidGlassStyle,
             glassIntensity: appState.liquidGlassIntensity,
             dockIconSize: displayedIconSize,
             dockItemSize: AtollMetric.Sidebar.dockItemSize(
@@ -483,14 +641,17 @@ struct UnifiedRailView: View {
                 baseSize: baseIconSize,
                 displayedIconSize: Double(displayedIconSize)
             )),
-            isDockHovered: hoveredDockServiceID == link.service.id,
-            dockMagnificationActive: hoveredDockServiceID != nil
+            supplementaryWorkspaceName: duplicateServiceIDs.contains(link.service.id)
+                ? link.space.name
+                : nil,
+            isDockHovered: hoveredDockLinkID == link.id,
+            dockMagnificationActive: hoveredDockLinkID != nil
                 && appState.iconRailMagnificationEnabled,
             onDockHoverChange: { hovering in
                 if hovering {
-                    beginDockHover(for: link.service.id)
+                    beginDockHover(for: link.id)
                 } else {
-                    endDockHover(for: link.service.id)
+                    endDockHover(for: link.id)
                 }
             },
             isFocused: focused
@@ -499,15 +660,15 @@ struct UnifiedRailView: View {
         }
     }
 
-    private func dockIconSize(for serviceID: UUID) -> CGFloat {
+    private func dockIconSize(for linkID: UUID) -> CGFloat {
         guard sidebarPresentation == .collapsed,
-              let itemIndex = filteredLinks.firstIndex(where: { $0.service.id == serviceID })
+              let itemIndex = dockLinks.firstIndex(where: { $0.id == linkID })
         else {
             return CGFloat(DockIconSizing.baseSize(appState.iconRailBaseSize))
         }
 
-        let hoveredIndex = hoveredDockServiceID.flatMap { hoveredID in
-            filteredLinks.firstIndex(where: { $0.service.id == hoveredID })
+        let hoveredIndex = hoveredDockLinkID.flatMap { hoveredID in
+            dockLinks.firstIndex(where: { $0.id == hoveredID })
         }
         return CGFloat(DockIconSizing.displayedSize(
             baseSize: appState.iconRailBaseSize,
@@ -521,14 +682,14 @@ struct UnifiedRailView: View {
     private var dockStackVerticalOffset: CGFloat {
         guard sidebarPresentation == .collapsed else { return 0 }
 
-        let hoveredIndex = hoveredDockServiceID.flatMap { hoveredID in
-            filteredLinks.firstIndex(where: { $0.service.id == hoveredID })
+        let hoveredIndex = hoveredDockLinkID.flatMap { hoveredID in
+            dockLinks.firstIndex(where: { $0.id == hoveredID })
         }
         return CGFloat(DockIconSizing.stackVerticalOffset(
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
             magnificationEnabled: appState.iconRailMagnificationEnabled,
-            itemCount: filteredLinks.count,
+            itemCount: dockLinks.count,
             hoveredIndex: hoveredIndex
         ))
     }
@@ -540,23 +701,25 @@ struct UnifiedRailView: View {
 
         return CGFloat(DockIconSizing.centeredTopPadding(
             viewportHeight: Double(viewportHeight),
-            itemCount: filteredLinks.count,
+            itemCount: dockLinks.count,
             baseSize: appState.iconRailBaseSize,
-            bottomInset: 0
+            bottomInset: 0,
+            additionalContentHeight: Double(dockDividerCount)
+                * Double(AtollMetric.Sidebar.workspaceDividerHeight)
         ))
     }
 
     /// A magnified row changes the pointer target while the pointer is still.
     /// Keep its hover state briefly so the new geometry can settle. Entry stays
     /// immediate, and entry on any icon cancels the pending exit.
-    private func beginDockHover(for serviceID: UUID) {
+    private func beginDockHover(for linkID: UUID) {
         dockHoverExitTask?.cancel()
         dockHoverExitTask = nil
-        hoveredDockServiceID = serviceID
+        hoveredDockLinkID = linkID
     }
 
-    private func endDockHover(for serviceID: UUID) {
-        guard hoveredDockServiceID == serviceID else { return }
+    private func endDockHover(for linkID: UUID) {
+        guard hoveredDockLinkID == linkID else { return }
 
         dockHoverExitTask?.cancel()
         dockHoverExitTask = Task { @MainActor in
@@ -566,15 +729,15 @@ struct UnifiedRailView: View {
                 return
             }
 
-            guard hoveredDockServiceID == serviceID else { return }
-            hoveredDockServiceID = nil
+            guard hoveredDockLinkID == linkID else { return }
+            hoveredDockLinkID = nil
         }
     }
 
     private func clearDockHover() {
         dockHoverExitTask?.cancel()
         dockHoverExitTask = nil
-        hoveredDockServiceID = nil
+        hoveredDockLinkID = nil
     }
 
     /// Selects a service and co-locates keyboard focus on its cell, so a click
@@ -582,8 +745,9 @@ struct UnifiedRailView: View {
     /// Button click doesn't reliably promote the enclosing `.focusable()` to
     /// focused on its own.
     private func selectService(_ link: SpaceServiceLink) {
+        selectedSpaceID = link.space.id
         selectedServiceID = link.service.id
-        focusedServiceID = link.service.id
+        focusedLinkID = link.id
     }
 
     /// Arrow keys move the selection along the rail's axis (↑/↓ vertical,
@@ -605,17 +769,18 @@ struct UnifiedRailView: View {
         if press.modifiers.contains(.option) {
             if forward { moveServiceDown(link) } else { moveServiceUp(link) }
             // The service kept its id but changed slot — hold focus on it.
-            focusedServiceID = link.service.id
+            focusedLinkID = link.id
             return .handled
         }
 
-        let links = filteredLinks
+        let links = links(in: link.space.id)
         guard let index = links.firstIndex(where: { $0.id == link.id }) else { return .handled }
         let neighborIndex = forward ? index + 1 : index - 1
         guard links.indices.contains(neighborIndex) else { return .handled }
-        let neighborID = links[neighborIndex].service.id
-        selectedServiceID = neighborID
-        focusedServiceID = neighborID
+        let neighbor = links[neighborIndex]
+        selectedSpaceID = neighbor.space.id
+        selectedServiceID = neighbor.service.id
+        focusedLinkID = neighbor.id
         return .handled
     }
 
@@ -665,6 +830,32 @@ struct UnifiedRailView: View {
     }
 
     @ViewBuilder
+    private func workspaceContextMenu(for space: Space) -> some View {
+        Toggle("Mute Workspace", isOn: Binding(
+            get: { space.isMutedEffective },
+            set: { setWorkspaceMuted($0, for: space) }
+        ))
+
+        Divider()
+
+        Button("Add Service…") {
+            selectedSpaceID = space.id
+            appState.showAddService = true
+        }
+
+        Button("Edit Workspace…") {
+            editingSpace = space
+        }
+
+        if liveSpaces.count > 1 {
+            Divider()
+            Button("Delete Workspace", role: .destructive) {
+                confirmingDeleteSpace = space
+            }
+        }
+    }
+
+    @ViewBuilder
     private func serviceContextMenu(for link: SpaceServiceLink) -> some View {
         Button("Edit Service…") {
             editingService = link.service
@@ -678,6 +869,16 @@ struct UnifiedRailView: View {
                 syncBadge(for: link.service)
             }
         ))
+
+        if let media = appState.webViewPool.mediaCaptureStates[link.service.id],
+           media.micActive || media.micMuted {
+            Button(media.micMuted ? "Unmute Microphone" : "Mute Microphone") {
+                appState.webViewPool.setMicrophoneMuted(
+                    !media.micMuted,
+                    for: link.service.id
+                )
+            }
+        }
 
         Divider()
 
@@ -772,6 +973,18 @@ struct UnifiedRailView: View {
         appState.refreshBadgeState(for: service.id)
     }
 
+    /// A workspace mute is an immediate presentation mask. Keep each member's
+    /// raw unread count, then re-apply its effective mute state to the rail and
+    /// Dock badge without waiting for the next page poll.
+    private func setWorkspaceMuted(_ muted: Bool, for space: Space) {
+        space.isMuted = muted
+        guard save("toggle workspace mute") else { return }
+
+        for link in links(in: space.id) {
+            syncBadge(for: link.service)
+        }
+    }
+
     /// Spaces the service can be moved into: every space except the ones it's
     /// already in. Membership is read from the reliable `allLinks` query, not the
     /// service's inverse `spaceLinks` relationship, which can be stale.
@@ -796,6 +1009,8 @@ struct UnifiedRailView: View {
     private func moveService(link: SpaceServiceLink, to targetSpace: Space, followToSpace: Bool) {
         guard link.modelContext != nil, link.space.id != targetSpace.id else { return }
         let serviceID = link.service.id
+        let movedSelectedRow = selectedServiceID == serviceID
+            && selectedSpaceID == link.space.id
 
         // Compute the tail order before repointing, so the link's old order in
         // its current space doesn't count toward the target's max.
@@ -809,43 +1024,18 @@ struct UnifiedRailView: View {
         if followToSpace {
             selectedSpaceID = targetSpace.id
             selectedServiceID = serviceID
-        } else if selectedServiceID == serviceID {
+        } else if movedSelectedRow {
             selectedServiceID = nil
         }
     }
 
+    /// The view only fixes up selection. `AppState.removeLink` owns the
+    /// decision to delete the service, the save, and the teardown order.
     private func removeFromSpace(link: SpaceServiceLink) {
-        let service = link.service
-        let serviceID = service.id
-
-        if selectedServiceID == serviceID {
+        if selectedServiceID == link.service.id && selectedSpaceID == link.space.id {
             selectedServiceID = nil
         }
-
-        modelContext.delete(link)
-
-        // Check remaining links *after* the delete so the count is current.
-        let hasOtherLinks = service.spaceLinks.contains { $0.id != link.id }
-        // Capture the identifier before the service is deleted — reading it off a
-        // deleted model would fault the freed backing data.
-        let orphanedIdentifier: UUID? = hasOtherLinks ? nil : service.dataStoreIdentifier
-        if !hasOtherLinks {
-            modelContext.delete(service)
-        }
-
-        // Only run the irreversible teardown (web-view removal, on-disk data-store
-        // wipe) once the delete actually commits. A failed save rolls back, so
-        // doing these first would log the user out / drop cookies for a service
-        // whose row still exists — the data-loss pattern `deleteSpace` avoids.
-        guard save("remove service from space") else { return }
-
-        if !hasOtherLinks {
-            appState.webViewPool.removeWebView(for: serviceID)
-        }
-        if let orphanedIdentifier {
-            appState.markDataStoreOrphaned(orphanedIdentifier)
-            appState.cleanUpOrphanedDataStores()
-        }
+        appState.removeLink(link.id)
     }
 
     private func pickCustomIcon(for service: ServiceInstance) {
@@ -885,7 +1075,7 @@ struct UnifiedRailView: View {
     }
 
     private func moveServiceUp(_ link: SpaceServiceLink) {
-        var links = filteredLinks
+        var links = links(in: link.space.id)
         guard let index = links.firstIndex(where: { $0.id == link.id }), index > 0 else { return }
         links.swapAt(index, index - 1)
         for (i, l) in links.enumerated() { l.sortOrder = i }
@@ -893,7 +1083,7 @@ struct UnifiedRailView: View {
     }
 
     private func moveServiceDown(_ link: SpaceServiceLink) {
-        var links = filteredLinks
+        var links = links(in: link.space.id)
         guard let index = links.firstIndex(where: { $0.id == link.id }), index < links.count - 1 else { return }
         links.swapAt(index, index + 1)
         for (i, l) in links.enumerated() { l.sortOrder = i }
@@ -906,7 +1096,14 @@ struct UnifiedRailView: View {
         relativeTo target: SpaceServiceLink,
         placement: ServiceReorderPlacement
     ) -> Bool {
-        var links = filteredLinks
+        guard let droppedLink = liveLinks.first(where: { $0.id == droppedLinkID }),
+              WorkspaceNavigationPolicy.allowsReorder(
+                sourceWorkspaceID: droppedLink.space.id,
+                targetWorkspaceID: target.space.id
+              )
+        else { return false }
+
+        var links = links(in: target.space.id)
         let linksByID = Dictionary(uniqueKeysWithValues: links.map { ($0.id, $0) })
         guard let reorderedIDs = ServiceReorder.reorderedIDs(
             links.map(\.id),
@@ -951,6 +1148,13 @@ struct UnifiedRailView: View {
         appState.markDataStoreOrphaned(dataStoreIdentifier)
         appState.cleanUpOrphanedDataStores()
     }
+}
+
+private struct WorkspaceLinkGroup: Identifiable {
+    let space: Space
+    let links: [SpaceServiceLink]
+
+    var id: UUID { space.id }
 }
 
 /// Clips the scrolling rail at its top and bottom while it keeps enough

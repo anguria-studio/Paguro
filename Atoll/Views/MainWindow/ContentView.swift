@@ -7,6 +7,7 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @SceneStorage("Atoll.sidebarCollapsed") private var sidebarCollapsed = false
     @State private var collapsedToggleChromeVisible = false
+    @State private var collapsedChromeRevealTask: Task<Void, Never>?
 
     var body: some View {
         @Bindable var state = appState
@@ -82,6 +83,16 @@ struct ContentView: View {
                 .accessibilityLabel("Offline")
             }
 
+            if let feedback = appState.microphoneActionFeedback {
+                NoticeStrip(severity: .info, systemImage: "mic.slash.fill") {
+                    Text(feedback)
+                        .font(.caption)
+                    Spacer()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(feedback)
+            }
+
             mainLayout(
                 spaceSelection: $state.selectedSpaceID,
                 serviceSelection: $state.selectedServiceID
@@ -113,6 +124,9 @@ struct ContentView: View {
             collapsedToggleChromeVisible = sidebarCollapsed
         }
         .onChange(of: sidebarCollapsed) { _, isCollapsed in
+            collapsedChromeRevealTask?.cancel()
+            collapsedChromeRevealTask = nil
+
             guard isCollapsed else {
                 collapsedToggleChromeVisible = false
                 return
@@ -126,13 +140,21 @@ struct ContentView: View {
             // movement duration plus one small render margin, so the circle
             // cannot travel across the window from the expanded rail.
             collapsedToggleChromeVisible = false
-            Task { @MainActor in
-                try? await Task.sleep(for: AtollMotion.collapsedChromeDelay)
+            collapsedChromeRevealTask = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: AtollMotion.collapsedChromeDelay)
+                } catch {
+                    return
+                }
                 guard sidebarCollapsed else { return }
                 withAnimation(.easeOut(duration: AtollMotion.collapsedChromeFadeSeconds)) {
                     collapsedToggleChromeVisible = true
                 }
             }
+        }
+        .onDisappear {
+            collapsedChromeRevealTask?.cancel()
+            collapsedChromeRevealTask = nil
         }
         // Ask for macOS notification permission here, not in AppState.init:
         // requesting during App.init (before the scene exists) can fail with

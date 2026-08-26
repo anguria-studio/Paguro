@@ -18,8 +18,11 @@ set -euo pipefail
 
 HAGEZI_REF="${HAGEZI_REF:-37522026.190.70475}"   # HaGezi release tag
 CONVERTER_REF="${CONVERTER_REF:-v4.3.0}"          # SafariConverterLib tag
-SAFARI_VERSION="${SAFARI_VERSION:-14}"            # matches app deployment target
+SAFARI_VERSION="${SAFARI_VERSION:-14}"            # rule-syntax level for the converter, not the macOS target
 CAP=150000                                        # WKContentRuleList per-list rule cap
+# EasyList publishes Fanboy's Annoyance List only as a moving file with no
+# versioned download. Record the fetch date in the commit message when you
+# regenerate it; the HaGezi list is pinned by tag above.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"

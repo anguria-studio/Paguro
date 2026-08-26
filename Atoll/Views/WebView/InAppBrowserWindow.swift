@@ -105,11 +105,13 @@ final class InAppBrowserWindow: NSObject, WKNavigationDelegate, WKUIDelegate {
     ) async -> WKNavigationActionPolicy {
         guard let url = navigationAction.request.url,
               let scheme = url.scheme?.lowercased() else { return .cancel }
-        // Web content loads in this window; a non-web scheme (mailto:, tel:, …)
-        // goes to the system handler, gated by the same vetted-scheme rule the
-        // main views use. Anything else is dropped.
+        // Web content loads in this window. A clicked non-web scheme (mailto:,
+        // tel:, …) goes to the system handler, gated by the same vetted-scheme
+        // and user-click rules the main views use. Anything else is dropped.
         if scheme == "http" || scheme == "https" { return .allow }
-        WebViewCoordinator.openExternally(url)
+        if navigationAction.navigationType == .linkActivated {
+            WebViewCoordinator.openExternally(url)
+        }
         return .cancel
     }
 

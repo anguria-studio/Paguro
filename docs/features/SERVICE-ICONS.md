@@ -5,7 +5,11 @@ Status: active
 ## User behavior
 
 Each service has one icon across the sidebar, collapsed rail, top bar, quick
-switcher, and menu-bar list.
+switcher, menu-bar list, and native notification attachment.
+
+The main icon in a macOS notification is always the Atoll app icon. macOS uses
+that icon to identify the sending application. Atoll supplies the service icon
+as an additional image.
 
 The custom-service form and the service editor show an icon preview.
 The user can choose a local image or enter a website or direct image address.

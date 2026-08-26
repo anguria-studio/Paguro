@@ -1,12 +1,16 @@
 import SwiftUI
 import SwiftData
+import AtollCore
 #if canImport(Sparkle)
 import Sparkle
 #endif
 
 @main
 struct AtollApp: App {
-    @State private var appState: AppState
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var appModel: AppModel
+
+    private var appState: AppState { appModel.appState }
 
     #if canImport(Sparkle)
     /// Owns the Sparkle updater for the app's lifetime: drives the
@@ -15,7 +19,8 @@ struct AtollApp: App {
     #endif
 
     init() {
-        _appState = State(initialValue: AppState())
+        let appModel = AppModel()
+        _appModel = State(initialValue: appModel)
         #if canImport(Sparkle)
         updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -23,16 +28,18 @@ struct AtollApp: App {
             userDriverDelegate: nil
         )
         #endif
+        appModel.connect(to: appDelegate)
     }
 
     var body: some Scene {
         Window("Atoll", id: "main") {
             ContentView()
                 .environment(appState)
+                .environment(appModel)
                 .modelContainer(appState.modelContainer)
                 .preferredColorScheme(appState.appearanceColorScheme)
                 .onDisappear {
-                    saveWindowState()
+                    appModel.saveWindowState()
                 }
         }
         .defaultSize(width: 1100, height: 700)
@@ -88,10 +95,13 @@ struct AtollApp: App {
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 .disabled(!appState.appLockEnabled)
 
-                Button("Mute All Microphones") {
-                    appState.muteAllMicrophones()
+                Button(MicrophoneMutePresentation.menuTitle(
+                    activeCount: appState.webViewPool.activeMicrophoneCount
+                )) {
+                    appState.muteActiveMicrophones()
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
+                .disabled(appState.webViewPool.activeMicrophoneCount == 0)
             }
 
             KeyboardShortcutCommands(
@@ -143,9 +153,23 @@ struct AtollApp: App {
             }
         }
 
-        MenuBarExtra("Atoll", systemImage: "square.grid.2x2") {
+        // "Dock only" removes the menu-bar item. When the user drags the item
+        // off the menu bar, the preference follows: Atoll keeps the Dock icon
+        // so the app stays reachable.
+        MenuBarExtra("Atoll", systemImage: "square.grid.2x2", isInserted: Binding(
+            get: { appModel.presenceController.mode.showsMenuBarItem },
+            set: { inserted in
+                let mode = appModel.presenceController.mode
+                if !inserted, mode != .dock {
+                    appModel.setPresenceMode(.dock)
+                } else if inserted, mode == .dock {
+                    appModel.setPresenceMode(.both)
+                }
+            }
+        )) {
             MenuBarView()
                 .environment(appState)
+                .environment(appModel)
                 .modelContainer(appState.modelContainer)
         }
 
@@ -153,11 +177,13 @@ struct AtollApp: App {
             #if canImport(Sparkle)
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
+                .environment(appModel)
                 .modelContainer(appState.modelContainer)
                 .preferredColorScheme(appState.appearanceColorScheme)
             #else
             SettingsView()
                 .environment(appState)
+                .environment(appModel)
                 .modelContainer(appState.modelContainer)
                 .preferredColorScheme(appState.appearanceColorScheme)
             #endif
@@ -182,21 +208,6 @@ struct AtollApp: App {
         } catch {
             AppLogger.dataStore.error("Failed to fetch spaces: \(error.localizedDescription)")
             return []
-        }
-    }
-
-    @MainActor
-    private func saveWindowState() {
-        // Single shared accessor so we never mint a second preferences row.
-        let prefs = appState.ensurePreferences()
-        prefs.selectedSpaceID = appState.selectedSpaceID
-        prefs.selectedServiceID = appState.selectedServiceID
-
-        do {
-            try appState.modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save window state: \(error.localizedDescription)")
-            appState.modelContainer.mainContext.rollback()
         }
     }
 
@@ -235,7 +246,6 @@ struct AtollApp: App {
 // canImport(Sparkle) so the project still builds before the package is present.
 
 #if canImport(Sparkle)
-import Sparkle
 
 /// Publishes whether the updater can currently check for updates, so the menu
 /// item can enable/disable itself reactively.

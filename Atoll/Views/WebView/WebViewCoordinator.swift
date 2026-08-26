@@ -78,6 +78,42 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         "mailto", "tel", "sms", "facetime", "facetime-audio", "imessage", "maps"
     ]
 
+    /// URL schemes that a web view can load. Every other scheme is cancelled
+    /// before WebKit tries it: WebKit cannot show an app scheme such as
+    /// `slack://`, and the failed load would replace the live page with the
+    /// error page.
+    nonisolated private static let webSchemes: Set<String> = [
+        "http", "https", "about", "blob", "data"
+    ]
+
+    nonisolated static func isWebScheme(_ scheme: String) -> Bool {
+        webSchemes.contains(scheme.lowercased())
+    }
+
+    /// The legacy WebKit error domain that `WKWebView` still reports for
+    /// load failures that are not network errors.
+    nonisolated private static let webKitLegacyErrorDomain = "WebKitErrorDomain"
+    /// `WebKitErrorCannotShowURL`: WebKit has no way to show this URL.
+    nonisolated private static let webKitCannotShowURLCode = 101
+    /// `WebKitErrorFrameLoadInterruptedByPolicyChange`: the load stopped
+    /// because the response became a download.
+    nonisolated private static let webKitFrameLoadInterruptedCode = 102
+
+    /// Whether a provisional navigation failure keeps the current page instead
+    /// of showing the error page.
+    ///
+    /// The committed page is still on screen after a provisional failure.
+    /// These failures are not connection problems, so the page must stay: a
+    /// cancelled load (the user navigated away), a URL WebKit cannot show, and
+    /// a load that WebKit interrupted to start a download.
+    nonisolated static func keepsCurrentPage(afterProvisionalFailure error: NSError) -> Bool {
+        if error.domain == NSURLErrorDomain, error.code == NSURLErrorCancelled { return true }
+        if error.domain == webKitLegacyErrorDomain {
+            return error.code == webKitCannotShowURLCode || error.code == webKitFrameLoadInterruptedCode
+        }
+        return false
+    }
+
     /// Whether a URL may be handed to `NSWorkspace.open`. Only http/https and the
     /// curated `nonWebSchemes` qualify.
     ///
@@ -155,19 +191,20 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         }
         #endif
 
-        // 1. Non-web schemes (mailto:, tel:, sms:, facetime:, maps:, etc.)
-        //    Hand off to the system handler so Mail/Phone/Messages opens,
-        //    instead of letting WebKit fail with an unsupported-URL error.
-        //    Only on a real click: a page that runs
+        // 1. Non-web schemes never reach WebKit. A click on a vetted scheme
+        //    (mailto:, tel:, facetime:, maps:, …) goes to the system handler;
+        //    `openExternally` drops every other scheme. Only a real click
+        //    qualifies: a page that runs
         //    `location.href = "facetime-audio://attacker"` (navigationType
         //    `.other`) could otherwise spawn Mail/Messages/call prompts with no
-        //    user gesture, on repeat. Cancel either way so WebKit doesn't then
-        //    try to load the unsupported scheme; only a `.linkActivated`
-        //    navigation actually reaches the system handler.
-        if let scheme = url.scheme?.lowercased(),
-           Self.nonWebSchemes.contains(scheme) {
+        //    user gesture, on repeat. Cancel in every case, because WebKit
+        //    cannot load an app scheme and the failure would replace the live
+        //    page with the error page.
+        if let scheme = url.scheme, !Self.isWebScheme(scheme) {
             if navigationAction.navigationType == .linkActivated {
                 Self.openExternally(url)
+            } else {
+                AppLogger.webView.info("Dropped programmatic navigation to scheme \(scheme, privacy: .public)")
             }
             return .cancel
         }
@@ -395,8 +432,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         if webView === popupWebView { return }
 
         let nsError = error as NSError
-        // Ignore cancelled loads (e.g., user navigated away)
-        guard nsError.code != NSURLErrorCancelled else { return }
+        guard !Self.keepsCurrentPage(afterProvisionalFailure: nsError) else { return }
 
         // Same page the generic error page below is about, reported to the rail
         // so a service that failed while you were looking at another one still
@@ -406,8 +442,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         // The URL that failed isn't `webView.url` (which still points at the
         // last committed page); pull it from the error so "Try Again" retries
         // the right page.
-        let failingURL = (nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String)
-            ?? (nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL)?.absoluteString
+        let failingURL = (nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL)?.absoluteString
             ?? webView.url?.absoluteString
             ?? fallbackURL?.absoluteString
 
@@ -939,41 +974,52 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     /// destination back). Keyed by object identity; cleared on finish/failure.
     private var downloadDestinations: [ObjectIdentifier: URL] = [:]
 
-    /// Identities of downloads still running, and a strong self-reference held
-    /// while any are. The coordinator is otherwise retained only by
-    /// `WebViewPool.coordinators`, and `WKDownload.delegate` is weak — so
-    /// evicting/rebuilding/hibernating the web view mid-download would dealloc
-    /// the coordinator, drop the delegate, lose `downloadDestinations`, and
-    /// silently abort the transfer. Keeping `self` alive until the last
-    /// download finishes lets it complete regardless of the web view's fate.
-    // Hold the WKDownloads themselves (not just their ids) so a WebContent crash
-    // can cancel any that are still in flight — otherwise a download that never
-    // delivers a terminal callback would keep `selfRetainWhileDownloading`
-    // (and this coordinator's data-store refs) alive for the app's lifetime.
+    /// Downloads still running. The set holds the `WKDownload` objects, not
+    /// only their identities, so a cancel can reach a download that never
+    /// delivers a terminal callback.
     private var activeDownloads: Set<WKDownload> = []
-    private var selfRetainWhileDownloading: WebViewCoordinator?
+
+    /// Coordinators with a download in flight.
+    ///
+    /// Membership keeps a coordinator alive until its last download ends. The
+    /// coordinator is otherwise retained only by `WebViewPool.coordinators`,
+    /// and `WKDownload.delegate` is weak. Without this set, evicting or
+    /// hibernating the web view mid-download would release the coordinator,
+    /// drop the delegate, lose `downloadDestinations`, and silently abort the
+    /// transfer. The set also lets `cancelAllDownloads()` reach downloads whose
+    /// web view is already gone, so quitting stops every transfer.
+    private static var coordinatorsWithDownloads: Set<WebViewCoordinator> = []
 
     private func trackDownload(_ download: WKDownload) {
         activeDownloads.insert(download)
-        selfRetainWhileDownloading = self
+        Self.coordinatorsWithDownloads.insert(self)
     }
 
     private func untrackDownload(_ download: WKDownload) {
         activeDownloads.remove(download)
-        if activeDownloads.isEmpty { selfRetainWhileDownloading = nil }
+        if activeDownloads.isEmpty { Self.coordinatorsWithDownloads.remove(self) }
     }
 
-    /// Cancels every in-flight download and clears the self-retain. Called when
-    /// the main web view's content process dies: such downloads can't be relied
-    /// on to deliver a terminal callback, so releasing here prevents a permanent
-    /// coordinator leak. The page has already crashed, so an aborted transfer is
-    /// an acceptable tradeoff (the user can retry).
-    private func cancelActiveDownloads() {
+    /// Cancels every in-flight download of this coordinator and releases it
+    /// from the download registry. Called when the content process dies (such
+    /// downloads cannot be relied on to deliver a terminal callback) and during
+    /// shutdown. An aborted transfer is acceptable in both cases; the user can
+    /// retry.
+    func cancelActiveDownloads() {
         guard !activeDownloads.isEmpty else { return }
         for download in activeDownloads { download.cancel(nil) }
         activeDownloads.removeAll()
         downloadDestinations.removeAll()
-        selfRetainWhileDownloading = nil
+        Self.coordinatorsWithDownloads.remove(self)
+    }
+
+    /// Cancels every in-flight download in the process, including downloads
+    /// whose web view was already torn down. `Command-Q` must stop all work.
+    static func cancelAllDownloads() {
+        for coordinator in coordinatorsWithDownloads {
+            coordinator.cancelActiveDownloads()
+        }
+        coordinatorsWithDownloads.removeAll()
     }
 
     // Save straight to the user's Downloads folder — the browser-like default —

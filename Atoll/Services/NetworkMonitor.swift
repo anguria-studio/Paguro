@@ -2,8 +2,9 @@ import Foundation
 import Network
 
 /// Lightweight wrapper around NWPathMonitor exposing a SwiftUI-observable
-/// `isOnline` flag. Used by ContentView to show an offline banner and by
-/// NotificationManager to suspend polling while the network is unreachable.
+/// `isOnline` flag. `ContentView` reads it to show the offline banner;
+/// `AppState` uses `onChange` to suspend polling while the network is
+/// unreachable and to resume it on reconnect.
 @MainActor
 @Observable
 final class NetworkMonitor {
@@ -17,8 +18,9 @@ final class NetworkMonitor {
 
     private let monitor: NWPathMonitor
     private let queue = DispatchQueue(label: "com.tommasolaterza.Atoll.NetworkMonitor")
+    private var isStopped = false
 
-    /// Callback fired whenever connectivity toggles. Lets NotificationManager
+    /// Callback fired whenever connectivity toggles. Lets `AppState`
     /// pause/resume polling without polling the `isOnline` flag itself.
     var onChange: ((Bool) -> Void)?
 
@@ -37,6 +39,13 @@ final class NetworkMonitor {
     }
 
     deinit {
+        monitor.cancel()
+    }
+
+    func stop() {
+        guard !isStopped else { return }
+        isStopped = true
+        onChange = nil
         monitor.cancel()
     }
 }

@@ -1,3 +1,4 @@
+import AtollCore
 import SwiftUI
 import SwiftData
 
@@ -137,14 +138,20 @@ struct SpacePaletteView: View {
         // not `Space.serviceLinks` — that inverse relationship can be stale,
         // which once left the aggregate summing an empty list. See SpaceStripView.
         let serviceIDs = appState.servicesForSpace(space.id).map(\.id)
-        let muted = space.isMutedEffective
-        let badgeCount = muted ? 0 : appState.badgeManager.aggregateCount(for: serviceIDs)
+        let workspaceMuted = space.isMutedEffective
+        let showsMutedState = NotificationMutePresentation.showsMutedState(
+            scopeMuted: workspaceMuted,
+            manualGlobalMute: appState.doNotDisturb
+        )
+        let badgeCount = workspaceMuted
+            ? 0
+            : appState.badgeManager.aggregateCount(for: serviceIDs)
 
         SpacePaletteRow(
             space: space,
             serviceCount: serviceIDs.count,
             badgeCount: badgeCount,
-            isMuted: muted,
+            isMuted: showsMutedState,
             isCurrent: space.id == selectedSpaceID,
             isHighlighted: index == highlightedIndex,
             shortcutDigit: SpacePalette.shortcutDigit(forIndex: index)
@@ -367,7 +374,9 @@ private struct SpacePaletteRow: View {
 
                 if badgeCount > 0 {
                     BadgeCountView(count: badgeCount)
-                } else if isMuted {
+                }
+
+                if isMuted {
                     Image(systemName: "bell.slash.fill")
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)

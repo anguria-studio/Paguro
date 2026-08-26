@@ -1,3 +1,4 @@
+import AtollCore
 import SwiftUI
 
 /// One service in the rail, drawn as a labelled row in either axis.
@@ -15,6 +16,13 @@ import SwiftUI
 ///
 /// Icon resolution, the spoken label, the badge and the media glyph are all
 /// shared with the rest of the app through `ServiceIconView.swift`.
+enum ServiceRowLabel {
+    static func contextualName(serviceName: String, workspaceName: String?) -> String {
+        guard let workspaceName, !workspaceName.isEmpty else { return serviceName }
+        return "\(serviceName) — \(workspaceName)"
+    }
+}
+
 struct ServiceRowView: View {
     let instance: ServiceInstance
     let isSelected: Bool
@@ -27,12 +35,14 @@ struct ServiceRowView: View {
     var micActive: Bool = false
     var micMuted: Bool = false
     var health: ServiceHealth = .live
+    var glassStyle = GlassLabDefaults.style
     var glassIntensity = GlassIntensityScale.defaultValue
     var dockIconSize = AtollMetric.Sidebar.collapsedIconSize
     var dockItemSize = AtollMetric.Sidebar.dockItemSize
     var dockRowHeight = AtollMetric.Sidebar.dockRowHeight
     var dockIconHorizontalOffset: CGFloat = 0
     var dockTooltipLeadingOffset: CGFloat = 0
+    var supplementaryWorkspaceName: String?
     var isDockHovered = false
     var dockMagnificationActive = false
     var onDockHoverChange: (Bool) -> Void = { _ in }
@@ -66,6 +76,13 @@ struct ServiceRowView: View {
         isDockItem ? isDockHovered : isHovering
     }
 
+    private var contextualName: String {
+        ServiceRowLabel.contextualName(
+            serviceName: instance.label,
+            workspaceName: supplementaryWorkspaceName
+        )
+    }
+
     var body: some View {
         Button(action: action) {
             content
@@ -82,7 +99,7 @@ struct ServiceRowView: View {
 
                     ZStack {
                         RoundedRectangle(cornerRadius: Self.cornerRadius)
-                            .fill(mark.fillStyle)
+                            .fill(fillStyle(for: mark))
                             .opacity(1 - adaptiveProgress)
 
                         if mark.fill == .selected {
@@ -122,14 +139,14 @@ struct ServiceRowView: View {
         }
         .modifier(
             ServiceHelpModifier(
-                label: instance.label,
+                label: contextualName,
                 isEnabled: !isDockItem
             )
         )
         .zIndex(isDockItem && presentsHover ? 10 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ServiceAccessibility.label(
-            name: instance.label,
+            name: contextualName,
             badgeCount: badgeCount,
             isHibernated: isHibernated,
             isMuted: isMuted,
@@ -158,11 +175,7 @@ struct ServiceRowView: View {
                 .font(isSelected ? .atollSidebarLabelSelected : .atollSidebarLabel)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(
-                    isSelected
-                        ? AtollColor.Fill.sidebarSelectedTint
-                        : AtollColor.Text.primary
-                )
+                .foregroundStyle(serviceNameColor)
 
             if axis == .vertical {
                 // Pushes the accessories to the trailing edge of the fixed-width
@@ -188,10 +201,35 @@ struct ServiceRowView: View {
         .fixedSize(horizontal: axis == .horizontal, vertical: false)
     }
 
+    private var serviceNameColor: Color {
+        guard isSelected else { return AtollColor.Text.primary }
+        guard axis == .vertical else { return AtollColor.Fill.sidebarSelectedTint }
+        return SidebarSelectionContrastPolicy.usesHighContrastText(
+            shellTransparency: glassIntensity
+        )
+            ? AtollColor.Text.selectedOnGlass
+            : AtollColor.Fill.sidebarSelectedTint
+    }
+
+    private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
+        if axis == .vertical,
+           sidebarPresentation == .expanded,
+           mark.fill == .hover {
+            return AnyShapeStyle(AtollColor.Fill.sidebarRowHover)
+        }
+        return mark.fillStyle
+    }
+
     /// The collapsed sidebar keeps only the service icon and its live marks.
     /// The label remains available through the tooltip and accessibility text.
     private var dockContent: some View {
         serviceIcon(size: dockIconSize)
+            .overlay(alignment: .topLeading) {
+                if isMuted {
+                    MutedNotificationGlyph()
+                        .offset(x: -5, y: -5)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if badgeCount > 0 && instance.showBadge {
                     BadgeCountView(count: badgeCount)
@@ -214,31 +252,31 @@ struct ServiceRowView: View {
                 height: dockItemSize
             )
             .overlay(alignment: .leading) {
-                if presentsHover {
-                    dockTooltip
-                        .offset(x: dockTooltipLeadingOffset)
-                        .transition(.opacity)
-                }
+                // Keep the native glass surface alive before hover. Creating it
+                // on pointer entry exposes the first background sample as
+                // a brief color change.
+                dockTooltip
+                    .offset(x: dockTooltipLeadingOffset)
+                    .opacity(presentsHover ? 1 : 0)
             }
     }
 
     private var dockTooltip: some View {
-        Text(instance.label)
+        Text(contextualName)
             .font(.callout)
             .foregroundStyle(.primary)
             .lineLimit(1)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(
-                    cornerRadius: AtollMetric.Sidebar.rowRadius,
-                    style: .continuous
+            .modifier(
+                DockTooltipSurfaceModifier(
+                    glassStyle: glassStyle,
+                    glassIntensity: glassIntensity
                 )
             )
             .overlay {
                 RoundedRectangle(
-                    cornerRadius: AtollMetric.Sidebar.rowRadius,
+                    cornerRadius: AtollRadius.surface,
                     style: .continuous
                 )
                 .strokeBorder(AtollColor.shellBorder, lineWidth: 1)
@@ -283,10 +321,7 @@ struct ServiceRowView: View {
             }
 
             if isMuted {
-                Image(systemName: "bell.slash.fill")
-                    .font(.atollSidebarAccessory)
-                    .foregroundStyle(AtollColor.Text.tertiary)
-                    .accessibilityHidden(true)
+                MutedNotificationGlyph(isCompact: false)
             }
 
             if badgeCount > 0 && instance.showBadge {
@@ -295,6 +330,46 @@ struct ServiceRowView: View {
         }
     }
 
+}
+
+private struct DockTooltipSurfaceModifier: ViewModifier {
+    let glassStyle: ShellGlassStyle
+    let glassIntensity: Double
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: AtollRadius.surface, style: .continuous)
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch glassStyle {
+        case .off:
+            content.background {
+                ZStack {
+                    shape.fill(.regularMaterial)
+                    shape.fill(
+                        AtollColor.Fill.shellMaterialTint(
+                            intensity: glassIntensity
+                        )
+                    )
+                }
+            }
+        case .clear:
+            content.glassEffect(
+                .clear.tint(
+                    AtollColor.Fill.glassTint(intensity: glassIntensity)
+                ),
+                in: shape
+            )
+        case .regular:
+            content.glassEffect(
+                .regular.tint(
+                    AtollColor.Fill.glassTint(intensity: glassIntensity)
+                ),
+                in: shape
+            )
+        }
+    }
 }
 
 private struct ServiceHelpModifier: ViewModifier {

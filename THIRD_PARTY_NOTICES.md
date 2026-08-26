@@ -14,14 +14,6 @@ Atoll uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
 The `LICENSE` file contains the upstream MIT license and copyright notice.
 Git keeps the upstream commit history.
 
-## Dark Reader
-
-- Project: [Dark Reader](https://github.com/darkreader/darkreader)
-- License: MIT
-- Use: bundled per-service dark theme script
-
-The bundled file keeps its license header.
-
 ## HaGeZi DNS blocklists
 
 - Project: [HaGeZi DNS Blocklists](https://github.com/hagezi/dns-blocklists)

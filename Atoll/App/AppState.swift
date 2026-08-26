@@ -43,13 +43,12 @@ final class AppState {
     var showQuickSwitcher = false
 
     /// True once launch-time preference loading has finished. Gates the DND
-    /// `didSet`s below so they don't push the effective DND (which touches the
-    /// AppKit dock tile) while `loadAppPreferences` is still assigning them
-    /// during init — the same early-AppKit race that code defers a runloop tick.
+    /// `didSet`s below so they do not push effective DND while
+    /// `loadAppPreferences` is still assigning them during init.
     @ObservationIgnored private var isLaunchComplete = false
 
     /// Manual Do Not Disturb toggle. `didSet` re-pushes the effective DND so any
-    /// writer (menu command, Settings) keeps the badge/dock/notification gate in
+    /// writer (menu command, Settings) keeps the notification gate in
     /// sync without having to remember to call `refreshEffectiveDoNotDisturb()`.
     var doNotDisturb = false {
         didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
@@ -143,9 +142,10 @@ final class AppState {
     var liquidGlassStyle = GlassLabDefaults.style
     var liquidGlassIntensity = GlassLabDefaults.transparency
     var iconRailBaseSize = DockIconSizing.defaultBaseSize
-    var iconRailMagnificationEnabled = false
+    var iconRailMagnificationEnabled = DockIconSizing.defaultMagnification > 0
     var iconRailMagnifiedSize = DockIconSizing.defaultMagnifiedSize
-    var iconRailPosition = DockRailPosition.center
+    var iconRailPosition = DockRailPosition.defaultPosition
+    var workspaceViewMode = WorkspaceViewMode.defaultMode
 
     @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
     private static let liquidGlassStyleKey = "Atoll.liquidGlassStyle"
@@ -154,6 +154,7 @@ final class AppState {
     private static let iconRailMagnificationEnabledKey = "Atoll.iconRailMagnificationEnabled"
     private static let iconRailMagnifiedSizeKey = "Atoll.iconRailMagnifiedSize"
     private static let iconRailPositionKey = "Atoll.iconRailPosition"
+    private static let workspaceViewModeKey = "Atoll.workspaceViewMode"
 
     var iconRailMagnification: Double {
         guard iconRailMagnificationEnabled else { return 0 }
@@ -172,23 +173,20 @@ final class AppState {
         }
     }
 
-    /// Tokens for the NSWorkspace sleep/wake observers, removed in `deinit`.
-    /// AppState is a process-lifetime singleton, so this is hygiene rather than a
-    /// live leak, but keeping registration and teardown symmetric avoids a
-    /// dangling observer if that ever changes. Not observed UI state, so
-    /// `@ObservationIgnored`; `nonisolated(unsafe)` so the nonisolated deinit can
-    /// read it — it's only mutated during main-actor setup and read once at
-    /// teardown, so there's no real concurrency exposure.
-    @ObservationIgnored nonisolated(unsafe) private var systemObserverTokens: [NSObjectProtocol] = []
+    /// Tokens for the NSWorkspace sleep/wake observers, removed in `shutdown()`.
+    /// AppState lives for the whole process, so `shutdown()` is its one
+    /// teardown; there is no `deinit`. Not observed UI state, so
+    /// `@ObservationIgnored`.
+    @ObservationIgnored private var systemObserverTokens: [NSObjectProtocol] = []
 
-    /// Tokens for `DistributedNotificationCenter` screen-lock observers.
-    /// `deinit` removes them for the same symmetry as the workspace tokens.
-    @ObservationIgnored nonisolated(unsafe) private var distributedObserverTokens: [NSObjectProtocol] = []
+    /// Tokens for `DistributedNotificationCenter` screen-lock observers,
+    /// removed in `shutdown()`.
+    @ObservationIgnored private var distributedObserverTokens: [NSObjectProtocol] = []
 
-    /// Tokens registered on `NotificationCenter.default`, unregistered in
-    /// `deinit`. Kept apart from `systemObserverTokens`, which belongs to
+    /// Tokens registered on `NotificationCenter.default`, removed in
+    /// `shutdown()`. Kept apart from `systemObserverTokens`, which belongs to
     /// `NSWorkspace.shared.notificationCenter`.
-    @ObservationIgnored nonisolated(unsafe) private var defaultCenterTokens: [NSObjectProtocol] = []
+    @ObservationIgnored private var defaultCenterTokens: [NSObjectProtocol] = []
 
     /// Data-store identifiers a `cleanUpOrphanedDataStores` invocation is
     /// currently processing, so overlapping calls don't both run the backoff loop
@@ -198,7 +196,7 @@ final class AppState {
 
     /// Scheduled "quiet hours" Do Not Disturb, loaded from AppPreferences.
     /// `doNotDisturb` above stays the manual toggle; the effective DND that
-    /// gates badges and notifications is `doNotDisturb || scheduledDNDActive`.
+    /// gates notification delivery is `doNotDisturb || scheduledDNDActive`.
     var scheduledDNDEnabled = false {
         didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
     }
@@ -208,8 +206,10 @@ final class AppState {
     var dndEndMinutes = 7 * 60 {
         didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
     }
-    @ObservationIgnored nonisolated(unsafe) private var quietHoursTask: Task<Void, Never>?
-    @ObservationIgnored nonisolated(unsafe) private var idleHibernationTask: Task<Void, Never>?
+    @ObservationIgnored private var quietHoursTask: Task<Void, Never>?
+    @ObservationIgnored private var idleHibernationTask: Task<Void, Never>?
+    @ObservationIgnored private var microphoneFeedbackTask: Task<Void, Never>?
+    @ObservationIgnored private var hasShutDown = false
     /// Per-service grace timers for the `.immediate` hibernation policy: a service
     /// switched away from is torn down a few seconds later unless switched back to.
     /// Keyed by service id so switching back can cancel the pending teardown.
@@ -243,6 +243,9 @@ final class AppState {
     /// the permission hot path, so kept in memory rather than re-fetched.
     var defaultCameraPolicy: MediaPermissionPolicy = .ask
     var defaultMicrophonePolicy: MediaPermissionPolicy = .ask
+
+    /// A short confirmation for the one-shot active-microphone mute action.
+    private(set) var microphoneActionFeedback: String?
 
     /// Non-nil when the persistent store failed and we fell back to in-memory storage.
     /// The UI should display a warning banner when this is set.
@@ -355,7 +358,16 @@ final class AppState {
         !isStoreInMemoryFallback && !storeWasDamagedAtLaunch && !storeWasRestoredAtLaunch
     }
 
-    init() {
+    init(
+        dataStoreManager: DataStoreManager,
+        userScriptManager: UserScriptManager,
+        badgeManager: BadgeManager,
+        notificationManager: NotificationManager,
+        transientBadgeFetcher: TransientBadgeFetcher,
+        contentBlocker: ContentBlockerManager,
+        webViewPool: WebViewPool,
+        networkMonitor: NetworkMonitor
+    ) {
         // The current shipping shape, pinned as an explicit `VersionedSchema`.
         // `loadContainer` opens it through `AtollMigrationPlan`, so an older
         // store migrates through named, tested stages instead of inference. See
@@ -432,9 +444,9 @@ final class AppState {
             self.isStoreInMemoryFallback = true
         }
 
-        self.dataStoreManager = DataStoreManager()
-        self.userScriptManager = UserScriptManager()
-        self.badgeManager = BadgeManager()
+        self.dataStoreManager = dataStoreManager
+        self.userScriptManager = userScriptManager
+        self.badgeManager = badgeManager
 
         // Capture the modelContainer locally so the @Sendable closure below
         // doesn't capture `self` before all stored properties are assigned.
@@ -476,18 +488,11 @@ final class AppState {
         self.userScriptManager.isDoNotDisturbActive = { @Sendable in
             MainActor.assumeIsolated { badgeManager.doNotDisturb }
         }
-        self.notificationManager = NotificationManager(badgeManager: badgeManager)
-        self.transientBadgeFetcher = TransientBadgeFetcher(
-            badgeManager: badgeManager,
-            dataStoreManager: dataStoreManager
-        )
-        self.contentBlocker = ContentBlockerManager()
-        self.webViewPool = WebViewPool(
-            dataStoreManager: dataStoreManager,
-            userScriptManager: userScriptManager,
-            contentBlocker: contentBlocker
-        )
-        self.networkMonitor = NetworkMonitor()
+        self.notificationManager = notificationManager
+        self.transientBadgeFetcher = transientBadgeFetcher
+        self.contentBlocker = contentBlocker
+        self.webViewPool = webViewPool
+        self.networkMonitor = networkMonitor
 
         loadAppPreferences()
         startContentBlocker()
@@ -498,7 +503,6 @@ final class AppState {
         setupNetworkHandling()
         setupExternalLinkRouting()
         setupMediaPermissions()
-        setupTerminationRecording()
         let didSeedDefaults = seedDefaultDataIfNeeded()
         backfillPasskeyNoticeIfNeeded(freshInstall: didSeedDefaults)
         reapOrphanedServices()
@@ -518,18 +522,46 @@ final class AppState {
         recordStoreContent()
     }
 
-    deinit {
+    /// Stops process-lifetime work and saves the final selection before AppKit
+    /// completes a requested quit. Calls after the first one are no-ops.
+    func shutdown() async {
+        guard !hasShutDown else { return }
+        hasShutDown = true
+
+        quietHoursTask?.cancel()
+        quietHoursTask = nil
+        idleHibernationTask?.cancel()
+        idleHibernationTask = nil
+        microphoneFeedbackTask?.cancel()
+        microphoneFeedbackTask = nil
+        for task in pendingImmediateHibernation.values {
+            task.cancel()
+        }
+        pendingImmediateHibernation.removeAll()
+
+        drainAllMediaRequests()
+        notificationManager.stopAllPolling()
+        transientBadgeFetcher.pause()
+        networkMonitor.stop()
+        contentBlocker.stop()
+        webViewPool.shutdown()
+
         for token in systemObserverTokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
         }
+        systemObserverTokens.removeAll()
         for token in distributedObserverTokens {
             DistributedNotificationCenter.default().removeObserver(token)
         }
+        distributedObserverTokens.removeAll()
         for token in defaultCenterTokens {
             NotificationCenter.default.removeObserver(token)
         }
-        quietHoursTask?.cancel()
-        idleHibernationTask?.cancel()
+        defaultCenterTokens.removeAll()
+
+        saveWindowState()
+        recordStoreContent()
+        await Task.yield()
     }
 
     /// Wires the WebViewPool's external-link handler so that cross-domain
@@ -559,8 +591,9 @@ final class AppState {
     /// Resolves a service's camera/microphone request into a WebKit decision from
     /// the persisted per-service policy (falling back to the global default, then
     /// `.ask`). Fails closed (`.deny`) whenever anything is uncertain: unknown
-    /// service, a persisted grant reached from a cross-origin subframe, or — until
-    /// the prompt lands in the next step — an `.ask` outcome.
+    /// service, a locked app, an inactive service, or a persisted grant reached
+    /// from a cross-origin subframe. An `.ask` outcome queues the native prompt
+    /// and waits for the answer.
     @MainActor
     func resolveMediaPermission(
         serviceID: UUID,
@@ -760,11 +793,25 @@ final class AppState {
         }
     }
 
-    /// Mutes every service whose microphone is currently live (⇧⌘M). Logs the
-    /// count so the action isn't silent when nothing was muted.
-    func muteAllMicrophones() {
-        let count = webViewPool.muteAllMicrophones()
+    /// Mutes every service whose microphone is currently live (⇧⌘M).
+    func muteActiveMicrophones() {
+        let count = webViewPool.muteActiveMicrophones()
         AppLogger.general.info("Muted \(count) live microphone(s)")
+
+        guard let feedback = MicrophoneMutePresentation.confirmation(mutedCount: count) else {
+            return
+        }
+        microphoneActionFeedback = feedback
+        microphoneFeedbackTask?.cancel()
+        microphoneFeedbackTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(2))
+            } catch {
+                return
+            }
+            guard self?.microphoneActionFeedback == feedback else { return }
+            self?.microphoneActionFeedback = nil
+        }
     }
 
     /// Logs a capture denial caused by the requesting origin not belonging to the
@@ -944,27 +991,6 @@ final class AppState {
         })
     }
 
-    /// Records what the store holds as the app goes away. A deliberate deletion
-    /// during the session lowers the record here, which is what stops the next
-    /// launch reading the user's own housekeeping as data loss.
-    private func setupTerminationRecording() {
-        // `queue: nil`, not `.main`, is load-bearing here. A non-nil queue makes
-        // `NotificationCenter` deliver the block asynchronously via
-        // `queue.addOperation`, and `NSApplication` exits right after posting
-        // this notification without giving the run loop another turn to drain
-        // it — the block would be silently dropped. `queue: nil` runs it
-        // synchronously on the posting thread instead, which AppKit guarantees
-        // is main for this notification, so `MainActor.assumeIsolated` still
-        // holds and the write actually lands before the process exits.
-        defaultCenterTokens.append(NotificationCenter.default.addObserver(
-            forName: NSApplication.willTerminateNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.recordStoreContent() }
-        })
-    }
-
     /// Pauses or resumes polling when network connectivity toggles. While
     /// offline every poll (active, background, and hibernated) would only fire
     /// doomed requests, draining battery for nothing; on reconnect we restart
@@ -1002,11 +1028,11 @@ final class AppState {
             return
         }
         AppLogger.general.info("Resuming polling — \(reason)")
-        restartPollingAfterWake()
+        restartPollingAfterResume()
         transientBadgeFetcher.resume()
     }
 
-    private func restartPollingAfterWake() {
+    private func restartPollingAfterResume() {
         let activeID = webViewPool.activeServiceID
         for id in webViewPool.liveServiceIDs {
             guard let webView = webViewPool.liveWebView(for: id) else { continue }
@@ -1020,7 +1046,7 @@ final class AppState {
                 mode: (id == activeID) ? .active : .background
             )
         }
-        AppLogger.general.info("System wake — restarted polling for \(self.webViewPool.liveServiceIDs.count) service(s)")
+        AppLogger.general.info("Restarted polling after wake or reconnect for \(self.webViewPool.liveServiceIDs.count) service(s)")
     }
 
     /// Effective mute state for a service: true if its own `isMuted` flag is
@@ -1134,6 +1160,11 @@ final class AppState {
         UserDefaults.standard.set(position.rawValue, forKey: Self.iconRailPositionKey)
     }
 
+    func setWorkspaceViewMode(_ mode: WorkspaceViewMode) {
+        workspaceViewMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: Self.workspaceViewModeKey)
+    }
+
     /// Applies user edits to a service: persists label/URL/keep-loaded, syncs
     /// the pool's never-hibernate set, and navigates the live web view to the
     /// new URL when it changed. The caller has already mutated the model;
@@ -1230,9 +1261,8 @@ final class AppState {
     }
 
     /// Applies a new Atoll-wide default zoom in memory and to every open
-    /// service that has no explicit per-service zoom. Persistence is handled by
-    /// the Settings view (mirrors the badge/presence preferences). Clamped to
-    /// the same 0.5x–3.0x range as manual zoom.
+    /// service that has no explicit per-service zoom. The Settings view saves
+    /// the preference. Clamped to the same 0.5x–3.0x range as manual zoom.
     func applyDefaultZoom(_ zoom: Double) {
         let clamped = max(0.5, min(3.0, zoom))
         defaultZoom = clamped
@@ -1535,6 +1565,89 @@ final class AppState {
         return orphaned
     }
 
+    /// Returns every link whose space and service still exist.
+    ///
+    /// A fetch is the authoritative view of membership. It includes unsaved
+    /// inserts and deletes in the context, while the `serviceLinks` and
+    /// `spaceLinks` inverse relationships can lag behind them.
+    static func liveLinks(in context: ModelContext) throws -> [SpaceServiceLink] {
+        try context.fetch(FetchDescriptor<SpaceServiceLink>()).filter {
+            $0.modelContext != nil && $0.space.modelContext != nil && $0.service.modelContext != nil
+        }
+    }
+
+    /// Maps each service ID to the IDs of the spaces that contain it.
+    static func memberships(from links: [SpaceServiceLink]) -> [UUID: Set<UUID>] {
+        var memberships: [UUID: Set<UUID>] = [:]
+        for link in links {
+            memberships[link.service.id, default: []].insert(link.space.id)
+        }
+        return memberships
+    }
+
+    /// Counts the services that Atoll deletes together with this space.
+    /// The delete confirmation shows this number.
+    func orphanedServiceCount(byDeletingSpace spaceID: UUID) -> Int {
+        let links = (try? Self.liveLinks(in: modelContainer.mainContext)) ?? []
+        return Self.servicesOrphaned(byDeletingSpace: spaceID, memberships: Self.memberships(from: links)).count
+    }
+
+    /// The result of `removeLink(_:in:)`.
+    struct LinkRemovalOutcome: Equatable {
+        let serviceID: UUID
+        /// The data store to reclaim. Set only when the removed link was the
+        /// service's last one and the service is deleted.
+        let orphanedDataStoreIdentifier: UUID?
+
+        var deletedService: Bool { orphanedDataStoreIdentifier != nil }
+    }
+
+    /// Removes one link and saves. Deletes the service when no other link
+    /// remains for it. Membership comes from a fresh fetch, so an unsaved link
+    /// in the same context counts.
+    ///
+    /// Nothing irreversible happens here. The caller tears down the web view
+    /// and reclaims the data store after the save succeeds, and rolls back
+    /// when this function throws. Returns `nil` when the link does not exist.
+    static func removeLink(_ linkID: UUID, in context: ModelContext) throws -> LinkRemovalOutcome? {
+        let links = try liveLinks(in: context)
+        guard let link = links.first(where: { $0.id == linkID }) else { return nil }
+        let service = link.service
+        let serviceID = service.id
+        // Capture before any delete. Reading a deleted model traps.
+        let dataStoreIdentifier = service.dataStoreIdentifier
+        let hasOtherLinks = links.contains { $0.id != linkID && $0.service.id == serviceID }
+
+        context.delete(link)
+        if !hasOtherLinks {
+            context.delete(service)
+        }
+        try context.save()
+        return LinkRemovalOutcome(
+            serviceID: serviceID,
+            orphanedDataStoreIdentifier: hasOtherLinks ? nil : dataStoreIdentifier
+        )
+    }
+
+    /// Removes a service from one space. When the service exists in no other
+    /// space, it is deleted and its data store is reclaimed — but only after
+    /// the save succeeds. A failed save rolls back and changes nothing.
+    func removeLink(_ linkID: UUID) {
+        let context = modelContainer.mainContext
+        let outcome: LinkRemovalOutcome?
+        do {
+            outcome = try Self.removeLink(linkID, in: context)
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to remove service from space; rolled back: \(error.localizedDescription)")
+            return
+        }
+        guard let outcome, let dataStoreIdentifier = outcome.orphanedDataStoreIdentifier else { return }
+        webViewPool.removeWebView(for: outcome.serviceID)
+        markDataStoreOrphaned(dataStoreIdentifier)
+        cleanUpOrphanedDataStores()
+    }
+
     /// Deletes a space and reclaims any services that lived *only* in it.
     /// A service linked to other spaces is preserved (the delete-confirmation
     /// dialog promises this); a service orphaned by the deletion has its web
@@ -1556,19 +1669,19 @@ final class AppState {
             return
         }
 
-        // Guard against dangling links on both sides before materializing
-        // `.service`/`.space` — reading a deleted model traps.
-        let linkedServices = space.serviceLinks
-            .filter { $0.modelContext != nil && $0.service.modelContext != nil }
-            .map(\.service)
-        var memberships: [UUID: Set<UUID>] = [:]
-        for service in linkedServices {
-            memberships[service.id] = Set(
-                service.spaceLinks
-                    .filter { $0.modelContext != nil && $0.space.modelContext != nil }
-                    .map { $0.space.id }
-            )
+        // Read memberships from a fresh link fetch, not from the `serviceLinks`
+        // and `spaceLinks` inverse relationships. A fetch includes unsaved
+        // inserts and deletes in this context; an inverse can lag behind them.
+        guard let liveLinks = try? Self.liveLinks(in: context) else {
+            AppLogger.dataStore.error("Failed to fetch links; not deleting space \(spaceID)")
+            return
         }
+        var linkedServices: [ServiceInstance] = []
+        var seenServiceIDs: Set<UUID> = []
+        for link in liveLinks where link.space.id == spaceID && seenServiceIDs.insert(link.service.id).inserted {
+            linkedServices.append(link.service)
+        }
+        let memberships = Self.memberships(from: liveLinks)
         let orphanedIDs = Self.servicesOrphaned(byDeletingSpace: spaceID, memberships: memberships)
 
         // Delete the models and their orphaned services, but hold off on every
@@ -1848,19 +1961,6 @@ final class AppState {
         storeError = nil
     }
 
-    /// Post-open sanity check for dangling `SpaceServiceLink` rows — join rows
-    /// whose non-optional `space` points at a deleted `Space`, left behind by a
-    /// build that shipped before `Space.serviceLinks` declared its inverse (the
-    /// `.cascade` rule never fired). Reading such a link's `space` faults the
-    /// deleted row and traps, crashing the app at launch, so the actual cleanup
-    /// runs on the raw store file BEFORE it opens (`StoreRepair`, called from
-    /// `init`). By the time this runs the store should already be clean; this
-    /// only detects and logs anything that slipped through — deliberately
-    /// without ever touching a link's `space`/`service`. It walks outward from
-    /// live spaces and services (reading link `id`s only) and treats any link
-    /// not reachable from BOTH sides as dangling. It does NOT delete: an
-    /// object-graph delete faults the dead space on save (the very crash we
-    /// avoid), which is why removal is the raw-file repair's job.
     /// Whether the store still holds any dangling `SpaceServiceLink` — a join
     /// row whose non-optional `space` or `service` points at a deleted row.
     /// Reading such a link's relationship faults the deleted model and traps
@@ -2380,9 +2480,6 @@ final class AppState {
         }
     }
 
-    /// Preloads web views for all services in the currently selected space.
-    /// Runs after window state is restored so `selectedSpaceID` is already set.
-    /// The selected service (if any) loads first, then the rest stagger at 500ms intervals.
     /// Returns services for a space, safely skipping any links with dangling relationships
     /// (can happen if the previous session crashed mid-delete).
     func servicesForSpace(_ spaceID: UUID) -> [ServiceInstance] {
@@ -2409,6 +2506,9 @@ final class AppState {
         }
     }
 
+    /// Preloads web views for all services in the currently selected space.
+    /// Runs after window state is restored so `selectedSpaceID` is already set.
+    /// The selected service (if any) loads first, then the rest stagger at 500ms intervals.
     private func preloadActiveSpaceServices() {
         guard let spaceID = selectedSpaceID else { return }
         let services = servicesForSpace(spaceID)
@@ -2614,6 +2714,22 @@ final class AppState {
         return prefs
     }
 
+    func savePreferences(reason: String) {
+        do {
+            try modelContainer.mainContext.save()
+        } catch {
+            AppLogger.dataStore.error("Failed to save \(reason): \(error.localizedDescription)")
+            modelContainer.mainContext.rollback()
+        }
+    }
+
+    func saveWindowState() {
+        let preferences = ensurePreferences()
+        preferences.selectedSpaceID = selectedSpaceID
+        preferences.selectedServiceID = selectedServiceID
+        savePreferences(reason: "window state")
+    }
+
     private func loadAppPreferences() {
         let context = modelContainer.mainContext
         let descriptor = FetchDescriptor<AppPreferences>()
@@ -2630,7 +2746,8 @@ final class AppState {
         // SwiftUI App scene has finished wiring up NSApp. Touching AppKit
         // there can race with NSApplication bootstrap. Defer the
         // AppKit-facing mutations to the next runloop tick.
-        userScriptManager.autoDismissCookieBanners = prefs?.autoDismissCookieBanners ?? true
+        userScriptManager.autoDismissCookieBanners = prefs?.autoDismissCookieBanners
+            ?? AppPreferenceDefaults.autoDismissCookieBanners
         defaultZoom = prefs?.defaultZoomEffective ?? 1.0
         railLayout = prefs?.railLayout ?? .sidebar
         appearanceMode = prefs?.appearanceMode ?? .system
@@ -2655,7 +2772,7 @@ final class AppState {
             forKey: Self.iconRailMagnificationEnabledKey
         ) != nil
             ? defaults.bool(forKey: Self.iconRailMagnificationEnabledKey)
-            : false
+            : DockIconSizing.defaultMagnification > 0
         let storedMagnifiedSize = defaults.object(
             forKey: Self.iconRailMagnifiedSizeKey
         ) != nil
@@ -2667,7 +2784,10 @@ final class AppState {
         )
         iconRailPosition = defaults.string(forKey: Self.iconRailPositionKey)
             .flatMap(DockRailPosition.init(rawValue:))
-            ?? .center
+            ?? DockRailPosition.defaultPosition
+        workspaceViewMode = WorkspaceViewMode.resolving(
+            defaults.string(forKey: Self.workspaceViewModeKey)
+        )
         // Frost is now a fixed material rule. Remove the temporary Glass Lab
         // value so an old experiment cannot affect a future setting.
         UserDefaults.standard.removeObject(forKey: "Atoll.backdropFrostIntensity")
@@ -2693,13 +2813,11 @@ final class AppState {
         }
 
         let resolvedShowBadge = prefs?.showBadgeCountInDock ?? true
-        let resolvedPresenceMode = prefs?.appPresenceMode ?? .dock
         Task { @MainActor in
             // Launch AppKit-facing setup is now safe (past the init runloop tick).
             // Flip the flag first so the DND `didSet`s become live from here on.
             self.isLaunchComplete = true
             self.badgeManager.showBadgeCountInDock = resolvedShowBadge
-            AppPresenceManager().apply(mode: resolvedPresenceMode)
             // Apply any active quiet-hours schedule now, then keep it current.
             self.refreshEffectiveDoNotDisturb()
             self.startQuietHoursTimer()
@@ -2864,7 +2982,7 @@ final class AppState {
     }
 
     private func setupMenuBarNavigation() {
-        NotificationCenter.default.addObserver(
+        let token = NotificationCenter.default.addObserver(
             forName: .menuBarServiceActivated,
             object: nil,
             queue: .main
@@ -2878,6 +2996,7 @@ final class AppState {
                 self?.selectedServiceID = serviceID
             }
         }
+        defaultCenterTokens.append(token)
     }
 
     private func setupNotificationNavigation() {
@@ -3067,31 +3186,9 @@ final class AppState {
             // recognized as loss rather than reseeded.
             Self.markHasData(defaults)
             AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
-
-            // Fetch favicons for all seeded services — capture IDs before the Task
-            let allServicesDescriptor = FetchDescriptor<ServiceInstance>()
-            do {
-                let entries = try context.fetch(allServicesDescriptor).map { (id: $0.id, url: $0.url) }
-                Task {
-                    for entry in entries {
-                        let data = await FaviconFetcher.shared.fetchFavicon(for: entry.url)
-                        guard let data else { continue }
-                        let entryID = entry.id
-                        let desc = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == entryID })
-                        guard let service = try? context.fetch(desc).first else { continue }
-                        service.fetchedIconData = data
-                        service.faviconFetchedAt = Date()
-                    }
-                    do {
-                        try context.save()
-                    } catch {
-                        AppLogger.dataStore.error("Failed to save seeded favicons: \(error.localizedDescription)")
-                        context.rollback()
-                    }
-                }
-            } catch {
-                AppLogger.dataStore.error("Failed to fetch services for favicon seeding: \(error.localizedDescription)")
-            }
+            // `fetchMissingAndStaleFavicons` runs next in `init`. It fetches
+            // every icon that has no `faviconFetchedAt`, so one pass covers the
+            // seeded services. A second task here raced it on the same context.
             return true
         } catch {
             AppLogger.dataStore.error("Failed to seed default data: \(error.localizedDescription)")

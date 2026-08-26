@@ -111,18 +111,38 @@ The app must not run two detection systems.
 The default must avoid two visible alerts for one event.
 The user can enable both routes when desired.
 
+macOS always uses the Atoll app icon as the sender identity for a native
+notification. Public notification APIs do not let Atoll replace that icon for
+each service.
+
+Atoll adds the service icon as an image attachment when an icon is available.
+Each notification receives its own copy of the icon file, because macOS moves
+an attachment file into the notification store.
+It also adds the service name as the notification subtitle. macOS controls the
+size and location of the attached image.
+
 ## Global mute
 
 The content header has one global notification mute beside reload.
 It applies to all spaces and services.
 The same state is available in Settings and through `Shift-Command-D`.
 
-Global mute suppresses new macOS notification banners and visible badge counts.
-Atoll continues to detect and store the current unread counts in memory.
-Unmuting restores those counts without waiting for a new poll.
+Global mute suppresses new macOS notification banners. Unread counts remain
+visible in service badges, workspace totals, and the Dock badge. Each visible
+workspace header and service adds a barred bell while manual global mute is
+active.
 
 Global mute does not delete notifications that macOS has already delivered.
 It does not stop web views or sign services out.
+
+## Workspace mute
+
+The workspace context menu can mute every service in that workspace. The mute
+hides badges and suppresses new macOS notification banners. It preserves each
+service's raw unread count, so unmuting restores the badges immediately.
+
+If several workspaces share a service, muting any of them also mutes the
+service.
 
 ## Click routing
 

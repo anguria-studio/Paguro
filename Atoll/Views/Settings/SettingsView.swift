@@ -58,6 +58,7 @@ struct GeneralSettingsView: View {
     @Query private var preferences: [AppPreferences]
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(AppModel.self) private var appModel
     // Settings is its own scene (`Settings { … }` in AtollApp), separate from
     // `Window("Atoll", id: "main")`. The recovery sheet is only attached to
     // the main window, so setting `isShowingStoreRecovery` from here alone
@@ -70,8 +71,6 @@ struct GeneralSettingsView: View {
     // "If the targeted scene is a Window, the system orders it to the front."
     @Environment(\.openWindow) private var openWindow
 
-    private let presenceManager = AppPresenceManager()
-
     private var prefs: AppPreferences {
         preferences.first ?? AppPreferences()
     }
@@ -82,9 +81,7 @@ struct GeneralSettingsView: View {
                 Picker("Show Atoll in", selection: Binding(
                     get: { prefs.appPresenceMode },
                     set: { mode in
-                        ensurePrefs().appPresenceMode = mode
-                        presenceManager.apply(mode: mode)
-                        save("app presence mode")
+                        appModel.setPresenceMode(mode)
                     }
                 )) {
                     Text("Dock only").tag(AppPresenceMode.dock)
@@ -143,12 +140,9 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 38, alignment: .trailing)
                 }
-                .help("Controls how much of the desktop appears through the Atoll shell. Web pages remain opaque.")
+                .help("Controls how much of the desktop appears through the Atoll shell. This control does not change web pages.")
 
                 HStack {
-                    Text("These experimental controls update the main window live.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     Spacer()
                     Button("Reset Glass Lab") {
                         appState.resetGlassLab()
@@ -168,6 +162,15 @@ struct GeneralSettingsView: View {
                         Text(layout.displayName).tag(layout)
                     }
                 }
+
+                Picker("Workspace view", selection: Binding(
+                    get: { appState.workspaceViewMode },
+                    set: { appState.setWorkspaceViewMode($0) }
+                )) {
+                    Text("Current workspace").tag(WorkspaceViewMode.current)
+                    Text("All workspaces").tag(WorkspaceViewMode.all)
+                }
+                .help("Shows one workspace or all workspace sections in the sidebar layout.")
             }
 
             Section("Icon Rail") {
@@ -264,8 +267,8 @@ struct GeneralSettingsView: View {
 
             Section("Startup") {
                 Toggle("Open at login", isOn: Binding(
-                    get: { presenceManager.isLaunchAtLoginEnabled },
-                    set: { presenceManager.setLaunchAtLogin($0) }
+                    get: { appModel.presenceController.isLaunchAtLoginEnabled },
+                    set: { appModel.presenceController.setLaunchAtLogin($0) }
                 ))
             }
 
@@ -279,6 +282,7 @@ struct GeneralSettingsView: View {
                     }
                     Spacer()
                     Button("Restore from a backup…") {
+                        AppDelegate.prepareToShowWindow()
                         openWindow(id: "main")
                         appState.isShowingStoreRecovery = true
                     }
@@ -346,7 +350,7 @@ struct NotificationSettingsView: View {
                         appState.refreshEffectiveDoNotDisturb()
                     }
                 ))
-                Text("Silences all badge counts and notification banners.")
+                Text("Silences notification banners. Unread badges remain visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -503,7 +507,7 @@ struct NotificationSettingsView: View {
                 ), displayedComponents: .hourAndMinute)
             }
 
-            Text("Silences badges and notification banners during these hours.")
+            Text("Silences notification banners during these hours. Unread badges remain visible.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

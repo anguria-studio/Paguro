@@ -19,7 +19,8 @@ final class BadgeManager {
         // Mirror into a thread-safe snapshot so the UNUserNotificationCenter
         // delegate can read Do Not Disturb from its callback without asserting
         // main-actor isolation (that callback isn't contractually main-thread;
-        // an off-main read via MainActor.assumeIsolated would hard-crash).
+        // an off-main read via MainActor.assumeIsolated would hard-crash). DND
+        // suppresses delivery; it does not hide the unread state.
         didSet { doNotDisturbSnapshot.value = doNotDisturb }
     }
 
@@ -31,7 +32,6 @@ final class BadgeManager {
     }
 
     var totalCount: Int {
-        guard !doNotDisturb else { return 0 }
         return counts.reduce(0) { $0 + (maskedIDs.contains($1.key) ? 0 : $1.value) }
     }
 
@@ -42,12 +42,11 @@ final class BadgeManager {
     }
 
     func badgeCount(for instanceID: UUID) -> Int {
-        guard !doNotDisturb, !maskedIDs.contains(instanceID) else { return 0 }
+        guard !maskedIDs.contains(instanceID) else { return 0 }
         return counts[instanceID] ?? 0
     }
 
     func aggregateCount(for serviceIDs: [UUID]) -> Int {
-        guard !doNotDisturb else { return 0 }
         return serviceIDs.reduce(0) { sum, id in
             sum + (maskedIDs.contains(id) ? 0 : (counts[id] ?? 0))
         }
@@ -85,7 +84,7 @@ final class BadgeManager {
         // .dockTile through it then traps. NSApplication.shared is lazy
         // and safe even before the run loop is up.
         let dockTile = NSApplication.shared.dockTile
-        if doNotDisturb || !showBadgeCountInDock {
+        if !showBadgeCountInDock {
             dockTile.badgeLabel = nil
         } else {
             let total = totalCount
