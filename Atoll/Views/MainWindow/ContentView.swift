@@ -5,7 +5,7 @@ import AtollCore
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @SceneStorage("Atoll.sidebarCollapsed") private var sidebarCollapsed = false
+    @SceneStorage(DefaultsKey.sidebarCollapsed) private var sidebarCollapsed = false
     @State private var collapsedToggleChromeVisible = false
     @State private var collapsedChromeRevealTask: Task<Void, Never>?
 

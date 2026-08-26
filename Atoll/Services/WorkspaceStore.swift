@@ -52,8 +52,6 @@ final class WorkspaceStore {
         let homeURL: URL?
     }
 
-    private static let passkeyNoticeBackfilledKey = "passkeyNoticeBackfilled"
-
     private let context: ModelContext
     private let preferencesStore: PreferencesStore
 
@@ -447,7 +445,7 @@ final class WorkspaceStore {
         guard existingSpaces.isEmpty else {
             return SeedOutcome(didSeed: false, selectedSpaceID: existingSpaces.first?.id)
         }
-        guard !defaults.bool(forKey: StoreLoader.hasEverHadDataKey) else {
+        guard !defaults.bool(forKey: DefaultsKey.hasEverHadData) else {
             AppLogger.dataStore.error(
                 "Store is empty but this install has had data; skipping seed to avoid overwriting a lost store"
             )
@@ -502,8 +500,8 @@ final class WorkspaceStore {
         freshInstall: Bool,
         defaults: UserDefaults = .standard
     ) {
-        guard !defaults.bool(forKey: Self.passkeyNoticeBackfilledKey) else { return }
-        defaults.set(true, forKey: Self.passkeyNoticeBackfilledKey)
+        guard !defaults.bool(forKey: DefaultsKey.passkeyNoticeBackfilled) else { return }
+        defaults.set(true, forKey: DefaultsKey.passkeyNoticeBackfilled)
         guard !freshInstall else { return }
 
         let services = allServices()

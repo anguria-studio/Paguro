@@ -6,8 +6,6 @@ import AtollCore
 /// Reclaims persistent WebKit stores after their service rows are committed away.
 @MainActor
 final class WebsiteDataReclaimer {
-    static let orphanedDataStoresKey = "atoll.orphanedDataStoreIdentifiers"
-
     private let context: ModelContext
     private let dataStoreManager: DataStoreManager
     private let isSafeToReclaim: Bool
@@ -186,7 +184,7 @@ final class WebsiteDataReclaimer {
     }
 
     private func loadOrphanedIdentifiers() -> Set<UUID> {
-        guard let raw = defaults.array(forKey: Self.orphanedDataStoresKey) as? [String] else {
+        guard let raw = defaults.array(forKey: DefaultsKey.orphanedDataStoreIdentifiers) as? [String] else {
             return []
         }
         return Set(raw.compactMap(UUID.init(uuidString:)))
@@ -194,11 +192,11 @@ final class WebsiteDataReclaimer {
 
     private func saveOrphanedIdentifiers(_ identifiers: Set<UUID>) {
         if identifiers.isEmpty {
-            defaults.removeObject(forKey: Self.orphanedDataStoresKey)
+            defaults.removeObject(forKey: DefaultsKey.orphanedDataStoreIdentifiers)
         } else {
             defaults.set(
                 identifiers.map(\.uuidString).sorted(),
-                forKey: Self.orphanedDataStoresKey
+                forKey: DefaultsKey.orphanedDataStoreIdentifiers
             )
         }
     }

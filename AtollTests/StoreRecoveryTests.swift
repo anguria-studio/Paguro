@@ -720,11 +720,11 @@ final class StoreRecoveryTests: XCTestCase {
         try ModelFixtures.insertSpaces(storeURL, count: 1)
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 1, "precondition: live store thinned out")
 
-        defaults.set("store.sqlite.snapshot-1700000000-1.0.0.bak", forKey: StoreRepair.pendingRestoreKey)
+        defaults.set("store.sqlite.snapshot-1700000000-1.0.0.bak", forKey: DefaultsKey.pendingRestore)
         XCTAssertTrue(StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults))
 
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 4, "the chosen backup must be in place")
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must be cleared")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must be cleared")
 
         let asideCount = try FileManager.default.contentsOfDirectory(atPath: dir.path)
             .filter { $0.hasPrefix("store.sqlite.prepick-") && $0.hasSuffix(".bak") }
@@ -742,9 +742,9 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertFalse(StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults))
 
         // A rejected filename must clear the key and change nothing.
-        defaults.set("../escape.bak", forKey: StoreRepair.pendingRestoreKey)
+        defaults.set("../escape.bak", forKey: DefaultsKey.pendingRestore)
         XCTAssertFalse(StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults))
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey))
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore))
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 4, "a rejected name must not touch the store")
     }
 
@@ -791,13 +791,13 @@ final class StoreRecoveryTests: XCTestCase {
             encoding: .utf8
         )
 
-        defaults.set(backupName, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(backupName, forKey: DefaultsKey.pendingRestore)
         XCTAssertFalse(
             StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults),
             "an unreadable chosen backup must report failure"
         )
 
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must still be cleared even on revert")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must still be cleared even on revert")
         XCTAssertEqual(
             StoreRepair.spaceCount(at: storeURL), before,
             "the revert must restore exactly what was live before the attempt"
@@ -842,10 +842,10 @@ final class StoreRecoveryTests: XCTestCase {
         )
         XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent(missingName).path))
 
-        defaults.set(missingName, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(missingName, forKey: DefaultsKey.pendingRestore)
         XCTAssertFalse(StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults))
 
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must be cleared")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must be cleared")
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), before, "a missing source must not touch the store")
 
         let anyAsideFiles = try FileManager.default.contentsOfDirectory(atPath: dir.path)
@@ -938,14 +938,14 @@ final class StoreRecoveryTests: XCTestCase {
         )
         defer { _ = chflags(storeURL.path, 0) }
 
-        defaults.set(snapshotName, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(snapshotName, forKey: DefaultsKey.pendingRestore)
         let result = StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults)
 
         XCTAssertFalse(
             result,
             "a removeItem failure during apply must be reported as failure, not masked by a stale-but-readable store"
         )
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must still be cleared")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must still be cleared")
         // Reading (unlike removing or writing) is unaffected by `uchg`, so this
         // is safe to check before the flag is cleared by the `defer` above.
         XCTAssertEqual(
@@ -992,13 +992,13 @@ final class StoreRecoveryTests: XCTestCase {
             "precondition: the live store must not be readable"
         )
 
-        defaults.set(snapshotName, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(snapshotName, forKey: DefaultsKey.pendingRestore)
         XCTAssertTrue(
             StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults),
             "a restore over an unreadable live store must go through -- refusing it strands the user on the store they asked to escape"
         )
         XCTAssertEqual(StoreRepair.spaceCount(at: storeURL), 3, "the chosen backup must be in place")
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must be cleared")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must be cleared")
 
         // The unreadable store is still kept, byte for byte: a corrupt copy is
         // exactly the way back to what the user had, so it is worth keeping even
@@ -1063,12 +1063,12 @@ final class StoreRecoveryTests: XCTestCase {
             "precondition: the directory must be unwritable, or this test cannot make the aside copy fail"
         )
 
-        defaults.set(snapshotName, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(snapshotName, forKey: DefaultsKey.pendingRestore)
         XCTAssertFalse(
             StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults),
             "an aside copy that could not be written must stop the restore"
         )
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must still be cleared")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must still be cleared")
         XCTAssertEqual(
             StoreRepair.spaceCount(at: storeURL), 1,
             "with no way back written, the live store must still hold exactly what it held"
@@ -1123,12 +1123,12 @@ final class StoreRecoveryTests: XCTestCase {
         )
         let liveBytesBefore = try Data(contentsOf: storeURL)
 
-        defaults.set(snapshotName, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(snapshotName, forKey: DefaultsKey.pendingRestore)
         XCTAssertFalse(
             StoreRepair.applyPendingRestore(at: storeURL, defaults: defaults),
             "an aside missing a suffix that failed to copy is not a way back, so the restore must stop"
         )
-        XCTAssertNil(defaults.string(forKey: StoreRepair.pendingRestoreKey), "the key must still be cleared")
+        XCTAssertNil(defaults.string(forKey: DefaultsKey.pendingRestore), "the key must still be cleared")
         XCTAssertEqual(
             try Data(contentsOf: storeURL), liveBytesBefore,
             "the live store must be untouched, byte for byte"
@@ -1302,7 +1302,7 @@ final class StoreRecoveryTests: XCTestCase {
                 spaceNames: [],
                 serviceLabels: []
             )),
-            forKey: StoreRecoveryCoordinator.contentRecordKey
+            forKey: DefaultsKey.lastKnownContent
         )
         let container = try makeRecoveryContainer()
         let coordinator = StoreRecoveryCoordinator(
@@ -1330,7 +1330,7 @@ final class StoreRecoveryTests: XCTestCase {
         coordinator.declineOffer()
         XCTAssertNil(coordinator.offer)
         XCTAssertEqual(
-            defaults.stringArray(forKey: StoreRecoveryCoordinator.declinedRestoresKey)?.count,
+            defaults.stringArray(forKey: DefaultsKey.declinedRestores)?.count,
             1
         )
         coordinator.evaluateOffer()
@@ -1376,7 +1376,7 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertTrue(coordinator.chooseRestore(candidate))
         XCTAssertEqual(armCount, 1)
         XCTAssertTrue(coordinator.isRestartArmed)
-        XCTAssertEqual(defaults.string(forKey: StoreRepair.pendingRestoreKey), name)
+        XCTAssertEqual(defaults.string(forKey: DefaultsKey.pendingRestore), name)
 
         coordinator.quitForScheduledRestore()
         coordinator.quitForScheduledRestore()
@@ -1471,7 +1471,7 @@ final class StoreRecoveryTests: XCTestCase {
 
         XCTAssertTrue(StoreRecoveryCoordinator.scheduleRestore(candidate, storeName: storeURL.lastPathComponent, defaults: defaults))
         XCTAssertEqual(
-            defaults.string(forKey: StoreRepair.pendingRestoreKey),
+            defaults.string(forKey: DefaultsKey.pendingRestore),
             name,
             "the written key must be exactly what applyPendingRestore validates against"
         )
@@ -1498,7 +1498,7 @@ final class StoreRecoveryTests: XCTestCase {
 
         XCTAssertFalse(StoreRecoveryCoordinator.scheduleRestore(damagedCandidate, storeName: storeURL.lastPathComponent, defaults: defaults))
         XCTAssertNil(
-            defaults.string(forKey: StoreRepair.pendingRestoreKey),
+            defaults.string(forKey: DefaultsKey.pendingRestore),
             "a damaged candidate must not schedule a restore"
         )
     }
@@ -1523,7 +1523,7 @@ final class StoreRecoveryTests: XCTestCase {
 
         XCTAssertFalse(StoreRecoveryCoordinator.scheduleRestore(candidate, storeName: storeURL.lastPathComponent, defaults: defaults))
         XCTAssertNil(
-            defaults.string(forKey: StoreRepair.pendingRestoreKey),
+            defaults.string(forKey: DefaultsKey.pendingRestore),
             "a filename that doesn't belong to this store must not schedule a restore"
         )
     }
@@ -1755,7 +1755,7 @@ final class StoreRecoveryTests: XCTestCase {
             try? FileManager.default.removeItem(at: URL(fileURLWithPath: legacy.path + suffix))
         }
         try Self.makeForeignStore(at: legacy)
-        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)
+        defaults.set(true, forKey: DefaultsKey.hasEverHadData)
 
         let url = StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped)
         let config = ModelConfiguration(schema: Self.storeSchema, url: url)

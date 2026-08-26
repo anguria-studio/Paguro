@@ -8,14 +8,14 @@ final class ShellPreferencesTests: XCTestCase {
     func testLoadCombinesDefaultsAndTransactionalPreferences() throws {
         let sandbox = try StoreSandbox(testCase: self, label: "shell-load")
         let defaults = sandbox.defaults
-        defaults.set(ShellGlassStyle.clear.rawValue, forKey: "Atoll.liquidGlassStyle")
-        defaults.set(0.4, forKey: "Atoll.liquidGlassIntensity")
-        defaults.set(30.0, forKey: "Atoll.iconRailBaseSize")
-        defaults.set(true, forKey: "Atoll.iconRailMagnificationEnabled")
-        defaults.set(68.0, forKey: "Atoll.iconRailMagnifiedSize")
-        defaults.set(DockRailPosition.center.rawValue, forKey: "Atoll.iconRailPosition")
-        defaults.set(WorkspaceViewMode.current.rawValue, forKey: "Atoll.workspaceViewMode")
-        defaults.set(0.8, forKey: "Atoll.backdropFrostIntensity")
+        defaults.set(ShellGlassStyle.clear.rawValue, forKey: DefaultsKey.liquidGlassStyle)
+        defaults.set(0.4, forKey: DefaultsKey.liquidGlassIntensity)
+        defaults.set(30.0, forKey: DefaultsKey.iconRailBaseSize)
+        defaults.set(true, forKey: DefaultsKey.iconRailMagnificationEnabled)
+        defaults.set(68.0, forKey: DefaultsKey.iconRailMagnifiedSize)
+        defaults.set(DockRailPosition.center.rawValue, forKey: DefaultsKey.iconRailPosition)
+        defaults.set(WorkspaceViewMode.current.rawValue, forKey: DefaultsKey.workspaceViewMode)
+        defaults.set(0.8, forKey: DefaultsKey.retiredBackdropFrostIntensity)
         let fixture = try makePreferencesStore(
             AppPreferences(
                 railLayoutRaw: RailLayout.topBars.rawValue,
@@ -39,19 +39,19 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.workspaceViewMode, .current)
         XCTAssertEqual(preferences.railLayout, .topBars)
         XCTAssertEqual(preferences.appearanceMode, .dark)
-        XCTAssertNil(defaults.object(forKey: "Atoll.backdropFrostIntensity"))
+        XCTAssertNil(defaults.object(forKey: DefaultsKey.retiredBackdropFrostIntensity))
     }
 
     @MainActor
     func testLoadRejectsUnknownValuesAndClampsGeometry() throws {
         let sandbox = try StoreSandbox(testCase: self, label: "shell-invalid")
         let defaults = sandbox.defaults
-        defaults.set("unsupported", forKey: "Atoll.liquidGlassStyle")
-        defaults.set(4.0, forKey: "Atoll.liquidGlassIntensity")
-        defaults.set(-20.0, forKey: "Atoll.iconRailBaseSize")
-        defaults.set(2.0, forKey: "Atoll.iconRailMagnifiedSize")
-        defaults.set("sideways", forKey: "Atoll.iconRailPosition")
-        defaults.set("one", forKey: "Atoll.workspaceViewMode")
+        defaults.set("unsupported", forKey: DefaultsKey.liquidGlassStyle)
+        defaults.set(4.0, forKey: DefaultsKey.liquidGlassIntensity)
+        defaults.set(-20.0, forKey: DefaultsKey.iconRailBaseSize)
+        defaults.set(2.0, forKey: DefaultsKey.iconRailMagnifiedSize)
+        defaults.set("sideways", forKey: DefaultsKey.iconRailPosition)
+        defaults.set("one", forKey: DefaultsKey.workspaceViewMode)
         let fixture = try makePreferencesStore(AppPreferences())
         defer { withExtendedLifetime(fixture.container) {} }
         let store = fixture.store
@@ -114,9 +114,9 @@ final class ShellPreferencesTests: XCTestCase {
             preferencesStore: store
         )
         XCTAssertEqual(reloaded, preferences)
-        XCTAssertEqual(defaults.double(forKey: "Atoll.liquidGlassIntensity"), 0)
+        XCTAssertEqual(defaults.double(forKey: DefaultsKey.liquidGlassIntensity), 0)
         XCTAssertEqual(
-            defaults.double(forKey: "Atoll.iconRailMagnifiedSize"),
+            defaults.double(forKey: DefaultsKey.iconRailMagnifiedSize),
             DockIconSizing.peakSize(baseSize: 30, magnification: 0.5),
             accuracy: 0.000_001
         )
@@ -142,8 +142,8 @@ final class ShellPreferencesTests: XCTestCase {
 
         XCTAssertEqual(preferences.liquidGlassStyle, GlassLabDefaults.style)
         XCTAssertEqual(preferences.liquidGlassIntensity, GlassLabDefaults.transparency)
-        XCTAssertNil(defaults.object(forKey: "Atoll.liquidGlassStyle"))
-        XCTAssertNil(defaults.object(forKey: "Atoll.liquidGlassIntensity"))
+        XCTAssertNil(defaults.object(forKey: DefaultsKey.liquidGlassStyle))
+        XCTAssertNil(defaults.object(forKey: DefaultsKey.liquidGlassIntensity))
     }
 
     @MainActor

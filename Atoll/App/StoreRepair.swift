@@ -320,8 +320,7 @@ enum StoreRepair {
         keeping keep: Int = 3
     ) {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
-        let key = "atoll.storeSnapshotVersion"
-        guard defaults.string(forKey: key) != version else { return }
+        guard defaults.string(forKey: DefaultsKey.storeSnapshotVersion) != version else { return }
 
         // Stamp with the fixed-width Unix second (so names sort by age) followed
         // by the version, which both documents what each snapshot preceded and
@@ -329,7 +328,7 @@ enum StoreRepair {
         let safeVersion = version.replacingOccurrences(of: "/", with: "_")
         snapshot(at: url, stamp: "\(Int(Date().timeIntervalSince1970))-\(safeVersion)")
         pruneSnapshots(at: url, keeping: keep)
-        defaults.set(version, forKey: key)
+        defaults.set(version, forKey: DefaultsKey.storeSnapshotVersion)
     }
 
     /// Copies `store`(+`-wal`/`-shm`) to `store.snapshot-<stamp>.bak` siblings.
@@ -429,8 +428,6 @@ enum StoreRepair {
     /// Where the user's pick waits for the next launch. The restore itself runs
     /// before the container opens, because swapping SQLite files under a live
     /// container faults deleted models and traps.
-    static let pendingRestoreKey = "atoll.pendingRestore"
-
     /// Puts the user's chosen backup in place, if one is waiting. Returns whether
     /// a restore actually happened.
     ///
@@ -474,8 +471,8 @@ enum StoreRepair {
         at storeURL: URL,
         defaults: UserDefaults = .standard
     ) -> Bool {
-        guard let raw = defaults.string(forKey: pendingRestoreKey) else { return false }
-        defaults.removeObject(forKey: pendingRestoreKey)
+        guard let raw = defaults.string(forKey: DefaultsKey.pendingRestore) else { return false }
+        defaults.removeObject(forKey: DefaultsKey.pendingRestore)
 
         guard let name = StoreRecoveryPolicy.validatedRestoreName(
             raw,

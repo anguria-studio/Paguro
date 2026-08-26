@@ -362,7 +362,7 @@ final class WorkspaceStoreMutationTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 2)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 7)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<SpaceServiceLink>()), 7)
-        XCTAssertTrue(defaults.bool(forKey: StoreLoader.hasEverHadDataKey))
+        XCTAssertTrue(defaults.bool(forKey: DefaultsKey.hasEverHadData))
         XCTAssertEqual(
             store.servicesForSpace(try XCTUnwrap(outcome.selectedSpaceID)).count,
             DefaultSeed.personalServices.count
@@ -377,7 +377,7 @@ final class WorkspaceStoreMutationTests: XCTestCase {
         let suiteName = "WorkspaceStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(true, forKey: StoreLoader.hasEverHadDataKey)
+        defaults.set(true, forKey: DefaultsKey.hasEverHadData)
 
         let outcome = store.seedDefaultDataIfNeeded(defaults: defaults)
 

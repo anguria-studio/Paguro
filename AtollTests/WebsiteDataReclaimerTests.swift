@@ -39,7 +39,7 @@ final class WebsiteDataReclaimerTests: XCTestCase {
 
         XCTAssertEqual(attempts, 2)
         XCTAssertNil(
-            fixture.defaults.array(forKey: WebsiteDataReclaimer.orphanedDataStoresKey)
+            fixture.defaults.array(forKey: DefaultsKey.orphanedDataStoreIdentifiers)
         )
         reclaimer.shutdown()
     }
@@ -77,7 +77,7 @@ final class WebsiteDataReclaimerTests: XCTestCase {
         )
         XCTAssertEqual(
             fixture.defaults.stringArray(
-                forKey: WebsiteDataReclaimer.orphanedDataStoresKey
+                forKey: DefaultsKey.orphanedDataStoreIdentifiers
             ),
             [orphanDataStoreIdentifier.uuidString]
         )
@@ -106,7 +106,7 @@ final class WebsiteDataReclaimerTests: XCTestCase {
 
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 1)
         XCTAssertNil(
-            fixture.defaults.array(forKey: WebsiteDataReclaimer.orphanedDataStoresKey)
+            fixture.defaults.array(forKey: DefaultsKey.orphanedDataStoreIdentifiers)
         )
         reclaimer.shutdown()
     }

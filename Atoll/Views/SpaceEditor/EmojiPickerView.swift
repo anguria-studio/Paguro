@@ -6,7 +6,7 @@ struct EmojiPickerView: View {
     @State private var searchText = ""
     @State private var selectedCategoryID: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("recentEmojis") private var recentEmojisData: Data = Data()
+    @AppStorage(DefaultsKey.recentEmojis) private var recentEmojisData: Data = Data()
 
     private let columns = Array(repeating: GridItem(.fixed(36), spacing: 4), count: 10)
 

@@ -16,10 +16,6 @@ enum StoreLoadOutcome: Equatable {
 /// Opens the SwiftData store and applies the launch recovery policy.
 @MainActor
 enum StoreLoader {
-    /// Records whether this installation has held user data. This lets the loader
-    /// distinguish a fresh installation from a store that migrated to empty.
-    static let hasEverHadDataKey = "atoll.hasEverHadData"
-
     /// Result of one open attempt. An unusable container does not escape this
     /// scope, so SwiftData releases its SQLite connection before a restore.
     private enum TryOpenResult {
@@ -40,7 +36,7 @@ enum StoreLoader {
         // file can be a fresh installation. An existing empty file can be loss.
         let fileExisted = FileManager.default.fileExists(atPath: config.url.path)
         let before = StoreRepair.spaceCount(at: config.url)
-        let hadHistory = (before ?? 0) > 0 || defaults.bool(forKey: hasEverHadDataKey)
+        let hadHistory = (before ?? 0) > 0 || defaults.bool(forKey: DefaultsKey.hasEverHadData)
         if (before ?? 0) > 0 { recordHasData(defaults) }
 
         let kind: StoreUnusableKind
@@ -81,7 +77,7 @@ enum StoreLoader {
         case .freshStart:
             // It is safe to clear a stale history flag only when no store file or
             // usable backup exists.
-            defaults.set(false, forKey: hasEverHadDataKey)
+            defaults.set(false, forKey: DefaultsKey.hasEverHadData)
             if case .usable(let fresh) = tryOpen(schema: schema, config: config, hadHistory: false) {
                 AppLogger.dataStore.info("No file and nothing to restore; starting fresh")
                 return (fresh, .openedClean)
@@ -175,8 +171,8 @@ enum StoreLoader {
 
     /// Records that the current installation holds user data.
     static func recordHasData(_ defaults: UserDefaults = .standard) {
-        if !defaults.bool(forKey: hasEverHadDataKey) {
-            defaults.set(true, forKey: hasEverHadDataKey)
+        if !defaults.bool(forKey: DefaultsKey.hasEverHadData) {
+            defaults.set(true, forKey: DefaultsKey.hasEverHadData)
         }
     }
 }

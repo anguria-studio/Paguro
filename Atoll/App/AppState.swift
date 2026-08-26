@@ -980,17 +980,15 @@ final class AppState {
         }
     }
 
-    private static let lastRunVersionKey = "atoll.lastRunAppVersion"
-
     /// Records the current app version and reports whether this launch follows an
     /// update (a different version ran last time). Used to refresh the icon caches
     /// so a release that adds or changes icons shows them at once, instead of
     /// waiting out the weekly staleness timer.
     private static func recordLaunchVersionAndCheckUpdate() -> Bool {
         let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        let previous = UserDefaults.standard.string(forKey: lastRunVersionKey)
+        let previous = UserDefaults.standard.string(forKey: DefaultsKey.lastRunAppVersion)
         if !current.isEmpty {
-            UserDefaults.standard.set(current, forKey: lastRunVersionKey)
+            UserDefaults.standard.set(current, forKey: DefaultsKey.lastRunAppVersion)
         }
         return shouldBustCachesOnLaunch(previousVersion: previous, currentVersion: current)
     }

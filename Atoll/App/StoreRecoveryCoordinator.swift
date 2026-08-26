@@ -13,8 +13,6 @@ final class StoreRecoveryCoordinator {
         let isDismissible: Bool
     }
 
-    static let contentRecordKey = "atoll.lastKnownContent"
-    static let declinedRestoresKey = "atoll.declinedRestores"
     static let maxDeclinedRestores = 20
 
     private let context: ModelContext
@@ -101,7 +99,7 @@ final class StoreRecoveryCoordinator {
         let live = currentLiveContent()
         let currentCandidates = StoreInventory.candidates(for: storeURL, liveContent: live)
         let best = StoreRecoveryPolicy.best(among: currentCandidates)
-        let declined = Set(defaults.stringArray(forKey: Self.declinedRestoresKey) ?? [])
+        let declined = Set(defaults.stringArray(forKey: DefaultsKey.declinedRestores) ?? [])
         let liveMatchesSeed = live?.looksLikeUntouchedSeed ?? false
 
         candidates = currentCandidates
@@ -110,7 +108,7 @@ final class StoreRecoveryCoordinator {
             liveMatchesUntouchedSeed: liveMatchesSeed,
             best: best,
             record: StoreRecoveryPolicy.decodeRecord(
-                defaults.string(forKey: Self.contentRecordKey)
+                defaults.string(forKey: DefaultsKey.lastKnownContent)
             ),
             declinedKeys: declined
         )
@@ -144,12 +142,12 @@ final class StoreRecoveryCoordinator {
         if let best = StoreRecoveryPolicy.best(among: candidates) {
             let liveContent = candidates.first(where: { $0.kind == .live })?.content
             let key = StoreRecoveryPolicy.declineKey(live: liveContent, candidate: best)
-            var declined = defaults.stringArray(forKey: Self.declinedRestoresKey) ?? []
+            var declined = defaults.stringArray(forKey: DefaultsKey.declinedRestores) ?? []
             if !declined.contains(key) {
                 declined.append(key)
                 defaults.set(
                     Array(declined.suffix(Self.maxDeclinedRestores)),
-                    forKey: Self.declinedRestoresKey
+                    forKey: DefaultsKey.declinedRestores
                 )
             }
         }
@@ -165,9 +163,9 @@ final class StoreRecoveryCoordinator {
             content,
             offerOutstanding: offer != nil,
             isInMemoryFallback: isInMemoryFallback,
-            restoreScheduled: defaults.string(forKey: StoreRepair.pendingRestoreKey) != nil
+            restoreScheduled: defaults.string(forKey: DefaultsKey.pendingRestore) != nil
         ), let content else { return }
-        defaults.set(StoreRecoveryPolicy.encodeRecord(content), forKey: Self.contentRecordKey)
+        defaults.set(StoreRecoveryPolicy.encodeRecord(content), forKey: DefaultsKey.lastKnownContent)
     }
 
     /// Validates the selected backup and arms a restart after the picker closes.
@@ -229,7 +227,7 @@ final class StoreRecoveryCoordinator {
             )
             return false
         }
-        defaults.set(name, forKey: StoreRepair.pendingRestoreKey)
+        defaults.set(name, forKey: DefaultsKey.pendingRestore)
         AppLogger.dataStore.info("Scheduled a restore from \(name)")
         return true
     }

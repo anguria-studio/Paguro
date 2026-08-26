@@ -4,17 +4,6 @@ import AtollCore
 /// Stores the main-window appearance and rail preferences as one value.
 @MainActor
 struct ShellPreferences: Equatable {
-    private enum Key {
-        static let glassStyle = "Atoll.liquidGlassStyle"
-        static let glassIntensity = "Atoll.liquidGlassIntensity"
-        static let iconRailBaseSize = "Atoll.iconRailBaseSize"
-        static let iconRailMagnificationEnabled = "Atoll.iconRailMagnificationEnabled"
-        static let iconRailMagnifiedSize = "Atoll.iconRailMagnifiedSize"
-        static let iconRailPosition = "Atoll.iconRailPosition"
-        static let workspaceViewMode = "Atoll.workspaceViewMode"
-        static let retiredFrostIntensity = "Atoll.backdropFrostIntensity"
-    }
-
     private(set) var liquidGlassStyle: ShellGlassStyle
     private(set) var liquidGlassIntensity: Double
     private(set) var iconRailBaseSize: Double
@@ -37,29 +26,29 @@ struct ShellPreferences: Equatable {
         defaults: UserDefaults = .standard,
         preferencesStore: PreferencesStore
     ) -> Self {
-        let storedIntensity = defaults.object(forKey: Key.glassIntensity) != nil
-            ? defaults.double(forKey: Key.glassIntensity)
+        let storedIntensity = defaults.object(forKey: DefaultsKey.liquidGlassIntensity) != nil
+            ? defaults.double(forKey: DefaultsKey.liquidGlassIntensity)
             : GlassLabDefaults.transparency
-        let storedBaseSize = defaults.object(forKey: Key.iconRailBaseSize) != nil
-            ? defaults.double(forKey: Key.iconRailBaseSize)
+        let storedBaseSize = defaults.object(forKey: DefaultsKey.iconRailBaseSize) != nil
+            ? defaults.double(forKey: DefaultsKey.iconRailBaseSize)
             : DockIconSizing.defaultBaseSize
         let baseSize = DockIconSizing.baseSize(storedBaseSize)
         let magnificationEnabled = defaults.object(
-            forKey: Key.iconRailMagnificationEnabled
+            forKey: DefaultsKey.iconRailMagnificationEnabled
         ) != nil
-            ? defaults.bool(forKey: Key.iconRailMagnificationEnabled)
+            ? defaults.bool(forKey: DefaultsKey.iconRailMagnificationEnabled)
             : DockIconSizing.defaultMagnification > 0
-        let storedMagnifiedSize = defaults.object(forKey: Key.iconRailMagnifiedSize) != nil
-            ? defaults.double(forKey: Key.iconRailMagnifiedSize)
+        let storedMagnifiedSize = defaults.object(forKey: DefaultsKey.iconRailMagnifiedSize) != nil
+            ? defaults.double(forKey: DefaultsKey.iconRailMagnifiedSize)
             : DockIconSizing.defaultMagnifiedSize
 
         // Frost now has one fixed rule. Remove the retired experimental value
         // so it cannot affect a future setting.
-        defaults.removeObject(forKey: Key.retiredFrostIntensity)
+        defaults.removeObject(forKey: DefaultsKey.retiredBackdropFrostIntensity)
 
         return Self(
             liquidGlassStyle: ShellGlassStyle.resolving(
-                defaults.string(forKey: Key.glassStyle)
+                defaults.string(forKey: DefaultsKey.liquidGlassStyle)
             ),
             liquidGlassIntensity: GlassIntensityScale.normalized(storedIntensity),
             iconRailBaseSize: baseSize,
@@ -68,11 +57,11 @@ struct ShellPreferences: Equatable {
                 storedMagnifiedSize,
                 baseSize: baseSize
             ),
-            iconRailPosition: defaults.string(forKey: Key.iconRailPosition)
+            iconRailPosition: defaults.string(forKey: DefaultsKey.iconRailPosition)
                 .flatMap(DockRailPosition.init(rawValue:))
                 ?? DockRailPosition.defaultPosition,
             workspaceViewMode: WorkspaceViewMode.resolving(
-                defaults.string(forKey: Key.workspaceViewMode)
+                defaults.string(forKey: DefaultsKey.workspaceViewMode)
             ),
             railLayout: preferencesStore.railLayout,
             appearanceMode: preferencesStore.appearanceMode
@@ -84,7 +73,7 @@ struct ShellPreferences: Equatable {
         defaults: UserDefaults = .standard
     ) {
         liquidGlassIntensity = GlassIntensityScale.normalized(value)
-        defaults.set(liquidGlassIntensity, forKey: Key.glassIntensity)
+        defaults.set(liquidGlassIntensity, forKey: DefaultsKey.liquidGlassIntensity)
     }
 
     mutating func setLiquidGlassStyle(
@@ -92,14 +81,14 @@ struct ShellPreferences: Equatable {
         defaults: UserDefaults = .standard
     ) {
         liquidGlassStyle = style
-        defaults.set(style.rawValue, forKey: Key.glassStyle)
+        defaults.set(style.rawValue, forKey: DefaultsKey.liquidGlassStyle)
     }
 
     mutating func resetGlass(defaults: UserDefaults = .standard) {
         liquidGlassStyle = GlassLabDefaults.style
         liquidGlassIntensity = GlassLabDefaults.transparency
-        defaults.removeObject(forKey: Key.glassStyle)
-        defaults.removeObject(forKey: Key.glassIntensity)
+        defaults.removeObject(forKey: DefaultsKey.liquidGlassStyle)
+        defaults.removeObject(forKey: DefaultsKey.liquidGlassIntensity)
     }
 
     mutating func setIconRailBaseSize(
@@ -112,8 +101,8 @@ struct ShellPreferences: Equatable {
             baseSize: iconRailBaseSize,
             magnification: magnification
         )
-        defaults.set(iconRailBaseSize, forKey: Key.iconRailBaseSize)
-        defaults.set(iconRailMagnifiedSize, forKey: Key.iconRailMagnifiedSize)
+        defaults.set(iconRailBaseSize, forKey: DefaultsKey.iconRailBaseSize)
+        defaults.set(iconRailMagnifiedSize, forKey: DefaultsKey.iconRailMagnifiedSize)
     }
 
     mutating func setIconRailMagnification(
@@ -128,9 +117,9 @@ struct ShellPreferences: Equatable {
         )
         defaults.set(
             iconRailMagnificationEnabled,
-            forKey: Key.iconRailMagnificationEnabled
+            forKey: DefaultsKey.iconRailMagnificationEnabled
         )
-        defaults.set(iconRailMagnifiedSize, forKey: Key.iconRailMagnifiedSize)
+        defaults.set(iconRailMagnifiedSize, forKey: DefaultsKey.iconRailMagnifiedSize)
     }
 
     mutating func setIconRailPosition(
@@ -138,7 +127,7 @@ struct ShellPreferences: Equatable {
         defaults: UserDefaults = .standard
     ) {
         iconRailPosition = position
-        defaults.set(position.rawValue, forKey: Key.iconRailPosition)
+        defaults.set(position.rawValue, forKey: DefaultsKey.iconRailPosition)
     }
 
     mutating func setWorkspaceViewMode(
@@ -146,7 +135,7 @@ struct ShellPreferences: Equatable {
         defaults: UserDefaults = .standard
     ) {
         workspaceViewMode = mode
-        defaults.set(mode.rawValue, forKey: Key.workspaceViewMode)
+        defaults.set(mode.rawValue, forKey: DefaultsKey.workspaceViewMode)
     }
 
     @discardableResult
