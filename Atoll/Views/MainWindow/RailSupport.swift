@@ -1,18 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Window-drag plumbing and the reorder maths the rail depends on.
-///
-/// All of it moved here verbatim when `ServiceSidebarView` and `SpaceStripView`
-/// were replaced by `UnifiedRailView` (build step 5 of concept C). It is the
-/// part the UX audit rated severity 0 — tested, and working — so it was moved
-/// rather than rewritten, and it lives in its own file so the next rail rebuild
-/// cannot take it down with the view it happened to sit in.
-
-enum ServiceReorderPlacement {
-    case before
-    case after
-}
+/// AppKit support for the main window's backdrop, chrome, and drag handle.
 
 /// Wraps a SwiftUI hosting view in the main-window appearance experiment.
 ///
@@ -314,48 +303,5 @@ struct WindowDragHandle: NSViewRepresentable {
                 window.performDrag(with: event)
             }
         }
-    }
-}
-
-enum SpaceMove {
-    /// The spaces a service can be moved into: every space except the ones it
-    /// already belongs to. Moving into a space it's already in would just
-    /// double-link it, and the current space is one of those memberships, so
-    /// this naturally leaves it out too. Order follows `allSpaceIDs` (the
-    /// sorted space list).
-    static func eligibleSpaceIDs(allSpaceIDs: [UUID], memberSpaceIDs: Set<UUID>) -> [UUID] {
-        allSpaceIDs.filter { !memberSpaceIDs.contains($0) }
-    }
-}
-
-enum ServiceReorder {
-    static func reorderedIDs(
-        _ ids: [UUID],
-        moving droppedID: UUID,
-        relativeTo targetID: UUID,
-        placement: ServiceReorderPlacement
-    ) -> [UUID]? {
-        guard droppedID != targetID,
-              let fromIndex = ids.firstIndex(of: droppedID),
-              let targetIndex = ids.firstIndex(of: targetID) else {
-            return nil
-        }
-
-        var reordered = ids
-        let moved = reordered.remove(at: fromIndex)
-
-        var toIndex = targetIndex
-        if placement == .after {
-            toIndex += 1
-        }
-        if fromIndex < toIndex {
-            toIndex -= 1
-        }
-        guard fromIndex != toIndex else {
-            return nil
-        }
-
-        reordered.insert(moved, at: toIndex)
-        return reordered
     }
 }

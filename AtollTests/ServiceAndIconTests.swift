@@ -195,37 +195,4 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("192.168.1.10"))      // literal private IP
     }
 
-    func testServiceReorderPlacement() {
-        let first = UUID()
-        let second = UUID()
-        let third = UUID()
-        let fourth = UUID()
-        let ids = [first, second, third, fourth]
-
-        XCTAssertEqual(
-            ServiceReorder.reorderedIDs(ids, moving: first, relativeTo: second, placement: .after),
-            [second, first, third, fourth]
-        )
-        XCTAssertEqual(
-            ServiceReorder.reorderedIDs(ids, moving: fourth, relativeTo: first, placement: .before),
-            [fourth, first, second, third]
-        )
-        XCTAssertEqual(
-            ServiceReorder.reorderedIDs(ids, moving: second, relativeTo: fourth, placement: .after),
-            [first, third, fourth, second]
-        )
-    }
-
-    func testServiceReorderNoOpsAndInvalidDrops() {
-        let first = UUID()
-        let second = UUID()
-        let missing = UUID()
-        let ids = [first, second]
-
-        XCTAssertNil(ServiceReorder.reorderedIDs(ids, moving: first, relativeTo: first, placement: .after))
-        XCTAssertNil(ServiceReorder.reorderedIDs(ids, moving: first, relativeTo: second, placement: .before))
-        XCTAssertNil(ServiceReorder.reorderedIDs(ids, moving: second, relativeTo: first, placement: .after))
-        XCTAssertNil(ServiceReorder.reorderedIDs(ids, moving: missing, relativeTo: first, placement: .before))
-        XCTAssertNil(ServiceReorder.reorderedIDs(ids, moving: first, relativeTo: missing, placement: .before))
-    }
 }
