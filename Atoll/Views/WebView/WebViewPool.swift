@@ -12,6 +12,7 @@ final class WebViewPool {
     private var suspendedURLs: [UUID: String] = [:]
     private var snapshots: [UUID: NSImage] = [:]
     private let maxLoaded: Int = 15
+    private var hasShutDown = false
 
     /// Guard set: IDs currently being evaluated for eviction.
     private var evictionInFlight: Set<UUID> = []
@@ -250,6 +251,7 @@ final class WebViewPool {
     /// background work. This makes the service feel instant when the user selects it.
     /// Skips services that already have a web view or are fully hibernated-by-user.
     func preload(_ instance: ServiceInstance) {
+        guard !hasShutDown else { return }
         guard webViews[instance.id] == nil else { return }
         guard instance.modelContext != nil else { return }
 
@@ -304,7 +306,7 @@ final class WebViewPool {
     /// in a context before it reads anything from it.
     func preloadAll(_ instances: [ServiceInstance], delayBetween: Duration = .milliseconds(500)) async {
         for instance in instances {
-            guard !Task.isCancelled else { break }
+            guard !Task.isCancelled, !hasShutDown else { break }
             guard instance.modelContext != nil else { continue }
             guard webViews[instance.id] == nil else { continue }
             preload(instance)
@@ -342,6 +344,8 @@ final class WebViewPool {
     /// delegates during process termination. The persistent website data
     /// stores remain on disk.
     func shutdown() {
+        guard !hasShutDown else { return }
+        hasShutDown = true
         WebDownloadHandler.cancelAllDownloads()
         let serviceIDs = Array(webViews.keys)
         for serviceID in serviceIDs {

@@ -85,6 +85,8 @@ final class AppState {
     /// Tokens for `DistributedNotificationCenter` screen-lock observers,
     /// removed in `shutdown()`.
     @ObservationIgnored private var distributedObserverTokens: [NSObjectProtocol] = []
+    @ObservationIgnored private var launchPreloadTask: Task<Void, Never>?
+    @ObservationIgnored private var workspacePreloadTask: Task<Void, Never>?
 
     var scheduledDNDEnabled: Bool { notificationRuntime.scheduledDNDEnabled }
     var dndStartMinutes: Int { notificationRuntime.dndStartMinutes }
@@ -283,6 +285,10 @@ final class AppState {
         guard !hasShutDown else { return }
         hasShutDown = true
 
+        launchPreloadTask?.cancel()
+        launchPreloadTask = nil
+        workspacePreloadTask?.cancel()
+        workspacePreloadTask = nil
         mediaPermissions.shutdown()
         websiteDataReclaimer.shutdown()
         hibernationScheduler.shutdown()
@@ -916,11 +922,16 @@ final class AppState {
         // stay up.
         let alsoKeepLive = crossSpaceCriticalServices(excluding: Set(services.map(\.id)))
 
-        Task {
-            await webViewPool.preloadAll(ordered)
-            if let selected {
-                webViewPool.unpin(selected)
+        launchPreloadTask?.cancel()
+        launchPreloadTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if let selected {
+                    webViewPool.unpin(selected)
+                }
             }
+            await webViewPool.preloadAll(ordered)
+            guard !Task.isCancelled else { return }
             if !alsoKeepLive.isEmpty {
                 AppLogger.webView.info("Preloading \(alsoKeepLive.count) chat service(s) outside the active space so they can post notifications")
                 await webViewPool.preloadAll(alsoKeepLive)
@@ -968,7 +979,8 @@ final class AppState {
     /// Preloads services when the user switches to a different space.
     func preloadServicesForSpace(_ spaceID: UUID) {
         let services = servicesForSpace(spaceID)
-        Task {
+        workspacePreloadTask?.cancel()
+        workspacePreloadTask = Task {
             await webViewPool.preloadAll(services)
         }
     }

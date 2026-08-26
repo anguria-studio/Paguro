@@ -1,5 +1,6 @@
-import XCTest
+import SwiftData
 import WebKit
+import XCTest
 @testable import Atoll
 
 final class WebViewPoolActivationTests: XCTestCase {
@@ -57,6 +58,21 @@ final class WebViewPoolActivationTests: XCTestCase {
         pool.deactivateCurrentService()
         XCTAssertEqual(events, [.softHibernated(second.id)])
         XCTAssertNil(pool.activeServiceID)
+    }
+
+    @MainActor
+    func testShutdownRejectsLaterPreloads() async throws {
+        let container = try ModelFixtures.groupingContainer()
+        let service = ServiceInstance(label: "Mail", url: "about:blank")
+        container.mainContext.insert(service)
+        try container.mainContext.save()
+        let pool = makePool()
+
+        pool.shutdown()
+        pool.preload(service)
+        await pool.preloadAll([service], delayBetween: .zero)
+
+        XCTAssertEqual(pool.loadedCount, 0)
     }
 
     @MainActor
