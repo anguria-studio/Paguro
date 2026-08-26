@@ -2,6 +2,7 @@ import Foundation
 import WebKit
 import AppKit
 import os
+import AtollCore
 
 @MainActor
 final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
@@ -15,8 +16,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     private weak var openerWebView: WKWebView?
 
     /// Whether the current popup was *opened at* a known sign-in gateway. Set
-    /// once, from the URL that opened it — see `shouldReloadOpener` for why the
-    /// rest of the navigation chain is deliberately not consulted.
+    /// once, from the URL that opened it. `WebRoutingPolicy.shouldReloadOpener`
+    /// explains why the rest of the navigation chain is not consulted.
     private var popupOpenedAtAuthHost = false
 
     /// Fallback URL to load if the WebContent process crashes before any
@@ -72,12 +73,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     /// and the "ask" prompt. Nil ⇒ deny (fail closed).
     var mediaCapturePolicyProvider: ((UUID, WKMediaCaptureType, WKFrameInfo) async -> WKPermissionDecision)?
 
-    /// URL schemes the OS handles natively. We forward to NSWorkspace rather
-    /// than letting WebKit fail with an unsupported-scheme error.
-    nonisolated private static let nonWebSchemes: Set<String> = [
-        "mailto", "tel", "sms", "facetime", "facetime-audio", "imessage", "maps"
-    ]
-
     /// URL schemes that a web view can load. Every other scheme is cancelled
     /// before WebKit tries it: WebKit cannot show an app scheme such as
     /// `slack://`, and the failed load would replace the live page with the
@@ -114,26 +109,11 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         return false
     }
 
-    /// Whether a URL may be handed to `NSWorkspace.open`. Only http/https and the
-    /// curated `nonWebSchemes` qualify.
-    ///
-    /// Without this gate a page could offer a link on any scheme the system has a
-    /// handler for and a single click would fire it: `smb://`/`afp://` mounts a
-    /// remote share (leaking the user's NTLM credentials to the attacker's
-    /// server), `file://` opens local content, and an arbitrary custom scheme
-    /// reaches whatever app claims it. The click requirement (`.linkActivated`)
-    /// bounds this to social engineering rather than a drive-by, but the handoff
-    /// itself should never have been unrestricted.
-    nonisolated static func isSafeForExternalOpen(_ url: URL) -> Bool {
-        guard let scheme = url.scheme?.lowercased() else { return false }
-        return scheme == "http" || scheme == "https" || nonWebSchemes.contains(scheme)
-    }
-
     /// Whether a link that leaves a service (and that no other Atoll service
     /// owns) should open in an in-app Atoll window rather than the system
     /// browser. True only when the source service opted in AND the target is
-    /// http/https. Other schemes stay on the `openExternally` path so the vetted-
-    /// scheme gate above still decides them (a `mailto:` reaches Mail, an
+    /// http/https. Other schemes stay on the `openExternally` path so the Core
+    /// scheme gate still decides them (a `mailto:` reaches Mail, an
     /// `smb://` is dropped) — an in-app web view can't load them anyway.
     nonisolated static func shouldOpenInAppBrowser(sourceOptedIn: Bool, url: URL) -> Bool {
         guard sourceOptedIn, let scheme = url.scheme?.lowercased() else { return false }
@@ -143,7 +123,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     /// Hands `url` to the system handler, but only on a vetted scheme. Anything
     /// else is dropped with a log line rather than silently ignored.
     nonisolated static func openExternally(_ url: URL) {
-        guard isSafeForExternalOpen(url) else {
+        guard WebRoutingPolicy.isSafeForExternalOpen(url) else {
             AppLogger.webView.info("Blocked external open on disallowed scheme: \(url.scheme ?? "none")")
             return
         }
@@ -240,19 +220,19 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         //      in-app and can complete;
         //    - only the main frame (or a new-window request), so an embedded
         //      iframe navigating cross-origin isn't kicked out;
-        //    - "leaves the service" is `!belongsToService`, which keeps
+        //    - "leaves the service" is `!WebRoutingPolicy.belongsToService`, which keeps
         //      *.slack.com workspaces in-app but treats Google products
         //      (docs. vs mail.google.com) as separate;
         //    - identity gateways (accounts.google.com, login.microsoftonline.com,
-        //      …) are exempt via `isAuthHost`, so clicking "Sign in" on a
+        //      …) are exempt via `isAuthenticationHost`, so clicking "Sign in" on a
         //      signed-out page (Gmail → accounts.google.com) loads in place and
         //      the login can finish instead of being kicked to the browser.
         if navigationAction.navigationType == .linkActivated,
            navigationAction.targetFrame?.isMainFrame ?? true,
            let currentHost = webView.url?.host,
            let targetHost = url.host,
-           !Self.belongsToService(targetHost, serviceHost: currentHost),
-           !Self.isAuthHost(targetHost) {
+           !WebRoutingPolicy.belongsToService(targetHost, serviceHost: currentHost),
+           !WebRoutingPolicy.isAuthenticationHost(targetHost) {
             if let handler = externalLinkHandler {
                 handler(url, instanceID)
             } else {
@@ -329,8 +309,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         // sign-in. Close a known authentication popup after it returns to the
         // opener's service, then reload the opener with the shared session.
         if webView === popupWebView {
-            if Self.shouldCloseAuthPopup(
-                openedAtAuthHost: popupOpenedAtAuthHost,
+            if WebRoutingPolicy.shouldCloseAuthenticationPopup(
+                openedAtAuthenticationHost: popupOpenedAtAuthHost,
                 landedHost: webView.url?.host,
                 openerHost: openerWebView?.url?.host ?? fallbackURL?.host
             ) {
@@ -572,8 +552,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         // Same-service `window.open` therefore falls through to a real window,
         // which shares the opener's data store so a session started in it lands
         // in the right place.
-        if Self.shouldLoadNewWindowInPlace(
-            navigationType: navigationAction.navigationType,
+        if WebRoutingPolicy.shouldLoadNewWindowInPlace(
+            isLinkActivated: navigationAction.navigationType == .linkActivated,
             targetHost: navigationAction.request.url?.host,
             openerHost: webView.url?.host
         ) {
@@ -592,8 +572,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
 
         // The sign-in signal, taken from the URL that opened the popup and not
         // touched again: a service asking the user to sign in again opens
-        // straight at its provider. See `shouldReloadOpener`.
-        popupOpenedAtAuthHost = navigationAction.request.url?.host.map(Self.isAuthHost) ?? false
+        // straight at its provider. See `WebRoutingPolicy.shouldReloadOpener`.
+        popupOpenedAtAuthHost = navigationAction.request.url?.host.map(WebRoutingPolicy.isAuthenticationHost) ?? false
 
         // CRITICAL: Use the configuration passed in — it inherits the parent's data store
         let popup = WKWebView(frame: .zero, configuration: configuration)
@@ -662,64 +642,11 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         cleanupPopup()
     }
 
-    /// Whether closing a popup should reload the service that opened it.
-    ///
-    /// Reloading exists for sign-in: the popup shares the service's data store,
-    /// so once sign-in finishes the session cookies are already here and the
-    /// main view only needs a reload to leave its signed-out page.
-    ///
-    /// Reloading *unconditionally* is wrong, because a popup is also how an
-    /// ordinary link opens. Glance at a link from a chat service, close the
-    /// window, and the service reloads underneath you — losing scroll position,
-    /// a half-typed message, and whatever else the page held but never sent.
-    /// That is a steady, visible cost paid for a case that comes up rarely.
-    ///
-    /// Two signals separate them, and either one is enough:
-    ///
-    /// - **The page closed itself.** OAuth popups finish by calling
-    ///   `window.close()`; a link window is closed by the user. This is the
-    ///   signal that carries flows through identity providers we don't list,
-    ///   such as a company's own Okta or Keycloak.
-    /// - **The popup was opened at a known sign-in gateway.** A service asking
-    ///   the user to sign in again opens straight at its provider, so the very
-    ///   first URL is the gateway. This covers a flow the user closes by hand
-    ///   once it is done, which some providers leave to them.
-    ///
-    /// The second signal reads the *opening* URL only, never the rest of the
-    /// navigation chain, and that distinction is the whole point. Plenty of
-    /// ordinary links pass through a sign-in gateway on their way somewhere
-    /// else: opening an Azure portal link from Teams starts at
-    /// `portal.azure.com` and redirects through `login.microsoftonline.com` for
-    /// SSO. Watching the chain counts that as a sign-in and reloads the service
-    /// — the exact bug this function exists to fix, measured happening.
-    ///
-    /// When neither signal holds, the popup was a link, and the service is left
-    /// alone. The failure mode this trades into is mild and recoverable: a
-    /// sign-in that neither starts at a listed gateway nor closes itself leaves
-    /// the service on its signed-out page until the user hits reload, once.
-    nonisolated static func shouldReloadOpener(selfClosed: Bool, openedAtAuthHost: Bool) -> Bool {
-        selfClosed || openedAtAuthHost
-    }
-
-    /// Whether a completed authentication popup should close automatically.
-    ///
-    /// A known authentication start is required. Without this signal, an
-    /// ordinary popup that returns to the service could close before the user
-    /// finishes with it. The landing host must belong to the opener's service.
-    nonisolated static func shouldCloseAuthPopup(
-        openedAtAuthHost: Bool,
-        landedHost: String?,
-        openerHost: String?
-    ) -> Bool {
-        guard openedAtAuthHost, let landedHost, let openerHost else { return false }
-        return belongsToService(landedHost, serviceHost: openerHost)
-    }
-
-    /// Reloads the service that opened the popup, when the rule above says to.
+    /// Reloads the service that opened the popup when the Core rule says to.
     private func reloadOpenerAfterPopup(selfClosed: Bool) {
-        guard Self.shouldReloadOpener(
+        guard WebRoutingPolicy.shouldReloadOpener(
             selfClosed: selfClosed,
-            openedAtAuthHost: popupOpenedAtAuthHost
+            openedAtAuthenticationHost: popupOpenedAtAuthHost
         ) else { return }
         guard let opener = openerWebView else { return }
         if opener.url != nil {
@@ -1044,7 +971,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
             return nil
         }
 
-        let filename = Self.sanitizedDownloadFilename(suggestedFilename)
+        let filename = WebRoutingPolicy.sanitizedDownloadFilename(suggestedFilename)
         let destination = Self.nonCollidingURL(
             in: downloads,
             filename: filename,
@@ -1075,24 +1002,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     }
 
     // MARK: - Helpers
-
-    /// Reduces a server-suggested filename to a safe single path component:
-    /// strips any directory parts and path separators so a crafted name can't
-    /// escape the Downloads folder, and falls back to "download" if empty.
-    nonisolated static func sanitizedDownloadFilename(_ suggested: String) -> String {
-        // Take the last path component off the raw name first (so "../../x"
-        // reduces to "x"), then scrub any separators the OS still treats as
-        // path-significant.
-        let cleaned = (suggested as NSString).lastPathComponent
-            .replacingOccurrences(of: "\0", with: "")
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleaned.isEmpty || cleaned == "." || cleaned == ".." || cleaned == "-" {
-            return "download"
-        }
-        return cleaned
-    }
 
     /// Whether the response asks to be saved rather than displayed, i.e. it
     /// carries a `Content-Disposition: attachment` header. Used so a downloadable
@@ -1129,191 +1038,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
         }
     }
 
-    /// Reduces a host to its registrable domain (eTLD+1), e.g.
-    /// `app.slack.com` → `slack.com`, `foo.co.uk` → `foo.co.uk`. Exposed so
-    /// `belongsToService` and its callers share one definition of "same site".
-    nonisolated static func effectiveDomain(_ host: String) -> String {
-        var h = host.lowercased()
-        if h.hasPrefix("www.") {
-            h = String(h.dropFirst(4))
-        }
-
-        let parts = h.split(separator: ".")
-        guard parts.count >= 2 else { return h }
-
-        // Known two-part TLDs (country-code second-level domains)
-        let twoPartTLDs: Set<String> = [
-            "co.uk", "org.uk", "ac.uk", "gov.uk",
-            "com.au", "net.au", "org.au", "edu.au",
-            "co.nz", "net.nz", "org.nz",
-            "co.jp", "or.jp", "ne.jp",
-            "com.br", "org.br", "net.br",
-            "co.kr", "or.kr",
-            "co.in", "net.in", "org.in",
-            "com.cn", "net.cn", "org.cn",
-            "co.za", "org.za",
-            "com.mx", "org.mx",
-            "co.il", "org.il",
-            "com.sg", "org.sg",
-            "com.hk", "org.hk",
-            "co.th", "or.th",
-        ]
-
-        let lastTwo = parts.suffix(2).joined(separator: ".")
-        if twoPartTLDs.contains(lastTwo) && parts.count >= 3 {
-            // eTLD+1 is last 3 parts
-            return parts.suffix(3).joined(separator: ".")
-        }
-
-        // Standard: eTLD+1 is last 2 parts
-        return lastTwo
-    }
-
-    /// Registrable domains that host many distinct products on different
-    /// subdomains — Gmail, Google Docs, and Drive all live under google.com.
-    /// For these, only the exact host counts as "the same service", so a Docs
-    /// link clicked in Gmail is routed out instead of hijacking the inbox.
-    /// Services that use per-tenant/workspace subdomains (e.g. *.slack.com,
-    /// *.atlassian.net) are deliberately NOT listed — there a subdomain change
-    /// is still the same app and should stay in-app.
-    nonisolated static let sharedUmbrellaDomains: Set<String> = [
-        "google.com",
-        "microsoft.com",
-        "live.com",
-        "yahoo.com",
-        "apple.com",
-        "amazon.com",
-    ]
-
-    /// Whether a new-window request should collapse into the opener's web view
-    /// instead of getting its own window.
-    ///
-    /// Only real link clicks collapse. A programmatic `window.open()` must come
-    /// back with a window handle: sign-in flows null-check the return value to
-    /// detect a popup blocker, and a nil answer makes them abandon the flow
-    /// silently — no window, no error, no request. Factored out so the rule is
-    /// unit-testable without a live `WKWebView`.
-    nonisolated static func shouldLoadNewWindowInPlace(
-        navigationType: WKNavigationType,
-        targetHost: String?,
-        openerHost: String?
-    ) -> Bool {
-        guard navigationType == .linkActivated,
-              let targetHost,
-              let openerHost
-        else { return false }
-        return belongsToService(targetHost, serviceHost: openerHost)
-    }
-
-    /// Whether `targetHost` belongs to the service whose current (or home) host
-    /// is `serviceHost`. Same registrable domain counts as the same service — so
-    /// Slack can switch workspaces across *.slack.com in-app — except for
-    /// shared-umbrella domains (see `sharedUmbrellaDomains`) where only the exact
-    /// host matches. Used to decide in-app vs. browser for links and new windows.
-    nonisolated static func belongsToService(_ targetHost: String, serviceHost: String) -> Bool {
-        let target = normalizedHost(targetHost)
-        let service = normalizedHost(serviceHost)
-        guard !target.isEmpty, !service.isEmpty else { return false }
-
-        // Reduce with the public-suffix-aware registrable-domain function, the
-        // same one the capture trust check uses. The naive `effectiveDomain`
-        // collapsed a shared multi-tenant hosting suffix to its bare form, so
-        // `evil.vercel.app` and `team.vercel.app` both became `vercel.app` and
-        // an attacker sibling on that suffix was treated as owning a user's
-        // service — its page then loaded in place inside the service's
-        // authenticated web view. `captureRegistrableDomain` keeps the tenant
-        // label (`team.vercel.app`), so distinct owners no longer collide.
-        let targetDomain = captureRegistrableDomain(target)
-        guard targetDomain == captureRegistrableDomain(service) else { return false }
-
-        if sharedUmbrellaDomains.contains(targetDomain) {
-            return target == service
-        }
-        return true
-    }
-
-    /// Multi-tenant hosting suffixes where each label directly under the suffix is
-    /// a DIFFERENT owner — a curated subset of the Public Suffix List's private
-    /// section. For the camera/mic trust decision these are treated as public
-    /// suffixes, so `alice.web.app` and `attacker.web.app` are different sites and
-    /// a capture grant can never leak across them. Not exhaustive (a full PSL is
-    /// the ideal), but it covers the common free-hosting providers a service might
-    /// live on. Used ONLY by the capture check, not by link routing.
-    nonisolated static let captureSharedHostingSuffixes: Set<String> = [
-        "github.io", "gitlab.io", "web.app", "firebaseapp.com", "appspot.com",
-        "run.app", "pages.dev", "workers.dev", "vercel.app", "netlify.app",
-        "herokuapp.com", "onrender.com", "fly.dev", "glitch.me", "repl.co",
-        "replit.dev", "surge.sh", "azurewebsites.net",
-    ]
-
-    /// The registrable domain for the capture trust decision. Like
-    /// `effectiveDomain`, but also treats the multi-tenant hosting suffixes above
-    /// as public suffixes, so a tenant on shared hosting reduces to
-    /// `<tenant>.<suffix>` instead of the bare suffix.
-    nonisolated static func captureRegistrableDomain(_ host: String) -> String {
-        let h = normalizedHost(host)
-        let parts = h.split(separator: ".")
-        guard parts.count >= 2 else { return h }
-        for suffix in captureSharedHostingSuffixes {
-            if h == suffix { return h }
-            if h.hasSuffix("." + suffix) {
-                let labels = suffix.split(separator: ".").count + 1  // tenant + suffix
-                return parts.suffix(labels).joined(separator: ".")
-            }
-        }
-        return effectiveDomain(h)
-    }
-
-    /// Whether a capture request from `frameHost` should be trusted as the service
-    /// at `serviceHost`. Stricter than `belongsToService` (which drives link
-    /// routing): hosts that merely share a multi-tenant hosting suffix are
-    /// different owners and never match, closing a grant leak across e.g.
-    /// `*.web.app`. Same registrable domain still matches (so `*.slack.com`
-    /// workspaces work), and shared-umbrella domains keep their exact-host rule.
-    nonisolated static func captureOriginBelongsToService(_ frameHost: String, serviceHost: String) -> Bool {
-        let frame = normalizedHost(frameHost)
-        let service = normalizedHost(serviceHost)
-        guard !frame.isEmpty, !service.isEmpty else { return false }
-        let frameDomain = captureRegistrableDomain(frame)
-        guard frameDomain == captureRegistrableDomain(service) else { return false }
-        if sharedUmbrellaDomains.contains(frameDomain) {
-            return frame == service
-        }
-        return true
-    }
-
-    /// Sign-in / identity gateways. These host the authentication step for a
-    /// service (and for third-party "Sign in with…" flows), so they are never a
-    /// separate product to route out — a click to one during sign-in must stay
-    /// in-app to complete. They sit on shared-umbrella domains (accounts vs.
-    /// mail.google.com), so `belongsToService`'s exact-host rule would otherwise
-    /// treat them as leaving the service and open the browser mid-login.
-    nonisolated static let authHosts: Set<String> = [
-        "accounts.google.com",
-        "accounts.youtube.com",
-        "login.microsoftonline.com",
-        "login.microsoft.com",
-        "login.windows.net",
-        "login.live.com",
-        "login.yahoo.com",
-        "appleid.apple.com",
-        "idmsa.apple.com",
-    ]
-
-    /// Whether `host` is a known authentication gateway (an exact match or a
-    /// subdomain of one). Callers keep such hosts in-app so sign-in completes.
-    nonisolated static func isAuthHost(_ host: String) -> Bool {
-        let h = normalizedHost(host)
-        return authHosts.contains(h) || authHosts.contains { h.hasSuffix("." + $0) }
-    }
-
-    /// Lowercases a host and drops a leading `www.` so host comparisons ignore
-    /// casing and the optional www prefix.
-    nonisolated private static func normalizedHost(_ host: String) -> String {
-        var h = host.lowercased()
-        if h.hasPrefix("www.") { h = String(h.dropFirst(4)) }
-        return h
-    }
 }
 
 /// Drives a file-open panel to a single completion. WebKit hangs the page's

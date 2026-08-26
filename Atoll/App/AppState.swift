@@ -828,12 +828,11 @@ final class AppState {
         guard let serviceHost = URL(string: service.url)?.host else { return false }
         let frameHost = frame.securityOrigin.host
         guard !frameHost.isEmpty else { return false }
-        // Stricter capture-specific same-site test (not the link-routing one): two
-        // owners on a shared hosting suffix (*.web.app, *.github.io, …) are NOT the
-        // same site, so an Allow-pinned service can't leak its grant to another site
-        // there. First-party cross-domain trust is handled separately, on the
-        // foreign-origin path in resolveMediaPermission.
-        return WebViewCoordinator.captureOriginBelongsToService(frameHost, serviceHost: serviceHost)
+        // The shared ownership rule keeps two owners on a hosting suffix
+        // (*.web.app, *.github.io, …) separate. This prevents an Allow-pinned
+        // service from leaking its grant to another site there. First-party
+        // cross-domain trust is handled on the foreign-origin path.
+        return WebRoutingPolicy.belongsToService(frameHost, serviceHost: serviceHost)
     }
 
     /// What to do with a capture request whose origin is NOT the service's own site
@@ -875,7 +874,7 @@ final class AppState {
               entry.firstParty == true,
               let serviceHost = URL(string: service.url)?.host,
               let entryHost = URL(string: entry.url)?.host else { return false }
-        return WebViewCoordinator.captureOriginBelongsToService(serviceHost, serviceHost: entryHost)
+        return WebRoutingPolicy.belongsToService(serviceHost, serviceHost: entryHost)
     }
 
     private static func captureKind(from type: WKMediaCaptureType) -> MediaCaptureKind {
@@ -928,7 +927,7 @@ final class AppState {
 
         let matches = services.filter { service in
             guard let serviceHost = URL(string: service.url)?.host else { return false }
-            return WebViewCoordinator.belongsToService(host, serviceHost: serviceHost)
+            return WebRoutingPolicy.belongsToService(host, serviceHost: serviceHost)
         }
         if matches.isEmpty { return nil }
         if matches.count == 1 { return matches.first }
