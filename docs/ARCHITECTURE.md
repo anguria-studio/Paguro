@@ -62,6 +62,7 @@ The main services and startup adapters are:
 - `StoreLoader` for SwiftData migration, integrity checks, and launch recovery.
 - `StoreRecoveryCoordinator` for recovery notices, backup selection, and restart handoff.
 - `PreferencesStore` for the single loaded preferences row and typed commits.
+- `ShellPreferences` for normalized window appearance and rail settings.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
 - `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.
@@ -78,6 +79,9 @@ post-save runtime work.
 Settings views do not mutate `AppPreferences`. They send typed intents to the
 application model. `PreferencesStore` saves each change before the application
 model applies its runtime side effects.
+`ShellPreferences` keeps the shell settings in one value. It preserves the
+existing storage split: layout and appearance use `PreferencesStore`; glass,
+icon-rail, and workspace-view settings use `UserDefaults`.
 
 The planned `SessionStoreManager` and `NotificationPipeline` will replace the
 current managers when their runtime phases start. The planned `IslandStore`

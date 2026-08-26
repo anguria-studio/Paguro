@@ -191,6 +191,11 @@ At 0 percent, the protective layer is opaque across the complete window.
 At 100 percent, Atoll adds no protective tint.
 The Reset Glass Lab action restores Regular glass and 100 percent transparency.
 
+`ShellPreferences` owns shell-setting load, normalization, and persistence.
+Layout and appearance use the transactional app preferences row. Glass,
+icon-rail, and workspace-view settings use `UserDefaults` so they remain
+available while Atoll repairs or restores the content store.
+
 On a fresh install, Atoll follows the system appearance, uses the left rail,
 shows all workspaces, and appears in both the Dock and menu bar. The Dock badge
 is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a

@@ -9,6 +9,7 @@ import AtollCore
 final class AppState {
     let modelContainer: ModelContainer
     let preferencesStore: PreferencesStore
+    private(set) var shellPreferences: ShellPreferences
     let mediaPermissions: MediaPermissionCoordinator
     let storeRecovery: StoreRecoveryCoordinator
     let websiteDataReclaimer: WebsiteDataReclaimer
@@ -48,37 +49,21 @@ final class AppState {
     /// per-service zoom. Loaded from `PreferencesStore` at launch.
     var defaultZoom: Double = 1.0
 
-    /// Where the spaces/services rails sit. Loaded from `PreferencesStore`.
-    var railLayout: RailLayout = .sidebar
-
-    /// App-level appearance override, loaded from `PreferencesStore`.
-    var appearanceMode: AppearanceMode = .system
-
-    /// Small visual preferences live in UserDefaults so they remain available
-    /// if the content store needs recovery.
-    var liquidGlassStyle = GlassLabDefaults.style
-    var liquidGlassIntensity = GlassLabDefaults.transparency
-    var iconRailBaseSize = DockIconSizing.defaultBaseSize
-    var iconRailMagnificationEnabled = DockIconSizing.defaultMagnification > 0
-    var iconRailMagnifiedSize = DockIconSizing.defaultMagnifiedSize
-    var iconRailPosition = DockRailPosition.defaultPosition
-    var workspaceViewMode = WorkspaceViewMode.defaultMode
+    var railLayout: RailLayout { shellPreferences.railLayout }
+    var appearanceMode: AppearanceMode { shellPreferences.appearanceMode }
+    var liquidGlassStyle: ShellGlassStyle { shellPreferences.liquidGlassStyle }
+    var liquidGlassIntensity: Double { shellPreferences.liquidGlassIntensity }
+    var iconRailBaseSize: Double { shellPreferences.iconRailBaseSize }
+    var iconRailMagnificationEnabled: Bool {
+        shellPreferences.iconRailMagnificationEnabled
+    }
+    var iconRailMagnifiedSize: Double { shellPreferences.iconRailMagnifiedSize }
+    var iconRailPosition: DockRailPosition { shellPreferences.iconRailPosition }
+    var workspaceViewMode: WorkspaceViewMode { shellPreferences.workspaceViewMode }
 
     @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
-    private static let liquidGlassStyleKey = "Atoll.liquidGlassStyle"
-    private static let liquidGlassIntensityKey = "Atoll.liquidGlassIntensity"
-    private static let iconRailBaseSizeKey = "Atoll.iconRailBaseSize"
-    private static let iconRailMagnificationEnabledKey = "Atoll.iconRailMagnificationEnabled"
-    private static let iconRailMagnifiedSizeKey = "Atoll.iconRailMagnifiedSize"
-    private static let iconRailPositionKey = "Atoll.iconRailPosition"
-    private static let workspaceViewModeKey = "Atoll.workspaceViewMode"
-
     var iconRailMagnification: Double {
-        guard iconRailMagnificationEnabled else { return 0 }
-        return DockIconSizing.magnification(
-            baseSize: iconRailBaseSize,
-            peakSize: iconRailMagnifiedSize
-        )
+        shellPreferences.iconRailMagnification
     }
 
     /// The color scheme to force on the app, or nil to follow the system.
@@ -178,6 +163,9 @@ final class AppState {
         self.modelContainer = loadedContainer
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
+        self.shellPreferences = ShellPreferences.load(
+            preferencesStore: preferencesStore
+        )
         self.mediaPermissions = MediaPermissionCoordinator(
             context: loadedContainer.mainContext,
             preferencesStore: preferencesStore,
@@ -427,59 +415,31 @@ final class AppState {
     }
 
     func setLiquidGlassIntensity(_ value: Double) {
-        let normalized = GlassIntensityScale.normalized(value)
-        liquidGlassIntensity = normalized
-        UserDefaults.standard.set(normalized, forKey: Self.liquidGlassIntensityKey)
+        shellPreferences.setLiquidGlassIntensity(value)
     }
 
     func setLiquidGlassStyle(_ style: ShellGlassStyle) {
-        liquidGlassStyle = style
-        UserDefaults.standard.set(style.rawValue, forKey: Self.liquidGlassStyleKey)
+        shellPreferences.setLiquidGlassStyle(style)
     }
 
     func resetGlassLab() {
-        liquidGlassStyle = GlassLabDefaults.style
-        liquidGlassIntensity = GlassLabDefaults.transparency
-
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Self.liquidGlassStyleKey)
-        defaults.removeObject(forKey: Self.liquidGlassIntensityKey)
+        shellPreferences.resetGlass()
     }
 
     func setIconRailBaseSize(_ value: Double) {
-        let magnification = iconRailMagnification
-        iconRailBaseSize = DockIconSizing.baseSize(value)
-        iconRailMagnifiedSize = DockIconSizing.peakSize(
-            baseSize: iconRailBaseSize,
-            magnification: magnification
-        )
-
-        let defaults = UserDefaults.standard
-        defaults.set(iconRailBaseSize, forKey: Self.iconRailBaseSizeKey)
-        defaults.set(iconRailMagnifiedSize, forKey: Self.iconRailMagnifiedSizeKey)
+        shellPreferences.setIconRailBaseSize(value)
     }
 
     func setIconRailMagnification(_ value: Double) {
-        let magnification = DockIconSizing.magnification(value)
-        iconRailMagnificationEnabled = magnification > 0
-        iconRailMagnifiedSize = DockIconSizing.peakSize(
-            baseSize: iconRailBaseSize,
-            magnification: magnification
-        )
-
-        let defaults = UserDefaults.standard
-        defaults.set(iconRailMagnificationEnabled, forKey: Self.iconRailMagnificationEnabledKey)
-        defaults.set(iconRailMagnifiedSize, forKey: Self.iconRailMagnifiedSizeKey)
+        shellPreferences.setIconRailMagnification(value)
     }
 
     func setIconRailPosition(_ position: DockRailPosition) {
-        iconRailPosition = position
-        UserDefaults.standard.set(position.rawValue, forKey: Self.iconRailPositionKey)
+        shellPreferences.setIconRailPosition(position)
     }
 
     func setWorkspaceViewMode(_ mode: WorkspaceViewMode) {
-        workspaceViewMode = mode
-        UserDefaults.standard.set(mode.rawValue, forKey: Self.workspaceViewModeKey)
+        shellPreferences.setWorkspaceViewMode(mode)
     }
 
     func setShowBadgeCountInDock(_ enabled: Bool) {
@@ -487,13 +447,11 @@ final class AppState {
     }
 
     func setAppearanceMode(_ mode: AppearanceMode) {
-        guard preferencesStore.setAppearanceMode(mode) else { return }
-        appearanceMode = mode
+        shellPreferences.setAppearanceMode(mode, preferencesStore: preferencesStore)
     }
 
     func setRailLayout(_ layout: RailLayout) {
-        guard preferencesStore.setRailLayout(layout) else { return }
-        railLayout = layout
+        shellPreferences.setRailLayout(layout, preferencesStore: preferencesStore)
     }
 
     func setAutoDismissCookieBanners(_ enabled: Bool) {
@@ -1465,48 +1423,6 @@ final class AppState {
         // AppKit-facing mutations to the next runloop tick.
         userScriptManager.autoDismissCookieBanners = preferencesStore.autoDismissCookieBanners
         defaultZoom = preferencesStore.defaultZoom
-        railLayout = preferencesStore.railLayout
-        appearanceMode = preferencesStore.appearanceMode
-        liquidGlassStyle = ShellGlassStyle.resolving(
-            UserDefaults.standard.string(forKey: Self.liquidGlassStyleKey)
-        )
-        let hasStoredGlassIntensity = UserDefaults.standard.object(
-            forKey: Self.liquidGlassIntensityKey
-        ) != nil
-        let storedGlassIntensity = hasStoredGlassIntensity
-            ? UserDefaults.standard.double(forKey: Self.liquidGlassIntensityKey)
-            : nil
-        liquidGlassIntensity = GlassIntensityScale.normalized(
-            storedGlassIntensity ?? GlassLabDefaults.transparency
-        )
-        let defaults = UserDefaults.standard
-        let storedBaseSize = defaults.object(forKey: Self.iconRailBaseSizeKey) != nil
-            ? defaults.double(forKey: Self.iconRailBaseSizeKey)
-            : DockIconSizing.defaultBaseSize
-        iconRailBaseSize = DockIconSizing.baseSize(storedBaseSize)
-        iconRailMagnificationEnabled = defaults.object(
-            forKey: Self.iconRailMagnificationEnabledKey
-        ) != nil
-            ? defaults.bool(forKey: Self.iconRailMagnificationEnabledKey)
-            : DockIconSizing.defaultMagnification > 0
-        let storedMagnifiedSize = defaults.object(
-            forKey: Self.iconRailMagnifiedSizeKey
-        ) != nil
-            ? defaults.double(forKey: Self.iconRailMagnifiedSizeKey)
-            : DockIconSizing.defaultMagnifiedSize
-        iconRailMagnifiedSize = DockIconSizing.magnifiedSize(
-            storedMagnifiedSize,
-            baseSize: iconRailBaseSize
-        )
-        iconRailPosition = defaults.string(forKey: Self.iconRailPositionKey)
-            .flatMap(DockRailPosition.init(rawValue:))
-            ?? DockRailPosition.defaultPosition
-        workspaceViewMode = WorkspaceViewMode.resolving(
-            defaults.string(forKey: Self.workspaceViewModeKey)
-        )
-        // Frost is now a fixed material rule. Remove the temporary Glass Lab
-        // value so an old experiment cannot affect a future setting.
-        UserDefaults.standard.removeObject(forKey: "Atoll.backdropFrostIntensity")
         appLockEnabled = preferencesStore.appLockEnabled
         lockOnLaunch = preferencesStore.lockOnLaunch
         lockOnSleep = preferencesStore.lockOnSleep
