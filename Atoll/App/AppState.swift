@@ -234,13 +234,6 @@ final class AppState {
 
         setupLockObservers()
         startContentBlocker()
-        notificationRuntime.start(
-            currentSpaceID: { [weak self] in self?.selectedSpaceID },
-            selectService: { [weak self] spaceID, serviceID in
-                if let spaceID { self?.selectedSpaceID = spaceID }
-                self?.selectedServiceID = serviceID
-            }
-        )
         hibernationScheduler.start(
             globalEnabled: autoHibernateIdleEnabled,
             globalIdleMinutes: autoHibernateIdleMinutes,
@@ -265,6 +258,13 @@ final class AppState {
         workspaceStore.backfillPasskeyNoticeIfNeeded(freshInstall: seedOutcome.didSeed)
         websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
+        notificationRuntime.start(
+            currentSpaceID: { [weak self] in self?.selectedSpaceID },
+            selectService: { [weak self] spaceID, serviceID in
+                if let spaceID { self?.selectedSpaceID = spaceID }
+                self?.selectedServiceID = serviceID
+            }
+        )
         let didUpdate = Self.recordLaunchVersionAndCheckUpdate()
         fetchMissingAndStaleFavicons(force: didUpdate)
         fetchCatalogIcons(force: didUpdate)
