@@ -49,16 +49,6 @@ struct UnifiedRailView: View {
     /// each cell's `.focused`, so a click or Tab that focuses a cell records it
     /// here and the arrow keys move relative to it.
     @FocusState private var focusedLinkID: UUID?
-    // Fallback drop midpoints, used only until the first geometry pass records a
-    // cell's real size. They are half of what `ServiceRowView` draws: the active
-    // sidebar row height and a labelled tab of roughly 120 points. A wrong (too
-    // large) value would make every drop on that
-    // axis resolve `.before` and leave the last slot unreachable.
-    private static let serviceDropMidpointHorizontal: CGFloat = ServiceRowView.tabTypicalWidth / 2
-    /// Measured size of each drop cell, so the before/after split uses the target's
-    /// true midpoint instead of a hardcoded guess.
-    @State private var cellSizes: [UUID: CGSize] = [:]
-
     /// The horizontal bar: a 32 point header and 32 point tabs with 5 points
     /// clear above and below. The drawn frame says 42.
     static let barHeight: CGFloat = 42
@@ -341,12 +331,17 @@ struct UnifiedRailView: View {
                         .accessibilityHidden(true)
                 }
                 ForEach(group.links) { link in
-                    serviceRow(for: link, dockLayout: dockLayout)
+                    serviceRow(
+                        for: link,
+                        workspaceLinks: group.links,
+                        dockLayout: dockLayout
+                    )
                 }
             }
         } else {
-            ForEach(filteredLinks) { link in
-                serviceRow(for: link, dockLayout: dockLayout)
+            let links = filteredLinks
+            ForEach(links) { link in
+                serviceRow(for: link, workspaceLinks: links, dockLayout: dockLayout)
             }
         }
     }
@@ -390,7 +385,11 @@ struct UnifiedRailView: View {
 
         if isExpanded {
             ForEach(group.links) { link in
-                serviceRow(for: link, dockLayout: dockLayout)
+                serviceRow(
+                    for: link,
+                    workspaceLinks: group.links,
+                    dockLayout: dockLayout
+                )
             }
         }
     }
@@ -511,8 +510,9 @@ struct UnifiedRailView: View {
     /// so `ViewThatFits` can measure its width to decide whether the tabs fit.
     /// The traffic-light inset is spent by the header now, so this starts flush.
     private var tabRow: some View {
+        let links = filteredLinks
         let dockLayout = dockMagnification.layout(
-            linkIDs: filteredLinks.map(\.id),
+            linkIDs: links.map(\.id),
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
             magnificationEnabled: false,
@@ -520,8 +520,8 @@ struct UnifiedRailView: View {
         )
 
         return HStack(spacing: 4) {
-            ForEach(filteredLinks) { link in
-                serviceRow(for: link, dockLayout: dockLayout)
+            ForEach(links) { link in
+                serviceRow(for: link, workspaceLinks: links, dockLayout: dockLayout)
                     .id(link.service.id)
             }
             addServiceButton
@@ -532,157 +532,27 @@ struct UnifiedRailView: View {
 
     // MARK: - Service cells
 
-    @ViewBuilder
     private func serviceRow(
         for link: SpaceServiceLink,
+        workspaceLinks: [SpaceServiceLink],
         dockLayout: DockMagnificationLayout
     ) -> some View {
-        let isSel = selectedServiceID == link.service.id
-            && selectedSpaceID == link.space.id
-        let badge = appState.badgeManager.badgeCount(for: link.service.id)
-        let hibernated = !isSel && appState.webViewPool.isHibernated(link.service.id)
-        let muted = NotificationMutePresentation.showsMutedState(
-            scopeMuted: link.service.isEffectivelyMuted,
-            manualGlobalMute: appState.doNotDisturb
-        )
-        let media = appState.webViewPool.mediaCaptureStates[link.service.id]
-        // A hibernated service has no page to be healthy or broken, and the moon
-        // already says why it is not loaded — so it reports live and draws no dot.
-        let health = hibernated ? ServiceHealth.live : appState.webViewPool.health(for: link.service.id)
-
-        cell(
-            for: link,
-            isSelected: isSel,
-            badge: badge,
-            hibernated: hibernated,
-            muted: muted,
-            media: media,
-            health: health,
-            focused: focusedLinkID == link.id,
-            dockLayout: dockLayout
-        )
-            .draggable(link.id.uuidString) {
-                // Custom drag preview. Source-dimming is left to SwiftUI:
-                // manually tracking a "dragging" id can't be cleared reliably —
-                // a drop on itself or a cancelled drag never fires the drop
-                // handler — which left the row stuck at 0.4 opacity.
-                Text(link.service.label)
-                    .font(.caption)
-                    .padding(6)
-                    .atollMaterialBackground(.ultraThickMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: AtollRadius.control))
-            }
-            .dropDestination(for: String.self) { items, location in
-                guard let droppedIDString = items.first,
-                      let droppedID = UUID(uuidString: droppedIDString),
-                      droppedID != link.id,
-                      let droppedLink = liveLinks.first(where: { $0.id == droppedID }),
-                      WorkspaceNavigationPolicy.allowsReorder(
-                        sourceWorkspaceID: droppedLink.space.id,
-                        targetWorkspaceID: link.space.id
-                      )
-                else { return false }
-                let placement: ServiceReorderPlacement = {
-                    let size = cellSizes[link.id]
-                    if axis == .vertical {
-                        let mid = (size?.height).map { $0 / 2 } ?? sidebarPresentation.serviceRowHeight / 2
-                        return location.y < mid ? .before : .after
-                    }
-                    let mid = (size?.width).map { $0 / 2 } ?? Self.serviceDropMidpointHorizontal
-                    return location.x < mid ? .before : .after
-                }()
-                return appState.reorderService(
-                    droppedLinkID: droppedID,
-                    relativeTo: link.id,
-                    placement: placement
-                )
-            }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.onChange(of: proxy.size, initial: true) {
-                        cellSizes[link.id] = proxy.size
-                    }
-                }
-            )
-            .accessibilityAction(named: "Move up") { moveServiceUp(link) }
-            .accessibilityAction(named: "Move down") { moveServiceDown(link) }
-            .contextMenu { serviceContextMenu(for: link) }
-            .focusable()
-            .focused($focusedLinkID, equals: link.id)
-            // The system's rectangular ring stays off, but the signal it used to
-            // carry is now drawn by the row itself (`RowMark`): a fill for
-            // selection, and a ring only when focus differs from selection.
-            // 1.5.10 switched the system ring off because it stacked on the
-            // app's own border and the 52 point strip clipped the result.
-            .focusEffectDisabled()
-            .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow]) { press in
-                handleServiceKey(press, for: link)
-            }
-            .onKeyPress(keys: [.return, .space]) { _ in
-                selectService(link)
-                return .handled
-            }
-    }
-
-    @ViewBuilder
-    private func cell(
-        for link: SpaceServiceLink,
-        isSelected: Bool,
-        badge: Int,
-        hibernated: Bool,
-        muted: Bool,
-        media: WebViewPool.MediaCaptureState?,
-        health: ServiceHealth,
-        focused: Bool,
-        dockLayout: DockMagnificationLayout
-    ) -> some View {
-        let displayedIconSize = dockLayout.iconSize(for: link.id)
-        let baseIconSize = appState.iconRailBaseSize
-        ServiceRowView(
-            instance: link.service,
-            isSelected: isSelected,
+        RailServiceCell(
+            link: link,
+            workspaceLinks: workspaceLinks,
+            liveLinks: liveLinks,
+            selectedSpaceID: $selectedSpaceID,
+            selectedServiceID: $selectedServiceID,
             axis: axis,
-            sidebarPresentation: axis == .vertical ? sidebarPresentation : .expanded,
-            badgeCount: badge,
-            isHibernated: hibernated,
-            isMuted: muted,
-            cameraActive: media?.cameraActive ?? false,
-            micActive: media?.micActive ?? false,
-            micMuted: media?.micMuted ?? false,
-            health: health,
-            glassStyle: appState.liquidGlassStyle,
-            glassIntensity: appState.liquidGlassIntensity,
-            dockIconSize: displayedIconSize,
-            dockItemSize: AtollMetric.Sidebar.dockItemSize(
-                displayedIconSize: Double(displayedIconSize)
-            ),
-            dockRowHeight: AtollMetric.Sidebar.dockRowHeight(
-                displayedIconSize: Double(displayedIconSize)
-            ),
-            dockIconHorizontalOffset: CGFloat(DockIconSizing.horizontalOffset(
-                baseSize: baseIconSize,
-                displayedIconSize: Double(displayedIconSize)
-            )),
-            dockTooltipLeadingOffset: CGFloat(DockIconSizing.tooltipLeadingOffset(
-                baseSize: baseIconSize,
-                displayedIconSize: Double(displayedIconSize)
-            )),
+            sidebarPresentation: sidebarPresentation,
             supplementaryWorkspaceName: duplicateServiceIDs.contains(link.service.id)
                 ? link.space.name
                 : nil,
-            isDockHovered: dockMagnification.hoveredLinkID == link.id,
-            dockMagnificationActive: dockMagnification.hoveredLinkID != nil
-                && appState.iconRailMagnificationEnabled,
-            onDockHoverChange: { hovering in
-                if hovering {
-                    dockMagnification.beginHover(for: link.id)
-                } else {
-                    dockMagnification.endHover(for: link.id)
-                }
-            },
-            isFocused: focused
+            dockLayout: dockLayout,
+            dockMagnification: dockMagnification,
+            focusedLinkID: $focusedLinkID
         ) {
-            selectService(link)
+            serviceContextMenu(for: link)
         }
     }
 
@@ -699,50 +569,6 @@ struct UnifiedRailView: View {
             additionalContentHeight: Double(dockDividerCount)
                 * Double(AtollMetric.Sidebar.workspaceDividerHeight)
         ))
-    }
-
-    /// Selects a service and co-locates keyboard focus on its cell, so a click
-    /// (or ⌘-digit) leaves the arrow keys with an anchor to move from — a plain
-    /// Button click doesn't reliably promote the enclosing `.focusable()` to
-    /// focused on its own.
-    private func selectService(_ link: SpaceServiceLink) {
-        selectedSpaceID = link.space.id
-        selectedServiceID = link.service.id
-        focusedLinkID = link.id
-    }
-
-    /// Arrow keys move the selection along the rail's axis (↑/↓ vertical,
-    /// ←/→ horizontal); ⌥+arrow reorders the focused service, reusing the same
-    /// move helpers that back the VoiceOver actions. Selection stops at the ends
-    /// (no wrap). Cross-axis arrows are left unhandled so the scroll view keeps
-    /// them.
-    private func handleServiceKey(_ press: KeyPress, for link: SpaceServiceLink) -> KeyPress.Result {
-        let forward: Bool
-        switch (axis, press.key) {
-        case (.vertical, .upArrow), (.horizontal, .leftArrow):
-            forward = false
-        case (.vertical, .downArrow), (.horizontal, .rightArrow):
-            forward = true
-        default:
-            return .ignored
-        }
-
-        if press.modifiers.contains(.option) {
-            if forward { moveServiceDown(link) } else { moveServiceUp(link) }
-            // The service kept its id but changed slot — hold focus on it.
-            focusedLinkID = link.id
-            return .handled
-        }
-
-        let links = links(in: link.space.id)
-        guard let index = links.firstIndex(where: { $0.id == link.id }) else { return .handled }
-        let neighborIndex = forward ? index + 1 : index - 1
-        guard links.indices.contains(neighborIndex) else { return .handled }
-        let neighbor = links[neighborIndex]
-        selectedSpaceID = neighbor.space.id
-        selectedServiceID = neighbor.service.id
-        focusedLinkID = neighbor.id
-        return .handled
     }
 
     /// The vertical rail uses a small native bordered action. The horizontal bar
@@ -929,25 +755,6 @@ struct UnifiedRailView: View {
         appState.removeLink(link.id)
     }
 
-    private func moveServiceUp(_ link: SpaceServiceLink) {
-        let links = links(in: link.space.id)
-        guard let index = links.firstIndex(where: { $0.id == link.id }), index > 0 else { return }
-        appState.reorderService(
-            droppedLinkID: link.id,
-            relativeTo: links[index - 1].id,
-            placement: .before
-        )
-    }
-
-    private func moveServiceDown(_ link: SpaceServiceLink) {
-        let links = links(in: link.space.id)
-        guard let index = links.firstIndex(where: { $0.id == link.id }), index < links.count - 1 else { return }
-        appState.reorderService(
-            droppedLinkID: link.id,
-            relativeTo: links[index + 1].id,
-            placement: .after
-        )
-    }
 }
 
 private struct WorkspaceLinkGroup: Identifiable {
