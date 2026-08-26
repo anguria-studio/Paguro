@@ -208,7 +208,7 @@ struct WebContentView: View {
         if appState.selectedSpaceID == nil {
             emptyStateContent(
                 icon: "square.stack.3d.up",
-                message: "Create a space to get started",
+                message: "Create a workspace to get started",
                 actionTitle: nil
             )
         } else if selectedSpaceHasServices {
@@ -220,7 +220,7 @@ struct WebContentView: View {
         } else {
             emptyStateContent(
                 icon: "plus.rectangle.on.rectangle",
-                message: "No services in this space yet",
+                message: "No services in this workspace yet",
                 actionTitle: "Add Service"
             ) {
                 appState.showAddService = true

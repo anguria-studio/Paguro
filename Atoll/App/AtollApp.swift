@@ -61,7 +61,7 @@ struct AtollApp: App {
             #endif
 
             CommandGroup(replacing: .newItem) {
-                Button("Add Service...") {
+                Button("Add Service…") {
                     appState.showAddService = true
                 }
                 .keyboardShortcut("n", modifiers: .command)
@@ -71,7 +71,7 @@ struct AtollApp: App {
                 // covers the transient no-space state).
                 .disabled(appState.selectedSpaceID == nil)
 
-                Button("Add Workspace...") {
+                Button("Add Workspace…") {
                     appState.showAddSpace = true
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -145,7 +145,7 @@ struct AtollApp: App {
 
                 Divider()
 
-                Button("Find...") {
+                Button("Find…") {
                     appState.findInPageVisible = true
                 }
                 .keyboardShortcut("f", modifiers: .command)

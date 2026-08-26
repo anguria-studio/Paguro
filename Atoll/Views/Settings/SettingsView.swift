@@ -250,7 +250,7 @@ struct GeneralSettingsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Restore from a backup")
-                        Text("Atoll keeps a copy of your spaces and services before each update.")
+                        Text("Atoll keeps a copy of your workspaces and services before each update.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

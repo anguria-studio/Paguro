@@ -13,7 +13,7 @@ struct DeleteSpaceConfirmation: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            "Delete \(space?.name ?? "space")?",
+            "Delete \(space?.name ?? "workspace")?",
             isPresented: Binding(
                 get: { space != nil },
                 set: { if !$0 { space = nil } }

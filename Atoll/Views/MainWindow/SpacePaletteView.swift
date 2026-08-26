@@ -202,7 +202,7 @@ struct SpacePaletteView: View {
             ))
 
             Divider()
-            Button("Edit Space...") {
+            Button("Edit Workspace…") {
                 dismiss()
                 onEditSpace(space)
             }
@@ -210,7 +210,7 @@ struct SpacePaletteView: View {
             // with zero spaces, and AppState.deleteSpace refuses too.
             if spaces.count > 1 {
                 Divider()
-                Button("Delete Space", role: .destructive) {
+                Button("Delete Workspace", role: .destructive) {
                     dismiss()
                     onDeleteSpace(space)
                 }
@@ -227,7 +227,7 @@ struct SpacePaletteView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .medium))
                     .frame(width: 20)
-                Text("New Space")
+                Text("New Workspace")
                     .font(.subheadline)
                 Spacer(minLength: 0)
             }
@@ -237,7 +237,7 @@ struct SpacePaletteView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("New space")
+        .accessibilityLabel("New workspace")
     }
 
     // MARK: - Keyboard

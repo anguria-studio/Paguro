@@ -30,12 +30,12 @@ struct KeyboardShortcutCommands: Commands {
 
             Divider()
 
-            Button("Next Space") {
+            Button("Next Workspace") {
                 switchSpaceOffset(1)
             }
             .keyboardShortcut(KeyEquivalent.tab, modifiers: .control)
 
-            Button("Previous Space") {
+            Button("Previous Workspace") {
                 switchSpaceOffset(-1)
             }
             .keyboardShortcut(KeyEquivalent.tab, modifiers: [.control, .shift])

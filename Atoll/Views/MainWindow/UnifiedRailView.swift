@@ -36,7 +36,7 @@ struct UnifiedRailView: View {
     /// also makes a newly created workspace appear without another state sync.
     @State private var collapsedWorkspaceIDs: Set<UUID> = []
     /// The link whose service is being moved into a brand-new space: set when the
-    /// user picks "New Space…", it presents the space editor and, on create,
+    /// user picks "New Workspace…", it presents the workspace editor and, on create,
     /// moves the service into the freshly made space.
     @State var movingToNewSpace: SpaceServiceLink?
     /// The service cell that currently holds keyboard focus. Two-way bound to

@@ -4,7 +4,7 @@ import SwiftUI
 /// can be pinned by a test, the same way `ServiceAccessibility` is.
 enum SpaceHeader {
     static func label(spaceName: String?, badgeCount: Int, isMuted: Bool) -> String {
-        guard let spaceName, !spaceName.isEmpty else { return "No space" }
+        guard let spaceName, !spaceName.isEmpty else { return "No workspace" }
         var parts = [spaceName]
         if badgeCount > 0 {
             parts.append(badgeCount == 1 ? "1 unread" : "\(badgeCount) unread")
@@ -85,7 +85,7 @@ struct SpaceHeaderView: View {
             badgeCount: badgeCount,
             isMuted: isMuted
         ))
-        .accessibilityHint("Switch space")
+        .accessibilityHint("Switch workspace")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -134,7 +134,7 @@ struct SpaceHeaderView: View {
     }
 
     private var displayName: String {
-        guard let spaceName, !spaceName.isEmpty else { return "No space" }
+        guard let spaceName, !spaceName.isEmpty else { return "No workspace" }
         return spaceName
     }
 

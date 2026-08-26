@@ -53,7 +53,7 @@ struct ContentView: View {
 
             if recovery.banner == nil, recovery.offer != nil {
                 NoticeStrip(severity: .info) {
-                    Text("Atoll has a backup with more of your spaces and services than it can see now.")
+                    Text("Atoll has a backup with more of your workspaces and services than it can see now.")
                         .font(.caption)
                         .lineLimit(2)
                     Spacer()
@@ -188,7 +188,7 @@ struct ContentView: View {
                 // sheet is ever presented in that state, give it a way out rather
                 // than a blank, un-dismissable panel.
                 VStack(spacing: 16) {
-                    Text("Select or create a space before adding a service.")
+                    Text("Select or create a workspace before adding a service.")
                         .multilineTextAlignment(.center)
                     Button("OK") { state.showAddService = false }
                         .keyboardShortcut(.defaultAction)
@@ -331,7 +331,7 @@ struct ContentView: View {
             contentInset: contentInset
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Space and services")
+        .accessibilityLabel("Workspaces and services")
     }
 
     private var webContent: some View {

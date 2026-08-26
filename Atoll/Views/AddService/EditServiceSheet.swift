@@ -150,7 +150,7 @@ struct EditServiceSheet: View {
                 } label: {
                     Label("Clear session (log out)", systemImage: "rectangle.portrait.and.arrow.right")
                 }
-                .help("Signs you out by clearing this service's cookies and storage. Its place in your spaces is kept.")
+                .help("Signs you out by clearing this service's cookies and storage. Its place in your workspaces is kept.")
             }
             .padding(20)
 

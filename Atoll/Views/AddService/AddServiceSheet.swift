@@ -89,7 +89,7 @@ struct AddServiceSheet: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("Search services...", text: $searchText)
+                TextField("Search services…", text: $searchText)
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 10)

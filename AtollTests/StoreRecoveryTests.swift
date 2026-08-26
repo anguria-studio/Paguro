@@ -1586,14 +1586,14 @@ final class StoreRecoveryTests: XCTestCase {
             takenAt: stamp,
             content: StoreContent(spaces: 1, services: 1, links: 1, spaceNames: [], serviceLabels: [])
         )
-        XCTAssertEqual(singular.displayDetail, "\(when) — 1 space, 1 service")
+        XCTAssertEqual(singular.displayDetail, "\(when) — 1 workspace, 1 service")
 
         let plural = labelCandidate(
             kind: .snapshot(version: "1.5.11+20"),
             takenAt: stamp,
             content: StoreContent(spaces: 3, services: 4, links: 4, spaceNames: [], serviceLabels: [])
         )
-        XCTAssertEqual(plural.displayDetail, "\(when) — 3 spaces, 4 services")
+        XCTAssertEqual(plural.displayDetail, "\(when) — 3 workspaces, 4 services")
     }
 
     /// A backup with no parseable stamp reads "date unknown" rather than
@@ -1604,7 +1604,7 @@ final class StoreRecoveryTests: XCTestCase {
             takenAt: nil,
             content: StoreContent(spaces: 2, services: 5, links: 5, spaceNames: [], serviceLabels: [])
         )
-        XCTAssertEqual(candidate.displayDetail, "date unknown — 2 spaces, 5 services")
+        XCTAssertEqual(candidate.displayDetail, "date unknown — 2 workspaces, 5 services")
     }
 
     /// A backup that is empty but readable — all-zero
@@ -1621,7 +1621,7 @@ final class StoreRecoveryTests: XCTestCase {
             takenAt: stamp,
             content: StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
         )
-        XCTAssertEqual(candidate.displayDetail, "\(when) — 0 spaces, 0 services")
+        XCTAssertEqual(candidate.displayDetail, "\(when) — 0 workspaces, 0 services")
     }
 
     /// An unreadable backup (`content == nil`, which the real candidate
@@ -1646,7 +1646,7 @@ final class StoreRecoveryTests: XCTestCase {
             content: StoreContent(spaces: 1, services: 2, links: 2, spaceNames: [], serviceLabels: []),
             isDamaged: true
         )
-        XCTAssertEqual(candidate.displayDetail, "\(when) — 1 space, 2 services — damaged")
+        XCTAssertEqual(candidate.displayDetail, "\(when) — 1 workspace, 2 services — damaged")
     }
 
     /// The live row's `takenAt` is the store file's mtime,
@@ -1660,7 +1660,7 @@ final class StoreRecoveryTests: XCTestCase {
             takenAt: Date(timeIntervalSince1970: 1_700_000_000),
             content: StoreContent(spaces: 3, services: 10, links: 10, spaceNames: [], serviceLabels: [])
         )
-        XCTAssertEqual(withContent.displayDetail, "3 spaces, 10 services")
+        XCTAssertEqual(withContent.displayDetail, "3 workspaces, 10 services")
 
         let unreadable = labelCandidate(
             kind: .live,

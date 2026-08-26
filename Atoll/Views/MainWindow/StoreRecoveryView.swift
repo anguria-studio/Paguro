@@ -27,7 +27,7 @@ struct StoreRecoveryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Restore your spaces and services")
+            Text("Restore your workspaces and services")
                 .font(.headline)
             Text("Atoll keeps a copy of your data before each update. Pick the one you want and Atoll will restart to put it back. Your current data is set aside first, so nothing is thrown away.")
                 .font(.callout)

@@ -5,12 +5,12 @@ import AtollCore
 extension UnifiedRailView {
     @ViewBuilder
     var railCreationMenu: some View {
-        Button("Add Service...") {
+        Button("Add Service…") {
             appState.showAddService = true
         }
         .disabled(selectedSpaceID == nil)
 
-        Button("Add Workspace...") {
+        Button("Add Workspace…") {
             appState.showAddSpace = true
         }
     }
@@ -82,7 +82,7 @@ extension UnifiedRailView {
         }
 
         Divider()
-        Button("Change Icon...") {
+        Button("Change Icon…") {
             appState.pickCustomIcon(for: link.service.id)
         }
         if link.service.customIconData != nil {
@@ -91,7 +91,7 @@ extension UnifiedRailView {
             }
         }
         Divider()
-        Menu("Move to Space") {
+        Menu("Move to Workspace") {
             let targets = eligibleSpaces(for: link.service)
             ForEach(targets) { space in
                 Button {
@@ -108,11 +108,11 @@ extension UnifiedRailView {
             if !targets.isEmpty {
                 Divider()
             }
-            Button("New Space…") {
+            Button("New Workspace…") {
                 movingToNewSpace = link
             }
         }
-        Button("Remove from this space") {
+        Button("Remove from this workspace") {
             removeFromSpace(link: link)
         }
         Divider()

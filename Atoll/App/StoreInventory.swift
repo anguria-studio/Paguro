@@ -230,7 +230,7 @@ extension StoreCandidate {
     var displayDetail: String {
         let counts: String
         if let content {
-            let spaces = content.spaces == 1 ? "1 space" : "\(content.spaces) spaces"
+            let spaces = content.spaces == 1 ? "1 workspace" : "\(content.spaces) workspaces"
             let services = content.services == 1 ? "1 service" : "\(content.services) services"
             // `content == nil` is the only unreadable case (see below), so a
             // damaged-but-readable file is the only place this marker applies;

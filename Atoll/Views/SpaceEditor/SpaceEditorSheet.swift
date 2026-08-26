@@ -23,7 +23,7 @@ struct SpaceEditorSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(isEditing ? "Edit space" : "New space")
+                Text(isEditing ? "Edit workspace" : "New workspace")
                     .font(.headline)
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -44,7 +44,7 @@ struct SpaceEditorSheet: View {
                         .accessibilityLabel("Selected emoji: \(selectedEmoji)")
                         .accessibilityHint("Use the picker below to change")
 
-                    TextField("Space name", text: $name, prompt: Text("Work, Personal, etc."))
+                    TextField("Workspace name", text: $name, prompt: Text("Work, Personal, etc."))
                         .textFieldStyle(.roundedBorder)
                         .font(.title3)
                 }
@@ -57,7 +57,7 @@ struct SpaceEditorSheet: View {
 
             HStack {
                 if isEditing {
-                    Button("Delete Space", role: .destructive) {
+                    Button("Delete Workspace", role: .destructive) {
                         confirmingDeleteSpace = editingSpace
                     }
                     .deleteSpaceConfirmation(space: $confirmingDeleteSpace) { space in

@@ -292,7 +292,7 @@ final class NativeShellTests: XCTestCase {
     /// With no space resolved the header still draws rather than collapsing the
     /// rail, and it says so.
     func testSpaceHeaderLabelWithoutASpace() {
-        XCTAssertEqual(SpaceHeader.label(spaceName: nil, badgeCount: 0, isMuted: false), "No space")
+        XCTAssertEqual(SpaceHeader.label(spaceName: nil, badgeCount: 0, isMuted: false), "No workspace")
     }
 
     func testWorkspaceSectionLabelDescribesDisclosureAndHiddenBadge() {

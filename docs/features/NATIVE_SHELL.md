@@ -21,7 +21,7 @@ The top-bar layout remains available as a separate user choice.
 
 The expanded material surface is 218 points wide.
 An 8 point window gutter surrounds it, so the complete rail is 234 points wide.
-It shows the current space, service icons, service names, status marks, and the
+It shows the current workspace, service icons, service names, status marks, and the
 add action.
 
 The collapsed dock is 54 to 84 points wide.
@@ -29,7 +29,7 @@ It shows only service icons and live status marks.
 Each service icon is 14 to 44 points square.
 The default size is 22 points.
 The selection area and rail width grow with this size.
-It does not show the space selector or the add action.
+It does not show the workspace selector or the add action.
 Its material surface starts 52 points below the window top.
 The first dock item starts 8 points below this edge.
 The first dock item aligns with the web-page area.

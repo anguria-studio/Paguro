@@ -86,7 +86,7 @@ struct QuickSwitcherView: View {
                 .font(.title3)
                 .accessibilityHidden(true)
 
-            TextField("Jump to service...", text: $searchText)
+            TextField("Jump to service…", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.title3)
                 .onSubmit {

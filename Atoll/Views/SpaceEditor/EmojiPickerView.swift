@@ -44,7 +44,7 @@ struct EmojiPickerView: View {
                 .foregroundStyle(.tertiary)
                 .font(.system(size: 11))
                 .accessibilityHidden(true)
-            TextField("Search emoji...", text: $searchText)
+            TextField("Search emoji…", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
         }
@@ -173,7 +173,7 @@ struct EmojiPickerView: View {
             HStack(spacing: 4) {
                 Image(systemName: "character.book.closed")
                     .font(.system(size: 10))
-                Text("More Emoji...")
+                Text("More Emoji…")
                     .font(.system(size: 11))
             }
             .foregroundStyle(.secondary)
