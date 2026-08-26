@@ -1,14 +1,7 @@
 import WebKit
 import UserNotifications
 import os
-
-struct NotificationPayload: Codable {
-    let title: String
-    let body: String
-    let icon: String
-    let tag: String
-    let serviceID: String
-}
+import AtollCore
 
 @MainActor
 final class UserScriptManager {
@@ -451,42 +444,30 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
         let requestID = UUID().uuidString
         let traceID = String(requestID.prefix(8)).lowercased()
 
-        // Only accept notifications from the service's own origin — the main
-        // frame, or a same-origin subframe. The interception script runs in all
-        // frames (some services fire notifications from a subframe), so without
-        // this gate a cross-origin ad/tracker iframe could post a native
-        // notification with attacker-controlled title/body attributed to the
-        // trusted service (spoofing / phishing).
         let frame = message.frameInfo
         let frameKind: String
         if frame.isMainFrame {
             frameKind = "main"
         } else {
-            // Compare the full origin (scheme + host + port), not just the host:
-            // a same-host subframe on a different scheme/port is a different
-            // origin and must not post a notification attributed to the service.
+            // The script also runs in subframes. The Core rule prevents a
+            // cross-origin frame from spoofing its service's notifications.
             let origin = frame.securityOrigin
-            guard let mainURL = message.webView?.url,
-                  let mainScheme = mainURL.scheme?.lowercased(),
-                  let mainHost = mainURL.host,
-                  !origin.host.isEmpty
-            else {
-                AppLogger.notifications.warning(
-                    "Notification trace \(traceID, privacy: .public): rejected frame; main origin unavailable"
-                )
-                return
+            let mainOrigin = message.webView?.url.flatMap { url -> NotificationOrigin? in
+                guard let scheme = url.scheme, let host = url.host else { return nil }
+                return NotificationOrigin(scheme: scheme, host: host, port: url.port)
             }
-            // WKSecurityOrigin reports 0 for the scheme's default port; URL
-            // reports nil. Normalize both before comparing.
-            let defaultPort = mainScheme == "https" ? 443 : 80
-            let originPort = origin.port == 0 ? defaultPort : origin.port
-            let mainPort = mainURL.port ?? defaultPort
-            let schemeMatches = origin.protocol.lowercased() == mainScheme
-            let hostMatches = origin.host == mainHost
-            let portMatches = originPort == mainPort
-            guard schemeMatches, hostMatches, portMatches else {
+            let frameOrigin = NotificationOrigin(
+                scheme: origin.protocol,
+                host: origin.host,
+                port: origin.port
+            )
+            guard NotificationOriginPolicy.accepts(
+                isMainFrame: false,
+                mainOrigin: mainOrigin,
+                frameOrigin: frameOrigin
+            ) else {
                 AppLogger.notifications.warning(
-                    "Notification trace \(traceID, privacy: .public): rejected cross-origin frame schemeMatch=\(schemeMatches, privacy: .public) hostMatch=\(hostMatches, privacy: .public) portMatch=\(portMatches, privacy: .public)"
+                    "Notification trace \(traceID, privacy: .public): rejected cross-origin frame"
                 )
                 return
             }
@@ -497,9 +478,7 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
             "Notification trace \(traceID, privacy: .public): bridge accepted frame=\(frameKind, privacy: .public)"
         )
 
-        guard let jsonString = message.body as? String,
-              let data = jsonString.data(using: .utf8)
-        else {
+        guard let jsonString = message.body as? String else {
             AppLogger.notifications.warning(
                 "Notification trace \(traceID, privacy: .public): rejected non-string payload"
             )
@@ -508,7 +487,7 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unche
 
         let payload: NotificationPayload
         do {
-            payload = try JSONDecoder().decode(NotificationPayload.self, from: data)
+            payload = try NotificationPayload.decode(jsonString)
         } catch {
             AppLogger.notifications.error(
                 "Notification trace \(traceID, privacy: .public): payload decode failed: \(error.localizedDescription, privacy: .public)"

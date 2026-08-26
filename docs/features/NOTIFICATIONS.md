@@ -81,6 +81,11 @@ The first implementation should require the main origin.
 
 The bridge must not expose file access, shell access, or a general native command.
 
+The current bridge limits each UTF-8 field before presentation. A title can use
+512 bytes, and a body can use 4,096 bytes. An icon URL can use 2,048 bytes. A
+tag can use 512 bytes, and a service ID can use 64 bytes. The decoder removes
+control characters that have no display use. It keeps tabs and line breaks.
+
 ## Policy pipeline
 
 The pipeline applies rules in this order:

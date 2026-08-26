@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import AtollCore
 import JavaScriptCore
 import WebKit
 @testable import Atoll

@@ -1,4 +1,5 @@
 import AppKit
+import AtollCore
 import UserNotifications
 import XCTest
 @testable import Atoll

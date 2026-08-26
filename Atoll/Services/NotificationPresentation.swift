@@ -1,4 +1,5 @@
 import AppKit
+import AtollCore
 import Foundation
 import UserNotifications
 

@@ -130,8 +130,10 @@ macOS notification delivery
 safe click route to the service
 ```
 
-The bridge handler validates the frame origin, decodes a small
-`NotificationPayload`, applies the policy, and posts the macOS notification.
+The WebKit bridge adapter sends normalized origins and the raw payload to
+`AtollCore`. Core validates the frame origin and decodes a bounded
+`NotificationPayload`. The handler then applies the app policy and posts the
+macOS notification.
 The backlog tracks the split of that handler into detection and presentation
 parts, and a shared event type in `AtollCore` for the island.
 
