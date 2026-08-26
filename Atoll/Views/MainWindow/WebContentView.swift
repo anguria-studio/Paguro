@@ -11,7 +11,6 @@ struct WebContentView: View {
     @Query private var services: [ServiceInstance]
     @State private var currentWebView: WKWebView?
     @State private var transitionSnapshot: NSImage?
-    @State private var previousServiceID: UUID?
     @State private var showPasskeyNotice = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -117,25 +116,11 @@ struct WebContentView: View {
         // Existing automatic services update in place.
         appState.updateEffectiveShellAppearance(isDark: colorScheme == .dark)
 
-        // Stop the outgoing service's active poll — but only if the pool still
-        // regards it as the active service. On a deep-link switch AppState has
-        // already made the incoming service active and moved the outgoing one
-        // onto a background poll; stopping here would wrongly kill it. On a
-        // normal switch the pool hasn't transitioned yet, so this is the right
-        // point to stop. (See NotificationManager.shouldStopOutgoingPoll.)
-        if let previousID = previousServiceID,
-           NotificationManager.shouldStopOutgoingPoll(
-               previousID: previousID,
-               poolActiveID: appState.webViewPool.activeServiceID
-           ) {
-            appState.notificationManager.stopPolling(for: previousID)
-        }
-
         guard let service = selectedService else {
+            appState.webViewPool.deactivateCurrentService()
             webViewState.detach()
             currentWebView = nil
             transitionSnapshot = nil
-            previousServiceID = nil
             return
         }
 
@@ -150,7 +135,6 @@ struct WebContentView: View {
         webView.pageZoom = CGFloat(appState.effectiveZoom(for: service))
         currentWebView = webView
         webViewState.attach(to: webView)
-        previousServiceID = service.id
 
         // Passive one-time notice: WKWebView can't use passkeys for sign-in, so
         // warn the user the first time each service is opened. Gated by the same
@@ -173,20 +157,6 @@ struct WebContentView: View {
             _ = try? await webView.evaluateJavaScript("window.dispatchEvent(new Event('resize'))")
         }
 
-        // Start active-mode badge/title polling for the displayed service.
-        // Pass closures (rather than the captured bool) so the next poll tick
-        // sees fresh values after the user toggles mute or per-service badge.
-        let catalogEntry = service.catalogEntryID.flatMap { ServiceCatalog.shared.entry(for: $0) }
-        let serviceID = service.id
-        let appStateRef = appState
-        appState.notificationManager.startPolling(
-            for: service.id,
-            webView: webView,
-            isMuted: { appStateRef.isServiceEffectivelyMuted(serviceID) },
-            showBadge: { appStateRef.isServiceShowingBadge(serviceID) },
-            catalogEntry: catalogEntry,
-            mode: .active
-        )
     }
 
     /// A slim, dismissible bar warning that passkey sign-in isn't available in

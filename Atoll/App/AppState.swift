@@ -3209,14 +3209,12 @@ final class AppState {
                 self.notificationManager.stopPolling(for: serviceID)
                 return
             }
-            self.startBackgroundPolling(for: serviceID, webView: webView)
+            self.startPolling(for: serviceID, webView: webView, mode: .background)
         }
 
         webViewPool.onServiceSoftWoke = { [weak self] serviceID in
             // Switched back before the grace timer fired — call off the teardown.
             self?.cancelImmediateHibernation(serviceID)
-            // Polling will restart when WebContentView attaches the web view
-            // No further action here — startPolling is called from the view layer
         }
 
         webViewPool.onServicePreloaded = { [weak self] serviceID, webView in
@@ -3224,7 +3222,11 @@ final class AppState {
             // screen. Start it on the background poll so its <title>-based
             // badge count contributes to the sidebar and the per-space
             // aggregate as soon as the page finishes loading.
-            self?.startBackgroundPolling(for: serviceID, webView: webView)
+            self?.startPolling(for: serviceID, webView: webView, mode: .background)
+        }
+
+        webViewPool.onServiceActivated = { [weak self] serviceID, webView in
+            self?.startPolling(for: serviceID, webView: webView, mode: .active)
         }
 
         webViewPool.onServiceRemoved = { [weak self] serviceID in
@@ -3236,9 +3238,12 @@ final class AppState {
         }
     }
 
-    /// Starts (or replaces) a background-mode poll for a service with a live
-    /// WKWebView that isn't currently displayed.
-    private func startBackgroundPolling(for serviceID: UUID, webView: WKWebView) {
+    /// Starts or replaces the recurring poll for one live service.
+    private func startPolling(
+        for serviceID: UUID,
+        webView: WKWebView,
+        mode: NotificationManager.PollMode
+    ) {
         let catalogEntry = catalogEntry(for: serviceID)
         notificationManager.startPolling(
             for: serviceID,
@@ -3246,7 +3251,7 @@ final class AppState {
             isMuted: { [weak self] in self?.isServiceEffectivelyMuted(serviceID) ?? false },
             showBadge: { [weak self] in self?.isServiceShowingBadge(serviceID) ?? true },
             catalogEntry: catalogEntry,
-            mode: .background
+            mode: mode
         )
     }
 

@@ -105,6 +105,9 @@ It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
 microphone is in use. A download continues after hibernation, because the
 coordinator keeps the download alive until it ends.
+The pool reports service activation and hibernation to `AppState`.
+`AppState` starts active or background badge polling from those lifecycle
+events. SwiftUI views do not start or stop notification polling.
 
 `WebViewCoordinator` handles these WebKit operations:
 

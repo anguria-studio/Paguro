@@ -130,6 +130,11 @@ final class WebViewPool {
     /// polling so the service can collect badge counts before the user clicks it.
     var onServicePreloaded: ((UUID, WKWebView) -> Void)?
 
+    /// Called whenever `webView(for:)` makes a service active. The callback
+    /// receives the exact live view so lifecycle controllers can attach active
+    /// work without making the SwiftUI view own that work.
+    var onServiceActivated: ((UUID, WKWebView) -> Void)?
+
     /// Called when a service's main web view finishes a top-level navigation
     /// (fresh load or login redirect), so callers can fire an immediate badge
     /// poll. Forwarded from each coordinator's `onNavigationFinished`.
@@ -193,6 +198,7 @@ final class WebViewPool {
         if let existing = webViews[instance.id] {
             lastAccessTimes[instance.id] = Date()
             wakeService(instance.id)
+            onServiceActivated?(instance.id, existing)
             return existing
         }
 
@@ -227,13 +233,23 @@ final class WebViewPool {
             await self.evictIfNeeded()
         }
 
+        onServiceActivated?(instance.id, webView)
         return webView
+    }
+
+    /// Clears the active service when the content area has no selection. The
+    /// outgoing service follows the normal soft-hibernation path, which pauses
+    /// media and lets lifecycle controllers downgrade its active work.
+    func deactivateCurrentService() {
+        guard let activeServiceID else { return }
+        softHibernateService(activeServiceID)
+        self.activeServiceID = nil
     }
 
     /// Preloads a web view for a service in the background without making it active.
     /// The web view is created and starts loading, but no soft-hibernation of other
-    /// services is triggered and no notification polling starts. This makes the service
-    /// feel instant when the user eventually selects it.
+    /// services is triggered. The preload callback lets lifecycle controllers start
+    /// background work. This makes the service feel instant when the user selects it.
     /// Skips services that already have a web view or are fully hibernated-by-user.
     func preload(_ instance: ServiceInstance) {
         guard webViews[instance.id] == nil else { return }
@@ -349,6 +365,7 @@ final class WebViewPool {
         onServiceRemoved = nil
         onServiceTornDown = nil
         onServicePreloaded = nil
+        onServiceActivated = nil
         onNavigationFinished = nil
         externalLinkHandler = nil
         mediaCapturePolicyProvider = nil

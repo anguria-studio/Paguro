@@ -49,6 +49,9 @@ Otherwise mark the service as limited.
 
 The pool owns each live `WKWebView` and coordinator.
 Views must not create or retain a second pool.
+The pool reports service activation and hibernation through lifecycle
+callbacks. `AppState` maps those callbacks to active and background badge
+polling. The content view does not start or stop pollers.
 
 The pool can hibernate an inactive service.
 It must first check these conditions:
