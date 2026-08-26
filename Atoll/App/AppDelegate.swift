@@ -15,6 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// AppKit waits for this hook before it completes a requested quit.
     var flushBeforeTerminate: (@MainActor () async -> Void)?
 
+    /// Starts runtime work once AppKit is ready for platform side effects.
+    var startAfterLaunch: (@MainActor () -> Void)? {
+        didSet {
+            guard hasFinishedLaunching else { return }
+            startAfterLaunch?()
+        }
+    }
+
     private var isSettlingLoginLaunch = false
     private var isTerminating = false
     private var hasFinishedLaunching = false
@@ -25,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hasFinishedLaunching = true
+        startAfterLaunch?()
         observeWindows()
 
         let launchState = ApplicationLifecyclePolicy.activationAtLaunch(

@@ -55,6 +55,8 @@ Use the application model or a feature controller.
 `AtollApp` creates the SwiftUI scenes.
 `AppModel` is the application composition root.
 It creates each long-lived service one time.
+`AppState.init` constructs the graph and loads saved values.
+`AppDelegate` calls `AppState.start()` after AppKit finishes launching.
 
 The main services and startup adapters are:
 

@@ -50,6 +50,9 @@ final class AppModel {
     func connect(to delegate: AppDelegate) {
         let mode = appState.preferencesStore.appPresenceMode
         presenceController.connect(to: delegate, initialMode: mode)
+        delegate.startAfterLaunch = { [weak self] in
+            self?.appState.start()
+        }
         delegate.flushBeforeTerminate = { [weak self] in
             await self?.shutdown()
         }

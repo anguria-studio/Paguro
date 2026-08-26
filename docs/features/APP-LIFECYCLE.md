@@ -15,6 +15,12 @@ the process-lifetime application state and presence controller.
 `AppDelegate` adapts AppKit lifecycle events. Deterministic activation and
 shutdown rules live in AtollCore.
 
+`AppState` uses two startup phases. Its initializer opens the store, creates
+the service graph, and loads saved values. `AppDelegate` calls `AppState.start()`
+from `applicationDidFinishLaunching`. That second phase attaches platform
+observers, timers, WebKit callbacks, background fetchers, and preload work.
+Repeated start calls and start calls after shutdown do nothing.
+
 The notification manager installs its macOS notification delegate while the
 composition root initializes the application state. This timing allows a
 notification action that launches Atoll to wait until navigation is ready.
@@ -77,4 +83,5 @@ The process has no helper that continues after termination.
 
 AtollCore tests cover launch activation, window-close activation, Dock
 preference behavior, and repeated shutdown requests. The application test
-suite builds the AppKit adapter with Swift 6 strict concurrency.
+suite builds the AppKit adapter and the two-phase startup path with Swift 6
+strict concurrency.

@@ -89,6 +89,7 @@ final class AppState {
     var scheduledDNDEnabled: Bool { notificationRuntime.scheduledDNDEnabled }
     var dndStartMinutes: Int { notificationRuntime.dndStartMinutes }
     var dndEndMinutes: Int { notificationRuntime.dndEndMinutes }
+    @ObservationIgnored private var hasStarted = false
     @ObservationIgnored private var hasShutDown = false
 
     /// App lock (Touch ID / password), loaded from `PreferencesStore`. `isLocked`
@@ -221,6 +222,15 @@ final class AppState {
         self.webViewPool = webViewPool
 
         loadAppPreferences()
+    }
+
+    /// Connects process-lifetime work after AppKit finishes launching.
+    /// Repeated calls and calls after shutdown are no-ops.
+    func start() {
+        guard !hasStarted, !hasShutDown else { return }
+        hasStarted = true
+
+        setupLockObservers()
         startContentBlocker()
         notificationRuntime.start(
             currentSpaceID: { [weak self] in self?.selectedSpaceID },
@@ -1001,11 +1011,8 @@ final class AppState {
     }
 
     private func loadAppPreferences() {
-        // No AppKit/dockTile/setActivationPolicy access in this scope — it
-        // runs inside AppState.init via @State, which fires before the
-        // SwiftUI App scene has finished wiring up NSApp. Touching AppKit
-        // there can race with NSApplication bootstrap. Defer the
-        // AppKit-facing mutations to the next runloop tick.
+        // This runs during construction, before AppKit finishes launching.
+        // Only load values here. `start()` applies platform side effects.
         userScriptManager.autoDismissCookieBanners = preferencesStore.autoDismissCookieBanners
         defaultZoom = preferencesStore.defaultZoom
         appLockEnabled = preferencesStore.appLockEnabled
@@ -1023,9 +1030,6 @@ final class AppState {
             isLocked = true
         }
 
-        Task { @MainActor in
-            self.setupLockObservers()
-        }
     }
 
     /// Kicks off content-blocklist compilation at launch (before preload, so it
