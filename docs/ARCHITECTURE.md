@@ -71,9 +71,11 @@ The main services and startup adapters are:
 - `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.
 - `HibernationScheduler` for idle sweeps and immediate-hibernation grace tasks.
 - `WebViewPool` for live and hibernated web views.
-- `WebViewCoordinator` for WebKit delegates.
+- `WebViewCoordinator` for navigation and UI delegate routing.
+- `AuthPopupController` for popup windows and sign-in completion.
 - `WebDialogPresenter` for file pickers and page dialogs.
 - `WebDownloadHandler` for download lifetime, destinations, and cancellation.
+- `ErrorPage` for escaped local WebKit recovery pages.
 - `NotificationManager` for notification polling and macOS delivery.
 - `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
 - `AppPresenceController` for Dock and menu-bar behavior.
@@ -131,15 +133,13 @@ forwards notification-related events to `NotificationRuntime`.
 `NotificationRuntime` owns the pool callbacks that start active or background
 badge polling. SwiftUI views do not start or stop polling.
 
-`WebViewCoordinator` handles these WebKit operations:
+`WebViewCoordinator` handles navigation, redirects, external links, media
+requests, and web process failure. It forwards component-specific work:
 
-- navigation and redirects;
-- new windows and external links;
-- uploads and downloads;
-- camera and microphone requests;
-- page dialogs;
-- web process failure;
-- notification bridge messages.
+- `AuthPopupController` owns new-window and sign-in popup lifecycle;
+- `WebDialogPresenter` owns upload pickers and page dialogs;
+- `WebDownloadHandler` owns downloads after navigation handoff;
+- `ErrorPage` builds local failure and crash recovery pages.
 
 It converts navigation actions to `NavigationRequestContext` values.
 `AtollCore` owns the deterministic navigation decision and its routing order.

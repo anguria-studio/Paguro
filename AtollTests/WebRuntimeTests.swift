@@ -7,9 +7,11 @@ import AtollCore
 
 final class WebRuntimeTests: XCTestCase {
     @MainActor
-    func testCoordinatorExposesWebDialogDelegateMethods() {
+    func testCoordinatorExposesWebUIDelegateMethods() {
         let coordinator = WebViewCoordinator()
         let selectors = [
+            "webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:",
+            "webViewDidClose:",
             "webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:",
             "webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:",
             "webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:",

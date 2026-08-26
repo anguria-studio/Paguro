@@ -9,19 +9,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     private let downloadHandler = WebDownloadHandler()
     private let dialogPresenter = WebDialogPresenter()
-
-    private var popupWebView: WKWebView?
-    private var popupWindow: NSWindow?
-    private var popupTitleObservation: NSKeyValueObservation?
-
-    /// The service's main web view that opened the current popup. Kept so we can
-    /// reload it once the sign-in popup closes (see reloadOpenerAfterPopup).
-    private weak var openerWebView: WKWebView?
-
-    /// Whether the current popup was *opened at* a known sign-in gateway. Set
-    /// once, from the URL that opened it. `WebRoutingPolicy.shouldReloadOpener`
-    /// explains why the rest of the navigation chain is not consulted.
-    private var popupOpenedAtAuthHost = false
+    private let authPopupController = AuthPopupController()
 
     /// Fallback URL to load if the WebContent process crashes before any
     /// navigation has committed (so `webView.reload()` has nothing to retry).
@@ -30,10 +18,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Timestamps of recent WebContent terminations, used to break a crash →
     /// reload → crash loop. Accessed only from main-thread delegate callbacks.
     private var crashTimestamps: [Date] = []
-    /// Same, for the OAuth/sign-in popup web view — tracked separately so a
-    /// looping popup gets the same backoff the main view has instead of
-    /// reloading forever.
-    private var popupCrashTimestamps: [Date] = []
     // nonisolated so the nonisolated `shouldAutoReload` can use them as default
     // argument values — they're immutable Sendable constants.
     private nonisolated static let maxCrashesInWindow = 3
@@ -121,27 +105,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         NSWorkspace.shared.open(url)
     }
 
-    deinit {
-        // A backstop for the popup lifecycle, which is normally torn down by
-        // popupWindowWillClose / webViewDidClose. deinit is nonisolated, so it
-        // can't call the main-actor-isolated cleanupPopup(); invalidate the
-        // (thread-safe) KVO observation here and close any still-open popup
-        // window on the main actor. The window is captured as a local so the
-        // hop never touches `self`, which is being deallocated.
-        //
-        popupTitleObservation?.invalidate()
-        if let window = popupWindow {
-            Task { @MainActor in window.close() }
-        }
-        // Mirror cleanupPopup's removeObserver so the willClose observer is gone
-        // even if the coordinator is deallocated with a popup still open. Must
-        // come LAST: passing `self` copies it, after which isolated stored
-        // properties can't be touched in a deinit. removeObserver(self) is
-        // thread-safe; the modern runtime would auto-clear it anyway, but drop it
-        // explicitly for symmetry.
-        NotificationCenter.default.removeObserver(self)
-    }
-
     // MARK: - Navigation Delegate
 
     func webView(
@@ -195,7 +158,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         // record a path, query, account name, or page title. The host and broad
         // context show whether sign-in stayed in the service or its popup.
         if navigationAction.targetFrame?.isMainFrame ?? true {
-            let context = webView === popupWebView ? "popup" : "service"
+            let context = authPopupController.isPopup(webView) ? "popup" : "service"
             let host = url.host ?? "no-host"
             AppLogger.webView.info(
                 "Allowed main-frame navigation: context=\(context, privacy: .public) host=\(host, privacy: .public) type=\(navigationAction.navigationType.rawValue)"
@@ -250,22 +213,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Some providers finish sign-in by navigating the popup to the service
-        // instead of calling window.close(). Gmail does this after password
-        // sign-in. Close a known authentication popup after it returns to the
-        // opener's service, then reload the opener with the shared session.
-        if webView === popupWebView {
-            if WebRoutingPolicy.shouldCloseAuthenticationPopup(
-                openedAtAuthenticationHost: popupOpenedAtAuthHost,
-                landedHost: webView.url?.host,
-                openerHost: openerWebView?.url?.host ?? fallbackURL?.host
-            ) {
-                AppLogger.webView.info("Authentication popup returned to the service; closing it")
-                reloadOpenerAfterPopup(selfClosed: false)
-                cleanupPopup()
-            }
-            return
-        }
+        if authPopupController.handleNavigationFinished(webView) { return }
 
         // Only the service's main web view carries a badge.
         guard let instanceID else { return }
@@ -283,35 +231,20 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     // deterministically would reload-crash forever, so back off after a few
     // crashes in a short window and show a recovery page instead.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        // The OAuth/sign-in popup shares this coordinator as its delegate.
-        // Don't apply the service's crash recovery (fallbackURL + home page) to
-        // it — that would reload the popup on the service's home URL, not the
-        // popup's own page. Reload its own page, but with the same crash-window
-        // backoff the main view has: a popup that crashes deterministically
-        // would otherwise reload-crash forever. Give up by closing the popup.
-        if webView === popupWebView {
-            let now = Date()
-            popupCrashTimestamps.append(now)
-            popupCrashTimestamps = popupCrashTimestamps.filter { now.timeIntervalSince($0) <= Self.crashWindow }
-            guard Self.shouldAutoReload(
-                crashTimestamps: popupCrashTimestamps,
-                now: now,
-                maxCrashes: Self.maxCrashesInWindow,
-                window: Self.crashWindow
-            ) else {
-                AppLogger.webView.error("OAuth popup WebContent terminated repeatedly — closing popup")
-                cleanupPopup()
-                return
+        let now = Date()
+        if authPopupController.handleProcessTermination(
+            webView,
+            at: now,
+            within: Self.crashWindow,
+            shouldAutoReload: { timestamps, date in
+                Self.shouldAutoReload(crashTimestamps: timestamps, now: date)
             }
-            if webView.url != nil { webView.reload() }
-            return
-        }
+        ) { return }
 
         // A terminated content process cannot be trusted to deliver a final
         // download callback. Cancel its transfers and release their handler.
         downloadHandler.cancelActiveDownloads()
 
-        let now = Date()
         crashTimestamps.append(now)
         crashTimestamps = crashTimestamps.filter { now.timeIntervalSince($0) <= Self.crashWindow }
 
@@ -355,7 +288,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         // can't render, a captive-portal blip) would break the OAuth flow.
         // Let the popup's own site handle it. (didFinish already skips the
         // popup; this keeps the failure path symmetric.)
-        if webView === popupWebView { return }
+        if authPopupController.isPopup(webView) { return }
 
         let nsError = error as NSError
         guard !Self.keepsCurrentPage(afterProvisionalFailure: nsError) else { return }
@@ -404,156 +337,19 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        // If the new-window request is for the same service — e.g. Slack opening
-        // a workspace via a target=_blank link — load it in the existing web
-        // view instead of spawning a separate NSWindow. Only genuinely
-        // cross-service popups (real OAuth sign-in windows to another domain)
-        // fall through and get their own window below.
-        //
-        // Restricted to real link clicks. A programmatic `window.open()` hands
-        // the caller a window handle, and sign-in flows test it:
-        //
-        //     const w = window.open(url); if (!w) return;
-        //
-        // Returning nil there reads as "popup blocked", so the page abandons
-        // whatever it was starting with no window and no error to show for it.
-        // Same-service `window.open` therefore falls through to a real window,
-        // which shares the opener's data store so a session started in it lands
-        // in the right place.
-        if WebRoutingPolicy.shouldLoadNewWindowInPlace(
-            isLinkActivated: navigationAction.navigationType == .linkActivated,
-            targetHost: navigationAction.request.url?.host,
-            openerHost: webView.url?.host
-        ) {
-            webView.load(navigationAction.request)
-            return nil
-        }
-
-        // Clean up any existing popup before opening a new one
-        cleanupPopup()
-
-        // Remember the service's main web view so we can reload it after the
-        // popup closes. The popup shares this data store, so once sign-in
-        // finishes the session cookies are already here — the main view just
-        // needs to reload to leave its signed-out page.
-        openerWebView = webView
-
-        // The sign-in signal, taken from the URL that opened the popup and not
-        // touched again: a service asking the user to sign in again opens
-        // straight at its provider. See `WebRoutingPolicy.shouldReloadOpener`.
-        popupOpenedAtAuthHost = navigationAction.request.url?.host.map(WebRoutingPolicy.isAuthenticationHost) ?? false
-
-        // CRITICAL: Use the configuration passed in — it inherits the parent's data store
-        let popup = WKWebView(frame: .zero, configuration: configuration)
-        popup.navigationDelegate = self
-        popup.uiDelegate = self
-
-        // Honor the page's requested popup size when reasonable; otherwise
-        // default to a comfortable 1100×800 (the previous 800×600 was too
-        // cramped for modern OAuth screens and standalone editors).
-        let requestedWidth = (windowFeatures.width?.doubleValue ?? 0)
-        let requestedHeight = (windowFeatures.height?.doubleValue ?? 0)
-        let width = max(640, min(1400, requestedWidth > 0 ? requestedWidth : 1100))
-        let height = max(480, min(1000, requestedHeight > 0 ? requestedHeight : 800))
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
-            backing: .buffered,
-            defer: false
+        authPopupController.createWebView(
+            with: configuration,
+            for: navigationAction,
+            windowFeatures: windowFeatures,
+            opener: webView,
+            fallbackURL: fallbackURL,
+            navigationDelegate: self,
+            uiDelegate: self
         )
-        // We hold this window in a strong property (`popupWindow`) and release
-        // it ourselves in cleanupPopup. Left at its `true` default, AppKit would
-        // also release the window when it closes — an over-release that crashes
-        // the app when an OAuth/sign-in popup (e.g. Gmail) window is closed.
-        window.isReleasedWhenClosed = false
-        window.contentView = popup
-        window.title = navigationAction.request.url?.host ?? "Atoll"
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-
-        self.popupWebView = popup
-        self.popupWindow = window
-
-        // Mirror the page's <title> into the NSWindow title bar so the user
-        // sees what's actually loaded (e.g. "Google Drive — Sign in") rather
-        // than the stale initial host name.
-        popupTitleObservation?.invalidate()
-        // Read the new title from the (Sendable String?) KVO change value rather
-        // than reaching back into the web view — the observe closure is
-        // nonisolated/@Sendable, and touching the main-actor-isolated WKWebView
-        // from it is a data race under Swift 6. An empty title leaves the bar on
-        // its current text (the host it was seeded with) instead of clearing it.
-        popupTitleObservation = popup.observe(\.title, options: [.new]) { [weak window] _, change in
-            guard let newTitle = change.newValue ?? nil, !newTitle.isEmpty else { return }
-            Task { @MainActor in
-                window?.title = newTitle
-            }
-        }
-
-        // Observe window close to clean up even when closed via OS button
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(popupWindowWillClose(_:)),
-            name: NSWindow.willCloseNotification,
-            object: window
-        )
-
-        return popup
-    }
-
-    @objc private func popupWindowWillClose(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow,
-              window === popupWindow else { return }
-        // Closed by the user (red button / ⌘W), not by the page.
-        reloadOpenerAfterPopup(selfClosed: false)
-        cleanupPopup()
-    }
-
-    /// Reloads the service that opened the popup when the Core rule says to.
-    private func reloadOpenerAfterPopup(selfClosed: Bool) {
-        guard WebRoutingPolicy.shouldReloadOpener(
-            selfClosed: selfClosed,
-            openedAtAuthenticationHost: popupOpenedAtAuthHost
-        ) else { return }
-        guard let opener = openerWebView else { return }
-        if opener.url != nil {
-            opener.reload()
-        } else if let fallback = fallbackURL {
-            opener.load(URLRequest(url: fallback))
-        }
-    }
-
-    private func cleanupPopup() {
-        if let window = popupWindow {
-            NotificationCenter.default.removeObserver(
-                self,
-                name: NSWindow.willCloseNotification,
-                object: window
-            )
-        }
-        popupTitleObservation?.invalidate()
-        popupTitleObservation = nil
-        popupWebView?.navigationDelegate = nil
-        popupWebView?.uiDelegate = nil
-        popupWindow?.close()
-        popupWebView = nil
-        popupWindow = nil
-        // Give the next popup its own crash budget — a prior popup's tally must
-        // not shorten the backoff for an unrelated sign-in opened soon after.
-        popupCrashTimestamps = []
-        // Likewise the sign-in signal: a link popup opened after a sign-in must
-        // not inherit its predecessor's reason to reload the service.
-        popupOpenedAtAuthHost = false
     }
 
     func webViewDidClose(_ webView: WKWebView) {
-        if webView === popupWebView {
-            // The page called window.close() on itself — the shape an OAuth
-            // popup takes when it finishes.
-            reloadOpenerAfterPopup(selfClosed: true)
-            cleanupPopup()
-        }
+        _ = authPopupController.handleWebViewDidClose(webView)
     }
 
     // MARK: - File Upload Picker
