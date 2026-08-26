@@ -31,7 +31,7 @@ final class WebRuntimeTests: XCTestCase {
     }
 
     func testErrorPageEmbedsEscapedRetryURL() {
-        let html = WebViewCoordinator.errorPageHTML(
+        let html = ErrorPage.html(
             title: "Unable to connect",
             message: "The network connection was lost.",
             retryURLString: "https://example.com/a'b\"c"
@@ -45,7 +45,7 @@ final class WebRuntimeTests: XCTestCase {
     }
 
     func testErrorPageWithoutRetryURLHasNoButton() {
-        let html = WebViewCoordinator.errorPageHTML(
+        let html = ErrorPage.html(
             title: "Page unavailable", message: "Keeps crashing.", retryURLString: nil)
         XCTAssertFalse(html.contains("<button"))
     }
