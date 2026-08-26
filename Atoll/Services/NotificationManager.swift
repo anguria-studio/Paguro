@@ -252,19 +252,6 @@ final class NotificationManager {
         }
     }
 
-    /// Whether a service's intercepted web notification should be forwarded to
-    /// macOS Notification Center. Pure, so the gating policy is unit-testable.
-    /// A notification fires only when the service is not muted, has OS
-    /// notifications enabled, and Do Not Disturb is off. `notifyOS` is the
-    /// per-service toggle; `isMuted` (the master override) and DND each veto.
-    nonisolated static func shouldPostOSNotification(
-        isMuted: Bool,
-        notifyOS: Bool,
-        doNotDisturb: Bool
-    ) -> Bool {
-        !isMuted && notifyOS && !doNotDisturb
-    }
-
     // MARK: - Notifications
 
     /// Requests notification authorization from macOS after launch.

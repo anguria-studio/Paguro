@@ -4,7 +4,7 @@ import UserNotifications
 
 /// Builds and delivers native notifications from normalized events.
 @MainActor
-final class NotificationPresenter {
+final class NotificationPresenter: NotificationEventPresenting {
     private let serviceLabel: String
     private let serviceIconURL: URL?
     private let center: UNUserNotificationCenter

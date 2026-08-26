@@ -144,6 +144,15 @@ The app must not run two detection systems.
 The default must avoid two visible alerts for one event.
 The user can enable both routes when desired.
 
+`NotificationPresentationRouter` now applies mute, Do Not Disturb, and route
+settings once for both destinations. `AtollCore` returns a deterministic route
+plan. The default plan selects only the system notification route. The page
+message handler no longer calls a platform presenter directly.
+
+The island destination is optional in the router. It stays unavailable until
+Atoll installs an island presenter. An unavailable island destination does not
+block an enabled system notification.
+
 macOS always uses the Atoll app icon as the sender identity for a native
 notification. Public notification APIs do not let Atoll replace that icon for
 each service.

@@ -41,18 +41,21 @@ final class UserScriptManager {
             serviceLabel: instance.label,
             serviceIconURL: serviceIconURL
         )
-        let handler = NotificationMessageHandler(
-            serviceID: instance.id,
-            presenter: presenter,
+        let presentationRouter = NotificationPresentationRouter(
+            systemPresenter: presenter,
             isMutedCheck: { id in
                 mutedCheck?(id) ?? false
             },
-            notifyOSCheck: { id in
+            isSystemEnabledCheck: { id in
                 notifyOSCheck?(id) ?? true
             },
             isDoNotDisturbCheck: {
                 dndCheck?() ?? false
             }
+        )
+        let handler = NotificationMessageHandler(
+            serviceID: instance.id,
+            presentationRouter: presentationRouter
         )
         controller.add(handler, name: "atollNotification")
         messageHandlers[instance.id] = handler

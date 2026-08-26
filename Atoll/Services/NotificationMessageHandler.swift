@@ -6,24 +6,15 @@ import AtollCore
 @MainActor
 final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
     let serviceID: UUID
-    let presenter: NotificationPresenter
-    let isMutedCheck: @MainActor (UUID) -> Bool
-    let notifyOSCheck: @MainActor (UUID) -> Bool
-    let isDoNotDisturbCheck: @MainActor () -> Bool
+    let presentationRouter: NotificationPresentationRouter
     private var deduplicator = NotificationDeduplicator()
 
     init(
         serviceID: UUID,
-        presenter: NotificationPresenter,
-        isMutedCheck: @escaping @MainActor (UUID) -> Bool,
-        notifyOSCheck: @escaping @MainActor (UUID) -> Bool,
-        isDoNotDisturbCheck: @escaping @MainActor () -> Bool
+        presentationRouter: NotificationPresentationRouter
     ) {
         self.serviceID = serviceID
-        self.presenter = presenter
-        self.isMutedCheck = isMutedCheck
-        self.notifyOSCheck = notifyOSCheck
-        self.isDoNotDisturbCheck = isDoNotDisturbCheck
+        self.presentationRouter = presentationRouter
         super.init()
     }
 
@@ -109,21 +100,7 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
             return
         }
 
-        let isMuted = isMutedCheck(serviceID)
-        let notifyOS = notifyOSCheck(serviceID)
-        let doNotDisturb = isDoNotDisturbCheck()
-        guard NotificationManager.shouldPostOSNotification(
-            isMuted: isMuted,
-            notifyOS: notifyOS,
-            doNotDisturb: doNotDisturb
-        ) else {
-            AppLogger.notifications.info(
-                "Notification trace \(traceID, privacy: .public): suppressed by policy muted=\(isMuted, privacy: .public) notifyOS=\(notifyOS, privacy: .public) dnd=\(doNotDisturb, privacy: .public)"
-            )
-            return
-        }
-
-        presenter.present(
+        presentationRouter.present(
             event: event,
             requestID: requestID,
             traceID: traceID
