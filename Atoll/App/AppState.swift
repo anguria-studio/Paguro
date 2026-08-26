@@ -760,12 +760,7 @@ final class AppState {
         let policy: MediaPermissionPolicy = allow ? .allow : .deny
         if camAsked { service.cameraPolicy = policy }
         if micAsked { service.microphonePolicy = policy }
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to persist media permission: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "persist media permission")
     }
 
     /// Sets and persists the global default camera policy for services without
@@ -785,12 +780,7 @@ final class AppState {
         let prefs = ensurePreferences()
         prefs.defaultCameraPolicyRaw = defaultCameraPolicy.rawValue
         prefs.defaultMicrophonePolicyRaw = defaultMicrophonePolicy.rawValue
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save default media policies: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save default media policies")
     }
 
     /// Mutes every service whose microphone is currently live (⇧⌘M).
@@ -1176,14 +1166,7 @@ final class AppState {
             }
         }
 
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save service edits: \(error.localizedDescription)")
-            // Discard the failed mutation so it can't silently ride along on the
-            // next unrelated successful save.
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save service edits")
     }
 
     /// Wipes all website data (cookies, local/session storage, caches) for a
@@ -1402,12 +1385,7 @@ final class AppState {
         autoHibernateIdleEnabled = enabled
         let prefs = ensurePreferences()
         prefs.autoHibernateIdleEnabled = enabled
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save auto-hibernate toggle: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save auto-hibernate toggle")
         startIdleHibernationTimer()
     }
 
@@ -1473,10 +1451,7 @@ final class AppState {
     private func applyZoom(_ value: Double, to webView: WKWebView, service: ServiceInstance) {
         webView.pageZoom = CGFloat(value)
         service.pageZoom = value
-        do { try modelContainer.mainContext.save() } catch {
-            AppLogger.dataStore.error("Failed to persist zoom: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "persist zoom")
     }
 
     private func currentServiceInstance(id: UUID) -> ServiceInstance? {
@@ -1550,7 +1525,7 @@ final class AppState {
             space: space,
             service: service
         ))
-        try context.save()
+        guard context.saveOrRollback(reason: "add service") else { return nil }
         return service.id
     }
 
@@ -1584,7 +1559,7 @@ final class AppState {
             .map(\.sortOrder)
         link.sortOrder = (targetOrders.max() ?? -1) + 1
         link.space = targetSpace
-        try context.save()
+        guard context.saveOrRollback(reason: "move service") else { return nil }
         return ServiceMoveOutcome(
             serviceID: serviceID,
             sourceSpaceID: sourceSpaceID,
@@ -1624,7 +1599,7 @@ final class AppState {
         for (index, link) in reorderedLinks.enumerated() {
             link.sortOrder = index
         }
-        try context.save()
+        guard context.saveOrRollback(reason: "reorder service") else { return false }
         return true
     }
 
@@ -1646,7 +1621,7 @@ final class AppState {
         // links first invalidates objects that the cascade then inspects and
         // produces invalidated-model diagnostics.
         context.delete(service)
-        try context.save()
+        guard context.saveOrRollback(reason: "delete service") else { return nil }
         return ServiceDeletionOutcome(
             serviceID: serviceID,
             dataStoreIdentifier: dataStoreIdentifier
@@ -1665,7 +1640,7 @@ final class AppState {
         descriptor.fetchLimit = 1
         guard let service = try context.fetch(descriptor).first else { return false }
         service.isMuted = muted
-        try context.save()
+        guard context.saveOrRollback(reason: "toggle service mute") else { return false }
         return true
     }
 
@@ -1686,7 +1661,7 @@ final class AppState {
                 .map { $0.service.id }
         )
         space.isMuted = muted
-        try context.save()
+        guard context.saveOrRollback(reason: "toggle workspace mute") else { return nil }
         return serviceIDs
     }
 
@@ -1702,7 +1677,7 @@ final class AppState {
         descriptor.fetchLimit = 1
         guard let service = try context.fetch(descriptor).first else { return false }
         service.customIconData = data
-        try context.save()
+        guard context.saveOrRollback(reason: "set custom icon") else { return false }
         return true
     }
 
@@ -1899,7 +1874,7 @@ final class AppState {
             service.fetchedIconData = data
         }
         service.faviconFetchedAt = date
-        try context.save()
+        guard context.saveOrRollback(reason: "save fetched favicon") else { return false }
         return true
     }
 
@@ -1979,8 +1954,8 @@ final class AppState {
     /// in the same context counts.
     ///
     /// Nothing irreversible happens here. The caller tears down the web view
-    /// and reclaims the data store after the save succeeds, and rolls back
-    /// when this function throws. Returns `nil` when the link does not exist.
+    /// and reclaims the data store after the save succeeds. This method rolls
+    /// back a failed save. Returns `nil` when the link does not exist.
     static func removeLink(_ linkID: UUID, in context: ModelContext) throws -> LinkRemovalOutcome? {
         let links = try liveLinks(in: context)
         guard let link = links.first(where: { $0.id == linkID }) else { return nil }
@@ -1994,7 +1969,7 @@ final class AppState {
         if !hasOtherLinks {
             context.delete(service)
         }
-        try context.save()
+        guard context.saveOrRollback(reason: "remove service link") else { return nil }
         return LinkRemovalOutcome(
             serviceID: serviceID,
             orphanedDataStoreIdentifier: hasOtherLinks ? nil : dataStoreIdentifier
@@ -2072,16 +2047,8 @@ final class AppState {
         for service in reclaimed { context.delete(service) }
         context.delete(space)
 
-        do {
-            try context.save()
-            AppLogger.dataStore.info("Deleted space \(spaceID); reclaimed \(reclaimed.count) orphaned service(s)")
-        } catch {
-            // Undo the pending deletes so the store, web views, and data stores
-            // stay consistent with each other; nothing destructive has run yet.
-            context.rollback()
-            AppLogger.dataStore.error("Failed to delete space \(spaceID); rolled back: \(error.localizedDescription)")
-            return
-        }
+        guard context.saveOrRollback(reason: "delete space \(spaceID)") else { return }
+        AppLogger.dataStore.info("Deleted space \(spaceID); reclaimed \(reclaimed.count) orphaned service(s)")
 
         // Save committed — now the destructive cleanup is safe.
         for serviceID in reclaimedServiceIDs { webViewPool.removeWebView(for: serviceID) }
@@ -2631,14 +2598,8 @@ final class AppState {
         for service in orphans {
             context.delete(service)
         }
-        do {
-            try context.save()
-            AppLogger.dataStore.info("Reaped \(orphans.count) orphaned service(s) at launch")
-        } catch {
-            context.rollback()
-            AppLogger.dataStore.error("Failed to reap orphaned services; rolled back: \(error.localizedDescription)")
-            return
-        }
+        guard context.saveOrRollback(reason: "reap orphaned services") else { return }
+        AppLogger.dataStore.info("Reaped \(orphans.count) orphaned service(s) at launch")
         for id in orphanedIDs { markDataStoreOrphaned(id) }
         cleanUpOrphanedDataStores()
     }
@@ -3050,12 +3011,7 @@ final class AppState {
     }
 
     func savePreferences(reason: String) {
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save \(reason): \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save \(reason)")
     }
 
     func saveWindowState() {
@@ -3183,12 +3139,7 @@ final class AppState {
         contentBlocker.isEnabled = enabled
         let prefs = ensurePreferences()
         prefs.contentBlockingEnabled = enabled
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save content-blocking toggle: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save content-blocking toggle")
         webViewPool.reattachContentBlocker()
     }
 
@@ -3197,12 +3148,7 @@ final class AppState {
     func setGoogleFaviconFallbackEnabled(_ enabled: Bool) {
         let prefs = ensurePreferences()
         prefs.googleFaviconFallbackEnabled = enabled
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save favicon fallback toggle: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save favicon fallback toggle")
         Task { await FaviconFetcher.shared.setGoogleFallbackEnabled(enabled) }
     }
 
@@ -3212,12 +3158,7 @@ final class AppState {
         contentBlocker.annoyanceEnabled = enabled
         let prefs = ensurePreferences()
         prefs.annoyanceBlockingEnabled = enabled
-        do {
-            try modelContainer.mainContext.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to save annoyance-blocking toggle: \(error.localizedDescription)")
-            modelContainer.mainContext.rollback()
-        }
+        modelContainer.mainContext.saveOrRollback(reason: "save annoyance-blocking toggle")
         webViewPool.reattachContentBlocker()
     }
 
@@ -3498,21 +3439,16 @@ final class AppState {
             context.insert(SpaceServiceLink(sortOrder: index, space: workSpace, service: service))
         }
 
-        do {
-            try context.save()
-            selectedSpaceID = personalSpace.id
-            // Record that this install now holds data, so a future empty store is
-            // recognized as loss rather than reseeded.
-            Self.markHasData(defaults)
-            AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
-            // `fetchMissingAndStaleFavicons` runs next in `init`. It fetches
-            // every icon that has no `faviconFetchedAt`, so one pass covers the
-            // seeded services. A second task here raced it on the same context.
-            return true
-        } catch {
-            AppLogger.dataStore.error("Failed to seed default data: \(error.localizedDescription)")
-            return false
-        }
+        guard context.saveOrRollback(reason: "seed default data") else { return false }
+        selectedSpaceID = personalSpace.id
+        // Record that this install now holds data, so a future empty store is
+        // recognized as loss rather than reseeded.
+        Self.markHasData(defaults)
+        AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
+        // `fetchMissingAndStaleFavicons` runs next in `init`. It fetches
+        // every icon that has no `faviconFetchedAt`, so one pass covers the
+        // seeded services. A second task here raced it on the same context.
+        return true
     }
 
     private static let passkeyNoticeBackfilledKey = "passkeyNoticeBackfilled"
@@ -3547,12 +3483,8 @@ final class AppState {
             changed = true
         }
         guard changed else { return }
-        do {
-            try context.save()
+        if context.saveOrRollback(reason: "backfill passkey notice") {
             AppLogger.dataStore.info("Backfilled passkey notice for \(services.count) existing service(s)")
-        } catch {
-            AppLogger.dataStore.error("Failed to backfill passkey notice: \(error.localizedDescription)")
-            context.rollback()
         }
     }
 
@@ -3570,11 +3502,6 @@ final class AppState {
         descriptor.fetchLimit = 1
         guard let service = try? context.fetch(descriptor).first, service.needsPasskeyNotice else { return }
         service.hasSeenPasskeyNotice = true
-        do {
-            try context.save()
-        } catch {
-            AppLogger.dataStore.error("Failed to persist passkey notice dismissal: \(error.localizedDescription)")
-            context.rollback()
-        }
+        context.saveOrRollback(reason: "persist passkey notice dismissal")
     }
 }
