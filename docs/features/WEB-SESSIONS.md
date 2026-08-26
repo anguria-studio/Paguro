@@ -125,6 +125,13 @@ Atoll can use an in-app browser panel for a required sign-in or task.
 The popup must use the correct service data store.
 It must not create a shared default data store.
 
+An authentication popup can start after the service page redirects its opener
+to a provider marketing host. Atoll accepts completion only after two checks.
+The popup must start at a known authentication host. It must return to the live
+opener host or the configured service host. If the opener leaves the configured
+service, Atoll loads the service home instead of reloading the marketing page.
+This rule keeps separate products on a shared provider domain isolated.
+
 ## Files
 
 Uploads use a native open panel.

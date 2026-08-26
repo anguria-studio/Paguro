@@ -95,7 +95,8 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
         if WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: openedAtAuthenticationHost,
             landedHost: webView.url?.host,
-            openerHost: openerWebView?.url?.host ?? openerFallbackURL?.host
+            openerHost: openerWebView?.url?.host,
+            serviceHost: openerFallbackURL?.host
         ) {
             AppLogger.webView.info("Authentication popup returned to the service; closing it")
             reloadOpener(selfClosed: false)
@@ -156,10 +157,15 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
             openedAtAuthenticationHost: openedAtAuthenticationHost
         ), let opener = openerWebView else { return }
 
-        if opener.url != nil {
-            opener.reload()
-        } else if let openerFallbackURL {
+        if let openerFallbackURL,
+           opener.url == nil || WebRoutingPolicy.shouldLoadServiceHomeAfterAuthentication(
+               openedAtAuthenticationHost: openedAtAuthenticationHost,
+               openerHost: opener.url?.host,
+               serviceHost: openerFallbackURL.host
+           ) {
             opener.load(URLRequest(url: openerFallbackURL))
+        } else if opener.url != nil {
+            opener.reload()
         }
     }
 

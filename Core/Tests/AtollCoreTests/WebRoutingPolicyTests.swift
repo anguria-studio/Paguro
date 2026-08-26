@@ -103,27 +103,61 @@ final class WebRoutingPolicyTests: XCTestCase {
         XCTAssertTrue(WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: true,
             landedHost: "workspace.slack.com",
-            openerHost: "app.slack.com"
+            openerHost: "app.slack.com",
+            serviceHost: "app.slack.com"
         ))
         XCTAssertTrue(WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: true,
             landedHost: "mail.google.com",
-            openerHost: "mail.google.com"
+            openerHost: "mail.google.com",
+            serviceHost: "mail.google.com"
         ))
         XCTAssertTrue(WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: true,
             landedHost: "outlook.cloud.microsoft",
-            openerHost: "outlook.cloud.microsoft"
+            openerHost: "outlook.cloud.microsoft",
+            serviceHost: "outlook.cloud.microsoft"
         ))
         XCTAssertFalse(WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: true,
             landedHost: "accounts.google.com",
-            openerHost: "mail.google.com"
+            openerHost: "mail.google.com",
+            serviceHost: "mail.google.com"
         ))
         XCTAssertFalse(WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: false,
             landedHost: "workspace.slack.com",
-            openerHost: "app.slack.com"
+            openerHost: "app.slack.com",
+            serviceHost: "app.slack.com"
+        ))
+
+        XCTAssertTrue(WebRoutingPolicy.shouldCloseAuthenticationPopup(
+            openedAtAuthenticationHost: true,
+            landedHost: "calendar.google.com",
+            openerHost: "workspace.google.com",
+            serviceHost: "calendar.google.com"
+        ))
+        XCTAssertFalse(WebRoutingPolicy.shouldCloseAuthenticationPopup(
+            openedAtAuthenticationHost: true,
+            landedHost: "drive.google.com",
+            openerHost: "workspace.google.com",
+            serviceHost: "calendar.google.com"
+        ))
+
+        XCTAssertTrue(WebRoutingPolicy.shouldLoadServiceHomeAfterAuthentication(
+            openedAtAuthenticationHost: true,
+            openerHost: "workspace.google.com",
+            serviceHost: "calendar.google.com"
+        ))
+        XCTAssertFalse(WebRoutingPolicy.shouldLoadServiceHomeAfterAuthentication(
+            openedAtAuthenticationHost: true,
+            openerHost: "calendar.google.com",
+            serviceHost: "calendar.google.com"
+        ))
+        XCTAssertFalse(WebRoutingPolicy.shouldLoadServiceHomeAfterAuthentication(
+            openedAtAuthenticationHost: false,
+            openerHost: "workspace.google.com",
+            serviceHost: "calendar.google.com"
         ))
     }
 

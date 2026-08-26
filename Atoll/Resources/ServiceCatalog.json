@@ -203,7 +203,7 @@
     {
         "id": "google-calendar",
         "name": "Google Calendar",
-        "url": "https://calendar.google.com",
+        "url": "https://calendar.google.com/calendar/u/0/r",
         "icon": "gcal-icon",
         "category": "Productivity",
         "badgeJS": null,

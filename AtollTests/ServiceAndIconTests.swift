@@ -60,6 +60,12 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertEqual(entries[0].category, "Email")
     }
 
+    func testGoogleCalendarCatalogEntryUsesTheCalendarAppRoute() throws {
+        let entry = try XCTUnwrap(ServiceCatalog.shared.entry(for: "google-calendar"))
+
+        XCTAssertEqual(entry.url, "https://calendar.google.com/calendar/u/0/r")
+    }
+
     func testFaviconParserHandlesAttributeOrderAndRelativeURLs() {
         let html = """
         <html><head>

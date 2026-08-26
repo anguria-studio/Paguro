@@ -95,15 +95,35 @@ public enum WebRoutingPolicy {
     }
 
     /// Returns whether an authentication popup has returned to its service.
+    ///
+    /// The opener can be on a provider marketing page after the service home
+    /// redirected a signed-out user. In that case, the configured service host
+    /// remains the trusted return target.
     public static func shouldCloseAuthenticationPopup(
         openedAtAuthenticationHost: Bool,
         landedHost: String?,
-        openerHost: String?
+        openerHost: String?,
+        serviceHost: String?
     ) -> Bool {
-        guard openedAtAuthenticationHost, let landedHost, let openerHost else {
+        guard openedAtAuthenticationHost, let landedHost else {
             return false
         }
-        return belongsToService(landedHost, serviceHost: openerHost)
+        return [openerHost, serviceHost]
+            .compactMap { $0 }
+            .contains { belongsToService(landedHost, serviceHost: $0) }
+    }
+
+    /// Returns whether sign-in completion must load the configured service home
+    /// instead of reloading an opener that redirected outside the service.
+    public static func shouldLoadServiceHomeAfterAuthentication(
+        openedAtAuthenticationHost: Bool,
+        openerHost: String?,
+        serviceHost: String?
+    ) -> Bool {
+        guard openedAtAuthenticationHost, let openerHost, let serviceHost else {
+            return false
+        }
+        return !belongsToService(openerHost, serviceHost: serviceHost)
     }
 
     /// Returns whether Atoll can hand a URL to the system safely.
