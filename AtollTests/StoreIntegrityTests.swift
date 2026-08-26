@@ -1,6 +1,7 @@
 import XCTest
 import Foundation
 import SwiftData
+import AtollCore
 @testable import Atoll
 
 @MainActor
@@ -53,7 +54,10 @@ final class StoreIntegrityTests: XCTestCase {
             // that it read 0, so nothing was reclaimed and the space's links
             // were left dangling after the space was deleted.
             XCTAssertEqual(doomed.serviceLinks.count, 2, "Space.serviceLinks inverse must be populated")
-            let orphaned = AppState.servicesOrphaned(byDeletingSpace: workID, memberships: memberships)
+            let orphaned = WorkspaceDeletionPolicy.servicesOrphaned(
+                byDeletingSpace: workID,
+                memberships: memberships
+            )
             XCTAssertEqual(orphaned.count, 2, "Both of Work's services should be reclaimed")
             for service in linkedServices where orphaned.contains(service.id) {
                 context.delete(service)

@@ -295,7 +295,7 @@ struct EditServiceSheet: View {
     }
 
     private func saveEdits() {
-        switch AddServiceSheet.validatedCustomServiceInput(label: label, url: url) {
+        switch CustomServiceInputValidator.validate(label: label, url: url) {
         case .invalid(let message):
             errorMessage = message
         case .valid(let validLabel, let validURL):

@@ -395,35 +395,6 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertFalse(ServiceInstance(label: "Custom", url: "https://custom.example").isNotificationCritical)
     }
 
-    // MARK: - Scheduled DND (quiet hours)
-
-    @MainActor
-    func testQuietHoursSameDayWindow() {
-        // 09:00–17:00.
-        let start = 9 * 60, end = 17 * 60
-        XCTAssertTrue(AppState.isWithinQuietHours(nowMinutes: 10 * 60, start: start, end: end))
-        XCTAssertFalse(AppState.isWithinQuietHours(nowMinutes: 8 * 60, start: start, end: end))
-        XCTAssertTrue(AppState.isWithinQuietHours(nowMinutes: end - 1, start: start, end: end))
-        XCTAssertFalse(AppState.isWithinQuietHours(nowMinutes: end, start: start, end: end), "end is exclusive")
-        XCTAssertTrue(AppState.isWithinQuietHours(nowMinutes: start, start: start, end: end), "start is inclusive")
-    }
-
-    @MainActor
-    func testQuietHoursWrapsMidnight() {
-        // 22:00–07:00.
-        let start = 22 * 60, end = 7 * 60
-        XCTAssertTrue(AppState.isWithinQuietHours(nowMinutes: 23 * 60, start: start, end: end))
-        XCTAssertTrue(AppState.isWithinQuietHours(nowMinutes: 5 * 60, start: start, end: end))
-        XCTAssertFalse(AppState.isWithinQuietHours(nowMinutes: end, start: start, end: end), "end is exclusive")
-        XCTAssertTrue(AppState.isWithinQuietHours(nowMinutes: end - 1, start: start, end: end))
-        XCTAssertFalse(AppState.isWithinQuietHours(nowMinutes: 20 * 60, start: start, end: end))
-    }
-
-    @MainActor
-    func testQuietHoursZeroLengthWindowIsNeverActive() {
-        XCTAssertFalse(AppState.isWithinQuietHours(nowMinutes: 12 * 60, start: 9 * 60, end: 9 * 60))
-    }
-
     // MARK: - Dark mode
 
     func testForceDarkModeDefaultsOff() {

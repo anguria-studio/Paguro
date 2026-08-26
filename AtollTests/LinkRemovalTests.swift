@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import AtollCore
 @testable import Atoll
 
 /// Tests the SwiftData layer of "remove service from space" and the
@@ -152,7 +153,10 @@ final class LinkRemovalTests: XCTestCase {
         XCTAssertEqual(memberships[mail.id], [personal.id, work.id])
         XCTAssertEqual(memberships[chat.id], [work.id])
         XCTAssertEqual(
-            AppState.servicesOrphaned(byDeletingSpace: work.id, memberships: memberships),
+            WorkspaceDeletionPolicy.servicesOrphaned(
+                byDeletingSpace: work.id,
+                memberships: memberships
+            ),
             [chat.id]
         )
     }

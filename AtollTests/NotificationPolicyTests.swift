@@ -102,38 +102,4 @@ final class NotificationPolicyTests: XCTestCase {
         XCTAssertEqual(manager.badgeCount(for: id), 6)
     }
 
-    // MARK: - Orphaned-service detection (space deletion)
-
-    func testServicesOrphanedByDeletingSpace() {
-        let space = UUID()
-        let otherSpace = UUID()
-        let onlyHere = UUID()      // belongs only to `space` → orphaned
-        let alsoElsewhere = UUID() // belongs to `space` and `otherSpace` → kept
-        let elsewhere = UUID()     // not in `space` at all → untouched
-
-        let memberships: [UUID: Set<UUID>] = [
-            onlyHere: [space],
-            alsoElsewhere: [space, otherSpace],
-            elsewhere: [otherSpace],
-        ]
-
-        XCTAssertEqual(
-            AppState.servicesOrphaned(byDeletingSpace: space, memberships: memberships),
-            [onlyHere]
-        )
-    }
-
-    func testServicesOrphanedHandlesEmptyAndAbsentSpace() {
-        let space = UUID()
-        let svc = UUID()
-        // Deleting a space no service belongs to orphans nothing.
-        XCTAssertEqual(
-            AppState.servicesOrphaned(byDeletingSpace: space, memberships: [svc: [UUID()]]),
-            []
-        )
-        XCTAssertEqual(
-            AppState.servicesOrphaned(byDeletingSpace: space, memberships: [:]),
-            []
-        )
-    }
 }

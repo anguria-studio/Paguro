@@ -52,26 +52,6 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertEqual(entries[0].category, "Email")
     }
 
-    @MainActor
-    func testCustomServiceInputValidation() {
-        XCTAssertEqual(
-            AddServiceSheet.validatedCustomServiceInput(label: "  Docs  ", url: " HTTPS://example.com/app "),
-            .valid(label: "Docs", url: "https://example.com/app")
-        )
-        XCTAssertEqual(
-            AddServiceSheet.validatedCustomServiceInput(label: "   ", url: "https://example.com"),
-            .invalid("Label can't be empty")
-        )
-        XCTAssertEqual(
-            AddServiceSheet.validatedCustomServiceInput(label: "Broken", url: "https://"),
-            .invalid("URL must include a host")
-        )
-        XCTAssertEqual(
-            AddServiceSheet.validatedCustomServiceInput(label: "FTP", url: "ftp://example.com"),
-            .invalid("URL must start with https:// or http://")
-        )
-    }
-
     func testFaviconParserHandlesAttributeOrderAndRelativeURLs() {
         let html = """
         <html><head>

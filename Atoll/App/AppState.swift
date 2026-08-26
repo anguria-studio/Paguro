@@ -1245,22 +1245,16 @@ final class AppState {
 
     // MARK: - Scheduled Do Not Disturb (quiet hours)
 
-    /// True when `nowMinutes` (minutes since midnight) falls inside the
-    /// quiet-hours window, handling the midnight wrap-around (e.g. 22:00→07:00).
-    /// A zero-length window (start == end) is treated as no window. Pure, for
-    /// unit testing.
-    static func isWithinQuietHours(nowMinutes: Int, start: Int, end: Int) -> Bool {
-        guard start != end else { return false }
-        if start < end { return nowMinutes >= start && nowMinutes < end }
-        return nowMinutes >= start || nowMinutes < end
-    }
-
     /// Whether the schedule currently puts Atoll into Do Not Disturb.
     var scheduledDNDActive: Bool {
         guard scheduledDNDEnabled else { return false }
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let mins = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-        return Self.isWithinQuietHours(nowMinutes: mins, start: dndStartMinutes, end: dndEndMinutes)
+        return QuietHoursPolicy.contains(
+            nowMinutes: mins,
+            start: dndStartMinutes,
+            end: dndEndMinutes
+        )
     }
 
     /// Pushes the effective DND (manual toggle OR active schedule) into the
@@ -1520,22 +1514,6 @@ final class AppState {
     /// initializeWithTake EXC_BAD_ACCESS during preload).
     private static let orphanedDataStoresKey = "atoll.orphanedDataStoreIdentifiers"
 
-    /// Pure helper: given each service's set of parent-space IDs, returns the
-    /// services that would be left with no space at all once `spaceID` is
-    /// removed (i.e. they belong *only* to the space being deleted). Factored
-    /// out so the orphan rule is unit-testable without SwiftData.
-    nonisolated static func servicesOrphaned(
-        byDeletingSpace spaceID: UUID,
-        memberships: [UUID: Set<UUID>]
-    ) -> Set<UUID> {
-        var orphaned: Set<UUID> = []
-        for (serviceID, spaces) in memberships
-        where spaces.contains(spaceID) && spaces.subtracting([spaceID]).isEmpty {
-            orphaned.insert(serviceID)
-        }
-        return orphaned
-    }
-
     /// Returns every link whose space and service still exist.
     ///
     /// A fetch is the authoritative view of membership. It includes unsaved
@@ -1560,7 +1538,10 @@ final class AppState {
     /// The delete confirmation shows this number.
     func orphanedServiceCount(byDeletingSpace spaceID: UUID) -> Int {
         let links = (try? Self.liveLinks(in: modelContainer.mainContext)) ?? []
-        return Self.servicesOrphaned(byDeletingSpace: spaceID, memberships: Self.memberships(from: links)).count
+        return WorkspaceDeletionPolicy.servicesOrphaned(
+            byDeletingSpace: spaceID,
+            memberships: Self.memberships(from: links)
+        ).count
     }
 
     /// The result of `removeLink(_:in:)`.
@@ -1653,7 +1634,10 @@ final class AppState {
             linkedServices.append(link.service)
         }
         let memberships = Self.memberships(from: liveLinks)
-        let orphanedIDs = Self.servicesOrphaned(byDeletingSpace: spaceID, memberships: memberships)
+        let orphanedIDs = WorkspaceDeletionPolicy.servicesOrphaned(
+            byDeletingSpace: spaceID,
+            memberships: memberships
+        )
 
         // Delete the models and their orphaned services, but hold off on every
         // irreversible side effect (tearing down web views, wiping on-disk data

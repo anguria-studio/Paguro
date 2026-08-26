@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AtollCore
 
 struct AddServiceSheet: View {
     let spaceID: UUID
@@ -18,11 +19,6 @@ struct AddServiceSheet: View {
     enum AddServiceTab: String, CaseIterable {
         case catalog = "Browse"
         case custom = "Custom URL"
-    }
-
-    enum CustomServiceInputValidation: Equatable {
-        case valid(label: String, url: String)
-        case invalid(String)
     }
 
     var body: some View {
@@ -154,7 +150,7 @@ struct AddServiceSheet: View {
     }
 
     private func addCustomService() {
-        switch Self.validatedCustomServiceInput(label: customLabel, url: customURL) {
+        switch CustomServiceInputValidator.validate(label: customLabel, url: customURL) {
         case .invalid(let error):
             urlError = error
             return
@@ -212,37 +208,6 @@ struct AddServiceSheet: View {
         }
 
         dismiss()
-    }
-
-    static func validatedCustomServiceInput(
-        label rawLabel: String,
-        url rawURL: String
-    ) -> CustomServiceInputValidation {
-        let label = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !label.isEmpty else {
-            return .invalid("Label can't be empty")
-        }
-
-        let trimmedURL = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let components = URLComponents(string: trimmedURL),
-              let scheme = components.scheme?.lowercased(),
-              ["http", "https"].contains(scheme)
-        else {
-            return .invalid("URL must start with https:// or http://")
-        }
-
-        guard let host = components.host, !host.isEmpty else {
-            return .invalid("URL must include a host")
-        }
-
-        var normalizedComponents = components
-        normalizedComponents.scheme = scheme
-
-        guard let url = normalizedComponents.url else {
-            return .invalid("That doesn't look like a valid URL")
-        }
-
-        return .valid(label: label, url: url.absoluteString)
     }
 
     private func fetchSpace(id: UUID) -> Space? {
