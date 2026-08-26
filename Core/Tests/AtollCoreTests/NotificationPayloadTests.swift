@@ -19,6 +19,20 @@ struct NotificationPayloadTests {
     }
 
     @Test
+    func preservesEmojiSequencesAndRightToLeftMarks() throws {
+        let title = "👨‍👩‍👧 Family"
+        let body = "\u{200F}مرحبا"
+
+        let payload = try NotificationPayload.decode(Self.payloadJSON(
+            title: title,
+            body: body
+        ))
+
+        #expect(payload.title == title)
+        #expect(payload.body == body)
+    }
+
+    @Test
     func invalidPayloadTable() {
         let validFields = #""body":"","icon":"","tag":"","serviceID":"service-1""#
         let cases: [(name: String, json: String, error: NotificationPayloadDecodeError)] = [

@@ -54,11 +54,11 @@ public struct NotificationPayload: Equatable, Sendable {
         try validate(raw.serviceID, field: "serviceID", maximumBytes: maximumServiceIDBytes)
 
         return NotificationPayload(
-            title: removingNonDisplayControls(from: raw.title),
-            body: removingNonDisplayControls(from: raw.body),
-            icon: removingNonDisplayControls(from: raw.icon),
-            tag: removingNonDisplayControls(from: raw.tag),
-            serviceID: removingNonDisplayControls(from: raw.serviceID)
+            title: removingControlCharacters(from: raw.title),
+            body: removingControlCharacters(from: raw.body),
+            icon: removingControlCharacters(from: raw.icon),
+            tag: removingControlCharacters(from: raw.tag),
+            serviceID: removingControlCharacters(from: raw.serviceID)
         )
     }
 
@@ -75,10 +75,10 @@ public struct NotificationPayload: Equatable, Sendable {
         }
     }
 
-    private static func removingNonDisplayControls(from value: String) -> String {
+    private static func removingControlCharacters(from value: String) -> String {
         let permittedControls: Set<Unicode.Scalar> = ["\t", "\n"]
         return String(value.unicodeScalars.filter { scalar in
-            !CharacterSet.controlCharacters.contains(scalar)
+            scalar.properties.generalCategory != .control
                 || permittedControls.contains(scalar)
         })
     }
