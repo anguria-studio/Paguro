@@ -59,6 +59,7 @@ It creates each long-lived service one time.
 The main services are:
 
 - `AppState` for application and feature state.
+- `PreferencesStore` for the single loaded preferences row and typed commits.
 - `DataStoreManager` for WebKit data stores.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
@@ -68,6 +69,9 @@ The main services are:
 The main rail and service-add sheets send model mutation intents to `AppState`.
 `AppState` owns their SwiftData commits, rollback, selection updates, and
 post-save runtime work.
+Settings views do not mutate `AppPreferences`. They send typed intents to the
+application model. `PreferencesStore` saves each change before the application
+model applies its runtime side effects.
 
 The planned `SessionStoreManager` and `NotificationPipeline` will replace the
 current managers when their runtime phases start. The planned `IslandStore`
@@ -156,6 +160,9 @@ See [Notification system](features/NOTIFICATIONS.md).
 
 SwiftData stores Atoll settings, spaces, service records, and links.
 WebKit stores service cookies, caches, and local storage.
+
+`PreferencesStore` loads or creates one `AppPreferences` row. It is the only
+type that writes that row.
 
 Atoll must not store account passwords.
 Atoll must not copy full message history into its data store.

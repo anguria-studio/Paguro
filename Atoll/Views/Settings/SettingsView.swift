@@ -55,8 +55,6 @@ struct SettingsView: View {
 }
 
 struct GeneralSettingsView: View {
-    @Query private var preferences: [AppPreferences]
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Environment(AppModel.self) private var appModel
     // Settings is its own scene (`Settings { … }` in AtollApp), separate from
@@ -71,15 +69,11 @@ struct GeneralSettingsView: View {
     // "If the targeted scene is a Window, the system orders it to the front."
     @Environment(\.openWindow) private var openWindow
 
-    private var prefs: AppPreferences {
-        preferences.first ?? AppPreferences()
-    }
-
     var body: some View {
         Form {
             Section("Dock & Menu Bar") {
                 Picker("Show Atoll in", selection: Binding(
-                    get: { prefs.appPresenceMode },
+                    get: { appModel.presenceController.mode },
                     set: { mode in
                         appModel.setPresenceMode(mode)
                     }
@@ -90,23 +84,15 @@ struct GeneralSettingsView: View {
                 }
 
                 Toggle("Show badge count on Dock icon", isOn: Binding(
-                    get: { prefs.showBadgeCountInDock },
-                    set: { value in
-                        ensurePrefs().showBadgeCountInDock = value
-                        appState.badgeManager.showBadgeCountInDock = value
-                        save("badge count in dock")
-                    }
+                    get: { appState.badgeManager.showBadgeCountInDock },
+                    set: { appState.setShowBadgeCountInDock($0) }
                 ))
             }
 
             Section("Appearance") {
                 Picker("Appearance", selection: Binding(
-                    get: { prefs.appearanceMode },
-                    set: { mode in
-                        ensurePrefs().appearanceModeRaw = mode.rawValue
-                        appState.appearanceMode = mode
-                        save("appearance mode")
-                    }
+                    get: { appState.appearanceMode },
+                    set: { appState.setAppearanceMode($0) }
                 )) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
@@ -151,12 +137,8 @@ struct GeneralSettingsView: View {
                 }
 
                 Picker("Layout", selection: Binding(
-                    get: { prefs.railLayout },
-                    set: { layout in
-                        ensurePrefs().railLayoutRaw = layout.rawValue
-                        appState.railLayout = layout
-                        save("rail layout")
-                    }
+                    get: { appState.railLayout },
+                    set: { appState.setRailLayout($0) }
                 )) {
                     ForEach(RailLayout.allCases, id: \.self) { layout in
                         Text(layout.displayName).tag(layout)
@@ -223,12 +205,8 @@ struct GeneralSettingsView: View {
 
             Section("Web Content") {
                 Toggle("Accept cookie banners automatically", isOn: Binding(
-                    get: { prefs.autoDismissCookieBanners },
-                    set: { value in
-                        ensurePrefs().autoDismissCookieBanners = value
-                        appState.userScriptManager.autoDismissCookieBanners = value
-                        save("cookie banner preference")
-                    }
+                    get: { appState.preferencesStore.autoDismissCookieBanners },
+                    set: { appState.setAutoDismissCookieBanners($0) }
                 ))
                 Text("This accepts consent pop-ups for you. That includes advertising and tracking cookies, so turn it off to answer each site's banner yourself.")
                     .font(.caption)
@@ -237,20 +215,16 @@ struct GeneralSettingsView: View {
 
             Section("Performance") {
                 Toggle("Hibernate idle background services", isOn: Binding(
-                    get: { prefs.autoHibernateIdleEnabledEffective },
+                    get: { appState.autoHibernateIdleEnabled },
                     set: { value in
                         appState.setAutoHibernateIdleEnabled(value)
                     }
                 ))
 
-                if prefs.autoHibernateIdleEnabledEffective {
+                if appState.autoHibernateIdleEnabled {
                     Picker("After", selection: Binding(
-                        get: { prefs.autoHibernateIdleMinutesEffective },
-                        set: { value in
-                            ensurePrefs().autoHibernateIdleMinutes = value
-                            appState.autoHibernateIdleMinutes = value
-                            save("auto-hibernate interval")
-                        }
+                        get: { appState.autoHibernateIdleMinutes },
+                        set: { appState.setAutoHibernateIdleMinutes($0) }
                     )) {
                         Text("5 minutes").tag(5)
                         Text("10 minutes").tag(10)
@@ -291,12 +265,8 @@ struct GeneralSettingsView: View {
 
             Section("Accessibility") {
                 Picker("Default zoom", selection: Binding(
-                    get: { prefs.defaultZoomEffective },
-                    set: { value in
-                        ensurePrefs().defaultZoom = value
-                        appState.applyDefaultZoom(value)
-                        save("default zoom")
-                    }
+                    get: { appState.defaultZoom },
+                    set: { appState.setDefaultZoom($0) }
                 )) {
                     ForEach(Self.zoomLevels, id: \.self) { level in
                         Text("\(Int((level * 100).rounded()))%").tag(level)
@@ -311,40 +281,20 @@ struct GeneralSettingsView: View {
     }
 
     private static let zoomLevels: [Double] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5]
-
-    private func save(_ context: String) {
-        modelContext.saveOrRollback(reason: "save setting (\(context))")
-    }
-
-    private func ensurePrefs() -> AppPreferences {
-        // Route creation through the single accessor so two first-time setters
-        // (rapid toggles, or toggles across two Settings tabs) can't each insert
-        // a duplicate row — a fresh fetch there sees pending inserts, unlike this
-        // view's @Query, which refreshes a tick later.
-        appState.ensurePreferences()
-    }
 }
 
 struct NotificationSettingsView: View {
     @Query private var services: [ServiceInstance]
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
-    @Query private var preferences: [AppPreferences]
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-
-    private var prefs: AppPreferences {
-        preferences.first ?? AppPreferences()
-    }
 
     var body: some View {
         Form {
             Section {
                 Toggle("Do Not Disturb", isOn: Binding(
                     get: { appState.doNotDisturb },
-                    set: { value in
-                        appState.doNotDisturb = value
-                        appState.refreshEffectiveDoNotDisturb()
-                    }
+                    set: { appState.doNotDisturb = $0 }
                 ))
                 Text("Silences notification banners. Unread badges remain visible.")
                     .font(.caption)
@@ -476,30 +426,18 @@ struct NotificationSettingsView: View {
         Section("Quiet Hours") {
             Toggle("Do Not Disturb on a schedule", isOn: Binding(
                 get: { appState.scheduledDNDEnabled },
-                set: { value in
-                    appState.scheduledDNDEnabled = value
-                    let p = ensurePrefs()
-                    p.scheduledDNDEnabled = value
-                    if value {
-                        // Seed the stored window from the current defaults so the
-                        // pickers below have values to show.
-                        if p.dndStartMinutes == nil { p.dndStartMinutes = appState.dndStartMinutes }
-                        if p.dndEndMinutes == nil { p.dndEndMinutes = appState.dndEndMinutes }
-                    }
-                    appState.refreshEffectiveDoNotDisturb()
-                    save("scheduled DND")
-                }
+                set: { appState.setScheduledDNDEnabled($0) }
             ))
 
             if appState.scheduledDNDEnabled {
                 DatePicker("From", selection: timeBinding(
                     get: { appState.dndStartMinutes },
-                    set: { appState.dndStartMinutes = $0; ensurePrefs().dndStartMinutes = $0 }
+                    set: { appState.setDNDStartMinutes($0) }
                 ), displayedComponents: .hourAndMinute)
 
                 DatePicker("To", selection: timeBinding(
                     get: { appState.dndEndMinutes },
-                    set: { appState.dndEndMinutes = $0; ensurePrefs().dndEndMinutes = $0 }
+                    set: { appState.setDNDEndMinutes($0) }
                 ), displayedComponents: .hourAndMinute)
             }
 
@@ -510,7 +448,7 @@ struct NotificationSettingsView: View {
     }
 
     /// Bridges a minutes-since-midnight value to the Date a time-only DatePicker
-    /// expects. Re-evaluates effective DND and saves on every change.
+    /// expects. The supplied setter owns persistence and runtime updates.
     private func timeBinding(get: @escaping () -> Int, set: @escaping (Int) -> Void) -> Binding<Date> {
         Binding(
             get: {
@@ -522,18 +460,8 @@ struct NotificationSettingsView: View {
             set: { date in
                 let c = Calendar.current.dateComponents([.hour, .minute], from: date)
                 set((c.hour ?? 0) * 60 + (c.minute ?? 0))
-                appState.refreshEffectiveDoNotDisturb()
-                save("quiet hours time")
             }
         )
-    }
-
-    private func ensurePrefs() -> AppPreferences {
-        // Route creation through the single accessor so two first-time setters
-        // (rapid toggles, or toggles across two Settings tabs) can't each insert
-        // a duplicate row — a fresh fetch there sees pending inserts, unlike this
-        // view's @Query, which refreshes a tick later.
-        appState.ensurePreferences()
     }
 
     private func save(_ context: String) {
@@ -542,19 +470,13 @@ struct NotificationSettingsView: View {
 }
 
 struct PrivacySettingsView: View {
-    @Query private var preferences: [AppPreferences]
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-
-    private var prefs: AppPreferences {
-        preferences.first ?? AppPreferences()
-    }
 
     var body: some View {
         Form {
             Section("Service Icons") {
                 Toggle("Ask Google for icons Atoll can't find", isOn: Binding(
-                    get: { prefs.googleFaviconFallbackEnabledEffective },
+                    get: { appState.preferencesStore.googleFaviconFallbackEnabled },
                     set: { value in
                         appState.setGoogleFaviconFallbackEnabled(value)
                     }
@@ -568,29 +490,17 @@ struct PrivacySettingsView: View {
             Section("App Lock") {
                 Toggle("Require Touch ID or password", isOn: Binding(
                     get: { appState.appLockEnabled },
-                    set: { value in
-                        appState.appLockEnabled = value
-                        ensurePrefs().appLockEnabled = value
-                        save("app lock enabled")
-                    }
+                    set: { appState.setAppLockEnabled($0) }
                 ))
 
                 if appState.appLockEnabled {
                     Toggle("Lock on launch", isOn: Binding(
                         get: { appState.lockOnLaunch },
-                        set: { value in
-                            appState.lockOnLaunch = value
-                            ensurePrefs().lockOnLaunch = value
-                            save("lock on launch")
-                        }
+                        set: { appState.setLockOnLaunch($0) }
                     ))
                     Toggle("Lock when the Mac sleeps or the screen locks", isOn: Binding(
                         get: { appState.lockOnSleep },
-                        set: { value in
-                            appState.lockOnSleep = value
-                            ensurePrefs().lockOnSleep = value
-                            save("lock on sleep")
-                        }
+                        set: { appState.setLockOnSleep($0) }
                     ))
                 }
 
@@ -646,18 +556,6 @@ struct PrivacySettingsView: View {
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func ensurePrefs() -> AppPreferences {
-        // Route creation through the single accessor so two first-time setters
-        // (rapid toggles, or toggles across two Settings tabs) can't each insert
-        // a duplicate row — a fresh fetch there sees pending inserts, unlike this
-        // view's @Query, which refreshes a tick later.
-        appState.ensurePreferences()
-    }
-
-    private func save(_ context: String) {
-        modelContext.saveOrRollback(reason: "save setting (\(context))")
     }
 }
 

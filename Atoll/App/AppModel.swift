@@ -48,7 +48,7 @@ final class AppModel {
     }
 
     func connect(to delegate: AppDelegate) {
-        let mode = appState.ensurePreferences().appPresenceMode
+        let mode = appState.preferencesStore.appPresenceMode
         presenceController.connect(to: delegate, initialMode: mode)
         delegate.flushBeforeTerminate = { [weak self] in
             await self?.shutdown()
@@ -56,10 +56,8 @@ final class AppModel {
     }
 
     func setPresenceMode(_ mode: AppPresenceMode) {
-        let preferences = appState.ensurePreferences()
-        preferences.appPresenceMode = mode
+        guard appState.preferencesStore.setAppPresenceMode(mode) else { return }
         presenceController.setMode(mode)
-        appState.savePreferences(reason: "app presence mode")
     }
 
     func saveWindowState() {

@@ -77,7 +77,13 @@ enum AppPreferenceDefaults {
 final class AppPreferences {
     @Attribute(.unique) var id: UUID
     var appPresenceMode: AppPresenceMode
+
+    /// Retired compatibility field. Launch-at-login state now comes from
+    /// `SMAppService`; keep this property so existing stores retain their schema.
     var launchAtLogin: Bool
+
+    /// Retired compatibility field. Atoll's current commands are always active;
+    /// keep this property so existing stores retain their schema.
     var globalKeyboardShortcutsEnabled: Bool
     var showBadgeCountInDock: Bool
     var autoDismissCookieBanners: Bool

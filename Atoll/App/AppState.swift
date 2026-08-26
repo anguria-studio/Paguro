@@ -23,6 +23,7 @@ enum StoreLoadOutcome: Equatable {
 @Observable
 final class AppState {
     let modelContainer: ModelContainer
+    let preferencesStore: PreferencesStore
     let webViewPool: WebViewPool
     let contentBlocker: ContentBlockerManager
     let dataStoreManager: DataStoreManager
@@ -127,14 +128,13 @@ final class AppState {
     var webViewRebuildToken = 0
 
     /// Atoll-wide default page zoom, applied to services without an explicit
-    /// per-service zoom. Loaded from AppPreferences at launch.
+    /// per-service zoom. Loaded from `PreferencesStore` at launch.
     var defaultZoom: Double = 1.0
 
-    /// Where the spaces/services rails sit. Loaded from AppPreferences at
-    /// launch; the Settings picker writes both this and the persisted value.
+    /// Where the spaces/services rails sit. Loaded from `PreferencesStore`.
     var railLayout: RailLayout = .sidebar
 
-    /// App-level appearance override, loaded from AppPreferences.
+    /// App-level appearance override, loaded from `PreferencesStore`.
     var appearanceMode: AppearanceMode = .system
 
     /// Small visual preferences live in UserDefaults so they remain available
@@ -194,7 +194,7 @@ final class AppState {
     /// Main-actor only.
     @ObservationIgnored private var dataStoresBeingRemoved: Set<UUID> = []
 
-    /// Scheduled "quiet hours" Do Not Disturb, loaded from AppPreferences.
+    /// Scheduled "quiet hours" Do Not Disturb, loaded from `PreferencesStore`.
     /// `doNotDisturb` above stays the manual toggle; the effective DND that
     /// gates notification delivery is `doNotDisturb || scheduledDNDActive`.
     var scheduledDNDEnabled = false {
@@ -215,30 +215,28 @@ final class AppState {
     /// Keyed by service id so switching back can cancel the pending teardown.
     @ObservationIgnored private var pendingImmediateHibernation: [UUID: Task<Void, Never>] = [:]
 
-    /// App lock (Touch ID / password), loaded from AppPreferences. `isLocked`
+    /// App lock (Touch ID / password), loaded from `PreferencesStore`. `isLocked`
     /// drives an opaque cover over the window content in ContentView.
     var appLockEnabled = false
     var lockOnLaunch = true
     var lockOnSleep = true
     var isLocked = false
 
-    /// Global content-blocking toggle, mirrored from AppPreferences at launch.
-    /// The Settings switch writes both this and the persisted value via
-    /// `setContentBlockingEnabled(_:)`.
+    /// Global content-blocking toggle, loaded from `PreferencesStore` and changed
+    /// through `setContentBlockingEnabled(_:)`.
     var contentBlockingEnabled = true
 
-    /// "Hide annoyances" toggle, mirrored from AppPreferences at launch. Written
-    /// via `setAnnoyanceBlockingEnabled(_:)`.
+    /// "Hide annoyances" toggle, loaded from `PreferencesStore` and changed
+    /// through `setAnnoyanceBlockingEnabled(_:)`.
     var annoyanceBlockingEnabled = false
 
-    /// Auto-hibernate idle background services. Loaded from AppPreferences at
-    /// launch; written via `setAutoHibernateIdleEnabled(_:)`.
+    /// Auto-hibernate idle background services. Loaded from `PreferencesStore`.
     var autoHibernateIdleEnabled = false
-    /// Idle minutes before auto-hibernation fires. Mirrored from AppPreferences.
+    /// Idle minutes before auto-hibernation fires. Loaded from `PreferencesStore`.
     var autoHibernateIdleMinutes = 10
 
     /// Default camera/microphone permission for services that haven't pinned
-    /// their own, mirrored from AppPreferences at launch. Written via
+    /// their own, loaded from `PreferencesStore`. Written via
     /// `setDefaultCameraPolicy(_:)` / `setDefaultMicrophonePolicy(_:)`. Read on
     /// the permission hot path, so kept in memory rather than re-fetched.
     var defaultCameraPolicy: MediaPermissionPolicy = .ask
@@ -412,6 +410,7 @@ final class AppState {
         // newest usable pre-migration snapshot. The outcome drives the banner.
         let (loadedContainer, outcome) = Self.loadContainer(schema: schema, config: config)
         self.modelContainer = loadedContainer
+        self.preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         if case .restoredFromSnapshot = outcome {
             self.storeWasRestoredAtLaunch = true
         } else {
@@ -766,21 +765,20 @@ final class AppState {
     /// Sets and persists the global default camera policy for services without
     /// a per-service value. Mirrors the other global-toggle setters.
     func setDefaultCameraPolicy(_ policy: MediaPermissionPolicy) {
+        guard preferencesStore.setDefaultMediaPolicies(
+            camera: policy,
+            microphone: defaultMicrophonePolicy
+        ) else { return }
         defaultCameraPolicy = policy
-        persistDefaultMediaPolicies()
     }
 
     /// Sets and persists the global default microphone policy.
     func setDefaultMicrophonePolicy(_ policy: MediaPermissionPolicy) {
+        guard preferencesStore.setDefaultMediaPolicies(
+            camera: defaultCameraPolicy,
+            microphone: policy
+        ) else { return }
         defaultMicrophonePolicy = policy
-        persistDefaultMediaPolicies()
-    }
-
-    private func persistDefaultMediaPolicies() {
-        let prefs = ensurePreferences()
-        prefs.defaultCameraPolicyRaw = defaultCameraPolicy.rawValue
-        prefs.defaultMicrophonePolicyRaw = defaultMicrophonePolicy.rawValue
-        modelContainer.mainContext.saveOrRollback(reason: "save default media policies")
     }
 
     /// Mutes every service whose microphone is currently live (⇧⌘M).
@@ -1126,6 +1124,26 @@ final class AppState {
         UserDefaults.standard.set(mode.rawValue, forKey: Self.workspaceViewModeKey)
     }
 
+    func setShowBadgeCountInDock(_ enabled: Bool) {
+        guard preferencesStore.setShowBadgeCountInDock(enabled) else { return }
+        badgeManager.showBadgeCountInDock = enabled
+    }
+
+    func setAppearanceMode(_ mode: AppearanceMode) {
+        guard preferencesStore.setAppearanceMode(mode) else { return }
+        appearanceMode = mode
+    }
+
+    func setRailLayout(_ layout: RailLayout) {
+        guard preferencesStore.setRailLayout(layout) else { return }
+        railLayout = layout
+    }
+
+    func setAutoDismissCookieBanners(_ enabled: Bool) {
+        guard preferencesStore.setAutoDismissCookieBanners(enabled) else { return }
+        userScriptManager.autoDismissCookieBanners = enabled
+    }
+
     /// Applies user edits to a service: persists label/URL/keep-loaded, syncs
     /// the pool's never-hibernate set, and navigates the live web view to the
     /// new URL when it changed. The caller has already mutated the model;
@@ -1214,11 +1232,11 @@ final class AppState {
         Self.effectiveZoom(pageZoom: service.pageZoom, defaultZoom: defaultZoom)
     }
 
-    /// Applies a new Atoll-wide default zoom in memory and to every open
-    /// service that has no explicit per-service zoom. The Settings view saves
-    /// the preference. Clamped to the same 0.5x–3.0x range as manual zoom.
-    func applyDefaultZoom(_ zoom: Double) {
+    /// Saves a new Atoll-wide default zoom and applies it to every open service
+    /// that has no explicit per-service zoom.
+    func setDefaultZoom(_ zoom: Double) {
         let clamped = max(0.5, min(3.0, zoom))
+        guard preferencesStore.setDefaultZoom(clamped) else { return }
         defaultZoom = clamped
         let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
         for service in services where service.pageZoom == nil {
@@ -1246,6 +1264,35 @@ final class AppState {
     func refreshEffectiveDoNotDisturb() {
         badgeManager.doNotDisturb = doNotDisturb || scheduledDNDActive
         badgeManager.updateDockBadge()
+    }
+
+    func setScheduledDNDEnabled(_ enabled: Bool) {
+        guard preferencesStore.setQuietHours(
+            enabled: enabled,
+            startMinutes: dndStartMinutes,
+            endMinutes: dndEndMinutes
+        ) else { return }
+        scheduledDNDEnabled = enabled
+    }
+
+    func setDNDStartMinutes(_ minutes: Int) {
+        let resolvedMinutes = min((24 * 60) - 1, max(0, minutes))
+        guard preferencesStore.setQuietHours(
+            enabled: scheduledDNDEnabled,
+            startMinutes: resolvedMinutes,
+            endMinutes: dndEndMinutes
+        ) else { return }
+        dndStartMinutes = resolvedMinutes
+    }
+
+    func setDNDEndMinutes(_ minutes: Int) {
+        let resolvedMinutes = min((24 * 60) - 1, max(0, minutes))
+        guard preferencesStore.setQuietHours(
+            enabled: scheduledDNDEnabled,
+            startMinutes: dndStartMinutes,
+            endMinutes: resolvedMinutes
+        ) else { return }
+        dndEndMinutes = resolvedMinutes
     }
 
     /// Re-evaluates the quiet-hours schedule every minute so effective DND flips
@@ -1382,14 +1429,33 @@ final class AppState {
 
     /// Turns auto-hibernation on/off, persists it, and starts or stops the sweep.
     func setAutoHibernateIdleEnabled(_ enabled: Bool) {
+        guard preferencesStore.setAutoHibernateIdleEnabled(enabled) else { return }
         autoHibernateIdleEnabled = enabled
-        let prefs = ensurePreferences()
-        prefs.autoHibernateIdleEnabled = enabled
-        modelContainer.mainContext.saveOrRollback(reason: "save auto-hibernate toggle")
         startIdleHibernationTimer()
     }
 
+    func setAutoHibernateIdleMinutes(_ minutes: Int) {
+        let resolvedMinutes = min(120, max(1, minutes))
+        guard preferencesStore.setAutoHibernateIdleMinutes(resolvedMinutes) else { return }
+        autoHibernateIdleMinutes = resolvedMinutes
+    }
+
     // MARK: - App lock
+
+    func setAppLockEnabled(_ enabled: Bool) {
+        guard preferencesStore.setAppLockEnabled(enabled) else { return }
+        appLockEnabled = enabled
+    }
+
+    func setLockOnLaunch(_ enabled: Bool) {
+        guard preferencesStore.setLockOnLaunch(enabled) else { return }
+        lockOnLaunch = enabled
+    }
+
+    func setLockOnSleep(_ enabled: Bool) {
+        guard preferencesStore.setLockOnSleep(enabled) else { return }
+        lockOnSleep = enabled
+    }
 
     /// Shows the lock screen. No-op unless the lock is enabled, so a stray
     /// "Lock Now" can't trap a user who never set it up.
@@ -2993,55 +3059,23 @@ final class AppState {
         return previousVersion != currentVersion
     }
 
-    /// The single AppPreferences row, created (and inserted) once if missing.
-    /// All preference *writes* must go through this: unlike a per-view @Query
-    /// existence check, a fresh fetch here sees pending inserts, so two
-    /// first-time setters in the same tick reuse one row instead of each
-    /// inserting a duplicate (which then makes `.first` read nondeterministically
-    /// and settings appear to reset). Reads may still use @Query.
-    @discardableResult
-    func ensurePreferences() -> AppPreferences {
-        let context = modelContainer.mainContext
-        if let existing = try? context.fetch(FetchDescriptor<AppPreferences>()).first {
-            return existing
-        }
-        let prefs = AppPreferences()
-        context.insert(prefs)
-        return prefs
-    }
-
-    func savePreferences(reason: String) {
-        modelContainer.mainContext.saveOrRollback(reason: "save \(reason)")
-    }
-
     func saveWindowState() {
-        let preferences = ensurePreferences()
-        preferences.selectedSpaceID = selectedSpaceID
-        preferences.selectedServiceID = selectedServiceID
-        savePreferences(reason: "window state")
+        _ = preferencesStore.setWindowSelection(
+            spaceID: selectedSpaceID,
+            serviceID: selectedServiceID
+        )
     }
 
     private func loadAppPreferences() {
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<AppPreferences>()
-        let prefs: AppPreferences?
-        do {
-            prefs = try context.fetch(descriptor).first
-        } catch {
-            AppLogger.dataStore.error("Failed to load preferences: \(error.localizedDescription)")
-            prefs = nil
-        }
-
         // No AppKit/dockTile/setActivationPolicy access in this scope — it
         // runs inside AppState.init via @State, which fires before the
         // SwiftUI App scene has finished wiring up NSApp. Touching AppKit
         // there can race with NSApplication bootstrap. Defer the
         // AppKit-facing mutations to the next runloop tick.
-        userScriptManager.autoDismissCookieBanners = prefs?.autoDismissCookieBanners
-            ?? AppPreferenceDefaults.autoDismissCookieBanners
-        defaultZoom = prefs?.defaultZoomEffective ?? 1.0
-        railLayout = prefs?.railLayout ?? .sidebar
-        appearanceMode = prefs?.appearanceMode ?? .system
+        userScriptManager.autoDismissCookieBanners = preferencesStore.autoDismissCookieBanners
+        defaultZoom = preferencesStore.defaultZoom
+        railLayout = preferencesStore.railLayout
+        appearanceMode = preferencesStore.appearanceMode
         liquidGlassStyle = ShellGlassStyle.resolving(
             UserDefaults.standard.string(forKey: Self.liquidGlassStyleKey)
         )
@@ -3082,28 +3116,28 @@ final class AppState {
         // Frost is now a fixed material rule. Remove the temporary Glass Lab
         // value so an old experiment cannot affect a future setting.
         UserDefaults.standard.removeObject(forKey: "Atoll.backdropFrostIntensity")
-        scheduledDNDEnabled = prefs?.scheduledDNDEnabled ?? false
-        dndStartMinutes = prefs?.dndStartMinutes ?? (22 * 60)
-        dndEndMinutes = prefs?.dndEndMinutes ?? (7 * 60)
+        scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
+        dndStartMinutes = preferencesStore.dndStartMinutes
+        dndEndMinutes = preferencesStore.dndEndMinutes
 
-        appLockEnabled = prefs?.appLockEnabled ?? false
-        lockOnLaunch = prefs?.lockOnLaunch ?? true
-        lockOnSleep = prefs?.lockOnSleep ?? true
-        contentBlockingEnabled = prefs?.contentBlockingEnabledEffective ?? true
-        annoyanceBlockingEnabled = prefs?.annoyanceBlockingEnabledEffective ?? false
-        let googleFallback = prefs?.googleFaviconFallbackEnabledEffective ?? false
+        appLockEnabled = preferencesStore.appLockEnabled
+        lockOnLaunch = preferencesStore.lockOnLaunch
+        lockOnSleep = preferencesStore.lockOnSleep
+        contentBlockingEnabled = preferencesStore.contentBlockingEnabled
+        annoyanceBlockingEnabled = preferencesStore.annoyanceBlockingEnabled
+        let googleFallback = preferencesStore.googleFaviconFallbackEnabled
         Task { await FaviconFetcher.shared.setGoogleFallbackEnabled(googleFallback) }
-        autoHibernateIdleEnabled = prefs?.autoHibernateIdleEnabledEffective ?? false
-        autoHibernateIdleMinutes = prefs?.autoHibernateIdleMinutesEffective ?? 10
-        defaultCameraPolicy = prefs?.defaultCameraPolicyRaw.flatMap(MediaPermissionPolicy.init(rawValue:)) ?? .ask
-        defaultMicrophonePolicy = prefs?.defaultMicrophonePolicyRaw.flatMap(MediaPermissionPolicy.init(rawValue:)) ?? .ask
+        autoHibernateIdleEnabled = preferencesStore.autoHibernateIdleEnabled
+        autoHibernateIdleMinutes = preferencesStore.autoHibernateIdleMinutes
+        defaultCameraPolicy = preferencesStore.defaultCameraPolicy
+        defaultMicrophonePolicy = preferencesStore.defaultMicrophonePolicy
         // Start locked at launch when opted in; ContentView's lock overlay
         // prompts for Touch ID on appear.
         if appLockEnabled && lockOnLaunch {
             isLocked = true
         }
 
-        let resolvedShowBadge = prefs?.showBadgeCountInDock ?? true
+        let resolvedShowBadge = preferencesStore.showBadgeCountInDock
         Task { @MainActor in
             // Launch AppKit-facing setup is now safe (past the init runloop tick).
             // Flip the flag first so the DND `didSet`s become live from here on.
@@ -3135,30 +3169,24 @@ final class AppState {
     /// Flips the global content blocker, persists it, and rebuilds live web
     /// views so the change takes effect immediately.
     func setContentBlockingEnabled(_ enabled: Bool) {
+        guard preferencesStore.setContentBlockingEnabled(enabled) else { return }
         contentBlockingEnabled = enabled
         contentBlocker.isEnabled = enabled
-        let prefs = ensurePreferences()
-        prefs.contentBlockingEnabled = enabled
-        modelContainer.mainContext.saveOrRollback(reason: "save content-blocking toggle")
         webViewPool.reattachContentBlocker()
     }
 
     /// Opts in or out of the Google favicon fallback and persists the choice.
     /// Pushes the flag into the fetcher actor so later fetches pick it up.
     func setGoogleFaviconFallbackEnabled(_ enabled: Bool) {
-        let prefs = ensurePreferences()
-        prefs.googleFaviconFallbackEnabled = enabled
-        modelContainer.mainContext.saveOrRollback(reason: "save favicon fallback toggle")
+        guard preferencesStore.setGoogleFaviconFallbackEnabled(enabled) else { return }
         Task { await FaviconFetcher.shared.setGoogleFallbackEnabled(enabled) }
     }
 
     /// Flips annoyance hiding, persists it, and re-attaches lists to live views.
     func setAnnoyanceBlockingEnabled(_ enabled: Bool) {
+        guard preferencesStore.setAnnoyanceBlockingEnabled(enabled) else { return }
         annoyanceBlockingEnabled = enabled
         contentBlocker.annoyanceEnabled = enabled
-        let prefs = ensurePreferences()
-        prefs.annoyanceBlockingEnabled = enabled
-        modelContainer.mainContext.saveOrRollback(reason: "save annoyance-blocking toggle")
         webViewPool.reattachContentBlocker()
     }
 
@@ -3316,12 +3344,11 @@ final class AppState {
     private func restoreWindowState() {
         let context = modelContainer.mainContext
         do {
-            let prefs = try context.fetch(FetchDescriptor<AppPreferences>()).first
-
             // Apply a saved space only if it still exists. A nil/invalid saved
             // value leaves the seeded selection in place.
             let existingSpaceIDs = Set(try context.fetch(FetchDescriptor<Space>()).map(\.id))
-            if let savedSpaceID = prefs?.selectedSpaceID, existingSpaceIDs.contains(savedSpaceID) {
+            if let savedSpaceID = preferencesStore.selectedSpaceID,
+               existingSpaceIDs.contains(savedSpaceID) {
                 selectedSpaceID = savedSpaceID
             }
 
@@ -3335,7 +3362,7 @@ final class AppState {
                 return
             }
             let servicesInSpace = servicesForSpace(spaceID)
-            if let savedServiceID = prefs?.selectedServiceID,
+            if let savedServiceID = preferencesStore.selectedServiceID,
                servicesInSpace.contains(where: { $0.id == savedServiceID }) {
                 selectedServiceID = savedServiceID
             } else if selectedServiceID == nil
