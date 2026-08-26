@@ -2,12 +2,6 @@ import Foundation
 import WebKit
 import AtollCore
 
-// NOTE: The file is still named `HibernatedBadgePoller.swift` for build-inclusion
-// reasons (new .swift files aren't auto-compiled by the checked-in project; see
-// the project notes). The type it holds is `TransientBadgeFetcher` — the URLSession
-// title-fetch poller it replaced could not see unread counts, because modern web
-// apps inject those counts with JavaScript after load, not into the server HTML.
-
 /// Fetches badge counts for services that have no live `WKWebView` (everything
 /// the user isn't currently looking at, plus anything the pool has hibernated or
 /// evicted). It renders each service once in a short-lived, offscreen web view —
