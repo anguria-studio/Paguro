@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import AtollCore
 
 /// The color-scheme signal that Atoll gives to one web service.
 ///
@@ -38,132 +39,12 @@ enum ServiceAppearanceMode: String, CaseIterable {
     }
 }
 
-/// Per-service hibernation policy — when Atoll frees this service's WebContent
-/// process while it runs in the background. The service you're viewing always
-/// stays loaded, so every policy acts only while the service is not on screen.
-/// - `followGlobal`: obey the app-wide auto-hibernate setting (the prior default).
-/// - `never`: keep the service loaded (the legacy "Keep Loaded" flag).
-/// - `immediate`: hibernate a few seconds after you switch to another service.
-/// - `after`: hibernate once idle for `hibernateAfterMinutes`.
-enum HibernationPolicy: String, CaseIterable {
-    case followGlobal, never, immediate, after
-}
-
-/// Pure policy → idle-threshold math for auto-hibernation, kept free of AppState
-/// and WebKit so the truth table is unit-testable in isolation. Mirrors
-/// `MediaPermissionResolver`.
-enum HibernationResolver {
-    /// The idle sweep's backstop for `.immediate` services: short, because their
-    /// real teardown is the switch-away grace timer — this only catches one that
-    /// somehow escaped it. Also the grace period itself, kept in one place.
-    static let immediateBackstopSeconds: TimeInterval = 5
-
-    /// The idle seconds after which a service should hibernate on a sweep, or nil
-    /// if it shouldn't hibernate on this sweep at all.
-    /// - `never`: never hibernates.
-    /// - `followGlobal`: the global interval, but only while the global toggle is on.
-    /// - `after`: the service's own idle minutes.
-    /// - `immediate`: the short backstop above.
-    static func idleThreshold(
-        policy: HibernationPolicy,
-        globalEnabled: Bool,
-        globalIdleMinutes: Int,
-        afterMinutes: Int
-    ) -> TimeInterval? {
-        switch policy {
-        case .never:
-            return nil
-        case .followGlobal:
-            return globalEnabled ? TimeInterval(globalIdleMinutes * 60) : nil
-        case .after:
-            return TimeInterval(afterMinutes * 60)
-        case .immediate:
-            return immediateBackstopSeconds
-        }
-    }
-}
-
-/// Per-service camera/microphone permission. `ask` prompts once and remembers
-/// the answer (flipping to allow/deny); `allow` grants silently; `deny` blocks.
-enum MediaPermissionPolicy: String, CaseIterable {
-    case ask, allow, deny
-
+extension MediaPermissionPolicy {
     var displayName: String {
         switch self {
         case .ask: return "Ask"
         case .allow: return "Allow"
         case .deny: return "Deny"
-        }
-    }
-}
-
-/// Which capture a page requested. Mirrors `WKMediaCaptureType` without pulling
-/// WebKit into the model, so the resolution logic stays pure and unit-testable.
-enum MediaCaptureKind {
-    case camera, microphone, cameraAndMicrophone
-}
-
-/// Pure resolution of camera/microphone permission. No WebKit, no SwiftData —
-/// just the policy math, so the truth table is unit-testable in isolation.
-enum MediaPermissionResolver {
-    /// The outcome for a single capture request.
-    enum Resolution: Equatable {
-        case grant, deny, ask
-    }
-
-    /// The effective policy for one field: an explicit per-service value wins,
-    /// else the global default, else `.ask`. Resolution-time fallback (like page
-    /// zoom), so changing the global default moves every service that hasn't
-    /// pinned its own value.
-    static func effectivePolicy(serviceRaw: String?, globalRaw: String?) -> MediaPermissionPolicy {
-        if let raw = serviceRaw, let policy = MediaPermissionPolicy(rawValue: raw) { return policy }
-        if let raw = globalRaw, let policy = MediaPermissionPolicy(rawValue: raw) { return policy }
-        return .ask
-    }
-
-    /// Combines the camera and microphone policies for a capture request.
-    /// Restrictiveness order is deny > ask > allow: a combined request grants
-    /// only when both fields allow, denies if either denies, otherwise asks.
-    static func resolve(
-        _ kind: MediaCaptureKind,
-        camera: MediaPermissionPolicy,
-        microphone: MediaPermissionPolicy
-    ) -> Resolution {
-        switch kind {
-        case .camera: return resolution(for: camera)
-        case .microphone: return resolution(for: microphone)
-        case .cameraAndMicrophone:
-            if camera == .deny || microphone == .deny { return .deny }
-            if camera == .ask || microphone == .ask { return .ask }
-            return .grant
-        }
-    }
-
-    /// The device(s) a prompt is actually deciding: those the request involves
-    /// AND whose policy is currently `.ask`. Gating by the request kind (not just
-    /// the `.ask` state) is what stops a single-device prompt from persisting its
-    /// answer to the other, un-asked device — and lets the prompt copy name only
-    /// what's in question. Pure, so it's unit-testable.
-    static func askedFields(
-        _ kind: MediaCaptureKind,
-        camera: MediaPermissionPolicy,
-        microphone: MediaPermissionPolicy
-    ) -> (camera: Bool, microphone: Bool) {
-        let cameraInvolved: Bool
-        let microphoneInvolved: Bool
-        switch kind {
-        case .camera: (cameraInvolved, microphoneInvolved) = (true, false)
-        case .microphone: (cameraInvolved, microphoneInvolved) = (false, true)
-        case .cameraAndMicrophone: (cameraInvolved, microphoneInvolved) = (true, true)
-        }
-        return (cameraInvolved && camera == .ask, microphoneInvolved && microphone == .ask)
-    }
-
-    private static func resolution(for policy: MediaPermissionPolicy) -> Resolution {
-        switch policy {
-        case .allow: return .grant
-        case .deny: return .deny
-        case .ask: return .ask
         }
     }
 }

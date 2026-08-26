@@ -641,7 +641,7 @@ final class AppState {
         // whose media host differs from its home host). Decide per the
         // foreign-origin rules.
         let originHost = frame.securityOrigin.host
-        switch Self.foreignCaptureOutcome(
+        switch MediaPermissionResolver.foreignCaptureOutcome(
             isMainFrame: frame.isMainFrame,
             originHost: originHost,
             isFirstParty: isFirstPartyService(service),
@@ -833,34 +833,6 @@ final class AppState {
         // service from leaking its grant to another site there. First-party
         // cross-domain trust is handled on the foreign-origin path.
         return WebRoutingPolicy.belongsToService(frameHost, serviceHost: serviceHost)
-    }
-
-    /// What to do with a capture request whose origin is NOT the service's own site
-    /// — a foreign origin inside the service's own web view. Pure, so it's
-    /// unit-testable without a live `WKFrameInfo`. `resolution` is already known to
-    /// be `.grant` or `.ask` here (an explicit `.deny` is short-circuited earlier).
-    /// - A third-party SUBFRAME (can't meaningfully consent, the spoofiest case) or
-    ///   an empty origin fails closed.
-    /// - A first-party vendor pinned to Allow grants silently. This is the ONE
-    ///   cross-domain silent grant — the seamless-call case the flag exists for —
-    ///   and its accepted risk: the vendor's own main frame, navigated to a foreign
-    ///   origin, gets the grant.
-    /// - Everything else prompts NAMING THE REAL ORIGIN and does not persist: a
-    ///   non-first-party service, or a first-party vendor still on Ask. Naming the
-    ///   real origin (not the service) stops a hijacked main frame from borrowing
-    ///   the vendor's name; not persisting keeps a one-off foreign answer from
-    ///   pinning a blanket service Allow.
-    enum ForeignCaptureOutcome: Equatable { case grantSilently, promptNamingOrigin, deny }
-
-    static func foreignCaptureOutcome(
-        isMainFrame: Bool,
-        originHost: String,
-        isFirstParty: Bool,
-        resolution: MediaPermissionResolver.Resolution
-    ) -> ForeignCaptureOutcome {
-        guard isMainFrame, !originHost.isEmpty else { return .deny }
-        if isFirstParty, resolution == .grant { return .grantSilently }
-        return .promptNamingOrigin
     }
 
     /// Whether `service` is a curated first-party vendor: the catalog entry carries

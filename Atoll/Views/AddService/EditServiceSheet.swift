@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AtollCore
 
 /// Edits an existing service: rename, change its URL, toggle keep-loaded
 /// (never hibernate), and clear its session (log out). Validation is shared

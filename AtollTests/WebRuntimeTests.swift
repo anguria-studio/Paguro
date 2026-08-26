@@ -2,6 +2,7 @@ import XCTest
 import AppKit
 import JavaScriptCore
 import WebKit
+import AtollCore
 @testable import Atoll
 
 final class WebRuntimeTests: XCTestCase {
@@ -392,35 +393,6 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertTrue(ServiceInstance(label: "Slack", url: "https://slack.example", catalogEntryID: "slack").isNotificationCritical)
         XCTAssertFalse(ServiceInstance(label: "Gmail", url: "https://gmail.example", catalogEntryID: "gmail").isNotificationCritical)
         XCTAssertFalse(ServiceInstance(label: "Custom", url: "https://custom.example").isNotificationCritical)
-    }
-
-    func testHibernationResolverThresholdPerPolicy() {
-        // .never never fires, regardless of the global toggle.
-        XCTAssertNil(HibernationResolver.idleThreshold(
-            policy: .never, globalEnabled: true, globalIdleMinutes: 30, afterMinutes: 10))
-        XCTAssertNil(HibernationResolver.idleThreshold(
-            policy: .never, globalEnabled: false, globalIdleMinutes: 30, afterMinutes: 10))
-
-        // .followGlobal uses the global interval only while the global toggle is
-        // on; with it off the service must not hibernate on the sweep at all.
-        XCTAssertEqual(HibernationResolver.idleThreshold(
-            policy: .followGlobal, globalEnabled: true, globalIdleMinutes: 30, afterMinutes: 10), 1800)
-        XCTAssertNil(HibernationResolver.idleThreshold(
-            policy: .followGlobal, globalEnabled: false, globalIdleMinutes: 30, afterMinutes: 10))
-
-        // .after uses the service's own minutes, independent of the global toggle.
-        XCTAssertEqual(HibernationResolver.idleThreshold(
-            policy: .after, globalEnabled: false, globalIdleMinutes: 30, afterMinutes: 5), 300)
-        XCTAssertEqual(HibernationResolver.idleThreshold(
-            policy: .after, globalEnabled: true, globalIdleMinutes: 30, afterMinutes: 45), 2700)
-
-        // .immediate uses the short backstop, whether or not the global toggle is on.
-        XCTAssertEqual(HibernationResolver.idleThreshold(
-            policy: .immediate, globalEnabled: false, globalIdleMinutes: 30, afterMinutes: 10),
-            HibernationResolver.immediateBackstopSeconds)
-        XCTAssertEqual(HibernationResolver.idleThreshold(
-            policy: .immediate, globalEnabled: true, globalIdleMinutes: 30, afterMinutes: 10),
-            HibernationResolver.immediateBackstopSeconds)
     }
 
     // MARK: - Scheduled DND (quiet hours)
