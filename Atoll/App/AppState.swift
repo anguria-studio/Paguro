@@ -1746,18 +1746,7 @@ final class AppState {
 
         if customIconData == nil {
             Task { @MainActor [weak self] in
-                guard let self,
-                      let data = await FaviconFetcher.shared.fetchFavicon(for: url),
-                      let service = self.currentServiceInstance(id: serviceID)
-                else { return }
-                service.fetchedIconData = data
-                service.faviconFetchedAt = Date()
-                do {
-                    try self.modelContainer.mainContext.save()
-                } catch {
-                    self.modelContainer.mainContext.rollback()
-                    AppLogger.dataStore.error("Failed to save fetched favicon; rolled back: \(error.localizedDescription)")
-                }
+                await self?.refreshFetchedIcon(for: serviceID)
             }
         }
 
@@ -1887,7 +1876,6 @@ final class AppState {
     func resetIcon(for serviceID: UUID) {
         guard let service = currentServiceInstance(id: serviceID) else { return }
         let shouldFetch = service.fetchedIconData == nil
-        let serviceURL = service.url
         let context = modelContainer.mainContext
         do {
             guard try Self.setCustomIconData(nil, for: serviceID, in: context) else { return }
@@ -1899,18 +1887,54 @@ final class AppState {
         guard shouldFetch else { return }
 
         Task { @MainActor [weak self] in
-            guard let self,
-                  let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL),
-                  let service = self.currentServiceInstance(id: serviceID)
-            else { return }
+            await self?.refreshFetchedIcon(for: serviceID)
+        }
+    }
+
+    /// Records one automatic favicon attempt. A failed refresh keeps an older
+    /// icon but still records the attempt time so launch does not retry on every
+    /// run.
+    static func recordFetchedIconAttempt(
+        _ data: Data?,
+        at date: Date,
+        for serviceID: UUID,
+        in context: ModelContext
+    ) throws -> Bool {
+        var descriptor = FetchDescriptor<ServiceInstance>(
+            predicate: #Predicate { $0.id == serviceID }
+        )
+        descriptor.fetchLimit = 1
+        guard let service = try context.fetch(descriptor).first,
+              service.customIconData == nil
+        else { return false }
+        if let data {
             service.fetchedIconData = data
-            service.faviconFetchedAt = Date()
-            do {
-                try self.modelContainer.mainContext.save()
-            } catch {
-                self.modelContainer.mainContext.rollback()
-                AppLogger.dataStore.error("Failed to cache fetched icon; rolled back: \(error.localizedDescription)")
-            }
+        }
+        service.faviconFetchedAt = date
+        try context.save()
+        return true
+    }
+
+    /// Refreshes the automatic icon for one saved service. The service is
+    /// fetched again after the network wait because it can be deleted or gain a
+    /// custom icon while the request is in flight.
+    func refreshFetchedIcon(for serviceID: UUID) async {
+        guard let service = currentServiceInstance(id: serviceID),
+              service.customIconData == nil
+        else { return }
+        let serviceURL = service.url
+        let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL)
+        let context = modelContainer.mainContext
+        do {
+            _ = try Self.recordFetchedIconAttempt(
+                data,
+                at: Date(),
+                for: serviceID,
+                in: context
+            )
+        } catch {
+            context.rollback()
+            AppLogger.dataStore.error("Failed to save fetched favicon; rolled back: \(error.localizedDescription)")
         }
     }
 
@@ -3419,32 +3443,16 @@ final class AppState {
         guard !needsFetch.isEmpty else { return }
         AppLogger.favicon.info("Fetching favicons for \(needsFetch.count) service(s)")
 
-        // Capture IDs before the Task — model objects may be deleted during await
-        let fetchEntries = needsFetch.map { (id: $0.id, url: $0.url, hadIcon: $0.fetchedIconData != nil) }
+        // Capture IDs before the Task. A service can be deleted while a fetch
+        // waits on the network.
+        let serviceIDs = needsFetch.map(\.id)
 
-        Task {
-            for entry in fetchEntries {
-                let data = await FaviconFetcher.shared.fetchFavicon(for: entry.url)
-                // Re-fetch the model — it may have been deleted while we were awaiting
-                let entryID = entry.id
-                let descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == entryID })
-                guard let service = try? context.fetch(descriptor).first else { continue }
-
-                if let data {
-                    service.fetchedIconData = data
-                }
-                // Stamp on every attempt, success or failure, so a service whose
-                // favicon can't be fetched backs off instead of retrying every
-                // launch (a nil icon with a recent timestamp is "recently tried").
-                service.faviconFetchedAt = Date()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for serviceID in serviceIDs {
+                await self.refreshFetchedIcon(for: serviceID)
             }
-            do {
-                try context.save()
-                AppLogger.favicon.info("Favicon refresh complete")
-            } catch {
-                AppLogger.dataStore.error("Failed to save refreshed favicons: \(error.localizedDescription)")
-                context.rollback()
-            }
+            AppLogger.favicon.info("Favicon refresh complete")
         }
     }
 

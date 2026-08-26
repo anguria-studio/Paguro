@@ -195,4 +195,76 @@ final class AppStateMutationTests: XCTestCase {
         XCTAssertTrue(try AppState.setCustomIconData(nil, for: service.id, in: context))
         XCTAssertNil(service.customIconData)
     }
+
+    @MainActor
+    func testFetchedIconAttemptReplacesIconAndRecordsDate() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let service = ServiceInstance(
+            label: "Mail",
+            url: "https://mail.example",
+            fetchedIconData: Data([0x00])
+        )
+        context.insert(service)
+        try context.save()
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let icon = Data([0x01, 0x02])
+
+        XCTAssertTrue(try AppState.recordFetchedIconAttempt(
+            icon,
+            at: date,
+            for: service.id,
+            in: context
+        ))
+        XCTAssertEqual(service.fetchedIconData, icon)
+        XCTAssertEqual(service.faviconFetchedAt, date)
+    }
+
+    @MainActor
+    func testFailedFetchedIconAttemptKeepsOldIconAndBacksOff() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let oldIcon = Data([0x01])
+        let service = ServiceInstance(
+            label: "Mail",
+            url: "https://mail.example",
+            fetchedIconData: oldIcon
+        )
+        context.insert(service)
+        try context.save()
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+
+        XCTAssertTrue(try AppState.recordFetchedIconAttempt(
+            nil,
+            at: date,
+            for: service.id,
+            in: context
+        ))
+        XCTAssertEqual(service.fetchedIconData, oldIcon)
+        XCTAssertEqual(service.faviconFetchedAt, date)
+    }
+
+    @MainActor
+    func testFetchedIconAttemptDoesNotOverrideCustomIcon() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let customIcon = Data([0x09])
+        let service = ServiceInstance(
+            label: "Mail",
+            url: "https://mail.example",
+            customIconData: customIcon
+        )
+        context.insert(service)
+        try context.save()
+
+        XCTAssertFalse(try AppState.recordFetchedIconAttempt(
+            Data([0x01]),
+            at: Date(),
+            for: service.id,
+            in: context
+        ))
+        XCTAssertEqual(service.customIconData, customIcon)
+        XCTAssertNil(service.fetchedIconData)
+        XCTAssertNil(service.faviconFetchedAt)
+    }
 }
