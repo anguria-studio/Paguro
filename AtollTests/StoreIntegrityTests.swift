@@ -71,7 +71,7 @@ final class StoreIntegrityTests: XCTestCase {
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = container.mainContext
 
-        // reapOrphanedServices(): fetch all services, find any with no spaceLinks.
+        // WebsiteDataReclaimer must find no service without a live link.
         let services = try context.fetch(FetchDescriptor<ServiceInstance>())
         XCTAssertEqual(services.count, 2, "Only Personal's two services should remain")
         let orphans = services.filter { $0.spaceLinks.isEmpty }

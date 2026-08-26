@@ -64,6 +64,7 @@ The main services and startup adapters are:
 - `PreferencesStore` for the single loaded preferences row and typed commits.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
+- `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
 - `NotificationManager` for notification polling and macOS delivery.

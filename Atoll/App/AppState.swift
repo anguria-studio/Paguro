@@ -11,6 +11,7 @@ final class AppState {
     let preferencesStore: PreferencesStore
     let mediaPermissions: MediaPermissionCoordinator
     let storeRecovery: StoreRecoveryCoordinator
+    let websiteDataReclaimer: WebsiteDataReclaimer
     let webViewPool: WebViewPool
     let contentBlocker: ContentBlockerManager
     let dataStoreManager: DataStoreManager
@@ -110,12 +111,6 @@ final class AppState {
     /// `NSWorkspace.shared.notificationCenter`.
     @ObservationIgnored private var defaultCenterTokens: [NSObjectProtocol] = []
 
-    /// Data-store identifiers a `cleanUpOrphanedDataStores` invocation is
-    /// currently processing, so overlapping calls don't both run the backoff loop
-    /// and issue `WKWebsiteDataStore.remove(...)` for the same store at once.
-    /// Main-actor only.
-    @ObservationIgnored private var dataStoresBeingRemoved: Set<UUID> = []
-
     /// Scheduled "quiet hours" Do Not Disturb, loaded from `PreferencesStore`.
     /// `doNotDisturb` above stays the manual toggle; the effective DND that
     /// gates notification delivery is `doNotDisturb || scheduledDNDActive`.
@@ -214,11 +209,17 @@ final class AppState {
             preferencesStore: preferencesStore,
             webViewPool: webViewPool
         )
-        self.storeRecovery = StoreRecoveryCoordinator(
+        let storeRecovery = StoreRecoveryCoordinator(
             context: loadedContainer.mainContext,
             storeURL: config.url,
             outcome: outcome,
             wasDamagedAtLaunch: storeWasDamagedAtLaunch
+        )
+        self.storeRecovery = storeRecovery
+        self.websiteDataReclaimer = WebsiteDataReclaimer(
+            context: loadedContainer.mainContext,
+            dataStoreManager: dataStoreManager,
+            isSafeToReclaim: storeRecovery.isSafeToReclaim
         )
 
         self.dataStoreManager = dataStoreManager
@@ -285,15 +286,15 @@ final class AppState {
         )
         let didSeedDefaults = seedDefaultDataIfNeeded()
         backfillPasskeyNoticeIfNeeded(freshInstall: didSeedDefaults)
-        reapOrphanedServices()
+        websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
         let didUpdate = Self.recordLaunchVersionAndCheckUpdate()
         fetchMissingAndStaleFavicons(force: didUpdate)
         fetchCatalogIcons(force: didUpdate)
         preloadActiveSpaceServices()
         startTransientBadgeFetcher()
-        reclaimUnreferencedDataStores()
-        cleanUpOrphanedDataStores()
+        websiteDataReclaimer.reclaimUnreferencedDataStores()
+        websiteDataReclaimer.cleanUpOrphanedDataStores()
 
         // Evaluate before recording. Recording first could hide the shortfall
         // that produces a recovery offer.
@@ -317,6 +318,7 @@ final class AppState {
         pendingImmediateHibernation.removeAll()
 
         mediaPermissions.shutdown()
+        websiteDataReclaimer.shutdown()
         notificationManager.stopAllPolling()
         transientBadgeFetcher.pause()
         networkMonitor.stop()
@@ -1361,8 +1363,8 @@ final class AppState {
             selectedServiceID = nil
         }
         webViewPool.removeWebView(for: outcome.serviceID)
-        markDataStoreOrphaned(outcome.dataStoreIdentifier)
-        cleanUpOrphanedDataStores()
+        websiteDataReclaimer.markOrphaned(outcome.dataStoreIdentifier)
+        websiteDataReclaimer.cleanUpOrphanedDataStores()
     }
 
     func setServiceMuted(_ muted: Bool, for serviceID: UUID) {
@@ -1472,14 +1474,6 @@ final class AppState {
         }
     }
 
-    /// Tombstone list of `WKWebsiteDataStore` identifiers for services the
-    /// user deleted but whose on-disk data hasn't been removed yet. Tracked
-    /// in UserDefaults rather than via `WKWebsiteDataStore.allDataStoreIdentifiers`
-    /// — that API has been observed to crash on macOS 26 when WebKit
-    /// hands the returned `Vector<UUID>` to the Swift bridge (`BridgeObjectBox`
-    /// initializeWithTake EXC_BAD_ACCESS during preload).
-    private static let orphanedDataStoresKey = "atoll.orphanedDataStoreIdentifiers"
-
     /// Returns every link whose space and service still exist.
     ///
     /// A fetch is the authoritative view of membership. It includes unsaved
@@ -1562,8 +1556,8 @@ final class AppState {
         }
         guard let outcome, let dataStoreIdentifier = outcome.orphanedDataStoreIdentifier else { return }
         webViewPool.removeWebView(for: outcome.serviceID)
-        markDataStoreOrphaned(dataStoreIdentifier)
-        cleanUpOrphanedDataStores()
+        websiteDataReclaimer.markOrphaned(dataStoreIdentifier)
+        websiteDataReclaimer.cleanUpOrphanedDataStores()
     }
 
     /// Deletes a space and reclaims any services that lived *only* in it.
@@ -1623,7 +1617,9 @@ final class AppState {
 
         // Save committed — now the destructive cleanup is safe.
         for serviceID in reclaimedServiceIDs { webViewPool.removeWebView(for: serviceID) }
-        for dataStoreID in orphanedDataStoreIDs { markDataStoreOrphaned(dataStoreID) }
+        for dataStoreID in orphanedDataStoreIDs {
+            websiteDataReclaimer.markOrphaned(dataStoreID)
+        }
 
         // Fix up selection: clear a selected service that was just reclaimed,
         // and move off the deleted space to the first remaining one.
@@ -1638,218 +1634,7 @@ final class AppState {
             selectedServiceID = nil
         }
 
-        cleanUpOrphanedDataStores()
-    }
-
-    /// Safety net for crash-mid-delete (or stores written by a build that
-    /// predates `deleteSpace`'s reclaim logic): deletes any `ServiceInstance`
-    /// that no longer belongs to any space and schedules its data store for
-    /// removal. Runs once at launch, before preloading.
-    private func reapOrphanedServices() {
-        // A store that arrived damaged, was restored, or isn't the real store at
-        // all can present a perfectly healthy service as linkless. Deleting it
-        // here would wipe its cookies for good. Use the recovery coordinator's
-        // launch-safety result.
-        guard storeRecovery.isSafeToReclaim else {
-            AppLogger.dataStore.info("Skipping the orphan reap: the store was damaged, restored, or is the in-memory fallback")
-            return
-        }
-
-        let context = modelContainer.mainContext
-        let services: [ServiceInstance]
-        do {
-            services = try context.fetch(FetchDescriptor<ServiceInstance>())
-        } catch {
-            AppLogger.dataStore.error("Failed to fetch services for orphan reaping: \(error.localizedDescription)")
-            return
-        }
-
-        let orphans = services.filter { $0.spaceLinks.isEmpty }
-        guard !orphans.isEmpty else { return }
-
-        // Capture identifiers before deleting; tombstoning + removing the on-disk
-        // stores is irreversible, so defer it until the delete actually commits
-        // (matches deleteSpace). A failed save rolls back so nothing is wiped.
-        let orphanedIDs = orphans.map(\.dataStoreIdentifier)
-        for service in orphans {
-            context.delete(service)
-        }
-        guard context.saveOrRollback(reason: "reap orphaned services") else { return }
-        AppLogger.dataStore.info("Reaped \(orphans.count) orphaned service(s) at launch")
-        for id in orphanedIDs { markDataStoreOrphaned(id) }
-        cleanUpOrphanedDataStores()
-    }
-
-    /// Mark a per-service data store identifier as orphaned. Called from
-    /// the delete paths; the actual `WKWebsiteDataStore.remove(...)` is
-    /// deferred to `cleanUpOrphanedDataStores()` so the live WKWebView has
-    /// time to tear down first.
-    func markDataStoreOrphaned(_ identifier: UUID) {
-        var orphans = Self.loadOrphanedIdentifiers()
-        orphans.insert(identifier)
-        Self.saveOrphanedIdentifiers(orphans)
-    }
-
-    /// Removes any data store identifiers previously marked as orphaned.
-    /// Runs at launch (deferred) and after the user deletes a service.
-    func cleanUpOrphanedDataStores() {
-        // Drop any identifier a service currently claims, and forget it for
-        // good. The tombstone list lives in UserDefaults and the services live
-        // in the store, so the two can disagree: restoring a backup rolls the
-        // store back past a deletion and brings the service row with it, while
-        // the tombstone written when it was deleted stays behind. Without this
-        // reconcile, the next launch wipes the cookies of a service the user can
-        // see and is using. Nothing legitimate is lost — a tombstone whose
-        // service exists again is, by definition, wrong.
-        let reconciled = Self.reconciledTombstones(
-            tombstoned: Self.loadOrphanedIdentifiers(),
-            claimed: liveDataStoreIdentifiers()
-        )
-        let tombstoned = reconciled.keep
-        if !reconciled.dropped.isEmpty {
-            AppLogger.dataStore.info("Dropping \(reconciled.dropped.count) tombstone(s) for data store(s) a live service still claims")
-            Self.saveOrphanedIdentifiers(tombstoned)
-        }
-
-        // Exclude identifiers a prior invocation is already processing, so two
-        // overlapping calls (e.g. two deletes soon after launch) don't both run
-        // the backoff loop and call `remove(...)` on the same store concurrently.
-        let orphans = tombstoned.subtracting(dataStoresBeingRemoved)
-        guard !orphans.isEmpty else { return }
-        dataStoresBeingRemoved.formUnion(orphans)
-
-        // Drop cached handles so a live instance can't keep the on-disk store
-        // alive while we try to remove it.
-        for identifier in orphans {
-            dataStoreManager.evict(identifier: identifier)
-        }
-
-        // Must stay on the main actor. WKWebsiteDataStore's internal
-        // `allDataStores` registry asserts main-thread access, so calling
-        // `remove(forIdentifier:)` from a background thread traps inside WebKit
-        // (EXC_BREAKPOINT). Both `Task.sleep` and the async `remove` suspend
-        // rather than block, so running here doesn't stall the UI.
-        Task { @MainActor in
-            // Removing a store while its WKWebView is still retained traps inside
-            // WebKit, so removal must wait for the view to drop. The pool has
-            // already released its own reference by the time this runs; the last
-            // lingering one is SwiftUI's view hierarchy, which the pool can't see
-            // — so we can't cheaply gate on "pool has no live view for this id".
-            // Rather than trust one fixed delay (too short on a slow machine →
-            // trap; too long always → sluggish), wait a conservative beat, then
-            // retry with backoff, re-attempting only the stores WebKit still
-            // reports as in use. Anything that never succeeds stays in the
-            // tombstone list and is retried at the next launch, so no store leaks.
-            var removed: Set<UUID> = []
-            let backoff: [Duration] = [.seconds(2), .seconds(3), .seconds(5)]
-            for delay in backoff {
-                try? await Task.sleep(for: delay)
-                let pending = orphans.subtracting(removed)
-                guard !pending.isEmpty else { break }
-                for identifier in pending {
-                    do {
-                        try await WKWebsiteDataStore.remove(forIdentifier: identifier)
-                        removed.insert(identifier)
-                        AppLogger.dataStore.info("Removed orphaned data store \(identifier)")
-                    } catch {
-                        AppLogger.dataStore.warning("Data store \(identifier) not yet removable, will retry: \(error.localizedDescription)")
-                    }
-                }
-            }
-
-            // Release the in-flight claim so a later delete of the same store
-            // (should one somehow re-orphan) isn't blocked.
-            dataStoresBeingRemoved.subtract(orphans)
-
-            // Read-modify-write rather than overwriting with a stale snapshot:
-            // another delete may have appended new orphans while we slept, and
-            // blindly saving `orphans − removed` would drop them, leaking those
-            // stores permanently.
-            let current = Self.loadOrphanedIdentifiers()
-            Self.saveOrphanedIdentifiers(current.subtracting(removed))
-        }
-    }
-
-    /// Every data store identifier a service currently claims. Empty when the
-    /// store can't be read — callers must treat that as "unknown", never as
-    /// "nothing is claimed".
-    private func liveDataStoreIdentifiers() -> Set<UUID> {
-        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
-        return Set(services.map(\.dataStoreIdentifier))
-    }
-
-    /// Where WebKit keeps the identifier-scoped stores made by
-    /// `WKWebsiteDataStore(forIdentifier:)`, for a non-sandboxed app.
-    ///
-    /// Read by enumeration rather than through
-    /// `WKWebsiteDataStore.allDataStoreIdentifiers`, which has been observed to
-    /// crash on macOS 26 (see `orphanedDataStoresKey`). Only the *names* come
-    /// from the filesystem; removal still goes through the supported
-    /// `remove(forIdentifier:)`, so nothing here deletes a directory by hand.
-    nonisolated static func websiteDataStoreDirectory(bundleID: String?) -> URL? {
-        guard let bundleID, !bundleID.isEmpty else { return nil }
-        return URL.libraryDirectory
-            .appending(path: "WebKit")
-            .appending(path: bundleID)
-            .appending(path: "WebsiteDataStore")
-    }
-
-    /// The on-disk stores no service claims. Pure, so the rule is testable
-    /// without WebKit or a store.
-    ///
-    /// `claimed` being empty returns nothing rather than everything: an empty
-    /// claim set means the store could not be read, and answering "then all of
-    /// them are garbage" would wipe every login the user has.
-    nonisolated static func unreferencedDataStoreIdentifiers(
-        onDisk: Set<UUID>,
-        claimed: Set<UUID>
-    ) -> Set<UUID> {
-        guard !claimed.isEmpty else { return [] }
-        return onDisk.subtracting(claimed)
-    }
-
-    /// Tombstones every on-disk data store no service points at, so the existing
-    /// removal path reclaims it.
-    ///
-    /// These accumulate whenever a service row disappears without going through
-    /// a delete — a store lost and reseeded, or rolled back to a backup taken
-    /// before the service existed. The replacement service gets a fresh
-    /// identifier and a fresh empty store, so the user is logged out while the
-    /// old store keeps their cookies on disk indefinitely. Nothing reclaimed
-    /// them, because nothing ever tombstoned them.
-    ///
-    /// Gated on the recovery coordinator for the same reason as the orphan reap, and
-    /// this one is the more dangerous of the two: on a launch where the store
-    /// came up empty or seeded, every real store would read as unreferenced.
-    private func reclaimUnreferencedDataStores() {
-        guard storeRecovery.isSafeToReclaim else { return }
-        guard let dir = Self.websiteDataStoreDirectory(bundleID: Bundle.main.bundleIdentifier),
-              let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
-
-        let onDisk = Set(names.compactMap(UUID.init(uuidString:)))
-        let unreferenced = Self.unreferencedDataStoreIdentifiers(
-            onDisk: onDisk,
-            claimed: liveDataStoreIdentifiers()
-        )
-        guard !unreferenced.isEmpty else { return }
-
-        AppLogger.dataStore.info("Reclaiming \(unreferenced.count) website data store(s) no service points at")
-        for identifier in unreferenced { markDataStoreOrphaned(identifier) }
-    }
-
-    private static func loadOrphanedIdentifiers() -> Set<UUID> {
-        guard let raw = UserDefaults.standard.array(forKey: orphanedDataStoresKey) as? [String] else {
-            return []
-        }
-        return Set(raw.compactMap(UUID.init(uuidString:)))
-    }
-
-    private static func saveOrphanedIdentifiers(_ identifiers: Set<UUID>) {
-        if identifiers.isEmpty {
-            UserDefaults.standard.removeObject(forKey: orphanedDataStoresKey)
-        } else {
-            UserDefaults.standard.set(identifiers.map(\.uuidString), forKey: orphanedDataStoresKey)
-        }
+        websiteDataReclaimer.cleanUpOrphanedDataStores()
     }
 
     /// Returns services for a space, safely skipping any links with dangling relationships
@@ -1959,17 +1744,6 @@ final class AppState {
             .sorted { $0.id.uuidString < $1.id.uuidString }
             .prefix(limit)
             .map { $0 }
-    }
-
-    /// Which tombstones survive a reconcile against the services that exist, and
-    /// which are dropped as stale. Pure, so the rule that protects a live
-    /// service's cookies is testable without UserDefaults or a store.
-    nonisolated static func reconciledTombstones(
-        tombstoned: Set<UUID>,
-        claimed: Set<UUID>
-    ) -> (keep: Set<UUID>, dropped: Set<UUID>) {
-        let dropped = tombstoned.intersection(claimed)
-        return (tombstoned.subtracting(dropped), dropped)
     }
 
     /// How many chat services outside the active space are kept live. Held well

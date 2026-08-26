@@ -30,5 +30,6 @@ final class DataStoreManager {
     }
 
     // Do not remove a data store while a web view uses it. WebKit can crash.
-    // AppState first marks the store as unused. It removes the store later.
+    // WebsiteDataReclaimer first marks the store as unused. It removes the
+    // store later, after the related web view has been released.
 }

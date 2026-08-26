@@ -140,10 +140,15 @@ WebKit can crash during that operation.
 
 The user can remove one service account.
 Atoll first releases each related web view.
-It then removes the persistent data store.
+`WebsiteDataReclaimer` then records a durable tombstone, releases the cached
+data-store handle, and retries removal through the public WebKit API.
 
 The removal path must survive an interrupted app run.
-It must not remove another service account data.
+It must not remove another service account's data.
+Before removal, the reclaimer drops a tombstone when a live service claims the
+identifier. It scans for unclaimed stores only after a healthy store launch.
+It cancels delayed work during application shutdown. If shutdown cancels the
+removal or WebKit rejects every attempt, the tombstone remains for the next launch.
 
 ## Compatibility matrix
 

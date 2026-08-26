@@ -42,56 +42,6 @@ final class SessionRuntimeTests: XCTestCase {
         XCTAssertEqual(first.map(\.id), shuffled.map(\.id), "the same services must win the cap regardless of fetch order")
     }
 
-    // MARK: - Protecting a live service's cookies
-
-    /// The tombstone list lives in UserDefaults and the services live in the
-    /// store, so restoring a backup can bring back a service whose data store is
-    /// still tombstoned from when it was deleted. Wiping it would log the user
-    /// out of a service they can see. The stale tombstone must be dropped.
-    func testTombstoneForALiveServiceIsDroppedNotHonoured() {
-        let live = UUID()
-        let genuinelyDeleted = UUID()
-
-        let result = AppState.reconciledTombstones(
-            tombstoned: [live, genuinelyDeleted],
-            claimed: [live, UUID()]
-        )
-        XCTAssertEqual(result.dropped, [live], "a tombstone whose service exists again is wrong and must be dropped")
-        XCTAssertEqual(result.keep, [genuinelyDeleted], "a real orphan must still be reclaimed")
-    }
-
-    /// An unreadable store yields no claims. Treating that as "nothing is
-    /// claimed" would mark every store on disk as garbage and wipe every login
-    /// the user has, so it must reclaim nothing at all.
-    func testUnreferencedStoresReclaimsNothingWhenTheStoreCannotBeRead() {
-        let onDisk: Set<UUID> = [UUID(), UUID(), UUID()]
-        XCTAssertEqual(
-            AppState.unreferencedDataStoreIdentifiers(onDisk: onDisk, claimed: []), [],
-            "an empty claim set means unknown, never 'all of them are garbage'"
-        )
-    }
-
-    /// The leak this closes: a store no service points at, left behind when a
-    /// service row vanished without going through a delete.
-    func testUnreferencedStoresFindsTheOnesNoServiceClaims() {
-        let claimedA = UUID(), claimedB = UUID(), stranded = UUID()
-        XCTAssertEqual(
-            AppState.unreferencedDataStoreIdentifiers(
-                onDisk: [claimedA, claimedB, stranded],
-                claimed: [claimedA, claimedB]
-            ),
-            [stranded]
-        )
-    }
-
-    func testWebsiteDataStoreDirectoryIsScopedToTheBundle() {
-        let dir = AppState.websiteDataStoreDirectory(bundleID: "com.example.App")
-        XCTAssertEqual(dir?.lastPathComponent, "WebsiteDataStore")
-        XCTAssertEqual(dir?.deletingLastPathComponent().lastPathComponent, "com.example.App")
-        XCTAssertNil(AppState.websiteDataStoreDirectory(bundleID: nil))
-        XCTAssertNil(AppState.websiteDataStoreDirectory(bundleID: ""))
-    }
-
     /// The signal that gates both destructive reclaim paths. It has to be read
     /// from the raw file before the open path repairs the damage away.
     @MainActor
