@@ -45,6 +45,25 @@ Do not add a private selector to make one service pass.
 Use an external sign-in route when a public route exists.
 Otherwise mark the service as limited.
 
+## User agent
+
+Every service view uses the desktop Safari value from `UserAgentProvider` when
+the service has no stored override. This avoids an app-specific token and lets
+services provide the same web app that they provide to Safari.
+
+A catalog entry can supply a service-specific override when Atoll creates the
+service. The Mobile view setting stores Atoll's Mobile Safari value as the
+override. Turning Mobile view off clears that value and restores the desktop
+Safari default. Changing this setting reloads a live view. A view created after
+hibernation reads the current stored value.
+
+Temporary badge views use the same service override or desktop default. Their
+requests must match the service session that they inspect.
+
+Before a release, update the Safari version token to a current shipping major.
+Update the Mobile Safari tokens at the same time. Keep Safari's desktop
+platform token unchanged, including on Apple silicon.
+
 ## Web-view pool
 
 The pool owns each live `WKWebView` and coordinator.
