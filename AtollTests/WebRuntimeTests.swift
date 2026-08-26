@@ -432,41 +432,6 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertFalse(ServiceInstance(label: "X", url: "https://x.test", forceDarkMode: false).isForceDarkModeEnabled)
     }
 
-    // MARK: - Badge sweep sign-in walls (AuthWallResolver)
-
-    func testAuthWallResolverFlagsOffHostFetchWithNoCount() {
-        // A session needing interactive sign-in gets redirected to the identity
-        // provider and comes back empty. Retrying can't fix it — a transient web
-        // view can't sign anyone in — but it does make the provider push another
-        // approval request at the user, every sweep.
-        XCTAssertTrue(AuthWallResolver.looksLikeSignInWall(
-            requestedHost: "outlook.cloud.microsoft",
-            landedHost: "login.microsoftonline.com",
-            badge: 0))
-    }
-
-    func testAuthWallResolverLeavesHealthyFetchesAlone() {
-        // Same host, no count: an authenticated inbox that is simply empty.
-        XCTAssertFalse(AuthWallResolver.looksLikeSignInWall(
-            requestedHost: "outlook.cloud.microsoft",
-            landedHost: "outlook.cloud.microsoft",
-            badge: 0))
-        // Redirected but still produced a count, so the session is fine.
-        XCTAssertFalse(AuthWallResolver.looksLikeSignInWall(
-            requestedHost: "outlook.cloud.microsoft",
-            landedHost: "outlook.office.com",
-            badge: 3))
-    }
-
-    func testAuthWallResolverTreatsMissingHostAsUnknown() {
-        // A load that never resolved a host tells us nothing, and parking on a
-        // guess would stop that badge updating until the user opens the service.
-        XCTAssertFalse(AuthWallResolver.looksLikeSignInWall(
-            requestedHost: "outlook.cloud.microsoft", landedHost: nil, badge: 0))
-        XCTAssertFalse(AuthWallResolver.looksLikeSignInWall(
-            requestedHost: nil, landedHost: "login.microsoftonline.com", badge: 0))
-    }
-
     // MARK: - Compatibility fixture boundary
 
     func testCompatibilityFixtureNeedsItsExactLaunchArgument() {
@@ -869,42 +834,6 @@ final class WebRuntimeTests: XCTestCase {
         // nil (existing installs / fresh) resolves to enabled.
         XCTAssertTrue(AppPreferences().contentBlockingEnabledEffective)
         XCTAssertFalse(AppPreferences(contentBlockingEnabled: false).contentBlockingEnabledEffective)
-    }
-
-    func testBlocklistIdentifierIsStableAndContentAddressed() {
-        let a = BlocklistSupport.identifier(prefix: "hz", forJSON: "[1,2,3]")
-        let b = BlocklistSupport.identifier(prefix: "hz", forJSON: "[1,2,3]")
-        let c = BlocklistSupport.identifier(prefix: "hz", forJSON: "[1,2,4]")
-        XCTAssertEqual(a, b)                 // same JSON → same id (cache hit)
-        XCTAssertNotEqual(a, c)              // changed JSON → new id (recompile)
-        XCTAssertTrue(a.hasPrefix("hz-"))
-    }
-
-    func testBlocklistRuleCountAndChunkingGuard() throws {
-        let json = "[{\"x\":1},{\"x\":2},{\"x\":3}]"
-        XCTAssertEqual(try BlocklistSupport.ruleCount(inJSON: json), 3)
-        XCTAssertFalse(BlocklistSupport.needsChunking(count: 3, cap: 5))
-        XCTAssertTrue(BlocklistSupport.needsChunking(count: 6, cap: 5))
-    }
-
-    func testBlocklistChunkUnderCapReturnsSingle() throws {
-        let json = "[{\"x\":1},{\"x\":2}]"
-        let chunks = try BlocklistSupport.chunk(json: json, cap: 10)
-        XCTAssertEqual(chunks.count, 1)
-        XCTAssertEqual(chunks.first, json)
-    }
-
-    func testBlocklistChunkSplitsOverCapPreservingTotal() throws {
-        let rules = (0..<7).map { "{\"x\":\($0)}" }.joined(separator: ",")
-        let json = "[\(rules)]"
-        let chunks = try BlocklistSupport.chunk(json: json, cap: 3)
-        XCTAssertEqual(chunks.count, 3)  // 3 + 3 + 1
-        let total = try chunks.reduce(0) { $0 + (try BlocklistSupport.ruleCount(inJSON: $1)) }
-        XCTAssertEqual(total, 7)
-    }
-
-    func testBlocklistChunkRejectsNonArray() {
-        XCTAssertThrowsError(try BlocklistSupport.chunk(json: "{\"not\":\"an array\"}"))
     }
 
     // MARK: - Rail layout preference

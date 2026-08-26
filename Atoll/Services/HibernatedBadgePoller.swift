@@ -1,5 +1,6 @@
 import Foundation
 import WebKit
+import AtollCore
 
 // NOTE: The file is still named `HibernatedBadgePoller.swift` for build-inclusion
 // reasons (new .swift files aren't auto-compiled by the checked-in project; see
@@ -21,29 +22,6 @@ import WebKit
 /// count. A preloaded, never-displayed web view already hydrates its title in
 /// this app (the visibility override keeps the page reporting "visible"), so an
 /// offscreen frame-zero view is enough — no window attachment needed.
-
-/// Decides whether a finished badge fetch looks like it hit a sign-in wall. Pure
-/// and free of WebKit so the truth table is unit-testable in isolation. Mirrors
-/// `HibernationResolver`.
-enum AuthWallResolver {
-    /// True when a fetch ended somewhere other than the host it asked for and
-    /// came back with no count.
-    ///
-    /// A load with a valid session either stays on the service's own host or
-    /// returns a badge. One that needs interactive sign-in gets redirected to the
-    /// identity provider and returns nothing — and retrying can't change that,
-    /// because a transient web view can't sign anyone in. It can, however, make
-    /// the identity provider push a fresh approval request at the user on every
-    /// sweep.
-    ///
-    /// A missing host on either side reads as "don't know" rather than a wall.
-    /// Guessing wrong here costs a badge that stops updating until the user opens
-    /// the service, so the check stays conservative.
-    static func looksLikeSignInWall(requestedHost: String?, landedHost: String?, badge: Int) -> Bool {
-        guard let requestedHost, let landedHost else { return false }
-        return landedHost != requestedHost && badge == 0
-    }
-}
 
 @MainActor
 @Observable
@@ -352,7 +330,7 @@ final class TransientBadgeFetcher {
                     }
                 }
             } else if let title = (try? await webView.evaluateJavaScript("document.title")) as? String {
-                best = max(best, NotificationManager.extractBadgeCount(from: title))
+                best = max(best, BadgeCountExtractor.extractBadgeCount(from: title))
             }
 
             if best > 0 {

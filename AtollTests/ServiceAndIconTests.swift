@@ -53,13 +53,6 @@ final class ServiceAndIconTests: XCTestCase {
     }
 
     @MainActor
-    func testBadgeCountExtraction() {
-        XCTAssertEqual(NotificationManager.extractBadgeCount(from: "Inbox (5) - Gmail"), 5)
-        XCTAssertEqual(NotificationManager.extractBadgeCount(from: "(12) Slack"), 12)
-        XCTAssertEqual(NotificationManager.extractBadgeCount(from: "No badges here"), 0)
-    }
-
-    @MainActor
     func testCustomServiceInputValidation() {
         XCTAssertEqual(
             AddServiceSheet.validatedCustomServiceInput(label: "  Docs  ", url: " HTTPS://example.com/app "),

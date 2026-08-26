@@ -1,5 +1,6 @@
 import Foundation
 import WebKit
+import AtollCore
 
 /// Owns the compiled content-blocking rule lists and hands them to the web-view
 /// pool. Two independently-toggled lists ship in the app bundle (regenerated per
