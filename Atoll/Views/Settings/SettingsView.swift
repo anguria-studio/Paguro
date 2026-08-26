@@ -1,9 +1,7 @@
 import SwiftUI
 import SwiftData
 import AtollCore
-#if canImport(AppKit)
 import AppKit
-#endif
 #if canImport(Sparkle)
 import Sparkle
 #endif
@@ -615,14 +613,12 @@ struct AboutSettingsView: View {
 
     @ViewBuilder
     private var appIcon: some View {
-        #if canImport(AppKit)
         if let icon = NSApp.applicationIconImage {
             Image(nsImage: icon)
                 .resizable()
                 .frame(width: 64, height: 64)
                 .accessibilityHidden(true)
         }
-        #endif
     }
 }
 
