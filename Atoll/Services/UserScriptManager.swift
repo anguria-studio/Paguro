@@ -6,11 +6,11 @@ import AtollCore
 final class UserScriptManager {
     private var messageHandlers: [UUID: NotificationMessageHandler] = [:]
 
-    var isServiceMuted: (@Sendable (UUID) -> Bool)?
+    var isServiceMuted: (@MainActor (UUID) -> Bool)?
     /// Per-service "forward notifications to macOS" flag. Defaults to true when
     /// unset, preserving behavior for services that predate the toggle.
-    var isServiceNotifyingOS: (@Sendable (UUID) -> Bool)?
-    var isDoNotDisturbActive: (@Sendable () -> Bool)?
+    var isServiceNotifyingOS: (@MainActor (UUID) -> Bool)?
+    var isDoNotDisturbActive: (@MainActor () -> Bool)?
     var autoDismissCookieBanners = AppPreferenceDefaults.autoDismissCookieBanners
 
     /// Full setup for a freshly built web view: the message handlers (added once)
@@ -414,19 +414,20 @@ final class UserScriptManager {
     }
 }
 
-final class NotificationMessageHandler: NSObject, WKScriptMessageHandler, @unchecked Sendable {
+@MainActor
+final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
     let serviceID: UUID
     let presenter: NotificationPresenter
-    let isMutedCheck: @Sendable (UUID) -> Bool
-    let notifyOSCheck: @Sendable (UUID) -> Bool
-    let isDoNotDisturbCheck: @Sendable () -> Bool
+    let isMutedCheck: @MainActor (UUID) -> Bool
+    let notifyOSCheck: @MainActor (UUID) -> Bool
+    let isDoNotDisturbCheck: @MainActor () -> Bool
 
     init(
         serviceID: UUID,
         presenter: NotificationPresenter,
-        isMutedCheck: @escaping @Sendable (UUID) -> Bool,
-        notifyOSCheck: @escaping @Sendable (UUID) -> Bool,
-        isDoNotDisturbCheck: @escaping @Sendable () -> Bool
+        isMutedCheck: @escaping @MainActor (UUID) -> Bool,
+        notifyOSCheck: @escaping @MainActor (UUID) -> Bool,
+        isDoNotDisturbCheck: @escaping @MainActor () -> Bool
     ) {
         self.serviceID = serviceID
         self.presenter = presenter

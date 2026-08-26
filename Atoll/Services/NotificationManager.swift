@@ -43,8 +43,8 @@ final class NotificationManager {
     func startPolling(
         for instanceID: UUID,
         webView: WKWebView,
-        isMuted: @escaping @Sendable () -> Bool,
-        showBadge: @escaping @Sendable () -> Bool,
+        isMuted: @escaping @MainActor () -> Bool,
+        showBadge: @escaping @MainActor () -> Bool,
         catalogEntry: ServiceCatalogEntry?,
         mode: PollMode = .active
     ) {
@@ -79,8 +79,8 @@ final class NotificationManager {
         instanceID: UUID,
         weakSelf: @MainActor () -> NotificationManager?,
         weakWebView: @MainActor () -> WKWebView?,
-        isMuted: @Sendable () -> Bool,
-        showBadge: @Sendable () -> Bool,
+        isMuted: @MainActor () -> Bool,
+        showBadge: @MainActor () -> Bool,
         catalogEntry: ServiceCatalogEntry?
     ) async {
         var interval = 5
@@ -119,8 +119,8 @@ final class NotificationManager {
         instanceID: UUID,
         weakSelf: @MainActor () -> NotificationManager?,
         weakWebView: @MainActor () -> WKWebView?,
-        isMuted: @Sendable () -> Bool,
-        showBadge: @Sendable () -> Bool,
+        isMuted: @MainActor () -> Bool,
+        showBadge: @MainActor () -> Bool,
         catalogEntry: ServiceCatalogEntry?
     ) async {
         // A DOM selector, when defined, is authoritative — but a hidden view's

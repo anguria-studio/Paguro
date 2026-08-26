@@ -19,7 +19,6 @@ final class NotificationRuntime {
     private let contentBlocker: ContentBlockerManager
     private let notificationCenter: NotificationCenter
     private let workspaceNotificationCenter: NotificationCenter
-    private nonisolated let doNotDisturbSnapshot: AtomicBool
     private let minuteOfDay: @MainActor () -> Int
     private let quietHoursInterval: Duration
 
@@ -73,7 +72,6 @@ final class NotificationRuntime {
         self.contentBlocker = contentBlocker
         self.notificationCenter = notificationCenter
         self.workspaceNotificationCenter = workspaceNotificationCenter
-        self.doNotDisturbSnapshot = badgeManager.doNotDisturbSnapshot
         self.minuteOfDay = minuteOfDay
         self.quietHoursInterval = quietHoursInterval
         self.scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
@@ -254,16 +252,16 @@ final class NotificationRuntime {
         badgeManager.removeBadge(for: serviceID)
     }
 
-    nonisolated func isServiceEffectivelyMuted(_ serviceID: UUID) -> Bool {
-        MainActor.assumeIsolated { service(serviceID)?.isEffectivelyMuted ?? false }
+    func isServiceEffectivelyMuted(_ serviceID: UUID) -> Bool {
+        service(serviceID)?.isEffectivelyMuted ?? false
     }
 
-    nonisolated func isServiceNotifyingOS(_ serviceID: UUID) -> Bool {
-        MainActor.assumeIsolated { service(serviceID)?.notifiesOSEffective ?? false }
+    func isServiceNotifyingOS(_ serviceID: UUID) -> Bool {
+        service(serviceID)?.notifiesOSEffective ?? false
     }
 
-    nonisolated func isDoNotDisturbActive() -> Bool {
-        doNotDisturbSnapshot.value
+    func isDoNotDisturbActive() -> Bool {
+        badgeManager.doNotDisturb
     }
 
     /// Lets application tests wait for the deferred AppKit-facing setup.
@@ -394,15 +392,13 @@ final class NotificationRuntime {
         )
     }
 
-    private nonisolated func isServiceShowingBadge(_ serviceID: UUID) -> Bool {
-        MainActor.assumeIsolated { service(serviceID)?.showBadge ?? true }
+    private func isServiceShowingBadge(_ serviceID: UUID) -> Bool {
+        service(serviceID)?.showBadge ?? true
     }
 
-    private nonisolated func catalogEntry(for serviceID: UUID) -> ServiceCatalogEntry? {
-        MainActor.assumeIsolated {
-            guard let entryID = service(serviceID)?.catalogEntryID else { return nil }
-            return ServiceCatalog.shared.entry(for: entryID)
-        }
+    private func catalogEntry(for serviceID: UUID) -> ServiceCatalogEntry? {
+        guard let entryID = service(serviceID)?.catalogEntryID else { return nil }
+        return ServiceCatalog.shared.entry(for: entryID)
     }
 
     private func setupMenuBarNavigation() {

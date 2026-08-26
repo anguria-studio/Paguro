@@ -209,13 +209,13 @@ final class AppState {
         self.userScriptManager = userScriptManager
         self.badgeManager = badgeManager
 
-        self.userScriptManager.isServiceMuted = { @Sendable serviceID in
+        self.userScriptManager.isServiceMuted = { serviceID in
             notificationRuntime.isServiceEffectivelyMuted(serviceID)
         }
-        self.userScriptManager.isServiceNotifyingOS = { @Sendable serviceID in
+        self.userScriptManager.isServiceNotifyingOS = { serviceID in
             notificationRuntime.isServiceNotifyingOS(serviceID)
         }
-        self.userScriptManager.isDoNotDisturbActive = { @Sendable in
+        self.userScriptManager.isDoNotDisturbActive = {
             notificationRuntime.isDoNotDisturbActive()
         }
         self.contentBlocker = contentBlocker
