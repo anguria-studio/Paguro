@@ -152,8 +152,13 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertFalse(FaviconFetcher.isFetchableIconURL(URL(string: "data:image/png;base64,AAAA")!))
         // Literal private / loopback / link-local IPs are blocked (SSRF).
         XCTAssertFalse(FaviconFetcher.isFetchableIconURL(URL(string: "http://127.0.0.1/i.png")!))
+        XCTAssertFalse(FaviconFetcher.isFetchableIconURL(URL(string: "http://127.1/i.png")!))
         XCTAssertFalse(FaviconFetcher.isFetchableIconURL(URL(string: "http://10.0.0.5/i.png")!))
+        XCTAssertFalse(FaviconFetcher.isFetchableIconURL(URL(string: "http://100.64.0.1/i.png")!))
         XCTAssertFalse(FaviconFetcher.isFetchableIconURL(URL(string: "http://169.254.169.254/latest")!))
+        XCTAssertFalse(
+            FaviconFetcher.isFetchableIconURL(URL(string: "http://[::ffff:127.0.0.1]/i.png")!)
+        )
     }
 
     func testIsLikelyPrivateHostHeuristic() {
@@ -166,6 +171,13 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("mail.corp"))         // private TLD
         XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("nas.local"))
         XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("192.168.1.10"))      // literal private IP
+        XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("127.1"))
+        XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("::ffff:10.0.0.1"))
+        XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("100.64.0.1"))
+        XCTAssertTrue(FaviconFetcher.isLikelyPrivateHost("100.127.255.254"))
+        XCTAssertFalse(FaviconFetcher.isLikelyPrivateHost("::ffff:8.8.8.8"))
+        XCTAssertFalse(FaviconFetcher.isLikelyPrivateHost("100.63.255.254"))
+        XCTAssertFalse(FaviconFetcher.isLikelyPrivateHost("100.128.0.1"))
     }
 
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 actor FaviconFetcher {
     static let shared = FaviconFetcher()
@@ -144,24 +145,64 @@ actor FaviconFetcher {
     /// can't be reached via a parsed favicon href. A normal hostname (not a
     /// literal IP) returns false — DNS-level rebinding is out of scope.
     nonisolated static func isPrivateOrReservedHost(_ host: String) -> Bool {
-        if host.contains(":") {  // IPv6 literal
-            let h = host.hasPrefix("[") ? String(host.dropFirst().dropLast()) : host
-            let lower = h.lowercased()
-            if lower == "::1" || lower == "::" { return true }
-            return lower.hasPrefix("fe80") || lower.hasPrefix("fc") || lower.hasPrefix("fd")
+        let unbracketed = host.hasPrefix("[") && host.hasSuffix("]")
+            ? String(host.dropFirst().dropLast())
+            : host
+        if let octets = ipv4Octets(unbracketed) {
+            return isPrivateOrReservedIPv4(octets)
         }
-        let parts = host.split(separator: ".")
-        guard parts.count == 4, parts.allSatisfy({ Int($0) != nil }),
-              let a = Int(parts[0]), let b = Int(parts[1]) else {
-            return false  // not a dotted-quad IPv4 → treat as a normal hostname
+
+        guard let octets = ipv6Octets(unbracketed) else {
+            return false
         }
+
+        if octets.allSatisfy({ $0 == 0 }) { return true }
+        if octets.dropLast().allSatisfy({ $0 == 0 }), octets.last == 1 { return true }
+        if octets[0] == 0xFE, octets[1] & 0xC0 == 0x80 { return true }
+        if octets[0] & 0xFE == 0xFC { return true }
+
+        let mappedPrefix = octets.prefix(10).allSatisfy { $0 == 0 }
+            && octets[10] == 0xFF
+            && octets[11] == 0xFF
+        if mappedPrefix {
+            return isPrivateOrReservedIPv4(Array(octets.suffix(4)))
+        }
+        return false
+    }
+
+    private nonisolated static func isPrivateOrReservedIPv4(_ octets: [UInt8]) -> Bool {
+        guard octets.count == 4 else { return false }
+        let a = Int(octets[0])
+        let b = Int(octets[1])
         switch a {
-        case 0, 10, 127: return true                      // this-network, private, loopback
-        case 169 where b == 254: return true              // link-local
-        case 172 where (16...31).contains(b): return true // private
-        case 192 where b == 168: return true              // private
+        case 0, 10, 127: return true                         // this-network, private, loopback
+        case 100 where (64...127).contains(b): return true   // shared address space
+        case 169 where b == 254: return true                 // link-local
+        case 172 where (16...31).contains(b): return true    // private
+        case 192 where b == 168: return true                 // private
         default: return false
         }
+    }
+
+    /// `inet_aton` also recognizes the shortened IPv4 forms accepted by URL
+    /// loading, such as `127.1`. A dotted-quad-only parser would let those forms
+    /// bypass the loopback check.
+    private nonisolated static func ipv4Octets(_ host: String) -> [UInt8]? {
+        var address = in_addr()
+        guard host.withCString({ inet_aton($0, &address) }) == 1 else { return nil }
+        let value = UInt32(bigEndian: address.s_addr)
+        return [
+            UInt8((value >> 24) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8(value & 0xFF),
+        ]
+    }
+
+    private nonisolated static func ipv6Octets(_ host: String) -> [UInt8]? {
+        var address = in6_addr()
+        guard host.withCString({ inet_pton(AF_INET6, $0, &address) }) == 1 else { return nil }
+        return withUnsafeBytes(of: &address) { Array($0) }
     }
 
     struct IconLink: Equatable {
