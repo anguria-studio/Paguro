@@ -2,33 +2,29 @@ import AtollCore
 import Foundation
 import UserNotifications
 
-/// Builds and delivers native notifications from validated page payloads.
+/// Builds and delivers native notifications from normalized events.
 @MainActor
 final class NotificationPresenter {
-    private let serviceID: UUID
     private let serviceLabel: String
     private let serviceIconURL: URL?
     private let center: UNUserNotificationCenter
 
     init(
-        serviceID: UUID,
         serviceLabel: String,
         serviceIconURL: URL?,
         center: UNUserNotificationCenter = .current()
     ) {
-        self.serviceID = serviceID
         self.serviceLabel = serviceLabel
         self.serviceIconURL = serviceIconURL
         self.center = center
     }
 
     func makeRequest(
-        payload: NotificationPayload,
+        event: NotificationEvent,
         identifier: String
     ) -> UNNotificationRequest {
         let content = NativeNotificationContentBuilder.makeContent(
-            payload: payload,
-            serviceID: serviceID,
+            event: event,
             serviceLabel: serviceLabel,
             serviceIconURL: serviceIconURL
         )
@@ -40,11 +36,11 @@ final class NotificationPresenter {
     }
 
     func present(
-        payload: NotificationPayload,
+        event: NotificationEvent,
         requestID: String,
         traceID: String
     ) {
-        let request = makeRequest(payload: payload, identifier: requestID)
+        let request = makeRequest(event: event, identifier: requestID)
 
         #if DEBUG
         if CompatibilityFixture.isEnabled() {

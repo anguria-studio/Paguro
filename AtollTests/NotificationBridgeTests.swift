@@ -142,14 +142,18 @@ final class NotificationBridgeTests: XCTestCase {
         service.customIconData = iconData
         let iconURL = try XCTUnwrap(NotificationAttachmentStore.prepareServiceIcon(for: service))
 
-        let payload = NotificationPayload(
-            title: "New message",
-            body: "A short body",
-            tag: "message-1"
+        let event = try NotificationEvent.normalize(
+            id: UUID(),
+            serviceID: service.id,
+            payload: NotificationPayload(
+                title: "New message",
+                body: "A short body",
+                tag: "message-1"
+            ),
+            receivedAt: Date()
         )
         let content = NativeNotificationContentBuilder.makeContent(
-            payload: payload,
-            serviceID: service.id,
+            event: event,
             serviceLabel: service.label,
             serviceIconURL: iconURL
         )
@@ -162,21 +166,25 @@ final class NotificationBridgeTests: XCTestCase {
     }
 
     @MainActor
-    func testNotificationPresenterBuildsARequestForItsService() {
+    func testNotificationPresenterBuildsARequestForItsService() throws {
         let serviceID = UUID()
         let presenter = NotificationPresenter(
-            serviceID: serviceID,
             serviceLabel: "Slack",
             serviceIconURL: nil
         )
-        let payload = NotificationPayload(
-            title: "New message",
-            body: "A short body",
-            tag: "message-1"
+        let event = try NotificationEvent.normalize(
+            id: UUID(),
+            serviceID: serviceID,
+            payload: NotificationPayload(
+                title: "New message",
+                body: "A short body",
+                tag: "message-1"
+            ),
+            receivedAt: Date()
         )
 
         let request = presenter.makeRequest(
-            payload: payload,
+            event: event,
             identifier: "request-1"
         )
 

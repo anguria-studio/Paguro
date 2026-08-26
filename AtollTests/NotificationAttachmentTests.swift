@@ -25,15 +25,15 @@ final class NotificationAttachmentTests: XCTestCase {
         return iconURL
     }
 
-    private func makeContent(iconURL: URL) -> UNMutableNotificationContent {
-        let payload = NotificationPayload(
-            title: "New message",
-            body: "Body",
-            tag: "tag"
+    private func makeContent(iconURL: URL) throws -> UNMutableNotificationContent {
+        let event = try NotificationEvent.normalize(
+            id: UUID(),
+            serviceID: UUID(),
+            payload: NotificationPayload(title: "New message", body: "Body", tag: "tag"),
+            receivedAt: Date()
         )
         return NativeNotificationContentBuilder.makeContent(
-            payload: payload,
-            serviceID: UUID(),
+            event: event,
             serviceLabel: "Slack",
             serviceIconURL: iconURL
         )
@@ -42,8 +42,8 @@ final class NotificationAttachmentTests: XCTestCase {
     @MainActor
     func testEveryNotificationCarriesTheIcon() throws {
         let iconURL = try makeIconURL()
-        let first = makeContent(iconURL: iconURL)
-        let second = makeContent(iconURL: iconURL)
+        let first = try makeContent(iconURL: iconURL)
+        let second = try makeContent(iconURL: iconURL)
         XCTAssertEqual(first.attachments.count, 1, "First notification carries the icon")
         XCTAssertEqual(second.attachments.count, 1, "Second notification still carries the icon")
     }
@@ -51,7 +51,7 @@ final class NotificationAttachmentTests: XCTestCase {
     @MainActor
     func testThePreparedIconFileSurvivesAttachment() throws {
         let iconURL = try makeIconURL()
-        _ = makeContent(iconURL: iconURL)
+        _ = try makeContent(iconURL: iconURL)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: iconURL.path),
             "The shared per-service icon must not be consumed by the attachment"

@@ -149,8 +149,8 @@ extension NotificationPayloadDecodeError: LocalizedError {
             return "The payload exceeds \(maximumBytes) bytes."
         case .unsupportedVersion(let version):
             return "The payload version \(version) is not supported."
-        case .unsupportedType(let type):
-            return "The payload type \(type) is not supported."
+        case .unsupportedType:
+            return "The payload type is not supported."
         case .fieldTooLong(let field, let maximumBytes):
             return "The payload \(field) field exceeds \(maximumBytes) bytes."
         }

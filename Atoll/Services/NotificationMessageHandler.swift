@@ -10,6 +10,7 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
     let isMutedCheck: @MainActor (UUID) -> Bool
     let notifyOSCheck: @MainActor (UUID) -> Bool
     let isDoNotDisturbCheck: @MainActor () -> Bool
+    private var deduplicator = NotificationDeduplicator()
 
     init(
         serviceID: UUID,
@@ -31,7 +32,8 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
         didReceive message: WKScriptMessage
     ) {
         guard message.name == "atollNotification" else { return }
-        let requestID = UUID().uuidString
+        let eventID = UUID()
+        let requestID = eventID.uuidString
         let traceID = String(requestID.prefix(8)).lowercased()
 
         let frame = message.frameInfo
@@ -85,6 +87,28 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
             return
         }
 
+        let event: NotificationEvent
+        do {
+            event = try NotificationEvent.normalize(
+                id: eventID,
+                serviceID: serviceID,
+                payload: payload,
+                receivedAt: Date()
+            )
+        } catch {
+            AppLogger.notifications.error(
+                "Notification trace \(traceID, privacy: .public): event normalization failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return
+        }
+
+        guard deduplicator.accepts(event) else {
+            AppLogger.notifications.info(
+                "Notification trace \(traceID, privacy: .public): rejected recent duplicate"
+            )
+            return
+        }
+
         let isMuted = isMutedCheck(serviceID)
         let notifyOS = notifyOSCheck(serviceID)
         let doNotDisturb = isDoNotDisturbCheck()
@@ -100,7 +124,7 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
         }
 
         presenter.present(
-            payload: payload,
+            event: event,
             requestID: requestID,
             traceID: traceID
         )

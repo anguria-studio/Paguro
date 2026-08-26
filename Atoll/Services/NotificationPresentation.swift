@@ -68,16 +68,15 @@ enum NotificationAttachmentStore {
 
 enum NativeNotificationContentBuilder {
     static func makeContent(
-        payload: NotificationPayload,
-        serviceID: UUID,
+        event: NotificationEvent,
         serviceLabel: String,
         serviceIconURL: URL?
     ) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
-        content.title = payload.title
+        content.title = event.title
         content.subtitle = serviceLabel
-        content.body = payload.body
-        content.userInfo = ["serviceID": serviceID.uuidString]
+        content.body = event.body ?? ""
+        content.userInfo = ["serviceID": event.serviceID.uuidString]
         content.sound = .default
 
         // Each notification gets its own copy: the attachment consumes its file.

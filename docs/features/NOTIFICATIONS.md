@@ -73,6 +73,11 @@ The event contains these values:
 
 `AtollCore` owns this value type.
 
+The current page bridge creates this event before it applies presentation
+policy. Normalization trims display text, changes empty body and tag values to
+`nil`, and removes a body that repeats the title. A signal with an empty title
+does not create an event.
+
 ## Validation
 
 The bridge must check each message before use.
@@ -116,6 +121,15 @@ The pipeline applies rules in this order:
 10. Present the event.
 
 Policy code belongs in `AtollCore` when it does not need a platform API.
+
+The current duplicate key contains the service account ID, tag, title, and
+body. It does not contain the event ID, receipt time, detector source, or target
+URL. This lets two detectors identify the same event. A changed title or body
+remains a new event even when the service reuses a tag.
+
+Atoll rejects an equal key for five seconds. The in-memory set keeps at most
+256 keys and removes the oldest key first. Atoll does not persist this set or a
+notification body.
 
 ## Presentation
 

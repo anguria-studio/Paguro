@@ -38,7 +38,6 @@ final class UserScriptManager {
         let dndCheck = isDoNotDisturbActive
         let serviceIconURL = NotificationAttachmentStore.prepareServiceIcon(for: instance)
         let presenter = NotificationPresenter(
-            serviceID: instance.id,
             serviceLabel: instance.label,
             serviceIconURL: serviceIconURL
         )
