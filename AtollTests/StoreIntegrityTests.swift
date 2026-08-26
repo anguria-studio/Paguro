@@ -10,7 +10,7 @@ final class StoreIntegrityTests: XCTestCase {
 
     /// Reproduces the reported sequence against a real on-disk store: seed two
     /// spaces with linked services, delete the second (reclaiming its orphaned
-    /// services exactly as `AppState.deleteSpace` does at the SwiftData layer),
+    /// services exactly as `WorkspaceStore.deleteSpace` does),
     /// close the container, then reopen it and run the launch-time queries.
     /// A dangling `SpaceServiceLink` or corrupt store would trap here.
     func testDeleteSecondSpaceThenReopenStoreIsClean() throws {
@@ -40,7 +40,7 @@ final class StoreIntegrityTests: XCTestCase {
             link("slack", to: work, order: 1)
             try context.save()
 
-            // Replicate AppState.deleteSpace's SwiftData operations for `work`.
+            // Replicate WorkspaceStore.deleteSpace's SwiftData operations for `work`.
             let workID = work.id
             let doomed = try context.fetch(
                 FetchDescriptor<Space>(predicate: #Predicate { $0.id == workID })

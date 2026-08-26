@@ -9,6 +9,7 @@ import AtollCore
 final class AppState {
     let modelContainer: ModelContainer
     let preferencesStore: PreferencesStore
+    let workspaceStore: WorkspaceStore
     private(set) var shellPreferences: ShellPreferences
     let mediaPermissions: MediaPermissionCoordinator
     let storeRecovery: StoreRecoveryCoordinator
@@ -163,6 +164,10 @@ final class AppState {
         self.modelContainer = loadedContainer
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
+        self.workspaceStore = WorkspaceStore(
+            context: loadedContainer.mainContext,
+            preferencesStore: preferencesStore
+        )
         self.shellPreferences = ShellPreferences.load(
             preferencesStore: preferencesStore
         )
@@ -243,8 +248,9 @@ final class AppState {
             isLocked: { [weak self] in self?.isLocked ?? true },
             onWebViewRebuilt: { [weak self] in self?.webViewRebuildToken &+= 1 }
         )
-        let didSeedDefaults = seedDefaultDataIfNeeded()
-        backfillPasskeyNoticeIfNeeded(freshInstall: didSeedDefaults)
+        let seedOutcome = workspaceStore.seedDefaultDataIfNeeded()
+        selectedSpaceID = seedOutcome.selectedSpaceID
+        workspaceStore.backfillPasskeyNoticeIfNeeded(freshInstall: seedOutcome.didSeed)
         websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
         let didUpdate = Self.recordLaunchVersionAndCheckUpdate()
@@ -332,28 +338,7 @@ final class AppState {
     }
 
     private func findServiceMatching(host: String, preferringSpace spaceID: UUID?) -> ServiceInstance? {
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<ServiceInstance>()
-        guard let services = try? context.fetch(descriptor) else { return nil }
-
-        let matches = services.filter { service in
-            guard let serviceHost = URL(string: service.url)?.host else { return false }
-            return WebRoutingPolicy.belongsToService(host, serviceHost: serviceHost)
-        }
-        if matches.isEmpty { return nil }
-        if matches.count == 1 { return matches.first }
-
-        // Multiple instances of the same site (e.g. personal + work Notion).
-        // Prefer one inside the current space; fall back to any match.
-        if let spaceID,
-           let inCurrentSpace = matches.first(where: { service in
-               service.spaceLinks.contains {
-                   $0.modelContext != nil && $0.space.modelContext != nil && $0.space.id == spaceID
-               }
-           }) {
-            return inCurrentSpace
-        }
-        return matches.first
+        workspaceStore.findServiceMatching(host: host, preferringSpace: spaceID)
     }
 
     private func switchToService(_ service: ServiceInstance, navigateTo url: URL) {
@@ -376,9 +361,7 @@ final class AppState {
 
     /// Fetches one service by its indexed identifier.
     private func fetchService(id: UUID) -> ServiceInstance? {
-        var descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        return try? modelContainer.mainContext.fetch(descriptor).first
+        workspaceStore.service(id: id)
     }
 
     // MARK: - Active service actions (driven by keyboard shortcuts)
@@ -408,10 +391,7 @@ final class AppState {
     func updateEffectiveShellAppearance(isDark: Bool) {
         guard lastEffectiveShellAppearanceDark != isDark else { return }
         lastEffectiveShellAppearanceDark = isDark
-        let services = (try? modelContainer.mainContext.fetch(
-            FetchDescriptor<ServiceInstance>()
-        )) ?? []
-        webViewPool.applyShellAppearance(isDark: isDark, services: services)
+        webViewPool.applyShellAppearance(isDark: isDark, services: workspaceStore.allServices())
     }
 
     func setLiquidGlassIntensity(_ value: Double) {
@@ -469,7 +449,7 @@ final class AppState {
         webAppearanceChanged: Bool = false,
         presenceChanged: Bool = false
     ) {
-        guard let service = currentServiceInstance(id: serviceID) else { return }
+        guard let service = workspaceStore.commitServiceEdits(serviceID: serviceID) else { return }
         if cssChanged || presenceChanged {
             // Custom CSS and the focus override are both injected when the web
             // view is built, so rebuild it. The rebuild also re-bakes the
@@ -490,9 +470,6 @@ final class AppState {
             }
         }
 
-        guard modelContainer.mainContext.saveOrRollback(reason: "save service edits") else {
-            return
-        }
         hibernationScheduler.servicePolicyDidChange(serviceID)
     }
 
@@ -501,15 +478,14 @@ final class AppState {
     /// the live web view so the logged-out state is visible immediately. The
     /// service itself, its links, and its place in every space are preserved.
     func clearSession(for serviceID: UUID) {
-        guard let service = currentServiceInstance(id: serviceID) else { return }
-        let store = dataStoreManager.dataStore(forIdentifier: service.dataStoreIdentifier)
-        let homeURL = URL(string: service.url)
+        guard let target = workspaceStore.sessionTarget(for: serviceID) else { return }
+        let store = dataStoreManager.dataStore(forIdentifier: target.dataStoreIdentifier)
         let pool = webViewPool
         Task { @MainActor in
             let types = WKWebsiteDataStore.allWebsiteDataTypes()
             await store.removeData(ofTypes: types, modifiedSince: .distantPast)
             if let webView = pool.liveWebView(for: serviceID) {
-                if let homeURL {
+                if let homeURL = target.homeURL {
                     webView.load(URLRequest(url: homeURL))
                 } else {
                     webView.reload()
@@ -526,30 +502,25 @@ final class AppState {
         guard let id = webViewPool.activeServiceID,
               let webView = webViewPool.liveWebView(for: id),
               let service = currentServiceInstance(id: id) else { return }
-        let target = max(0.5, min(3.0, Self.effectiveZoom(pageZoom: service.pageZoom, defaultZoom: defaultZoom) * factor))
+        let target = max(0.5, min(3.0, WorkspaceStore.effectiveZoom(
+            pageZoom: service.pageZoom,
+            defaultZoom: defaultZoom
+        ) * factor))
         applyZoom(target, to: webView, service: service)
-    }
-
-    /// The zoom a service should render at: its own explicit zoom if set,
-    /// otherwise the Atoll-wide default. Pure so it can be unit-tested.
-    static func effectiveZoom(pageZoom: Double?, defaultZoom: Double) -> Double {
-        pageZoom ?? defaultZoom
     }
 
     /// The effective zoom for a specific service, using the current global default.
     func effectiveZoom(for service: ServiceInstance) -> Double {
-        Self.effectiveZoom(pageZoom: service.pageZoom, defaultZoom: defaultZoom)
+        WorkspaceStore.effectiveZoom(pageZoom: service.pageZoom, defaultZoom: defaultZoom)
     }
 
     /// Saves a new Atoll-wide default zoom and applies it to every open service
     /// that has no explicit per-service zoom.
     func setDefaultZoom(_ zoom: Double) {
-        let clamped = max(0.5, min(3.0, zoom))
-        guard preferencesStore.setDefaultZoom(clamped) else { return }
-        defaultZoom = clamped
-        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
-        for service in services where service.pageZoom == nil {
-            webViewPool.liveWebView(for: service.id)?.pageZoom = CGFloat(clamped)
+        guard let outcome = workspaceStore.setDefaultZoom(zoom) else { return }
+        defaultZoom = outcome.zoom
+        for serviceID in outcome.affectedServiceIDs {
+            webViewPool.liveWebView(for: serviceID)?.pageZoom = CGFloat(outcome.zoom)
         }
     }
 
@@ -660,9 +631,8 @@ final class AppState {
     }
 
     private func applyZoom(_ value: Double, to webView: WKWebView, service: ServiceInstance) {
+        guard workspaceStore.setPageZoom(value, for: service.id) else { return }
         webView.pageZoom = CGFloat(value)
-        service.pageZoom = value
-        modelContainer.mainContext.saveOrRollback(reason: "persist zoom")
     }
 
     private func currentServiceInstance(id: UUID) -> ServiceInstance? {
@@ -671,206 +641,6 @@ final class AppState {
 
     func refreshBadgeState(for serviceID: UUID) {
         notificationRuntime.refreshBadgeState(for: serviceID)
-    }
-
-    struct ServiceMoveOutcome: Equatable {
-        let serviceID: UUID
-        let sourceSpaceID: UUID
-        let targetSpaceID: UUID
-    }
-
-    struct ServiceDeletionOutcome: Equatable {
-        let serviceID: UUID
-        let dataStoreIdentifier: UUID
-    }
-
-    /// Inserts one service at the end of a space and saves it.
-    static func addService(
-        label: String,
-        url: String,
-        catalogEntryID: String? = nil,
-        userAgent: String? = nil,
-        customIconData: Data? = nil,
-        to spaceID: UUID,
-        in context: ModelContext
-    ) throws -> UUID? {
-        var descriptor = FetchDescriptor<Space>(
-            predicate: #Predicate { $0.id == spaceID }
-        )
-        descriptor.fetchLimit = 1
-        guard let space = try context.fetch(descriptor).first else { return nil }
-        let nextOrder = ((try liveLinks(in: context))
-            .filter { $0.space.id == spaceID }
-            .map(\.sortOrder)
-            .max() ?? -1) + 1
-
-        let service = ServiceInstance(
-            label: label,
-            url: url,
-            customIconData: customIconData,
-            catalogEntryID: catalogEntryID,
-            userAgent: userAgent
-        )
-        context.insert(service)
-        context.insert(SpaceServiceLink(
-            sortOrder: nextOrder,
-            space: space,
-            service: service
-        ))
-        guard context.saveOrRollback(reason: "add service") else { return nil }
-        return service.id
-    }
-
-    /// Relocates one existing link to the end of another space and saves it.
-    /// A fresh fetch supplies both membership and target ordering because
-    /// SwiftData inverse relationships can lag behind unsaved changes.
-    static func moveService(
-        linkID: UUID,
-        to targetSpaceID: UUID,
-        in context: ModelContext
-    ) throws -> ServiceMoveOutcome? {
-        let links = try liveLinks(in: context)
-        guard let link = links.first(where: { $0.id == linkID }) else { return nil }
-        let sourceSpaceID = link.space.id
-        let serviceID = link.service.id
-        guard sourceSpaceID != targetSpaceID else { return nil }
-
-        var targetDescriptor = FetchDescriptor<Space>(
-            predicate: #Predicate { $0.id == targetSpaceID }
-        )
-        targetDescriptor.fetchLimit = 1
-        guard let targetSpace = try context.fetch(targetDescriptor).first else { return nil }
-        guard !links.contains(where: {
-            $0.id != linkID
-                && $0.service.id == serviceID
-                && $0.space.id == targetSpaceID
-        }) else { return nil }
-
-        let targetOrders = links
-            .filter { $0.space.id == targetSpaceID }
-            .map(\.sortOrder)
-        link.sortOrder = (targetOrders.max() ?? -1) + 1
-        link.space = targetSpace
-        guard context.saveOrRollback(reason: "move service") else { return nil }
-        return ServiceMoveOutcome(
-            serviceID: serviceID,
-            sourceSpaceID: sourceSpaceID,
-            targetSpaceID: targetSpaceID
-        )
-    }
-
-    /// Applies a drag or accessibility reorder inside one space and saves it.
-    static func reorderService(
-        droppedLinkID: UUID,
-        relativeTo targetLinkID: UUID,
-        placement: ServiceReorderPlacement,
-        in context: ModelContext
-    ) throws -> Bool {
-        let links = try liveLinks(in: context)
-        guard let droppedLink = links.first(where: { $0.id == droppedLinkID }),
-              let targetLink = links.first(where: { $0.id == targetLinkID }),
-              WorkspaceNavigationPolicy.allowsReorder(
-                sourceWorkspaceID: droppedLink.space.id,
-                targetWorkspaceID: targetLink.space.id
-              )
-        else { return false }
-
-        let spaceLinks = links
-            .filter { $0.space.id == targetLink.space.id }
-            .sorted { $0.sortOrder < $1.sortOrder }
-        let linksByID = Dictionary(uniqueKeysWithValues: spaceLinks.map { ($0.id, $0) })
-        guard let reorderedIDs = ServiceReorder.reorderedIDs(
-            spaceLinks.map(\.id),
-            moving: droppedLinkID,
-            relativeTo: targetLinkID,
-            placement: placement
-        ) else { return false }
-
-        let reorderedLinks = reorderedIDs.compactMap { linksByID[$0] }
-        guard reorderedLinks.count == reorderedIDs.count else { return false }
-        for (index, link) in reorderedLinks.enumerated() {
-            link.sortOrder = index
-        }
-        guard context.saveOrRollback(reason: "reorder service") else { return false }
-        return true
-    }
-
-    /// Deletes one service and its links, then saves.
-    /// Runtime and data-store teardown remain with the instance wrapper below
-    /// so irreversible work starts only after this method succeeds.
-    static func deleteService(
-        _ serviceID: UUID,
-        in context: ModelContext
-    ) throws -> ServiceDeletionOutcome? {
-        var descriptor = FetchDescriptor<ServiceInstance>(
-            predicate: #Predicate { $0.id == serviceID }
-        )
-        descriptor.fetchLimit = 1
-        guard let service = try context.fetch(descriptor).first else { return nil }
-        let dataStoreIdentifier = service.dataStoreIdentifier
-
-        // SwiftData owns the cascade from a service to its links. Deleting the
-        // links first invalidates objects that the cascade then inspects and
-        // produces invalidated-model diagnostics.
-        context.delete(service)
-        guard context.saveOrRollback(reason: "delete service") else { return nil }
-        return ServiceDeletionOutcome(
-            serviceID: serviceID,
-            dataStoreIdentifier: dataStoreIdentifier
-        )
-    }
-
-    /// Persists one service's mute setting.
-    static func setServiceMuted(
-        _ muted: Bool,
-        for serviceID: UUID,
-        in context: ModelContext
-    ) throws -> Bool {
-        var descriptor = FetchDescriptor<ServiceInstance>(
-            predicate: #Predicate { $0.id == serviceID }
-        )
-        descriptor.fetchLimit = 1
-        guard let service = try context.fetch(descriptor).first else { return false }
-        service.isMuted = muted
-        guard context.saveOrRollback(reason: "toggle service mute") else { return false }
-        return true
-    }
-
-    /// Persists one space's mute setting and returns the affected services.
-    static func setWorkspaceMuted(
-        _ muted: Bool,
-        for spaceID: UUID,
-        in context: ModelContext
-    ) throws -> Set<UUID>? {
-        var descriptor = FetchDescriptor<Space>(
-            predicate: #Predicate { $0.id == spaceID }
-        )
-        descriptor.fetchLimit = 1
-        guard let space = try context.fetch(descriptor).first else { return nil }
-        let serviceIDs = Set(
-            try liveLinks(in: context)
-                .filter { $0.space.id == spaceID }
-                .map { $0.service.id }
-        )
-        space.isMuted = muted
-        guard context.saveOrRollback(reason: "toggle workspace mute") else { return nil }
-        return serviceIDs
-    }
-
-    /// Persists normalized custom icon bytes. Nil restores the default source.
-    static func setCustomIconData(
-        _ data: Data?,
-        for serviceID: UUID,
-        in context: ModelContext
-    ) throws -> Bool {
-        var descriptor = FetchDescriptor<ServiceInstance>(
-            predicate: #Predicate { $0.id == serviceID }
-        )
-        descriptor.fetchLimit = 1
-        guard let service = try context.fetch(descriptor).first else { return false }
-        service.customIconData = data
-        guard context.saveOrRollback(reason: "set custom icon") else { return false }
-        return true
     }
 
     /// Adds one service and starts post-save runtime work only after the model
@@ -884,20 +654,17 @@ final class AppState {
         customIconData: Data? = nil,
         to spaceID: UUID
     ) -> UUID? {
-        let context = modelContainer.mainContext
         let serviceID: UUID?
         do {
-            serviceID = try Self.addService(
+            serviceID = try workspaceStore.addService(
                 label: label,
                 url: url,
                 catalogEntryID: catalogEntryID,
                 userAgent: userAgent,
                 customIconData: customIconData,
-                to: spaceID,
-                in: context
+                to: spaceID
             )
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to add service; rolled back: \(error.localizedDescription)")
             return nil
         }
@@ -920,16 +687,13 @@ final class AppState {
     }
 
     func moveService(linkID: UUID, to targetSpaceID: UUID, followToSpace: Bool) {
-        let context = modelContainer.mainContext
-        let outcome: ServiceMoveOutcome?
+        let outcome: WorkspaceStore.ServiceMoveOutcome?
         do {
-            outcome = try Self.moveService(
+            outcome = try workspaceStore.moveService(
                 linkID: linkID,
-                to: targetSpaceID,
-                in: context
+                to: targetSpaceID
             )
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to move service; rolled back: \(error.localizedDescription)")
             return
         }
@@ -951,28 +715,23 @@ final class AppState {
         relativeTo targetLinkID: UUID,
         placement: ServiceReorderPlacement
     ) -> Bool {
-        let context = modelContainer.mainContext
         do {
-            return try Self.reorderService(
+            return try workspaceStore.reorderService(
                 droppedLinkID: droppedLinkID,
                 relativeTo: targetLinkID,
-                placement: placement,
-                in: context
+                placement: placement
             )
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to reorder services; rolled back: \(error.localizedDescription)")
             return false
         }
     }
 
     func deleteService(_ serviceID: UUID) {
-        let context = modelContainer.mainContext
-        let outcome: ServiceDeletionOutcome?
+        let outcome: WorkspaceStore.ServiceDeletionOutcome?
         do {
-            outcome = try Self.deleteService(serviceID, in: context)
+            outcome = try workspaceStore.deleteService(serviceID)
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to delete service; rolled back: \(error.localizedDescription)")
             return
         }
@@ -987,11 +746,9 @@ final class AppState {
     }
 
     func setServiceMuted(_ muted: Bool, for serviceID: UUID) {
-        let context = modelContainer.mainContext
         do {
-            guard try Self.setServiceMuted(muted, for: serviceID, in: context) else { return }
+            guard try workspaceStore.setServiceMuted(muted, for: serviceID) else { return }
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to toggle service mute; rolled back: \(error.localizedDescription)")
             return
         }
@@ -999,12 +756,10 @@ final class AppState {
     }
 
     func setWorkspaceMuted(_ muted: Bool, for spaceID: UUID) {
-        let context = modelContainer.mainContext
         let serviceIDs: Set<UUID>?
         do {
-            serviceIDs = try Self.setWorkspaceMuted(muted, for: spaceID, in: context)
+            serviceIDs = try workspaceStore.setWorkspaceMuted(muted, for: spaceID)
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to toggle workspace mute; rolled back: \(error.localizedDescription)")
             return
         }
@@ -1016,14 +771,12 @@ final class AppState {
 
     func pickCustomIcon(for serviceID: UUID) {
         guard let service = currentServiceInstance(id: serviceID) else { return }
-        let context = modelContainer.mainContext
         do {
             guard let data = try ServiceIconFilePicker.pickImageData(
                 message: "Choose an icon for \(service.label)"
             ) else { return }
-            _ = try Self.setCustomIconData(data, for: serviceID, in: context)
+            _ = try workspaceStore.setCustomIconData(data, for: serviceID)
         } catch {
-            context.rollback()
             AppLogger.ui.error("Failed to set custom icon: \(error.localizedDescription)")
         }
     }
@@ -1031,11 +784,9 @@ final class AppState {
     func resetIcon(for serviceID: UUID) {
         guard let service = currentServiceInstance(id: serviceID) else { return }
         let shouldFetch = service.fetchedIconData == nil
-        let context = modelContainer.mainContext
         do {
-            guard try Self.setCustomIconData(nil, for: serviceID, in: context) else { return }
+            guard try workspaceStore.setCustomIconData(nil, for: serviceID) else { return }
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to reset icon; rolled back: \(error.localizedDescription)")
             return
         }
@@ -1046,130 +797,24 @@ final class AppState {
         }
     }
 
-    /// Records one automatic favicon attempt. A failed refresh keeps an older
-    /// icon but still records the attempt time so launch does not retry on every
-    /// run.
-    static func recordFetchedIconAttempt(
-        _ data: Data?,
-        at date: Date,
-        for serviceID: UUID,
-        in context: ModelContext
-    ) throws -> Bool {
-        var descriptor = FetchDescriptor<ServiceInstance>(
-            predicate: #Predicate { $0.id == serviceID }
-        )
-        descriptor.fetchLimit = 1
-        guard let service = try context.fetch(descriptor).first,
-              service.customIconData == nil
-        else { return false }
-        if let data {
-            service.fetchedIconData = data
-        }
-        service.faviconFetchedAt = date
-        guard context.saveOrRollback(reason: "save fetched favicon") else { return false }
-        return true
-    }
-
-    /// Refreshes the automatic icon for one saved service. The service is
-    /// fetched again after the network wait because it can be deleted or gain a
-    /// custom icon while the request is in flight.
     func refreshFetchedIcon(for serviceID: UUID) async {
-        guard let service = currentServiceInstance(id: serviceID),
-              service.customIconData == nil
-        else { return }
-        let serviceURL = service.url
-        let data = await FaviconFetcher.shared.fetchFavicon(for: serviceURL)
-        let context = modelContainer.mainContext
-        do {
-            _ = try Self.recordFetchedIconAttempt(
-                data,
-                at: Date(),
-                for: serviceID,
-                in: context
-            )
-        } catch {
-            context.rollback()
-            AppLogger.dataStore.error("Failed to save fetched favicon; rolled back: \(error.localizedDescription)")
-        }
-    }
-
-    /// Returns every link whose space and service still exist.
-    ///
-    /// A fetch is the authoritative view of membership. It includes unsaved
-    /// inserts and deletes in the context, while the `serviceLinks` and
-    /// `spaceLinks` inverse relationships can lag behind them.
-    static func liveLinks(in context: ModelContext) throws -> [SpaceServiceLink] {
-        try context.fetch(FetchDescriptor<SpaceServiceLink>()).filter {
-            $0.modelContext != nil && $0.space.modelContext != nil && $0.service.modelContext != nil
-        }
-    }
-
-    /// Maps each service ID to the IDs of the spaces that contain it.
-    static func memberships(from links: [SpaceServiceLink]) -> [UUID: Set<UUID>] {
-        var memberships: [UUID: Set<UUID>] = [:]
-        for link in links {
-            memberships[link.service.id, default: []].insert(link.space.id)
-        }
-        return memberships
+        await workspaceStore.refreshFetchedIcon(for: serviceID)
     }
 
     /// Counts the services that Atoll deletes together with this space.
     /// The delete confirmation shows this number.
     func orphanedServiceCount(byDeletingSpace spaceID: UUID) -> Int {
-        let links = (try? Self.liveLinks(in: modelContainer.mainContext)) ?? []
-        return WorkspaceDeletionPolicy.servicesOrphaned(
-            byDeletingSpace: spaceID,
-            memberships: Self.memberships(from: links)
-        ).count
-    }
-
-    /// The result of `removeLink(_:in:)`.
-    struct LinkRemovalOutcome: Equatable {
-        let serviceID: UUID
-        /// The data store to reclaim. Set only when the removed link was the
-        /// service's last one and the service is deleted.
-        let orphanedDataStoreIdentifier: UUID?
-
-        var deletedService: Bool { orphanedDataStoreIdentifier != nil }
-    }
-
-    /// Removes one link and saves. Deletes the service when no other link
-    /// remains for it. Membership comes from a fresh fetch, so an unsaved link
-    /// in the same context counts.
-    ///
-    /// Nothing irreversible happens here. The caller tears down the web view
-    /// and reclaims the data store after the save succeeds. This method rolls
-    /// back a failed save. Returns `nil` when the link does not exist.
-    static func removeLink(_ linkID: UUID, in context: ModelContext) throws -> LinkRemovalOutcome? {
-        let links = try liveLinks(in: context)
-        guard let link = links.first(where: { $0.id == linkID }) else { return nil }
-        let service = link.service
-        let serviceID = service.id
-        // Capture before any delete. Reading a deleted model traps.
-        let dataStoreIdentifier = service.dataStoreIdentifier
-        let hasOtherLinks = links.contains { $0.id != linkID && $0.service.id == serviceID }
-
-        context.delete(link)
-        if !hasOtherLinks {
-            context.delete(service)
-        }
-        guard context.saveOrRollback(reason: "remove service link") else { return nil }
-        return LinkRemovalOutcome(
-            serviceID: serviceID,
-            orphanedDataStoreIdentifier: hasOtherLinks ? nil : dataStoreIdentifier
-        )
+        workspaceStore.orphanedServiceCount(byDeletingSpace: spaceID)
     }
 
     /// Removes a service from one space. When the service exists in no other
     /// space, it is deleted and its data store is reclaimed — but only after
     /// the save succeeds. A failed save rolls back and changes nothing.
     func removeLink(_ linkID: UUID) {
-        let context = modelContainer.mainContext
-        let outcome: LinkRemovalOutcome?
+        let outcome: WorkspaceStore.LinkRemovalOutcome?
         do {
-            outcome = try Self.removeLink(linkID, in: context)
+            outcome = try workspaceStore.removeLink(linkID)
         } catch {
-            context.rollback()
             AppLogger.dataStore.error("Failed to remove service from space; rolled back: \(error.localizedDescription)")
             return
         }
@@ -1186,100 +831,41 @@ final class AppState {
     /// removal, so deleting a space never leaves invisible orphan records or
     /// leaks per-service storage. Selection is moved off the deleted space.
     func deleteSpace(_ spaceID: UUID) {
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<Space>(predicate: #Predicate { $0.id == spaceID })
-        guard let space = try? context.fetch(descriptor).first else { return }
-
-        // Never delete the last space. With zero spaces the content area is
-        // blank and ⌘N would present an Add-Service sheet with no space to add
-        // to. The UI hides the delete action when only one space remains; this
-        // is the safety net.
-        let spaceCount = (try? context.fetchCount(FetchDescriptor<Space>())) ?? 0
-        guard spaceCount > 1 else {
-            AppLogger.dataStore.warning("Refusing to delete the last remaining space")
+        let outcome: WorkspaceStore.SpaceDeletionOutcome?
+        do {
+            outcome = try workspaceStore.deleteSpace(spaceID)
+        } catch {
+            AppLogger.dataStore.error(
+                "Failed to delete space; rolled back: \(error.localizedDescription)"
+            )
             return
         }
-
-        // Read memberships from a fresh link fetch, not from the `serviceLinks`
-        // and `spaceLinks` inverse relationships. A fetch includes unsaved
-        // inserts and deletes in this context; an inverse can lag behind them.
-        guard let liveLinks = try? Self.liveLinks(in: context) else {
-            AppLogger.dataStore.error("Failed to fetch links; not deleting space \(spaceID)")
-            return
-        }
-        var linkedServices: [ServiceInstance] = []
-        var seenServiceIDs: Set<UUID> = []
-        for link in liveLinks where link.space.id == spaceID && seenServiceIDs.insert(link.service.id).inserted {
-            linkedServices.append(link.service)
-        }
-        let memberships = Self.memberships(from: liveLinks)
-        let orphanedIDs = WorkspaceDeletionPolicy.servicesOrphaned(
-            byDeletingSpace: spaceID,
-            memberships: memberships
-        )
-
-        // Delete the models and their orphaned services, but hold off on every
-        // irreversible side effect (tearing down web views, wiping on-disk data
-        // stores) until the save succeeds. Doing them first meant a failed save
-        // left the service still in the store yet logged out with its cookies
-        // deleted 2s later — data loss the rest of the code is careful to avoid.
-        let reclaimed = linkedServices.filter { orphanedIDs.contains($0.id) }
-        // Capture the identifiers BEFORE deleting — reading them off the models
-        // after they're deleted would fault the freed backing data and trap.
-        let reclaimedServiceIDs = reclaimed.map(\.id)
-        let orphanedDataStoreIDs = reclaimed.map(\.dataStoreIdentifier)
-        for service in reclaimed { context.delete(service) }
-        context.delete(space)
-
-        guard context.saveOrRollback(reason: "delete space \(spaceID)") else { return }
-        AppLogger.dataStore.info("Deleted space \(spaceID); reclaimed \(reclaimed.count) orphaned service(s)")
+        guard let outcome else { return }
 
         // Save committed — now the destructive cleanup is safe.
-        for serviceID in reclaimedServiceIDs { webViewPool.removeWebView(for: serviceID) }
-        for dataStoreID in orphanedDataStoreIDs {
+        for serviceID in outcome.reclaimedServiceIDs {
+            webViewPool.removeWebView(for: serviceID)
+        }
+        for dataStoreID in outcome.orphanedDataStoreIdentifiers {
             websiteDataReclaimer.markOrphaned(dataStoreID)
         }
 
         // Fix up selection: clear a selected service that was just reclaimed,
         // and move off the deleted space to the first remaining one.
-        if let selected = selectedServiceID, orphanedIDs.contains(selected) {
+        if let selected = selectedServiceID,
+           outcome.reclaimedServiceIDs.contains(selected) {
             selectedServiceID = nil
         }
         if selectedSpaceID == spaceID {
-            let remaining = (try? context.fetch(
-                FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
-            ))?.first
-            selectedSpaceID = remaining?.id
+            selectedSpaceID = outcome.remainingSpaceID
             selectedServiceID = nil
         }
 
         websiteDataReclaimer.cleanUpOrphanedDataStores()
     }
 
-    /// Returns services for a space, safely skipping any links with dangling relationships
-    /// (can happen if the previous session crashed mid-delete).
     func servicesForSpace(_ spaceID: UUID) -> [ServiceInstance] {
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<SpaceServiceLink>()
-        do {
-            return try context.fetch(descriptor)
-                // Guard both relationships: a link that outlived its deleted
-                // service *or* its deleted space (crash mid-delete) would trap
-                // when we materialize the non-optional relationship to read its
-                // id. Reading `.modelContext` is safe (nil once deleted); read it
-                // before `.space.id`.
-                .filter {
-                    $0.modelContext != nil
-                        && $0.service.modelContext != nil
-                        && $0.space.modelContext != nil
-                        && $0.space.id == spaceID
-                }
-                .sorted { $0.sortOrder < $1.sortOrder }
-                .map(\.service)
-        } catch {
-            AppLogger.dataStore.error("Failed to fetch links for space \(spaceID): \(error.localizedDescription)")
-            return []
-        }
+        workspaceStore.servicesForSpace(spaceID)
     }
 
     /// Preloads web views for all services in the currently selected space.
@@ -1341,9 +927,8 @@ final class AppState {
     /// The order is the fetch's, made deterministic by sorting on id so the same
     /// services win the cap on every launch rather than a different set each time.
     private func crossSpaceCriticalServices(excluding covered: Set<UUID>) -> [ServiceInstance] {
-        let services = (try? modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())) ?? []
         return Self.criticalServicesToKeepLive(
-            among: services,
+            among: workspaceStore.allServices(),
             covered: covered,
             limit: Self.maxCrossSpaceCriticalServices
         )
@@ -1409,7 +994,7 @@ final class AppState {
     }
 
     func saveWindowState() {
-        _ = preferencesStore.setWindowSelection(
+        workspaceStore.saveWindowSelection(
             spaceID: selectedSpaceID,
             serviceID: selectedServiceID
         )
@@ -1483,71 +1068,21 @@ final class AppState {
     }
 
     private func restoreWindowState() {
-        let context = modelContainer.mainContext
-        do {
-            // Apply a saved space only if it still exists. A nil/invalid saved
-            // value leaves the seeded selection in place.
-            let existingSpaceIDs = Set(try context.fetch(FetchDescriptor<Space>()).map(\.id))
-            if let savedSpaceID = preferencesStore.selectedSpaceID,
-               existingSpaceIDs.contains(savedSpaceID) {
-                selectedSpaceID = savedSpaceID
-            }
-
-            // Validate the service selection against the current space. A space
-            // or service selected last session may have been deleted (or reaped
-            // at launch); ContentView's onChange fix-up doesn't run for the
-            // initial value, so a dangling id would strand the app on a blank
-            // pane until the user clicked. Fall back to the space's first service.
-            guard let spaceID = selectedSpaceID else {
-                selectedServiceID = nil
-                return
-            }
-            let servicesInSpace = servicesForSpace(spaceID)
-            if let savedServiceID = preferencesStore.selectedServiceID,
-               servicesInSpace.contains(where: { $0.id == savedServiceID }) {
-                selectedServiceID = savedServiceID
-            } else if selectedServiceID == nil
-                        || !servicesInSpace.contains(where: { $0.id == selectedServiceID }) {
-                selectedServiceID = servicesInSpace.first?.id
-            }
-        } catch {
-            AppLogger.dataStore.error("Failed to restore window state: \(error.localizedDescription)")
-        }
+        let selection = workspaceStore.restoredWindowSelection(
+            fallbackSpaceID: selectedSpaceID,
+            fallbackServiceID: selectedServiceID
+        )
+        selectedSpaceID = selection.spaceID
+        selectedServiceID = selection.serviceID
     }
 
     /// Fetches favicons for services that have none cached, and refreshes
     /// stale favicons (older than 7 days). Runs in a background Task to avoid
     /// blocking app launch.
     private func fetchMissingAndStaleFavicons(force: Bool = false) {
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<ServiceInstance>()
-        let services: [ServiceInstance]
-        do {
-            services = try context.fetch(descriptor)
-        } catch {
-            AppLogger.favicon.error("Failed to fetch services for favicon refresh: \(error.localizedDescription)")
-            return
-        }
-
-        let staleThreshold = Date().addingTimeInterval(-7 * 24 * 60 * 60) // 7 days
-
-        let needsFetch = services.filter { service in
-            guard service.customIconData == nil else { return false }
-            // After an app update, refresh every service's favicon regardless of
-            // age. Otherwise back off on the timestamp for both "never fetched"
-            // and "stale": a service whose favicon keeps failing gets stamped on
-            // failure (below), so it retries at most weekly instead of every launch.
-            if force { return true }
-            guard let fetchedAt = service.faviconFetchedAt else { return true }
-            return fetchedAt < staleThreshold
-        }
-
-        guard !needsFetch.isEmpty else { return }
-        AppLogger.favicon.info("Fetching favicons for \(needsFetch.count) service(s)")
-
-        // Capture IDs before the Task. A service can be deleted while a fetch
-        // waits on the network.
-        let serviceIDs = needsFetch.map(\.id)
+        let serviceIDs = workspaceStore.serviceIDsNeedingFaviconRefresh(force: force)
+        guard !serviceIDs.isEmpty else { return }
+        AppLogger.favicon.info("Fetching favicons for \(serviceIDs.count) service(s)")
 
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -1555,109 +1090,6 @@ final class AppState {
                 await self.refreshFetchedIcon(for: serviceID)
             }
             AppLogger.favicon.info("Favicon refresh complete")
-        }
-    }
-
-    /// Seeds the default spaces and services on a first launch. Returns `true`
-    /// if it seeded (a fresh install), `false` if data already existed or the
-    /// fetch failed — the caller uses this to decide whether to backfill the
-    /// passkey notice.
-    @discardableResult
-    private func seedDefaultDataIfNeeded(defaults: UserDefaults = .standard) -> Bool {
-        let context = modelContainer.mainContext
-
-        // Sorted so the fallback selection is the top space (sortOrder 0), not a
-        // nondeterministic one — matches deleteSpace's remaining-space pick.
-        let descriptor = FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
-        let existingSpaces: [Space]
-        do {
-            existingSpaces = try context.fetch(descriptor)
-        } catch {
-            AppLogger.dataStore.error("Failed to fetch spaces during seeding: \(error.localizedDescription)")
-            return false
-        }
-
-        guard existingSpaces.isEmpty else {
-            selectedSpaceID = existingSpaces.first?.id
-            return false
-        }
-
-        // Seed defaults ONLY on a genuine fresh install. An empty store while
-        // this install has held data before is data loss, not a first launch —
-        // `StoreLoader` already tried to restore it, and writing defaults here
-        // would overwrite the very store (or its in-memory stand-in) we want to
-        // preserve for recovery. This is the guard that turns the original bug
-        // from silent, permanent loss into a recoverable, surfaced condition.
-        guard !defaults.bool(forKey: StoreLoader.hasEverHadDataKey) else {
-            AppLogger.dataStore.error("Store is empty but this install has had data; skipping seed to avoid overwriting a lost store")
-            return false
-        }
-
-        let personalSpace = Space(name: DefaultSeed.spaces[0].name, emoji: DefaultSeed.spaces[0].emoji, sortOrder: 0)
-        let workSpace = Space(name: DefaultSeed.spaces[1].name, emoji: DefaultSeed.spaces[1].emoji, sortOrder: 1)
-        context.insert(personalSpace)
-        context.insert(workSpace)
-
-        // Each space gets its own ServiceInstance — even for the same service URL —
-        // so cookies, sessions, and login state are fully isolated between spaces.
-        for (index, entry) in DefaultSeed.personalServices.enumerated() {
-            let service = ServiceInstance(label: entry.label, url: entry.url, catalogEntryID: entry.catalogID)
-            context.insert(service)
-            context.insert(SpaceServiceLink(sortOrder: index, space: personalSpace, service: service))
-        }
-
-        for (index, entry) in DefaultSeed.workServices.enumerated() {
-            let service = ServiceInstance(label: entry.label, url: entry.url, catalogEntryID: entry.catalogID)
-            context.insert(service)
-            context.insert(SpaceServiceLink(sortOrder: index, space: workSpace, service: service))
-        }
-
-        guard context.saveOrRollback(reason: "seed default data") else { return false }
-        selectedSpaceID = personalSpace.id
-        // Record that this install now holds data, so a future empty store is
-        // recognized as loss rather than reseeded.
-        StoreLoader.recordHasData(defaults)
-        AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
-        // `fetchMissingAndStaleFavicons` runs next in `init`. It fetches
-        // every icon that has no `faviconFetchedAt`, so one pass covers the
-        // seeded services. A second task here raced it on the same context.
-        return true
-    }
-
-    private static let passkeyNoticeBackfilledKey = "passkeyNoticeBackfilled"
-
-    /// Runs once, the first time a build with the passkey notice launches. For a
-    /// pre-existing install it marks every current service as having seen the
-    /// notice, so the banner only appears for services added afterward rather
-    /// than for every service the user already had. On a fresh install
-    /// (`freshInstall == true`) it skips the marking, so the notice still shows
-    /// the first time each seeded service is opened.
-    private func backfillPasskeyNoticeIfNeeded(freshInstall: Bool) {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: Self.passkeyNoticeBackfilledKey) else { return }
-        // Set the flag first so a failure below doesn't re-run (and re-suppress)
-        // the notice on a later launch after the user has added new services.
-        defaults.set(true, forKey: Self.passkeyNoticeBackfilledKey)
-
-        guard !freshInstall else { return }
-
-        let context = modelContainer.mainContext
-        let services: [ServiceInstance]
-        do {
-            services = try context.fetch(FetchDescriptor<ServiceInstance>())
-        } catch {
-            AppLogger.dataStore.error("Failed to fetch services for passkey-notice backfill: \(error.localizedDescription)")
-            return
-        }
-
-        var changed = false
-        for service in services where service.hasSeenPasskeyNotice == nil {
-            service.hasSeenPasskeyNotice = true
-            changed = true
-        }
-        guard changed else { return }
-        if context.saveOrRollback(reason: "backfill passkey notice") {
-            AppLogger.dataStore.info("Backfilled passkey notice for \(services.count) existing service(s)")
         }
     }
 
@@ -1670,11 +1102,6 @@ final class AppState {
     /// Records that the passkey notice has been shown for the given service so
     /// it never appears again for it.
     func markPasskeyNoticeSeen(for serviceID: UUID) {
-        let context = modelContainer.mainContext
-        var descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
-        descriptor.fetchLimit = 1
-        guard let service = try? context.fetch(descriptor).first, service.needsPasskeyNotice else { return }
-        service.hasSeenPasskeyNotice = true
-        context.saveOrRollback(reason: "persist passkey notice dismissal")
+        workspaceStore.markPasskeyNoticeSeen(for: serviceID)
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 import AtollCore
 
-/// The spaces and services `seedDefaultDataIfNeeded` writes on a genuine fresh
+/// The spaces and services `WorkspaceStore` writes on a genuine fresh
 /// install. Shared with `StoreContent.looksLikeUntouchedSeed` so the seeder and
 /// the fingerprint can never drift apart; `testSeededStoreIsFingerprintedAsSeed`
 /// fails if they do.
@@ -33,7 +33,7 @@ enum DefaultSeed {
 }
 
 extension StoreContent {
-    /// True only when the store is exactly what `seedDefaultDataIfNeeded`
+    /// True only when the store is exactly what `WorkspaceStore`
     /// writes: the two seeded spaces, the seven seeded services, nothing added,
     /// nothing renamed. A store like this holds nothing of the user's, which is
     /// what makes it safe to preselect a backup over.

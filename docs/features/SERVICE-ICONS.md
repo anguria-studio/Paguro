@@ -47,6 +47,8 @@ It does not use a monochrome-only manifest image as a full-color service icon.
 Atoll stores the selected image with the service.
 It does not depend on the source address after the fetch succeeds.
 Atoll discards the source address after the fetch.
+`WorkspaceStore` saves custom icons and automatic favicon attempts. A failed
+automatic fetch keeps the older icon and records the attempt time.
 
 Choose a local source image no larger than 20 MB.
 Atoll converts it to PNG and limits its longest edge to 256 pixels.

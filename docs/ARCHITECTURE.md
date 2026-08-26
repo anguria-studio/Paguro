@@ -62,6 +62,7 @@ The main services and startup adapters are:
 - `StoreLoader` for SwiftData migration, integrity checks, and launch recovery.
 - `StoreRecoveryCoordinator` for recovery notices, backup selection, and restart handoff.
 - `PreferencesStore` for the single loaded preferences row and typed commits.
+- `WorkspaceStore` for workspace and service queries, mutations, seeding, and selection persistence.
 - `ShellPreferences` for normalized window appearance and rail settings.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
@@ -74,8 +75,9 @@ The main services and startup adapters are:
 - `AppPresenceController` for Dock and menu-bar behavior.
 
 The main rail and service-add sheets send model mutation intents to `AppState`.
-`AppState` owns their SwiftData commits, rollback, selection updates, and
-post-save runtime work.
+`WorkspaceStore` owns their SwiftData queries, commits, and rollback.
+`AppState` owns selection updates and post-save runtime work. Destructive
+WebKit cleanup starts only after `WorkspaceStore` returns a saved outcome.
 Settings views do not mutate `AppPreferences`. They send typed intents to the
 application model. `PreferencesStore` saves each change before the application
 model applies its runtime side effects.
@@ -177,6 +179,8 @@ WebKit stores service cookies, caches, and local storage.
 
 `PreferencesStore` loads or creates one `AppPreferences` row. It is the only
 type that writes that row.
+`WorkspaceStore` is the SwiftData facade for spaces, services, links, default
+seeding, passkey-notice state, favicons, page zoom, and window selection.
 
 Atoll must not store account passwords.
 Atoll must not copy full message history into its data store.

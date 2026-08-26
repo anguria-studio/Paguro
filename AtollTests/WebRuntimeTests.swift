@@ -270,10 +270,10 @@ final class WebRuntimeTests: XCTestCase {
     @MainActor
     func testEffectiveZoomPrefersPerServiceThenGlobalDefault() {
         // An explicit per-service zoom wins over the global default.
-        XCTAssertEqual(AppState.effectiveZoom(pageZoom: 1.25, defaultZoom: 0.9), 1.25)
+        XCTAssertEqual(WorkspaceStore.effectiveZoom(pageZoom: 1.25, defaultZoom: 0.9), 1.25)
         // With no per-service zoom, the global default applies.
-        XCTAssertEqual(AppState.effectiveZoom(pageZoom: nil, defaultZoom: 0.9), 0.9)
-        XCTAssertEqual(AppState.effectiveZoom(pageZoom: nil, defaultZoom: 1.0), 1.0)
+        XCTAssertEqual(WorkspaceStore.effectiveZoom(pageZoom: nil, defaultZoom: 0.9), 0.9)
+        XCTAssertEqual(WorkspaceStore.effectiveZoom(pageZoom: nil, defaultZoom: 1.0), 1.0)
     }
 
     func testAppPreferencesDefaultZoomEffectiveFallsBackToOne() {

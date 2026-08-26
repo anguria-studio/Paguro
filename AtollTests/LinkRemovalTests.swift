@@ -50,6 +50,13 @@ final class LinkRemovalTests: XCTestCase {
             return link
         }
 
+        func makeStore() -> WorkspaceStore {
+            WorkspaceStore(
+                context: context,
+                preferencesStore: PreferencesStore(context: context)
+            )
+        }
+
         func serviceCount() throws -> Int {
             try context.fetchCount(FetchDescriptor<ServiceInstance>())
         }
@@ -71,8 +78,9 @@ final class LinkRemovalTests: XCTestCase {
         let personalLink = fixture.link(mail, to: personal)
         fixture.link(mail, to: work)
         try context.save()
+        let store = fixture.makeStore()
 
-        let outcome = try XCTUnwrap(AppState.removeLink(personalLink.id, in: context))
+        let outcome = try XCTUnwrap(store.removeLink(personalLink.id))
 
         XCTAssertEqual(outcome.serviceID, mail.id)
         XCTAssertFalse(outcome.deletedService)
@@ -90,8 +98,9 @@ final class LinkRemovalTests: XCTestCase {
         let dataStoreID = mail.dataStoreIdentifier
         let onlyLink = fixture.link(mail, to: personal)
         try context.save()
+        let store = fixture.makeStore()
 
-        let outcome = try XCTUnwrap(AppState.removeLink(onlyLink.id, in: context))
+        let outcome = try XCTUnwrap(store.removeLink(onlyLink.id))
 
         XCTAssertTrue(outcome.deletedService)
         XCTAssertEqual(outcome.orphanedDataStoreIdentifier, dataStoreID)
@@ -112,8 +121,9 @@ final class LinkRemovalTests: XCTestCase {
         try context.save()
 
         fixture.link(mail, to: work)  // not saved yet
+        let store = fixture.makeStore()
 
-        let outcome = try XCTUnwrap(AppState.removeLink(personalLink.id, in: context))
+        let outcome = try XCTUnwrap(store.removeLink(personalLink.id))
 
         XCTAssertFalse(outcome.deletedService)
         XCTAssertEqual(try fixture.serviceCount(), 1)
@@ -127,8 +137,9 @@ final class LinkRemovalTests: XCTestCase {
         let personal = fixture.makeSpace("Personal", order: 0)
         fixture.link(fixture.makeService("mail"), to: personal)
         try context.save()
+        let store = fixture.makeStore()
 
-        XCTAssertNil(try AppState.removeLink(UUID(), in: context))
+        XCTAssertNil(try store.removeLink(UUID()))
         XCTAssertEqual(try fixture.serviceCount(), 1)
         XCTAssertEqual(try fixture.linkCount(), 1)
     }
@@ -147,8 +158,9 @@ final class LinkRemovalTests: XCTestCase {
         fixture.link(mail, to: work)
         fixture.link(chat, to: work)
         try context.save()
+        let store = fixture.makeStore()
 
-        let memberships = AppState.memberships(from: try AppState.liveLinks(in: context))
+        let memberships = WorkspaceStore.memberships(from: try store.liveLinks())
 
         XCTAssertEqual(memberships[mail.id], [personal.id, work.id])
         XCTAssertEqual(memberships[chat.id], [work.id])
@@ -171,12 +183,13 @@ final class LinkRemovalTests: XCTestCase {
         let ghost = fixture.makeService("ghost")
         fixture.link(ghost, to: personal)
         try context.save()
+        let store = fixture.makeStore()
 
         // Delete the service row directly, the way a crashed session can leave
         // a link whose service no longer exists.
         context.delete(ghost)
 
-        let links = try AppState.liveLinks(in: context)
+        let links = try store.liveLinks()
         XCTAssertEqual(links.map(\.service.id), [mail.id])
     }
 }
