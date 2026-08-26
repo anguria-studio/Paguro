@@ -181,8 +181,8 @@ final class NotificationManager {
 
     /// Routes a notification tap to the navigation handler, or buffers it if
     /// the handler isn't wired yet (a notification can launch the app before
-    /// AppState finishes setting `onServiceRequested`). Drained via
-    /// `handlePendingNotification()`.
+    /// NotificationRuntime finishes setting `onServiceRequested`). Drained by
+    /// the runtime when click routing starts.
     func routeServiceRequest(_ serviceID: UUID) {
         if let handler = onServiceRequested {
             handler(serviceID)

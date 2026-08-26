@@ -24,6 +24,9 @@ notification action that launches Atoll to wait until navigation is ready.
 It applies a selected backup only after restart, before the store opens again.
 `HibernationScheduler` owns idle sweeps and immediate-hibernation grace tasks.
 It cancels all scheduled work before the web-view pool shuts down.
+`NotificationRuntime` owns notification polling, quiet-hours timing, network
+and sleep suspension, unread badge probes, and click-routing observers. It
+removes these callbacks and observers before the web-view pool shuts down.
 
 ## Window behavior
 

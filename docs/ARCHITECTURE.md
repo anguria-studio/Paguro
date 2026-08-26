@@ -69,6 +69,7 @@ The main services and startup adapters are:
 - `WebViewPool` for live and hibernated web views.
 - `WebViewCoordinator` for WebKit delegates.
 - `NotificationManager` for notification polling and macOS delivery.
+- `NotificationRuntime` for polling lifecycle, DND timing, unread badges, and click routing.
 - `AppPresenceController` for Dock and menu-bar behavior.
 
 The main rail and service-add sheets send model mutation intents to `AppState`.
@@ -116,8 +117,9 @@ microphone is in use. A download continues after hibernation, because the
 coordinator keeps the download alive until it ends.
 The pool reports service activation and hibernation through callbacks.
 `HibernationScheduler` owns the hibernate, wake, and removal callbacks and
-forwards polling events to `AppState`. `AppState` starts active or background
-badge polling from those events. SwiftUI views do not start or stop polling.
+forwards notification-related events to `NotificationRuntime`.
+`NotificationRuntime` owns the pool callbacks that start active or background
+badge polling. SwiftUI views do not start or stop polling.
 
 `WebViewCoordinator` handles these WebKit operations:
 
@@ -154,6 +156,8 @@ The WebKit bridge adapter sends normalized origins and the raw payload to
 `AtollCore`. Core validates the frame origin and decodes a bounded
 `NotificationPayload`. The handler then applies the app policy and posts the
 macOS notification.
+`NotificationRuntime` coordinates live and transient badge polling, manual and
+scheduled Do Not Disturb, sleep and network suspension, and safe click routing.
 The backlog tracks the split of that handler into detection and presentation
 parts, and a shared event type in `AtollCore` for the island.
 

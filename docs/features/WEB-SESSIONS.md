@@ -51,8 +51,9 @@ The pool owns each live `WKWebView` and coordinator.
 Views must not create or retain a second pool.
 The pool reports service activation and hibernation through lifecycle
 callbacks. `HibernationScheduler` owns the hibernate, wake, and removal
-callbacks and forwards polling events to `AppState`. The content view does not
-start or stop pollers.
+callbacks and forwards notification-related events to `NotificationRuntime`.
+`NotificationRuntime` owns the activation and navigation callbacks that start
+or refresh polling. The content view does not start or stop pollers.
 
 The pool can hibernate an inactive service.
 It must first check these conditions:

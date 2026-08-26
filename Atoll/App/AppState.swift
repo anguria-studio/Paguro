@@ -13,6 +13,7 @@ final class AppState {
     let storeRecovery: StoreRecoveryCoordinator
     let websiteDataReclaimer: WebsiteDataReclaimer
     let hibernationScheduler: HibernationScheduler
+    let notificationRuntime: NotificationRuntime
     let webViewPool: WebViewPool
     let contentBlocker: ContentBlockerManager
     let dataStoreManager: DataStoreManager
@@ -22,9 +23,8 @@ final class AppState {
     /// Loading state and a weak reference for the active service's web view.
     /// Both window layouts use this state for reload and stop.
     let webViewState = WebViewState()
-    let notificationManager: NotificationManager
-    let transientBadgeFetcher: TransientBadgeFetcher
-    let networkMonitor: NetworkMonitor
+    var notificationManager: NotificationManager { notificationRuntime.notificationManager }
+    var networkMonitor: NetworkMonitor { notificationRuntime.networkMonitor }
 
     var selectedSpaceID: UUID?
     var selectedServiceID: UUID?
@@ -32,16 +32,9 @@ final class AppState {
     var showAddSpace = false
     var showQuickSwitcher = false
 
-    /// True once launch-time preference loading has finished. Gates the DND
-    /// `didSet`s below so they do not push effective DND while
-    /// `loadAppPreferences` is still assigning them during init.
-    @ObservationIgnored private var isLaunchComplete = false
-
-    /// Manual Do Not Disturb toggle. `didSet` re-pushes the effective DND so any
-    /// writer (menu command, Settings) keeps the notification gate in
-    /// sync without having to remember to call `refreshEffectiveDoNotDisturb()`.
-    var doNotDisturb = false {
-        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
+    var doNotDisturb: Bool {
+        get { notificationRuntime.doNotDisturb }
+        set { notificationRuntime.doNotDisturb = newValue }
     }
     /// Drives the Find-in-Page overlay in WebContentView. Toggled by Cmd-F.
     var findInPageVisible = false
@@ -97,7 +90,7 @@ final class AppState {
         }
     }
 
-    /// Tokens for the NSWorkspace sleep/wake observers, removed in `shutdown()`.
+    /// Tokens for the NSWorkspace app-lock observer, removed in `shutdown()`.
     /// AppState lives for the whole process, so `shutdown()` is its one
     /// teardown; there is no `deinit`. Not observed UI state, so
     /// `@ObservationIgnored`.
@@ -107,24 +100,9 @@ final class AppState {
     /// removed in `shutdown()`.
     @ObservationIgnored private var distributedObserverTokens: [NSObjectProtocol] = []
 
-    /// Tokens registered on `NotificationCenter.default`, removed in
-    /// `shutdown()`. Kept apart from `systemObserverTokens`, which belongs to
-    /// `NSWorkspace.shared.notificationCenter`.
-    @ObservationIgnored private var defaultCenterTokens: [NSObjectProtocol] = []
-
-    /// Scheduled "quiet hours" Do Not Disturb, loaded from `PreferencesStore`.
-    /// `doNotDisturb` above stays the manual toggle; the effective DND that
-    /// gates notification delivery is `doNotDisturb || scheduledDNDActive`.
-    var scheduledDNDEnabled = false {
-        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
-    }
-    var dndStartMinutes = 22 * 60 {
-        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
-    }
-    var dndEndMinutes = 7 * 60 {
-        didSet { if isLaunchComplete { refreshEffectiveDoNotDisturb() } }
-    }
-    @ObservationIgnored private var quietHoursTask: Task<Void, Never>?
+    var scheduledDNDEnabled: Bool { notificationRuntime.scheduledDNDEnabled }
+    var dndStartMinutes: Int { notificationRuntime.dndStartMinutes }
+    var dndEndMinutes: Int { notificationRuntime.dndEndMinutes }
     @ObservationIgnored private var hasShutDown = false
 
     /// App lock (Touch ID / password), loaded from `PreferencesStore`. `isLocked`
@@ -221,64 +199,57 @@ final class AppState {
             context: loadedContainer.mainContext,
             webViewPool: webViewPool
         )
+        let notificationRuntime = NotificationRuntime(
+            context: loadedContainer.mainContext,
+            preferencesStore: preferencesStore,
+            badgeManager: badgeManager,
+            notificationManager: notificationManager,
+            transientBadgeFetcher: transientBadgeFetcher,
+            webViewPool: webViewPool,
+            networkMonitor: networkMonitor,
+            contentBlocker: contentBlocker
+        )
+        self.notificationRuntime = notificationRuntime
 
         self.dataStoreManager = dataStoreManager
         self.userScriptManager = userScriptManager
         self.badgeManager = badgeManager
 
-        // Capture the modelContainer locally so the @Sendable closure below
-        // doesn't capture `self` before all stored properties are assigned.
-        let container = self.modelContainer
-        let badgeManager = self.badgeManager
         self.userScriptManager.isServiceMuted = { @Sendable serviceID in
-            // WKScriptMessageHandler.didReceive is invoked on the main
-            // thread, so we can safely hop into the main actor here to
-            // read the persisted mute state. A service is muted when its
-            // own isMuted flag is true *or* any of its parent spaces is
-            // muted (mute-the-space cascades to its members).
-            MainActor.assumeIsolated {
-                let context = container.mainContext
-                // Indexed single-row fetch, not a full-table scan — this runs on
-                // every intercepted web notification (matches isServiceNotifyingOS).
-                var descriptor = FetchDescriptor<ServiceInstance>(
-                    predicate: #Predicate { $0.id == serviceID }
-                )
-                descriptor.fetchLimit = 1
-                guard let service = try? context.fetch(descriptor).first else { return false }
-                return service.isEffectivelyMuted
-            }
+            notificationRuntime.isServiceEffectivelyMuted(serviceID)
         }
         self.userScriptManager.isServiceNotifyingOS = { @Sendable serviceID in
-            // Per-service flag (not cascaded, unlike mute); nil → enabled. Runs
-            // on every intercepted web notification, so use an indexed single-row
-            // fetch rather than a full-table scan. Fails silent: a missing or
-            // deleted service does not post a banner.
-            MainActor.assumeIsolated {
-                let context = container.mainContext
-                var descriptor = FetchDescriptor<ServiceInstance>(
-                    predicate: #Predicate { $0.id == serviceID }
-                )
-                descriptor.fetchLimit = 1
-                guard let service = try? context.fetch(descriptor).first else { return false }
-                return service.notifiesOSEffective
-            }
+            notificationRuntime.isServiceNotifyingOS(serviceID)
         }
         self.userScriptManager.isDoNotDisturbActive = { @Sendable in
-            MainActor.assumeIsolated { badgeManager.doNotDisturb }
+            notificationRuntime.isDoNotDisturbActive()
         }
-        self.notificationManager = notificationManager
-        self.transientBadgeFetcher = transientBadgeFetcher
         self.contentBlocker = contentBlocker
         self.webViewPool = webViewPool
-        self.networkMonitor = networkMonitor
 
         loadAppPreferences()
         startContentBlocker()
-        setupNotificationNavigation()
-        setupHibernationCallbacks()
-        setupMenuBarNavigation()
-        setupSystemSleepHandling()
-        setupNetworkHandling()
+        notificationRuntime.start(
+            currentSpaceID: { [weak self] in self?.selectedSpaceID },
+            selectService: { [weak self] spaceID, serviceID in
+                if let spaceID { self?.selectedSpaceID = spaceID }
+                self?.selectedServiceID = serviceID
+            }
+        )
+        hibernationScheduler.start(
+            globalEnabled: autoHibernateIdleEnabled,
+            globalIdleMinutes: autoHibernateIdleMinutes,
+            isLocked: { [weak self] in self?.isLocked ?? true },
+            onServiceHibernated: { [weak notificationRuntime] in
+                notificationRuntime?.serviceHibernated($0)
+            },
+            onServiceSoftHibernated: { [weak notificationRuntime] in
+                notificationRuntime?.serviceSoftHibernated($0)
+            },
+            onServiceRemoved: { [weak notificationRuntime] in
+                notificationRuntime?.serviceRemoved($0)
+            }
+        )
         setupExternalLinkRouting()
         mediaPermissions.start(
             isLocked: { [weak self] in self?.isLocked ?? true },
@@ -292,7 +263,7 @@ final class AppState {
         fetchMissingAndStaleFavicons(force: didUpdate)
         fetchCatalogIcons(force: didUpdate)
         preloadActiveSpaceServices()
-        startTransientBadgeFetcher()
+        notificationRuntime.startTransientBadgeFetcher()
         websiteDataReclaimer.reclaimUnreferencedDataStores()
         websiteDataReclaimer.cleanUpOrphanedDataStores()
 
@@ -308,15 +279,10 @@ final class AppState {
         guard !hasShutDown else { return }
         hasShutDown = true
 
-        quietHoursTask?.cancel()
-        quietHoursTask = nil
-
         mediaPermissions.shutdown()
         websiteDataReclaimer.shutdown()
         hibernationScheduler.shutdown()
-        notificationManager.stopAllPolling()
-        transientBadgeFetcher.pause()
-        networkMonitor.stop()
+        notificationRuntime.shutdown()
         contentBlocker.stop()
         webViewPool.shutdown()
 
@@ -328,11 +294,6 @@ final class AppState {
             DistributedNotificationCenter.default().removeObserver(token)
         }
         distributedObserverTokens.removeAll()
-        for token in defaultCenterTokens {
-            NotificationCenter.default.removeObserver(token)
-        }
-        defaultCenterTokens.removeAll()
-
         saveWindowState()
         storeRecovery.recordContent()
         await Task.yield()
@@ -425,116 +386,11 @@ final class AppState {
         webView.load(URLRequest(url: url))
     }
 
-    /// Hooks NSWorkspace sleep/wake notifications so polling tasks pause
-    /// while the Mac is asleep (otherwise their `Task.sleep` calls keep
-    /// firing on wake-up and stack up missed work). On wake we restart
-    /// polling for every live WKWebView — active mode for the currently
-    /// displayed service, background mode for the rest.
-    private func setupSystemSleepHandling() {
-        let center = NSWorkspace.shared.notificationCenter
-        systemObserverTokens.append(center.addObserver(
-            forName: NSWorkspace.willSleepNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.suspendPolling(reason: "system sleep")
-            }
-        })
-        systemObserverTokens.append(center.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.resumePolling(reason: "system wake")
-            }
-        })
-    }
-
-    /// Pauses or resumes polling when network connectivity toggles. While
-    /// offline every poll (active, background, and hibernated) would only fire
-    /// doomed requests, draining battery for nothing; on reconnect we restart
-    /// so badges refresh promptly.
-    private func setupNetworkHandling() {
-        networkMonitor.onChange = { [weak self] online in
-            Task { @MainActor in
-                guard let self else { return }
-                if online {
-                    self.resumePolling(reason: "network reachable")
-                } else {
-                    self.suspendPolling(reason: "network unreachable")
-                }
-            }
-        }
-    }
-
-    /// Suspends all polling subsystems. Used for both system sleep and loss of
-    /// network connectivity — in either case continued polling is wasted work.
-    private func suspendPolling(reason: String) {
-        notificationManager.stopAllPolling()
-        transientBadgeFetcher.pause()
-        AppLogger.general.info("Paused polling — \(reason)")
-    }
-
-    /// Resumes polling: restarts active/background polling for every live web
-    /// view and re-arms the hibernated-service poller.
-    private func resumePolling(reason: String) {
-        // Sleep/wake and network changes both drive suspend/resume. Waking while
-        // still offline must not restart polling: NWPathMonitor only fires on a
-        // change, so a still-unsatisfied path delivers no event to re-suspend,
-        // and pollers would hammer a dead network until the next transition.
-        guard networkMonitor.isOnline else {
-            AppLogger.general.info("Not resuming polling — offline (\(reason))")
-            return
-        }
-        AppLogger.general.info("Resuming polling — \(reason)")
-        restartPollingAfterResume()
-        transientBadgeFetcher.resume()
-    }
-
-    private func restartPollingAfterResume() {
-        let activeID = webViewPool.activeServiceID
-        for id in webViewPool.liveServiceIDs {
-            guard let webView = webViewPool.liveWebView(for: id) else { continue }
-            let catalog = catalogEntry(for: id)
-            notificationManager.startPolling(
-                for: id,
-                webView: webView,
-                isMuted: { [weak self] in self?.isServiceEffectivelyMuted(id) ?? false },
-                showBadge: { [weak self] in self?.isServiceShowingBadge(id) ?? true },
-                catalogEntry: catalog,
-                mode: (id == activeID) ? .active : .background
-            )
-        }
-        AppLogger.general.info("Restarted polling after wake or reconnect for \(self.webViewPool.liveServiceIDs.count) service(s)")
-    }
-
-    /// Effective mute state for a service: true if its own `isMuted` flag is
-    /// set, or any space it belongs to has `isMuted` set. Used by polling and
-    /// notification gating so that a muted space cascades to every member.
-    nonisolated func isServiceEffectivelyMuted(_ serviceID: UUID) -> Bool {
-        withService(id: serviceID) { $0.isEffectivelyMuted } ?? false
-    }
-
-    /// Single-service fetch by id (predicate + limit 1) instead of fetching the
-    /// whole table and scanning. Main-actor only, since it hands back a SwiftData
-    /// model; nonisolated callers use `withService` to extract Sendable values.
+    /// Fetches one service by its indexed identifier.
     private func fetchService(id: UUID) -> ServiceInstance? {
         var descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try? modelContainer.mainContext.fetch(descriptor).first
-    }
-
-    /// Runs `body` against the service with `id` on the main actor and returns
-    /// only the Sendable value it produces, so the SwiftData model never crosses
-    /// the actor boundary. Used by the nonisolated mute/badge/catalog lookups on
-    /// the poll and render paths. Returns nil when the service is gone.
-    private nonisolated func withService<T: Sendable>(id: UUID, _ body: @MainActor (ServiceInstance) -> T) -> T? {
-        MainActor.assumeIsolated {
-            guard let service = fetchService(id: id) else { return nil }
-            return body(service)
-        }
     }
 
     // MARK: - Active service actions (driven by keyboard shortcuts)
@@ -627,8 +483,7 @@ final class AppState {
     }
 
     func setShowBadgeCountInDock(_ enabled: Bool) {
-        guard preferencesStore.setShowBadgeCountInDock(enabled) else { return }
-        badgeManager.showBadgeCountInDock = enabled
+        notificationRuntime.setShowBadgeCountInDock(enabled)
     }
 
     func setAppearanceMode(_ mode: AppearanceMode) {
@@ -740,67 +595,16 @@ final class AppState {
         }
     }
 
-    // MARK: - Scheduled Do Not Disturb (quiet hours)
-
-    /// Whether the schedule currently puts Atoll into Do Not Disturb.
-    var scheduledDNDActive: Bool {
-        guard scheduledDNDEnabled else { return false }
-        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
-        let mins = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-        return QuietHoursPolicy.contains(
-            nowMinutes: mins,
-            start: dndStartMinutes,
-            end: dndEndMinutes
-        )
-    }
-
-    /// Pushes the effective DND (manual toggle OR active schedule) into the
-    /// badge manager, which the notification gate also reads. Call whenever the
-    /// manual toggle or the schedule changes, and on the minute timer.
-    func refreshEffectiveDoNotDisturb() {
-        badgeManager.doNotDisturb = doNotDisturb || scheduledDNDActive
-        badgeManager.updateDockBadge()
-    }
-
     func setScheduledDNDEnabled(_ enabled: Bool) {
-        guard preferencesStore.setQuietHours(
-            enabled: enabled,
-            startMinutes: dndStartMinutes,
-            endMinutes: dndEndMinutes
-        ) else { return }
-        scheduledDNDEnabled = enabled
+        notificationRuntime.setScheduledDNDEnabled(enabled)
     }
 
     func setDNDStartMinutes(_ minutes: Int) {
-        let resolvedMinutes = min((24 * 60) - 1, max(0, minutes))
-        guard preferencesStore.setQuietHours(
-            enabled: scheduledDNDEnabled,
-            startMinutes: resolvedMinutes,
-            endMinutes: dndEndMinutes
-        ) else { return }
-        dndStartMinutes = resolvedMinutes
+        notificationRuntime.setDNDStartMinutes(minutes)
     }
 
     func setDNDEndMinutes(_ minutes: Int) {
-        let resolvedMinutes = min((24 * 60) - 1, max(0, minutes))
-        guard preferencesStore.setQuietHours(
-            enabled: scheduledDNDEnabled,
-            startMinutes: dndStartMinutes,
-            endMinutes: resolvedMinutes
-        ) else { return }
-        dndEndMinutes = resolvedMinutes
-    }
-
-    /// Re-evaluates the quiet-hours schedule every minute so effective DND flips
-    /// at the window boundaries without the user touching anything.
-    private func startQuietHoursTimer() {
-        quietHoursTask?.cancel()
-        quietHoursTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-                self?.refreshEffectiveDoNotDisturb()
-            }
-        }
+        notificationRuntime.setDNDEndMinutes(minutes)
     }
 
     /// Turns auto-hibernation on/off, persists it, and starts or stops the sweep.
@@ -907,27 +711,8 @@ final class AppState {
         fetchService(id: id)
     }
 
-    /// Per-service "show badge" flag, queried live so the polling task picks
-    /// up toggles without restart.
-    nonisolated func isServiceShowingBadge(_ serviceID: UUID) -> Bool {
-        withService(id: serviceID) { $0.showBadge } ?? true
-    }
-
-    /// Re-applies mute/show-badge state immediately after settings changes.
-    /// Polling tasks read these values on their next tick, but the UI and dock
-    /// badge should update synchronously. The transient badge fetcher re-reads
-    /// mute/show-badge at write time, so it needs no per-service state sync here.
     func refreshBadgeState(for serviceID: UUID) {
-        guard let service = currentServiceInstance(id: serviceID) else { return }
-        let count = badgeManager.rawCount(for: serviceID)
-        let isMuted = isServiceEffectivelyMuted(serviceID)
-        let showBadge = service.showBadge
-        badgeManager.updateBadge(
-            for: serviceID,
-            count: count,
-            isMuted: isMuted,
-            showBadge: showBadge
-        )
+        notificationRuntime.refreshBadgeState(for: serviceID)
     }
 
     struct ServiceMoveOutcome: Equatable {
@@ -1627,60 +1412,6 @@ final class AppState {
     /// room to work.
     static let maxCrossSpaceCriticalServices = 5
 
-    /// Wires the transient badge fetcher's collaborators and starts its
-    /// launch + slow-periodic sweep. The fetcher renders each service that has no
-    /// live web view (everything outside the active space, plus anything the pool
-    /// evicted) once in a short-lived offscreen view, reads its badge, and tears
-    /// it down — so per-space aggregate badges are correct at launch and stay
-    /// roughly current, instead of staying blank until each service is opened.
-    private func startTransientBadgeFetcher() {
-        // Fresh target list each sweep. Built synchronously on the main actor so
-        // no @Model object is held across a suspension point; the fetcher only
-        // ever sees the plain-value `Target` snapshots.
-        transientBadgeFetcher.targetsProvider = { [weak self] in
-            guard let self else { return [] }
-            let services: [ServiceInstance]
-            do {
-                services = try self.modelContainer.mainContext.fetch(FetchDescriptor<ServiceInstance>())
-            } catch {
-                AppLogger.badges.error("Badge sweep fetch failed: \(error.localizedDescription)")
-                return []
-            }
-            return services.compactMap { service in
-                // A live web view already runs a poll that covers the badge, so
-                // skip it; muted / badge-hidden services never show a count.
-                guard !self.webViewPool.hasWebView(for: service.id),
-                      !service.isEffectivelyMuted,
-                      service.showBadge
-                else { return nil }
-                let badgeJS = service.catalogEntryID
-                    .flatMap { ServiceCatalog.shared.entry(for: $0) }?.badgeJS
-                return TransientBadgeFetcher.Target(
-                    id: service.id,
-                    url: service.url,
-                    dataStoreIdentifier: service.dataStoreIdentifier,
-                    userAgent: service.userAgent,
-                    badgeJS: badgeJS
-                )
-            }
-        }
-
-        transientBadgeFetcher.hasLiveWebView = { [weak self] id in
-            self?.webViewPool.hasWebView(for: id) ?? false
-        }
-
-        transientBadgeFetcher.currentBadgeParams = { [weak self] id in
-            guard let self, let service = self.currentServiceInstance(id: id) else { return nil }
-            return (self.isServiceEffectivelyMuted(id), service.showBadge)
-        }
-
-        transientBadgeFetcher.enabledContentRuleLists = { [weak self] in
-            self?.contentBlocker.enabledLists() ?? []
-        }
-
-        transientBadgeFetcher.start()
-    }
-
     /// Preloads services when the user switches to a different space.
     func preloadServicesForSpace(_ spaceID: UUID) {
         let services = servicesForSpace(spaceID)
@@ -1776,10 +1507,6 @@ final class AppState {
         // Frost is now a fixed material rule. Remove the temporary Glass Lab
         // value so an old experiment cannot affect a future setting.
         UserDefaults.standard.removeObject(forKey: "Atoll.backdropFrostIntensity")
-        scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
-        dndStartMinutes = preferencesStore.dndStartMinutes
-        dndEndMinutes = preferencesStore.dndEndMinutes
-
         appLockEnabled = preferencesStore.appLockEnabled
         lockOnLaunch = preferencesStore.lockOnLaunch
         lockOnSleep = preferencesStore.lockOnSleep
@@ -1795,15 +1522,7 @@ final class AppState {
             isLocked = true
         }
 
-        let resolvedShowBadge = preferencesStore.showBadgeCountInDock
         Task { @MainActor in
-            // Launch AppKit-facing setup is now safe (past the init runloop tick).
-            // Flip the flag first so the DND `didSet`s become live from here on.
-            self.isLaunchComplete = true
-            self.badgeManager.showBadgeCountInDock = resolvedShowBadge
-            // Apply any active quiet-hours schedule now, then keep it current.
-            self.refreshEffectiveDoNotDisturb()
-            self.startQuietHoursTimer()
             self.setupLockObservers()
         }
     }
@@ -1845,136 +1564,6 @@ final class AppState {
         annoyanceBlockingEnabled = enabled
         contentBlocker.annoyanceEnabled = enabled
         webViewPool.reattachContentBlocker()
-    }
-
-    private func setupHibernationCallbacks() {
-        hibernationScheduler.start(
-            globalEnabled: autoHibernateIdleEnabled,
-            globalIdleMinutes: autoHibernateIdleMinutes,
-            isLocked: { [weak self] in self?.isLocked ?? true },
-            onServiceHibernated: { [weak self] serviceID in
-                // The transient badge fetcher covers services without a live
-                // web view. Keep the last badge until its next sweep.
-                self?.notificationManager.stopPolling(for: serviceID)
-            },
-            onServiceSoftHibernated: { [weak self] serviceID in
-                guard let self else { return }
-                guard let webView = self.webViewPool.liveWebView(for: serviceID) else {
-                    self.notificationManager.stopPolling(for: serviceID)
-                    return
-                }
-                self.startPolling(for: serviceID, webView: webView, mode: .background)
-            },
-            onServiceRemoved: { [weak self] serviceID in
-                guard let self else { return }
-                self.notificationManager.stopPolling(for: serviceID)
-                self.badgeManager.removeBadge(for: serviceID)
-            }
-        )
-
-        // When a service's page finishes loading (startup or login redirect),
-        // poll its badge immediately instead of waiting for the next tick.
-        webViewPool.onNavigationFinished = { [weak self] serviceID in
-            guard let self,
-                  let webView = self.webViewPool.liveWebView(for: serviceID) else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                await self.notificationManager.pollNow(
-                    for: serviceID,
-                    webView: webView,
-                    isMuted: self.isServiceEffectivelyMuted(serviceID),
-                    showBadge: self.isServiceShowingBadge(serviceID),
-                    catalogEntry: self.catalogEntry(for: serviceID)
-                )
-            }
-        }
-
-        webViewPool.onServicePreloaded = { [weak self] serviceID, webView in
-            // A freshly-preloaded service has a live WKWebView but isn't on
-            // screen. Start it on the background poll so its <title>-based
-            // badge count contributes to the sidebar and the per-space
-            // aggregate as soon as the page finishes loading.
-            self?.startPolling(for: serviceID, webView: webView, mode: .background)
-        }
-
-        webViewPool.onServiceActivated = { [weak self] serviceID, webView in
-            self?.startPolling(for: serviceID, webView: webView, mode: .active)
-        }
-    }
-
-    /// Starts or replaces the recurring poll for one live service.
-    private func startPolling(
-        for serviceID: UUID,
-        webView: WKWebView,
-        mode: NotificationManager.PollMode
-    ) {
-        let catalogEntry = catalogEntry(for: serviceID)
-        notificationManager.startPolling(
-            for: serviceID,
-            webView: webView,
-            isMuted: { [weak self] in self?.isServiceEffectivelyMuted(serviceID) ?? false },
-            showBadge: { [weak self] in self?.isServiceShowingBadge(serviceID) ?? true },
-            catalogEntry: catalogEntry,
-            mode: mode
-        )
-    }
-
-    private nonisolated func catalogEntry(for serviceID: UUID) -> ServiceCatalogEntry? {
-        withService(id: serviceID) { service -> ServiceCatalogEntry? in
-            guard let entryID = service.catalogEntryID else { return nil }
-            return ServiceCatalog.shared.entry(for: entryID)
-        } ?? nil
-    }
-
-    private func setupMenuBarNavigation() {
-        let token = NotificationCenter.default.addObserver(
-            forName: .menuBarServiceActivated,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let userInfo = notification.userInfo,
-                  let serviceID = userInfo["serviceID"] as? UUID,
-                  let spaceID = userInfo["spaceID"] as? UUID
-            else { return }
-            Task { @MainActor in
-                self?.selectedSpaceID = spaceID
-                self?.selectedServiceID = serviceID
-            }
-        }
-        defaultCenterTokens.append(token)
-    }
-
-    private func setupNotificationNavigation() {
-        notificationManager.onServiceRequested = { [weak self] serviceID in
-            self?.navigateToServiceFromNotification(serviceID)
-        }
-        // Drain any notification taps that arrived (e.g. launched the app)
-        // before the handler was wired, in order. The last one wins the final
-        // selection, but each is processed rather than silently dropped.
-        for pending in notificationManager.drainPendingNotifications() {
-            navigateToServiceFromNotification(pending)
-        }
-    }
-
-    /// Selects the service a notification refers to, and switches to a space
-    /// that contains it so the selection is actually visible in the sidebar.
-    private func navigateToServiceFromNotification(_ serviceID: UUID) {
-        let context = modelContainer.mainContext
-        let descriptor = FetchDescriptor<ServiceInstance>(predicate: #Predicate { $0.id == serviceID })
-        guard let service = try? context.fetch(descriptor).first else { return }
-
-        // If the service isn't in the current space, move to one that has it.
-        // Guard the link relationships first: reading `$0.space.id` on a link
-        // whose Space was deleted (a dangling link that outlived StoreRepair)
-        // faults the freed model and traps. Reading `.modelContext` is safe.
-        let liveLinks = service.spaceLinks.filter {
-            $0.modelContext != nil && $0.space.modelContext != nil
-        }
-        let inCurrentSpace = liveLinks.contains { $0.space.id == selectedSpaceID }
-        if !inCurrentSpace, let firstSpace = liveLinks.first?.space.id {
-            selectedSpaceID = firstSpace
-        }
-        selectedServiceID = serviceID
     }
 
     private func restoreWindowState() {

@@ -23,7 +23,7 @@ final class HibernationSchedulerTests: XCTestCase {
         }
         try context.save()
 
-        var isLocked = false
+        let isLocked = AtomicBool(false)
         var hibernated: [UUID] = []
         let scheduler = HibernationScheduler(
             context: context,
@@ -45,13 +45,13 @@ final class HibernationSchedulerTests: XCTestCase {
         scheduler.start(
             globalEnabled: false,
             globalIdleMinutes: 10,
-            isLocked: { isLocked }
+            isLocked: { isLocked.value }
         )
 
         await scheduler.runIdleSweep()
         XCTAssertEqual(hibernated, [ready.id])
 
-        isLocked = true
+        isLocked.value = true
         hibernated.removeAll()
         await scheduler.runIdleSweep()
         XCTAssertTrue(hibernated.isEmpty)

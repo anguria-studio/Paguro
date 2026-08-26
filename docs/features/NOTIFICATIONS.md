@@ -10,6 +10,13 @@ It must work without an official API for each service.
 No single web signal works for all services.
 Atoll therefore uses a small set of signal sources.
 
+## Current runtime ownership
+
+`NotificationRuntime` owns manual and scheduled Do Not Disturb, badge-polling
+lifecycle, sleep and network suspension, and notification or menu-bar click
+routing. `NotificationManager` owns WebKit badge polling and macOS delivery.
+Detection and presentation remain separate from this lifecycle controller.
+
 ## Signal sources
 
 ### Page notifications

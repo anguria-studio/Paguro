@@ -85,7 +85,6 @@ struct AtollApp: App {
 
                 Button(appState.doNotDisturb ? "Turn Off Do Not Disturb" : "Do Not Disturb") {
                     appState.doNotDisturb.toggle()
-                    appState.refreshEffectiveDoNotDisturb()
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
 

@@ -37,7 +37,7 @@ final class TransientBadgeFetcher {
         let badgeJS: String?
     }
 
-    // MARK: - Injected collaborators (wired after AppState finishes init)
+    // MARK: - Injected collaborators (wired by NotificationRuntime)
 
     /// Fresh list of services to fetch, built on the main actor each sweep.
     var targetsProvider: (@MainActor () -> [Target])?
