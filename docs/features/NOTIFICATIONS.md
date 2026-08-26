@@ -1,6 +1,6 @@
 # Notification system
 
-Status: planned
+Status: in progress
 
 ## Purpose
 
@@ -26,7 +26,7 @@ presentation remain separate from this lifecycle controller.
 Atoll can wrap the page `Notification` constructor.
 It can also wrap page calls to `showNotification`.
 
-This source can provide a title, body, tag, icon, and target URL.
+The current source provides a title, body, and tag.
 It is the best generic source for an individual event.
 
 A service worker can create a notification outside the page context.
@@ -85,15 +85,20 @@ The bridge must check each message before use.
 6. Parse the URL without loading it.
 7. Apply the service route policy to the URL.
 
-Atoll must approve an origin before a subframe sends a message.
-The first implementation should require the main origin.
+Atoll accepts a main-frame signal. It also accepts a subframe signal when its
+origin is the same as the main-frame origin. It rejects a cross-origin signal.
 
 The bridge must not expose file access, shell access, or a general native command.
 
-The current bridge limits each UTF-8 field before presentation. A title can use
-512 bytes, and a body can use 4,096 bytes. An icon URL can use 2,048 bytes. A
-tag can use 512 bytes, and a service ID can use 64 bytes. The decoder removes
-control characters that have no display use. It keeps tabs and line breaks.
+The current signal uses schema version `1` and type `web-notification`. The
+complete UTF-8 message can use 16,384 bytes. A title can use 512 bytes, a body
+can use 4,096 bytes, and a tag can use 512 bytes. The decoder rejects another
+version or type. It removes control characters that have no display use. It
+keeps tabs and line breaks.
+
+The page does not send a service ID or notification icon. The native message
+handler binds each signal to its service account. Native presentation uses the
+known service icon. Extra page fields cannot replace these values.
 
 ## Policy pipeline
 

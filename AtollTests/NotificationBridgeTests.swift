@@ -66,6 +66,10 @@ final class NotificationBridgeTests: XCTestCase {
         )
         XCTAssertEqual(posted.count, 2, "each constructed notification is forwarded once")
         XCTAssertTrue(posted[0].contains("\"body\":\"b\""), "the payload must carry the body")
+        XCTAssertTrue(posted[0].contains("\"version\":1"), "the payload must carry its schema version")
+        XCTAssertTrue(posted[0].contains("\"type\":\"web-notification\""), "the payload must carry its signal type")
+        XCTAssertFalse(posted[0].contains("serviceID"), "the page must not choose the native service identity")
+        XCTAssertFalse(posted[0].contains("icon"), "the page must not choose a remote notification icon")
     }
 
     /// The path that was not covered at all. Web apps raise notifications
@@ -141,9 +145,7 @@ final class NotificationBridgeTests: XCTestCase {
         let payload = NotificationPayload(
             title: "New message",
             body: "A short body",
-            icon: "https://untrusted.example/icon.png",
-            tag: "message-1",
-            serviceID: service.id.uuidString
+            tag: "message-1"
         )
         let content = NativeNotificationContentBuilder.makeContent(
             payload: payload,
@@ -170,9 +172,7 @@ final class NotificationBridgeTests: XCTestCase {
         let payload = NotificationPayload(
             title: "New message",
             body: "A short body",
-            icon: "",
-            tag: "message-1",
-            serviceID: serviceID.uuidString
+            tag: "message-1"
         )
 
         let request = presenter.makeRequest(

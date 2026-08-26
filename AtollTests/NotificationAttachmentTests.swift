@@ -29,9 +29,7 @@ final class NotificationAttachmentTests: XCTestCase {
         let payload = NotificationPayload(
             title: "New message",
             body: "Body",
-            icon: "",
-            tag: "tag",
-            serviceID: UUID().uuidString
+            tag: "tag"
         )
         return NativeNotificationContentBuilder.makeContent(
             payload: payload,

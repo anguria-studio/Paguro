@@ -5,17 +5,34 @@ import Testing
 struct NotificationPayloadTests {
     @Test
     func validPayloadDecodesAndRemovesNonDisplayControls() throws {
-        let json = #"{"title":"New\u0000 message","body":"Line 1\nLine 2","icon":"https://example.com/icon.png","tag":"message-1","serviceID":"service-1"}"#
+        let json = #"{"version":1,"type":"web-notification","title":"New\u0000 message","body":"Line 1\nLine 2","tag":"message-1"}"#
 
         let payload = try NotificationPayload.decode(json)
 
         #expect(payload == NotificationPayload(
             title: "New message",
             body: "Line 1\nLine 2",
-            icon: "https://example.com/icon.png",
-            tag: "message-1",
-            serviceID: "service-1"
+            tag: "message-1"
         ))
+    }
+
+    @Test
+    func missingOptionalTextFieldsDecodeAsEmptyStrings() throws {
+        let payload = try NotificationPayload.decode(
+            #"{"version":1,"type":"web-notification","title":"New message"}"#
+        )
+
+        #expect(payload.body.isEmpty)
+        #expect(payload.tag.isEmpty)
+    }
+
+    @Test
+    func ignoresIdentityAndIconFieldsFromThePage() throws {
+        let json = #"{"version":1,"type":"web-notification","title":"New message","serviceID":"spoofed-service","icon":"https://untrusted.example/icon.png"}"#
+
+        let payload = try NotificationPayload.decode(json)
+
+        #expect(payload == NotificationPayload(title: "New message"))
     }
 
     @Test
@@ -34,11 +51,36 @@ struct NotificationPayloadTests {
 
     @Test
     func invalidPayloadTable() {
-        let validFields = #""body":"","icon":"","tag":"","serviceID":"service-1""#
+        let validFields = #""version":1,"type":"web-notification","body":"","tag":"""#
         let cases: [(name: String, json: String, error: NotificationPayloadDecodeError)] = [
             ("malformed JSON", "{", .invalidJSON),
             ("missing title", "{\(validFields)}", .missingField("title")),
             ("wrong title type", "{\"title\":12,\(validFields)}", .invalidField("title")),
+            (
+                "missing version",
+                #"{"type":"web-notification","title":"Title"}"#,
+                .missingField("version")
+            ),
+            (
+                "wrong version type",
+                #"{"version":"1","type":"web-notification","title":"Title"}"#,
+                .invalidField("version")
+            ),
+            (
+                "unsupported version",
+                Self.payloadJSON(version: NotificationPayload.currentVersion + 1),
+                .unsupportedVersion(NotificationPayload.currentVersion + 1)
+            ),
+            (
+                "missing type",
+                #"{"version":1,"title":"Title"}"#,
+                .missingField("type")
+            ),
+            (
+                "unsupported type",
+                Self.payloadJSON(type: "unknown"),
+                .unsupportedType("unknown")
+            ),
             (
                 "over-long title",
                 Self.payloadJSON(title: String(
@@ -62,17 +104,6 @@ struct NotificationPayloadTests {
                 )
             ),
             (
-                "over-long icon",
-                Self.payloadJSON(icon: String(
-                    repeating: "x",
-                    count: NotificationPayload.maximumIconBytes + 1
-                )),
-                .fieldTooLong(
-                    field: "icon",
-                    maximumBytes: NotificationPayload.maximumIconBytes
-                )
-            ),
-            (
                 "over-long tag",
                 Self.payloadJSON(tag: String(
                     repeating: "x",
@@ -81,17 +112,6 @@ struct NotificationPayloadTests {
                 .fieldTooLong(
                     field: "tag",
                     maximumBytes: NotificationPayload.maximumTagBytes
-                )
-            ),
-            (
-                "over-long service ID",
-                Self.payloadJSON(serviceID: String(
-                    repeating: "x",
-                    count: NotificationPayload.maximumServiceIDBytes + 1
-                )),
-                .fieldTooLong(
-                    field: "serviceID",
-                    maximumBytes: NotificationPayload.maximumServiceIDBytes
                 )
             ),
         ]
@@ -103,19 +123,40 @@ struct NotificationPayloadTests {
         }
     }
 
+    @Test
+    func rejectsAnOversizedMessageBeforeItDecodesUnknownFields() {
+        let object: [String: Any] = [
+            "version": NotificationPayload.currentVersion,
+            "type": NotificationPayloadType.webNotification.rawValue,
+            "title": "Title",
+            "padding": String(
+                repeating: "x",
+                count: NotificationPayload.maximumMessageBytes
+            ),
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        let json = String(decoding: data, as: UTF8.self)
+
+        #expect(throws: NotificationPayloadDecodeError.messageTooLong(
+            maximumBytes: NotificationPayload.maximumMessageBytes
+        )) {
+            try NotificationPayload.decode(json)
+        }
+    }
+
     private static func payloadJSON(
+        version: Int = NotificationPayload.currentVersion,
+        type: String = NotificationPayloadType.webNotification.rawValue,
         title: String = "Title",
         body: String = "Body",
-        icon: String = "",
-        tag: String = "",
-        serviceID: String = "service-1"
+        tag: String = ""
     ) -> String {
-        let object = [
+        let object: [String: Any] = [
+            "version": version,
+            "type": type,
             "title": title,
             "body": body,
-            "icon": icon,
             "tag": tag,
-            "serviceID": serviceID,
         ]
         let data = try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)

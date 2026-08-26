@@ -67,7 +67,7 @@ final class UserScriptManager {
         stayActiveInBackground: Bool,
         on controller: WKUserContentController
     ) {
-        let notificationScript = makeNotificationInterceptionScript(serviceID: instance.id.uuidString)
+        let notificationScript = makeNotificationInterceptionScript()
         let userScript = WKUserScript(
             source: notificationScript,
             injectionTime: .atDocumentStart,
@@ -162,19 +162,6 @@ final class UserScriptManager {
 
     func removeHandler(for instanceID: UUID) {
         messageHandlers.removeValue(forKey: instanceID)
-    }
-
-    /// Encodes a Swift string as a JS string literal (quotes included) so it can
-    /// be interpolated into a script without breaking out of the surrounding
-    /// literal. Falls back to `""`. Used for the service id baked into the probe
-    /// and notification scripts — a UUID today, but encode it so it stays safe
-    /// regardless of what feeds it.
-    nonisolated static func jsStringLiteral(_ value: String) -> String {
-        guard let data = try? JSONEncoder().encode(value),
-              let json = String(data: data, encoding: .utf8) else {
-            return "\"\""
-        }
-        return json
     }
 
     /// JavaScript that can be evaluated to check if a WebRTC call is active.
@@ -344,20 +331,18 @@ final class UserScriptManager {
     /// today: WebKit only delivers web notifications to an app that adopts the
     /// `WKUIDelegate` notification methods, and Atoll adopts none of them, so
     /// the original object is inert for display.
-    private func makeNotificationInterceptionScript(serviceID: String) -> String {
+    private func makeNotificationInterceptionScript() -> String {
         return """
         (function() {
-            var SERVICE_ID = \(Self.jsStringLiteral(serviceID));
-
             function forward(title, options) {
                 try {
                     window.webkit.messageHandlers.atollNotification.postMessage(
                         JSON.stringify({
+                            version: 1,
+                            type: 'web-notification',
                             title: title == null ? '' : String(title),
                             body: (options && options.body) || '',
-                            icon: (options && options.icon) || '',
-                            tag: (options && options.tag) || '',
-                            serviceID: SERVICE_ID
+                            tag: (options && options.tag) || ''
                         })
                     );
                 } catch (e) {
