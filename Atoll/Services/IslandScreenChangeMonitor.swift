@@ -112,6 +112,8 @@ final class IslandScreenChangeMonitor: NSObject, IslandScreenChangeMonitoring {
 
     private static func isMainAtollWindow(_ window: NSWindow) -> Bool {
         window.identifier?.rawValue == "main"
-            || (window.canBecomeMain && window.title == "Atoll")
+            || (window.canBecomeMain
+                && window.styleMask.contains(.titled)
+                && window.title == "Atoll")
     }
 }

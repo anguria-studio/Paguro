@@ -23,7 +23,11 @@ final class AppModel {
         let resolvedScreenGeometryProvider = screenGeometryProvider
             ?? IslandScreenGeometryConfiguration.makeProvider()
         let islandPanelController = IslandPanelController(
-            screenGeometryProvider: resolvedScreenGeometryProvider
+            screenGeometryProvider: resolvedScreenGeometryProvider,
+            // The island panel takes no activation of its own, so it must not
+            // reach the screen while AppKit is still bringing the main window
+            // forward. `AppDelegate` releases it.
+            waitsForLaunchActivation: true
         )
         let resolvedNotificationRouteSettings = notificationRouteSettings
             ?? NotificationRouteSettings()
@@ -35,6 +39,22 @@ final class AppModel {
             notificationRouteSettings: resolvedNotificationRouteSettings
         )
         self.presenceController = presenceController
+        observeIslandAppearance()
+    }
+
+    private func observeIslandAppearance() {
+        withObservationTracking {
+            islandPanelController.updateAppearance(
+                NotificationIslandAppearance(
+                    glassStyle: appState.liquidGlassStyle,
+                    transparency: appState.liquidGlassIntensity
+                )
+            )
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.observeIslandAppearance()
+            }
+        }
     }
 
     private static func makeAppState(
@@ -84,6 +104,9 @@ final class AppModel {
             [weak self, weak delegate] serviceID in
             self?.appState.notificationManager.routeServiceRequest(serviceID)
             delegate?.bringMainWindowForward()
+        }
+        delegate.launchActivationDidSettle = { [weak self] in
+            self?.islandPanelController.launchActivationDidSettle()
         }
         delegate.startAfterLaunch = { [weak self] in
             guard let self else { return }

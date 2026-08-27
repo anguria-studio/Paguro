@@ -23,9 +23,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Runs once the launch activation has settled: the application has become
+    /// active and AppKit has brought the initial main window forward.
+    ///
+    /// A window that never takes the front — the island's non-activating panel
+    /// — must wait for this hook. Ordering such a window while the launch
+    /// activation is still in flight leaves the main window behind the
+    /// application that started Atoll.
+    var launchActivationDidSettle: (@MainActor () -> Void)? {
+        didSet {
+            guard hasSettledLaunchActivation else { return }
+            launchActivationDidSettle?()
+        }
+    }
+
     private var isSettlingLoginLaunch = false
     private var isTerminating = false
     private var hasFinishedLaunching = false
+    private var hasActivatedSinceLaunch = false
+    private var hasSettledLaunchActivation = false
+    private var launchState = ApplicationActivationState.regular
     /// A regular activation policy only makes Atoll eligible for Command-Tab.
     /// It does not make the initial SwiftUI window key. Keep this request until
     /// the scene has produced a visible main-capable window.
@@ -40,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launchedAsLoginItem: Self.launchedAsLoginItem,
             keepsDockIconVisible: alwaysShowDockIcon
         )
+        self.launchState = launchState
         Self.apply(launchState)
 
         guard launchState == .accessory else {
@@ -81,14 +99,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Command-Tab activates the process but does not issue a reopen request.
     /// Re-order an existing visible main window so activation always has a
-    /// visible result.
+    /// visible result. A window that AppKit already made key is that result
+    /// already, and the launch activation arrives here too, so the redundant
+    /// order request is skipped.
     func applicationDidBecomeActive(_ notification: Notification) {
+        hasActivatedSinceLaunch = true
         guard hasFinishedLaunching,
               !isSettlingLoginLaunch,
               !isTerminating,
               NSApp.activationPolicy() == .regular,
               let window = mainWindow,
-              window.isVisible
+              window.isVisible,
+              !window.isKeyWindow
         else { return }
 
         window.makeKeyAndOrderFront(nil)
@@ -99,6 +121,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// cleared as soon as the main window is available.
     func applicationDidUpdate(_ notification: Notification) {
         activateInitialWindowIfAvailable()
+        settleLaunchActivationIfReady()
+    }
+
+    /// Releases the work that waits for the end of the launch activation.
+    ///
+    /// AppKit calls the update hook after every event-loop pass, so this runs
+    /// after the delegate's own activation and window callbacks rather than
+    /// racing them.
+    private func settleLaunchActivationIfReady() {
+        guard !hasSettledLaunchActivation, hasFinishedLaunching else { return }
+        guard ApplicationLifecyclePolicy.hasLaunchActivationSettled(
+            launchState: launchState,
+            hasActivatedSinceLaunch: hasActivatedSinceLaunch,
+            isAwaitingInitialWindowActivation: isAwaitingInitialWindowActivation,
+            isSettlingLoginLaunch: isSettlingLoginLaunch,
+            hasMainWindow: NSApp.mainWindow != nil
+        ) else { return }
+
+        hasSettledLaunchActivation = true
+        launchActivationDidSettle?()
     }
 
     /// AppKit must delay termination because `applicationWillTerminate` cannot
@@ -117,9 +159,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Promote before opening a window. Opening first can place the window
     /// behind the currently active application.
+    ///
+    /// This is the explicit request that follows a person's action, never the
+    /// launch request: at launch the system is already activating Atoll and a
+    /// second request costs it the front.
     static func prepareToShowWindow() {
         apply(ApplicationLifecyclePolicy.activationBeforeShowingMainWindow())
-        NSApp.activate(ignoringOtherApps: true)
+        takeFrontForUserAction()
+    }
+
+    /// Takes the front for an action that a person performed.
+    ///
+    /// macOS 14 replaced `activate(ignoringOtherApps:)` with a cooperative
+    /// exchange, in which the application that holds the front hands it over.
+    /// Naming that application makes the request succeed without the
+    /// deprecated call.
+    private static func takeFrontForUserAction() {
+        let frontApplication = NSWorkspace.shared.frontmostApplication
+        let request = ApplicationLifecyclePolicy.activationRequestForUserAction(
+            isApplicationActive: NSApp.isActive,
+            hasOtherFrontApplication: frontApplication != nil
+                && frontApplication != .current
+        )
+        switch request {
+        case .none:
+            return
+        case .cooperative:
+            NSApp.activate()
+        case .takeFront:
+            guard let frontApplication else { return }
+            NSRunningApplication.current.activate(from: frontApplication)
+        }
     }
 
     /// Activates Atoll and shows its existing main window after an external action.
@@ -145,7 +215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func windowDidBecomeMain(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, window.canBecomeMain else { return }
+        guard let window = notification.object as? NSWindow,
+              Self.carriesMainWindowLifecycle(window) else { return }
         if isSettlingLoginLaunch {
             window.close()
             return
@@ -160,12 +231,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func windowWillClose(_ notification: Notification) {
         guard let closingWindow = notification.object as? NSWindow,
-              closingWindow.canBecomeMain else { return }
+              Self.carriesMainWindowLifecycle(closingWindow) else { return }
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let visibleMainWindowCount = NSApp.windows.filter {
-                $0 !== closingWindow && $0.canBecomeMain && $0.isVisible
+                $0 !== closingWindow
+                    && Self.carriesMainWindowLifecycle($0)
+                    && $0.isVisible
             }.count
             let state = ApplicationLifecyclePolicy.activationAfterClosingMainWindow(
                 visibleMainWindowCount: visibleMainWindowCount,
@@ -177,9 +250,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Tells whether a window drives Atoll's main-window lifecycle.
+    ///
+    /// The window-style menu bar extra owns a borderless status window, and
+    /// AppKit and the text input system add further borderless windows while
+    /// Atoll starts. None of them is a window a person opened, so none of them
+    /// may promote the activation policy, hide the application, or count as the
+    /// last window on screen.
+    private static func carriesMainWindowLifecycle(_ window: NSWindow) -> Bool {
+        window.canBecomeMain && window.styleMask.contains(.titled)
+    }
+
     private func reconcileActivationPolicy() {
         let visibleMainWindowCount = NSApp.windows.filter {
-            $0.canBecomeMain && $0.isVisible
+            Self.carriesMainWindowLifecycle($0) && $0.isVisible
         }.count
         let state = ApplicationLifecyclePolicy.activationAfterClosingMainWindow(
             visibleMainWindowCount: visibleMainWindowCount,
@@ -193,19 +277,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let window = mainWindow else { return }
 
         isAwaitingInitialWindowActivation = false
-        Self.prepareToShowWindow()
-        window.makeKeyAndOrderFront(nil)
+        Self.apply(ApplicationLifecyclePolicy.activationBeforeShowingMainWindow())
+
+        // `LSUIElement` is NO, so the system already brought Atoll to the front
+        // and AppKit already made this window key. Repeating either request
+        // hands the front back to the application that launched Atoll: an
+        // activation request from an application that is already active enters
+        // the macOS 14 cooperative exchange, and the launching application wins
+        // it. Ask only for the part that is still missing.
+        let activation = ApplicationLifecyclePolicy.initialWindowActivation(
+            isApplicationActive: NSApp.isActive,
+            isMainWindowKey: window.isKeyWindow
+        )
+        if activation.activatesApplication {
+            NSApp.activate()
+        }
+        if activation.ordersWindowForward {
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 
     /// SwiftUI uses the scene ID as the AppKit identifier. The title fallback
     /// covers an initial scene window before SwiftUI assigns that identifier.
+    /// It requires a titled window: the window-style menu bar extra also has
+    /// the title "Atoll" but is borderless, and activating it at launch left
+    /// the real window behind.
     private var mainWindow: NSWindow? {
         NSApp.windows.first { $0.identifier?.rawValue == "main" }
-            ?? NSApp.windows.first { $0.canBecomeMain && $0.title == "Atoll" }
+            ?? NSApp.windows.first {
+                Self.carriesMainWindowLifecycle($0) && $0.title == "Atoll"
+            }
     }
 
     private func closeMainWindows() {
-        for window in NSApp.windows where window.canBecomeMain && window.isVisible {
+        for window in NSApp.windows
+        where Self.carriesMainWindowLifecycle(window) && window.isVisible {
             window.close()
         }
     }

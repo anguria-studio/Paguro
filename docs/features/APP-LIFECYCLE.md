@@ -59,9 +59,14 @@ The "Show Atoll in" setting has three modes:
 When the user drags the item off the menu bar, Atoll changes the mode to
 "Dock only" so the app stays reachable.
 
+The menu-bar item opens a native status window. The window can select a
+service, toggle global notification mute, open the main window, open Settings,
+or change a presence preference. This window is the complete application route
+while Atoll runs in Menu bar only mode.
+
 ## Quit behavior
 
-`Command-Q` and the menu-bar Quit action both request AppKit termination.
+`Command-Q` and the application menu Quit action both request AppKit termination.
 `AppDelegate` returns `terminateLater`, waits for `AppModel.shutdown()`, and
 then replies to AppKit.
 

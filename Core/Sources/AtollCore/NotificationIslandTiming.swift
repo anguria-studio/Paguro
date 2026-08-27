@@ -3,7 +3,7 @@ import Foundation
 /// Stable display times for the notification island.
 public struct NotificationIslandTiming: Equatable, Sendable {
     public static let standard = NotificationIslandTiming(
-        alertDuration: .seconds(6),
+        alertDuration: .seconds(4),
         voiceOverAlertDuration: .seconds(12),
         dismissalDuration: .milliseconds(180)
     )

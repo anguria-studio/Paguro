@@ -10,7 +10,7 @@ It can show a new event and a few common controls.
 The island is not the notification engine.
 It receives validated events from the notification pipeline.
 
-## State and queue rules
+## State and history rules
 
 `NotificationIslandReducer` owns the pure state rules in `AtollCore`.
 It does not create a panel or start a timer.
@@ -19,61 +19,220 @@ The model has these phases:
 
 - hidden;
 - collapsed;
+- peek;
 - alert;
 - expanded;
 - dismissed.
 
 The dismissed phase keeps the current event until the exit animation ends.
-The next queued event then becomes the current alert.
+It then returns to the collapsed state.
 
-The pending queue is in memory only.
-It keeps at most four events by default.
-If the queue is full, it removes the oldest pending event and keeps the new event.
-The counter still counts every additional event while the current alert is visible.
-It shows `99+` when the count is greater than 99.
-When the current alert ends, Atoll continues with the four most recent previews.
-The newest pending preview appears next. An older pending preview must not delay
-a newer one.
-The recent list keeps the four newest received events after their alerts end.
-It is also in memory only. Hiding or stopping the island clears this list.
+The recent list keeps all events that Atoll receives in the current session.
+It is in memory only. The count shows `99+` when it is greater than 99.
+Opening or dismissing one event decreases the count by one. Dismiss All clears
+the count and the recent list.
+
+A burst does not create a sequence of compact alerts. Each new event replaces
+the compact preview and restarts one display time. The recent view keeps all
+session details in newest-first order.
+Hiding or stopping the island clears the recent list and count.
 The state clears all event content when Atoll stops.
+
+## Layout rules
+
+`NotificationIslandLayout` owns the pure layout rules in `AtollCore`.
+It holds constants only and it measures no view.
+
+The type uses these values:
+
+- row height: 68 points;
+- row spacing: 8 points;
+- row pitch: 76 points;
+- top inset: 4 points;
+- bottom inset: 8 points;
+- toolbar horizontal inset: 14 points;
+- card horizontal inset: 10 points;
+- card corner radius: 12 points;
+- card vertical padding: 7 points;
+- visible row limit: 3 rows;
+- stack peek: 38 points;
+- stop line inset: 10 points;
+- pile stagger: 8 points;
+- bottom scroll clearance: 10 points;
+- maximum fold depth: 3 levels;
+- expanded body width: 420 points.
+
+The card inset is smaller than the toolbar inset. Each card therefore extends
+4 points past the toolbar capsules on each side.
+
+The visible row count is the event count, but not less than 1 and not more
+than 3.
+
+The expanded and peek panel height is the sum of these values:
+
+- the camera-housing toolbar height;
+- the top inset;
+- the visible row count times the row height;
+- the row spacing between the visible rows;
+- the bottom inset.
+
+An event count greater than 3 adds the 38-point stack peek to this height. The
+list then scrolls.
+
+A 38-point camera housing gives these heights:
+
+- 118 points for zero events or one event;
+- 194 points for two events;
+- 270 points for three events;
+- 308 points for four events or more.
+
+The height comes from the event count. Do not measure it from SwiftUI. AppKit
+stays the only owner of the panel frame. The Window type section gives this
+rule in full.
 
 ## Product states
 
 ### Collapsed
 
 The collapsed state is quiet.
-It can show the active service and a small unread signal.
-Clicking it opens the expanded state.
+The collapsed island is always solid black. It keeps this black surface in
+every glass style and in every transparency setting. It therefore reads as an
+extension of the camera housing.
+It shows the unreviewed count when that count is not zero.
+The counter badge stays legible on the black surface.
+Clicking it pins the expanded state open.
+Moving the pointer over it opens the complete recent view without activating
+Atoll when history is not empty.
+
+The island collapses completely when the pointer leaves it. This rule applies
+to the hover view and to the pinned expanded view. The collapse starts 180
+milliseconds after the pointer leaves. Pointer reentry inside this delay
+cancels the collapse.
+
+The controller compares the real pointer position with the island frame before
+it collapses the island. This test frame adds a 6-point margin at the two sides
+and at the bottom. It extends to the top screen edge. The island stays open
+when the pointer is inside that frame. The controller then tests the position
+again every 250 milliseconds until the pointer is outside. Pointer reentry
+cancels the test. This rule prevents the collapse-and-expand loop that a size
+change or the top screen edge can cause.
 
 ### Alert
 
 The alert state shows one recent event.
 It stays visible for a short and testable time.
 
-The standard alert time is six seconds.
+The standard alert time is four seconds.
 VoiceOver gets twelve seconds.
 The dismissed transition lasts 180 milliseconds.
-Each queued event gets its complete alert time after it becomes current.
+A new event replaces the compact preview and restarts the standard alert time.
+Hovering the alert opens the complete recent view and pauses its compact timer.
 
-A new high-priority event can replace the current event.
-Equal events must not restart the timer without limit.
+The compact alert does not continue its remaining display time after a hover.
+The 180-millisecond dismissed transition runs and the island returns to the
+collapsed state. The counter and the recent list keep their content.
+Each recent card has a dismiss action.
 
 ### Expanded
 
-The expanded state shows recent events and controls.
-The user opens this state by clicking the collapsed island.
-The expanded panel takes keyboard focus after this explicit action.
-Escape and the close button return it to the collapsed state.
-The newest recent event receives initial focus when one exists.
-Tab moves between the recent-event buttons and the close button.
-Return activates the focused button.
+The recent view shows the session events in a vertical stack. The newest event
+is on top. The list has no upper limit and it scrolls.
 
-The first expanded view shows up to four recent events. Each event is a native
-button with a service name, event title, time, and optional body. Activating a
-button opens the exact service account through the shared notification route
-and closes the expanded panel. It also removes that event from the recent list
-and the pending preview queue.
+Each visible card is full size, sharp, and interactive.
+Only a card at the bottom of the scroll area changes.
+
+The scroll view spans the complete island height. A leading spacer holds the
+list below the toolbar. That spacer equals the camera-housing height plus the
+top inset. Cards scroll under the toolbar and disappear at the island's top
+edge. The scroll view does not clip its content. The island shape is the only
+clip.
+
+The count badge and the Dismiss All button sit on frosted capsules. These
+capsules use the regular material. Reduce Transparency replaces that material
+with an opaque window background. The camera bridge paints above the toolbar.
+A card therefore never covers the camera area.
+
+The stop line sits 28 points below the bottom edge of the third card. A card
+stops at this line when
+its bottom edge reaches it. Its depth is the distance past the line divided by
+the row pitch. The depth stops at 3. Three events or fewer create no fold.
+
+The card holds the stop line without motion from depth 0 to depth 1. The card
+above it slides over it in this range. From depth 1 to depth 2 it eases 8
+points down and becomes the second strip. It scales by 6 percent for each
+level, anchored at its bottom edge, and reaches 0.88 at level 2. It fades out
+between depth 2 and depth 3. Atoll hides it at depth 3 and builds no view for
+it.
+
+At the end of the scroll the last card lands exactly on the stop line.
+It then shows all of its content.
+The deepest strip ends 10 points above the bottom edge of the island.
+Three events or fewer end the last card 8 points above that edge.
+
+The recent view never shows a scroll indicator. A mouse does not show one
+either.
+
+Each card keeps its translucent fill. A card first erases the cards behind it
+with a destination-out blend of its own shape. It then draws its fill, a
+1-point hairline border, and its content. The list puts these steps in one
+compositing group. Overlapping cards therefore never add up. The screen behind
+the island stays visible through the front card. The front card hides the
+covered card, and the border marks the edge between the two. Atoll never clips
+or fades the card content.
+
+The row computes its depth, offset, scale, and opacity in one `visualEffect`.
+It uses its frame in the scroll view and the measured scroll-area height. It
+uses the layout rule when no measurement exists. The transforms therefore
+follow the scroll position in the render phase without state lag. Row state
+holds a hidden flag only. Do not nest a visual effect inside the card. Do not
+use `bounds(of:)`.
+
+Reduce Motion keeps the offset and the fades and removes the scale.
+
+Dismissing a card animates that card out. The card fades, shrinks a little, and
+moves to the right. The remaining cards spring into their new positions. The
+panel height shrinks in the same 280-millisecond frame transition.
+A new event slides in from the top.
+Reduce Motion replaces these animations with a fade.
+Each card keeps its dismiss button and Dismiss All stays available.
+
+The user can click a card and drag it to the right to dismiss it.
+`NotificationIslandSwipeRule` in `AtollCore` holds the pure rules for this
+gesture. A drag starts after 8 points. The card follows the pointer only when
+the first movement is more horizontal than vertical. The card moves without
+resistance to the right. It resists a leftward drag at 35 percent.
+
+A release dismisses the card in these conditions:
+
+- the drag reaches 25 percent of the card width;
+- the velocity reaches 400 points each second.
+
+The card then slides out and the removal animation follows. A shorter drag
+springs the card back. A plain click still opens the card. The dismiss button
+stays for keyboard and VoiceOver users. Reduce Motion removes the leftward
+resistance and the fade during the drag. A two-finger trackpad swipe stays a
+scroll event and never dismisses a card.
+
+An active drag holds the island open. The pointer can leave the island during
+the drag and the island stays open. The exit delay starts at the end of the
+drag when the pointer is still outside.
+
+Hover opens a transient, nonactivating recent view. Clicking that view pins it
+open. The pinned panel takes keyboard focus after this explicit action.
+Escape returns it to the collapsed state.
+The newest recent event receives initial focus when one exists.
+Tab moves between event actions and Dismiss All.
+Up and Down move focus between cards and scroll the focused card into view.
+Delete dismisses the focused card.
+Return activates the focused control.
+
+The recent view shows all session events. Each event has a service
+name, event title, time, optional body, and dismiss button.
+The complete card acts as the open action. The card shows no arrow glyph.
+Opening an event selects the exact service account through the shared
+notification route and removes that event from the recent list. Dismiss All
+clears all session events. The count is on the left side of the camera housing.
+Dismiss All is on the right side. The island has no close button.
 
 The first controls can include these actions:
 
@@ -92,6 +251,13 @@ SwiftUI renders the panel content.
 
 `IslandPanelController` creates its panel only after an island event needs it.
 The panel starts hidden and does not activate Atoll.
+The panel keeps one SwiftUI hosting view for its complete lifetime.
+State changes update one observable presentation model.
+They must not replace the hosting view.
+One plain AppKit view owns the panel content area. It contains the hosting view
+and gives that view an explicit frame. AppKit is the only owner of the panel
+frame. Do not wrap presentation model updates in a SwiftUI animation that can
+change the hosting view's ideal size.
 The controller owns no notification detection.
 The notification router supplies normalized events through a service presenter.
 Island routing is off by default. The user can enable or disable it in
@@ -101,11 +267,29 @@ Application shutdown closes the panel and rejects later events.
 The panel must not take keyboard focus in the collapsed state.
 The expanded state can take focus after an explicit user action.
 
-The collapsed state receives pointer events because the expanded state is
-available. A visible alert also receives pointer events. Clicking the alert
-opens the exact service account through the shared notification navigation
-path. It removes the alert from the recent list and then starts the normal
-dismissal transition. A queued alert keeps its own full display time.
+The collapsed state and visible alert receive pointer events. An empty
+collapsed state does not open on hover or click. Hovering a non-empty state
+opens the transient recent view. Clicking the transient surface pins it open.
+Opening a recent card selects the exact service account through the shared
+notification route. Each event and the complete list have dismiss actions.
+
+The panel is wider than the visible island body. The fillets need 6 points on
+each side. The panel width is therefore the visible body width plus 12 points.
+
+These bodies use the fixed widths:
+
+- the alert body: 360 points;
+- the expanded body: 420 points.
+
+The collapsed body is the camera-housing width plus the counter wing.
+
+The collapsed surface grows in the horizontal direction only. It has the height
+of the camera housing and does not extend below that housing. The empty
+collapsed panel extends 6 points past each side of the housing. A nonzero
+counter gives the panel a wider wing on the left side. These side wings supply
+a public AppKit hover target. An AppKit tracking area on the panel content view
+supplies the hover events.
+Atoll does not try to receive events from the obscured camera area.
 
 The panel must not cover a system camera privacy indicator.
 The final hardware test must verify this condition.
@@ -213,11 +397,40 @@ The panel must move after these changes:
 Use native Liquid Glass on macOS 26.
 Keep text short and high contrast.
 
+Every island state uses the silhouette of the camera housing. `NotchShape`
+draws this silhouette. The shape has a flat top edge on the screen edge. Two
+concave 6-point fillets join the top corners to the menu bar. The bottom
+corners are convex.
+
+The bottom corner radius depends on the state:
+
+- 10 points for the camera bridge and the collapsed state;
+- 22 points for the peek, alert, and expanded states.
+
+The camera bridge stays black so it joins the physical housing.
+The collapsed island is also always solid black. It ignores the glass style and
+the transparency settings. The collapsed island therefore looks like the
+housing itself, only wider.
+
+The peek, alert, and expanded states use the shared glass and transparency
+settings. Their surface follows the Window glass style and the shell
+transparency setting. Reduce Transparency replaces this material with an
+opaque system background. Increase Contrast adds a system separator edge to
+these states only. The collapsed island stays plain black.
+Apply one glass effect to the complete island content view. Do not make a
+separate glass-effect shape for the background. The glass must stay behind
+notification text and controls.
+
 The collapsed state must not look like a permanent alert.
 The expanded state must use a clear information order.
+The recent stack must keep every visible card sharp and readable. Only a card
+that passes the stop line can use scale, offset, and opacity to show depth.
+A card erases the cards behind it, so translucent fills never add up.
 
-Use a glass transition for size changes when the system permits motion.
+Animate the AppKit panel frame when the system permits motion.
 Use a fade or direct change when Reduce Motion is on.
+Keep the panel top edge and horizontal center fixed while it changes size.
+The standard size transition is 280 milliseconds.
 
 ## Accessibility
 

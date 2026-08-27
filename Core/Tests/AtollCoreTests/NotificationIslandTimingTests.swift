@@ -7,7 +7,7 @@ struct NotificationIslandTimingTests {
     func standardTimingSupportsVoiceOver() {
         let timing = NotificationIslandTiming.standard
 
-        #expect(timing.alertDuration(isVoiceOverEnabled: false) == .seconds(6))
+        #expect(timing.alertDuration(isVoiceOverEnabled: false) == .seconds(4))
         #expect(timing.alertDuration(isVoiceOverEnabled: true) == .seconds(12))
         #expect(timing.dismissalDuration == .milliseconds(180))
     }

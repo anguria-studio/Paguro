@@ -16,7 +16,9 @@ final class SystemScreenGeometryProvider: ScreenGeometryProvider {
             NSApp.windows.first(where: { window in
                 window.isVisible && (
                     window.identifier?.rawValue == "main"
-                        || (window.canBecomeMain && window.title == "Atoll")
+                        || (window.canBecomeMain
+                            && window.styleMask.contains(.titled)
+                            && window.title == "Atoll")
                 )
             })?.screen
         }

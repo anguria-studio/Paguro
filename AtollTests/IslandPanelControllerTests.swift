@@ -14,6 +14,49 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(renderer.hideCount, 0)
     }
 
+    func testCollapsedIslandWaitsForTheLaunchActivationBeforeItIsOrdered() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(
+            renderer: renderer,
+            waitsForLaunchActivation: true
+        )
+
+        controller.showCollapsed()
+        // The geometry snapshot resolves and renders on the main actor, so the
+        // island has every chance to reach the renderer here.
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertTrue(renderer.shows.isEmpty)
+
+        controller.launchActivationDidSettle()
+        await waitForShow(in: renderer)
+
+        XCTAssertEqual(renderer.shows.last?.state.phase, .collapsed)
+    }
+
+    func testAnEventPresentedBeforeTheLaunchSettlesAppearsAfterIt() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(
+            renderer: renderer,
+            waitsForLaunchActivation: true
+        )
+        let event = try makeEvent(number: 1)
+
+        controller.present(panelContent(for: event))
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+        XCTAssertTrue(renderer.shows.isEmpty)
+
+        controller.launchActivationDidSettle()
+        await waitForShow(in: renderer)
+
+        XCTAssertEqual(renderer.shows.last?.content?.event, event)
+    }
+
     func testPresentingAnEventShowsTheResolvedAlert() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)
@@ -33,7 +76,7 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(renderer.shows.last?.placement.style, .cameraHousing)
     }
 
-    func testSecondEventWaitsBehindTheVisibleEvent() async throws {
+    func testSecondEventReplacesTheCompactPreview() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)
         let firstEvent = try makeEvent(number: 1)
@@ -43,9 +86,9 @@ final class IslandPanelControllerTests: XCTestCase {
         controller.present(panelContent(for: secondEvent))
         await waitForShow(in: renderer)
 
-        XCTAssertEqual(controller.state.currentEvent, firstEvent)
-        XCTAssertEqual(controller.state.queuedEvents, [secondEvent])
-        XCTAssertEqual(renderer.shows.last?.state.pendingCount, 1)
+        XCTAssertEqual(controller.state.currentEvent, secondEvent)
+        XCTAssertEqual(controller.state.recentEvents, [secondEvent, firstEvent])
+        XCTAssertEqual(renderer.shows.last?.state.unreviewedCount, 2)
     }
 
     func testStopHidesAndRejectsLaterEvents() async throws {
@@ -73,7 +116,7 @@ final class IslandPanelControllerTests: XCTestCase {
         controller.present(panelContent(for: try makeEvent(number: 1)))
         await waitForShow(in: renderer)
 
-        XCTAssertEqual(scheduler.pendingDelays, [.seconds(6)])
+        XCTAssertEqual(scheduler.pendingDelays, [.seconds(4)])
         scheduler.fireNext()
         XCTAssertEqual(controller.state.phase, .dismissed)
         XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
@@ -83,7 +126,7 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertTrue(scheduler.pendingDelays.isEmpty)
     }
 
-    func testQueuedAlertGetsItsOwnFullDisplayTime() async throws {
+    func testNewestAlertRestartsOneCompactDisplayTime() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let scheduler = RecordingIslandPanelScheduler()
         let controller = makeController(
@@ -97,13 +140,15 @@ final class IslandPanelControllerTests: XCTestCase {
         controller.present(panelContent(for: secondEvent))
         await waitForShow(in: renderer)
 
-        XCTAssertEqual(scheduler.pendingDelays, [.seconds(6)])
+        XCTAssertEqual(controller.state.currentEvent, secondEvent)
+        XCTAssertEqual(scheduler.pendingDelays, [.seconds(4)])
         scheduler.fireNext()
         scheduler.fireNext()
 
-        XCTAssertEqual(controller.state.currentEvent, secondEvent)
-        XCTAssertEqual(controller.state.phase, .alert)
-        XCTAssertEqual(scheduler.pendingDelays, [.seconds(6)])
+        XCTAssertNil(controller.state.currentEvent)
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertEqual(controller.state.unreviewedCount, 2)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
     }
 
     func testVoiceOverUsesTheLongerAlertDelay() async throws {
@@ -121,7 +166,148 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(scheduler.pendingDelays, [.seconds(12)])
     }
 
-    func testOpeningAnAlertRequestsItsServiceAndStartsDismissal() async throws {
+    func testNewAlertCancelsAnOlderDismissalTransition() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+        let firstEvent = try makeEvent(number: 1)
+        let secondEvent = try makeEvent(number: 2)
+
+        controller.present(panelContent(for: firstEvent))
+        await waitForShow(in: renderer)
+        scheduler.fireNext()
+        controller.present(panelContent(for: secondEvent))
+
+        XCTAssertEqual(controller.state.phase, .alert)
+        XCTAssertEqual(controller.state.currentEvent, secondEvent)
+        XCTAssertEqual(scheduler.pendingDelays, [.seconds(4)])
+    }
+
+    func testCollapsedIslandOpensTheExpandedState() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
+        renderer.shows.last?.actions.primary?()
+
+        XCTAssertEqual(controller.state.phase, .expanded)
+        XCTAssertNotNil(renderer.shows.last?.actions.collapse)
+        XCTAssertNotNil(renderer.shows.last?.actions.openEvent)
+        XCTAssertNotNil(renderer.shows.last?.actions.dismissEvent)
+        XCTAssertNotNil(renderer.shows.last?.actions.dismissAll)
+    }
+
+    func testEmptyCollapsedIslandDoesNotOfferAnOpenAction() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+
+        XCTAssertNil(renderer.shows.last?.actions.primary)
+        XCTAssertNotNil(renderer.shows.last?.actions.hoverChanged)
+    }
+
+    func testHoverOpensAPeekAndDelayedExitReturnsToCollapsed() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
+        renderer.shows.last?.actions.hoverChanged?(true)
+
+        XCTAssertEqual(controller.state.phase, .peek)
+        XCTAssertEqual(
+            renderer.shows.last?.placement.frame.size.width,
+            NotificationIslandLayout.panelWidth(
+                bodyWidth: NotificationIslandLayout.expandedWidth
+            )
+        )
+        XCTAssertEqual(
+            renderer.shows.last?.placement.frame.size.height,
+            expandedHeight(eventCount: 1)
+        )
+
+        renderer.shows.last?.actions.hoverChanged?(false)
+
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
+        scheduler.fireNext()
+        XCTAssertEqual(controller.state.phase, .collapsed)
+    }
+
+    func testExpandedHeightFollowsTheNumberOfRecentEvents() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+        let firstEvent = try makeEvent(number: 1)
+        let secondEvent = try makeEvent(number: 2)
+
+        controller.present(panelContent(for: firstEvent))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.pin?()
+        let oneEventHeight = renderer.shows.last?.placement.frame.size.height
+
+        XCTAssertEqual(controller.state.phase, .expanded)
+        XCTAssertEqual(oneEventHeight, expandedHeight(eventCount: 1))
+
+        controller.present(panelContent(for: secondEvent))
+        await Task.yield()
+        let twoEventHeight = renderer.shows.last?.placement.frame.size.height
+
+        XCTAssertEqual(controller.state.recentEvents.count, 2)
+        XCTAssertEqual(twoEventHeight, expandedHeight(eventCount: 2))
+        XCTAssertGreaterThan(twoEventHeight ?? 0, oneEventHeight ?? 0)
+
+        renderer.shows.last?.actions.dismissEvent?(firstEvent.id)
+        await Task.yield()
+
+        XCTAssertEqual(controller.state.recentEvents.count, 1)
+        XCTAssertEqual(
+            renderer.shows.last?.placement.frame.size.height,
+            expandedHeight(eventCount: 1)
+        )
+    }
+
+    func testHoveringACompactAlertOpensTheCompleteRecentView() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+
+        XCTAssertEqual(controller.state.phase, .peek)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+        XCTAssertNotNil(renderer.shows.last?.actions.pin)
+    }
+
+    func testLeavingTheHoverViewClosesTheIslandCompletely() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let scheduler = RecordingIslandPanelScheduler()
         let controller = makeController(
@@ -129,30 +315,372 @@ final class IslandPanelControllerTests: XCTestCase {
             scheduler: scheduler
         )
         let event = try makeEvent(number: 1)
-        var requestedServiceIDs: [UUID] = []
-        controller.onServiceRequested = { requestedServiceIDs.append($0) }
 
         controller.present(panelContent(for: event))
         await waitForShow(in: renderer)
-        renderer.shows.last?.actions.primary?()
-
-        XCTAssertEqual(requestedServiceIDs, [event.serviceID])
-        XCTAssertEqual(controller.state.phase, .dismissed)
-        XCTAssertTrue(controller.state.recentEvents.isEmpty)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.hoverChanged?(false)
         XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
+        scheduler.fireNext()
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertNil(controller.state.currentEvent)
+        XCTAssertEqual(controller.state.unreviewedCount, 1)
+        XCTAssertEqual(controller.state.recentEvents, [event])
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
     }
 
-    func testCollapsedIslandOpensTheExpandedState() async {
+    func testLeavingThePinnedExpandedIslandCollapsesIt() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+        let event = try makeEvent(number: 1)
+
+        controller.present(panelContent(for: event))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.pin?()
+        XCTAssertEqual(controller.state.phase, .expanded)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+
+        renderer.shows.last?.actions.hoverChanged?(false)
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
+        scheduler.fireNext()
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertNil(controller.state.currentEvent)
+        XCTAssertEqual(controller.state.unreviewedCount, 1)
+        XCTAssertEqual(controller.state.recentEvents, [event])
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testPointerOverTheIslandKeepsTheHoverViewOpen() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let pointer = RecordingPointerLocation(isInside: true)
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler,
+            pointer: pointer
+        )
+
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.hoverChanged?(false)
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(180)])
+        scheduler.fireNext()
+
+        // The pointer is still over the island, so the island stays open.
+        XCTAssertEqual(controller.state.phase, .peek)
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(250)])
+
+        scheduler.fireNext()
+        XCTAssertEqual(controller.state.phase, .peek)
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(250)])
+
+        pointer.isInside = false
+        scheduler.fireNext()
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertEqual(controller.state.unreviewedCount, 1)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testPointerReturnCancelsTheHoverExitCheck() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let pointer = RecordingPointerLocation(isInside: true)
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler,
+            pointer: pointer
+        )
+
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.hoverChanged?(false)
+        scheduler.fireNext()
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(250)])
+
+        renderer.shows.last?.actions.hoverChanged?(true)
+
+        XCTAssertEqual(controller.state.phase, .peek)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testStopCancelsTheHoverExitCheck() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let pointer = RecordingPointerLocation(isInside: true)
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler,
+            pointer: pointer
+        )
+
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.hoverChanged?(false)
+        scheduler.fireNext()
+        XCTAssertEqual(scheduler.pendingDelays, [.milliseconds(250)])
+
+        controller.stop()
+
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+        XCTAssertEqual(controller.state, .hidden)
+    }
+
+    func testHoverReentryKeepsTheExpandedIslandOpen() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.pin?()
+        renderer.shows.last?.actions.hoverChanged?(false)
+        renderer.shows.last?.actions.hoverChanged?(true)
+
+        XCTAssertEqual(controller.state.phase, .expanded)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testClickingTheHoverViewPinsItOpen() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.pin?()
+
+        XCTAssertEqual(controller.state.phase, .expanded)
+    }
+
+    func testDismissAllClearsTheCounterAndHistory() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        controller.present(panelContent(for: try makeEvent(number: 2)))
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.dismissAll?()
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertEqual(controller.state.unreviewedCount, 0)
+        XCTAssertTrue(controller.state.recentEvents.isEmpty)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testCollapsedIslandKeepsTheUnreviewedCounter() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
+
+        XCTAssertEqual(renderer.shows.last?.state.unreviewedCount, 1)
+        XCTAssertGreaterThan(
+            renderer.shows.last?.placement.frame.size.width ?? 0,
+            renderer.shows.last?.cameraHousingSize?.width ?? 0
+        )
+    }
+
+    /// The collapsed island must read as the camera housing, only wider.
+    func testCollapsedIslandKeepsTheHousingHeightAndTopEdge() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
+
+        let show = try XCTUnwrap(renderer.shows.last)
+        let housing = try XCTUnwrap(show.cameraHousingSize)
+        let screen = try XCTUnwrap(
+            SimulatedScreenGeometryProvider(preset: .notched14Inch)
+                .scenario
+                .snapshot
+                .selectedScreen
+        )
+        XCTAssertEqual(show.placement.frame.size.height, housing.height)
+        XCTAssertEqual(show.placement.frame.maxY, screen.frame.maxY)
+        XCTAssertEqual(
+            show.placement.frame.size.width,
+            NotificationIslandLayout.panelWidth(bodyWidth: housing.width + 76)
+        )
+    }
+
+    func testCollapsedIslandWithoutACountKeepsTheNarrowWings() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)
 
         controller.showCollapsed()
         await waitForShow(in: renderer)
-        renderer.shows.last?.actions.primary?()
 
-        XCTAssertEqual(controller.state.phase, .expanded)
-        XCTAssertNotNil(renderer.shows.last?.actions.collapse)
-        XCTAssertNotNil(renderer.shows.last?.actions.openEvent)
+        let show = try XCTUnwrap(renderer.shows.last)
+        let housing = try XCTUnwrap(show.cameraHousingSize)
+        XCTAssertEqual(
+            show.placement.frame.size.width,
+            NotificationIslandLayout.panelWidth(bodyWidth: housing.width + 12)
+        )
+    }
+
+    func testHoverReentryCancelsThePendingPeekExit() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
+
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
+        renderer.shows.last?.actions.hoverChanged?(true)
+        renderer.shows.last?.actions.hoverChanged?(false)
+        renderer.shows.last?.actions.hoverChanged?(true)
+
+        XCTAssertEqual(controller.state.phase, .peek)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testHoverDoesNotOpenAnEmptyNotificationList() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+        renderer.shows.last?.actions.hoverChanged?(true)
+
+        XCTAssertEqual(controller.state.phase, .collapsed)
+    }
+
+    func testPointerTestFrameKeepsTheSideAndBottomMargin() {
+        let panelFrame = CGRect(x: 500, y: 1000, width: 400, height: 100)
+
+        let frame = IslandPanelController.pointerTestFrame(
+            panelFrame: panelFrame,
+            screenTopY: 1100
+        )
+
+        XCTAssertEqual(frame.minX, 494)
+        XCTAssertEqual(frame.maxX, 906)
+        XCTAssertEqual(frame.minY, 994)
+        XCTAssertEqual(frame.maxY, 1100)
+    }
+
+    func testPointerTestFrameReachesTheTopScreenEdge() {
+        let panelFrame = CGRect(x: 500, y: 980, width: 400, height: 100)
+
+        let frame = IslandPanelController.pointerTestFrame(
+            panelFrame: panelFrame,
+            screenTopY: 1100
+        )
+
+        XCTAssertEqual(frame.maxY, 1100)
+        XCTAssertEqual(frame.minY, 974)
+    }
+
+    func testPointerAtTheTopScreenEdgeCountsAsInsideTheIsland() {
+        let panelFrame = CGRect(x: 500, y: 980, width: 400, height: 100)
+
+        XCTAssertTrue(
+            IslandPanelController.pointerIsInside(
+                CGPoint(x: 700, y: 1100),
+                panelFrame: panelFrame,
+                screenTopY: 1100
+            )
+        )
+    }
+
+    func testPointerOutsideTheMarginCountsAsOutsideTheIsland() {
+        let panelFrame = CGRect(x: 500, y: 1000, width: 400, height: 100)
+
+        XCTAssertTrue(
+            IslandPanelController.pointerIsInside(
+                CGPoint(x: 494, y: 994),
+                panelFrame: panelFrame,
+                screenTopY: 1100
+            )
+        )
+        XCTAssertFalse(
+            IslandPanelController.pointerIsInside(
+                CGPoint(x: 493, y: 1050),
+                panelFrame: panelFrame,
+                screenTopY: 1100
+            )
+        )
+        XCTAssertFalse(
+            IslandPanelController.pointerIsInside(
+                CGPoint(x: 700, y: 993),
+                panelFrame: panelFrame,
+                screenTopY: 1100
+            )
+        )
+    }
+
+    func testPointerTestFrameWithoutAScreenUsesThePanelTop() {
+        let panelFrame = CGRect(x: 500, y: 1000, width: 400, height: 100)
+
+        let frame = IslandPanelController.pointerTestFrame(
+            panelFrame: panelFrame,
+            screenTopY: nil
+        )
+
+        XCTAssertEqual(frame.maxY, 1100)
+    }
+
+    func testAppearanceChangesReachTheVisibleIsland() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+        let appearance = NotificationIslandAppearance(
+            glassStyle: .clear,
+            transparency: 0.4
+        )
+
+        controller.showCollapsed()
+        await waitForShow(in: renderer)
+        controller.updateAppearance(appearance)
+
+        XCTAssertEqual(renderer.shows.last?.appearance, appearance)
     }
 
     func testExpandedIslandKeepsAndOpensARecentEvent() async throws {
@@ -178,12 +706,19 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(requestedServiceIDs, [event.serviceID])
     }
 
-    func testClosingExpandedIslandReturnsToCollapsed() async {
+    func testClosingExpandedIslandReturnsToCollapsed() async throws {
         let renderer = RecordingIslandPanelRenderer()
-        let controller = makeController(renderer: renderer)
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(
+            renderer: renderer,
+            scheduler: scheduler
+        )
 
-        controller.showCollapsed()
-        await waitForShow(in: renderer)
+        try await prepareCollapsedHistory(
+            controller: controller,
+            scheduler: scheduler,
+            renderer: renderer
+        )
         renderer.shows.last?.actions.primary?()
         renderer.shows.last?.actions.collapse?()
 
@@ -268,12 +803,22 @@ final class IslandPanelControllerTests: XCTestCase {
         XCTAssertEqual(renderer.stopCount, 1)
     }
 
+    /// Gives the panel height that the layout rule expects on the test screen.
+    private func expandedHeight(eventCount: Int) -> Double {
+        NotificationIslandLayout.expandedHeight(
+            eventCount: eventCount,
+            cameraHousingHeight: 38
+        )
+    }
+
     private func makeController(
         renderer: RecordingIslandPanelRenderer,
         provider: (any ScreenGeometryProvider)? = nil,
         scheduler: RecordingIslandPanelScheduler? = nil,
         screenChangeMonitor: RecordingIslandScreenChangeMonitor? = nil,
-        isVoiceOverEnabled: Bool = false
+        isVoiceOverEnabled: Bool = false,
+        pointer: RecordingPointerLocation = RecordingPointerLocation(),
+        waitsForLaunchActivation: Bool = false
     ) -> IslandPanelController {
         IslandPanelController(
             screenGeometryProvider: provider ?? SimulatedScreenGeometryProvider(
@@ -282,7 +827,9 @@ final class IslandPanelControllerTests: XCTestCase {
             renderer: renderer,
             scheduler: scheduler,
             screenChangeMonitor: screenChangeMonitor,
-            isVoiceOverEnabled: { isVoiceOverEnabled }
+            isVoiceOverEnabled: { isVoiceOverEnabled },
+            pointerIsInsideIsland: { pointer.isInside },
+            waitsForLaunchActivation: waitsForLaunchActivation
         )
     }
 
@@ -294,6 +841,19 @@ final class IslandPanelControllerTests: XCTestCase {
             serviceLabel: "Chat",
             serviceIconURL: nil
         )
+    }
+
+    private func prepareCollapsedHistory(
+        controller: IslandPanelController,
+        scheduler: RecordingIslandPanelScheduler,
+        renderer: RecordingIslandPanelRenderer
+    ) async throws {
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        scheduler.fireNext()
+        scheduler.fireNext()
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertEqual(controller.state.recentEvents.count, 1)
     }
 
     private func makeEvent(number: Int) throws -> NotificationEvent {
@@ -332,6 +892,16 @@ final class IslandPanelControllerTests: XCTestCase {
         for _ in 0..<20 where renderer.hideCount == previousCount {
             await Task.yield()
         }
+    }
+}
+
+/// Answers the island pointer question with a value that a test controls.
+@MainActor
+final class RecordingPointerLocation {
+    var isInside: Bool
+
+    init(isInside: Bool = false) {
+        self.isInside = isInside
     }
 }
 
@@ -433,6 +1003,8 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
         let state: NotificationIslandState
         let content: NotificationIslandPanelContent?
         let recentContents: [NotificationIslandPanelContent]
+        let appearance: NotificationIslandAppearance
+        let cameraHousingSize: IslandScreenSize?
         let placement: NotificationIslandPlacement
         let actions: NotificationIslandPanelActions
     }
@@ -445,6 +1017,8 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
         state: NotificationIslandState,
         content: NotificationIslandPanelContent?,
         recentContents: [NotificationIslandPanelContent],
+        appearance: NotificationIslandAppearance,
+        cameraHousingSize: IslandScreenSize?,
         placement: NotificationIslandPlacement,
         actions: NotificationIslandPanelActions
     ) {
@@ -453,6 +1027,8 @@ private final class RecordingIslandPanelRenderer: NotificationIslandPanelRenderi
                 state: state,
                 content: content,
                 recentContents: recentContents,
+                appearance: appearance,
+                cameraHousingSize: cameraHousingSize,
                 placement: placement,
                 actions: actions
             )
