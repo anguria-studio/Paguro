@@ -14,6 +14,7 @@ struct RailServiceCell<ContextMenu: View>: View {
     let dockLayout: DockMagnificationLayout
     let dockMagnification: DockMagnificationState
     let focusedLinkID: FocusState<UUID?>.Binding
+    @Binding var showsKeyboardFocusRing: Bool
 
     @Environment(AppState.self) private var appState
     @State private var measuredSize: CGSize?
@@ -31,6 +32,7 @@ struct RailServiceCell<ContextMenu: View>: View {
         dockLayout: DockMagnificationLayout,
         dockMagnification: DockMagnificationState,
         focusedLinkID: FocusState<UUID?>.Binding,
+        showsKeyboardFocusRing: Binding<Bool>,
         @ViewBuilder contextMenu: @escaping () -> ContextMenu
     ) {
         self.link = link
@@ -44,6 +46,7 @@ struct RailServiceCell<ContextMenu: View>: View {
         self.dockLayout = dockLayout
         self.dockMagnification = dockMagnification
         self.focusedLinkID = focusedLinkID
+        self._showsKeyboardFocusRing = showsKeyboardFocusRing
         self.contextMenuContent = contextMenu
     }
 
@@ -72,6 +75,10 @@ struct RailServiceCell<ContextMenu: View>: View {
             .focusable()
             .focused(focusedLinkID, equals: link.id)
             .focusEffectDisabled()
+            .onKeyPress(keys: [.tab]) { _ in
+                showsKeyboardFocusRing = true
+                return .ignored
+            }
             .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow]) { press in
                 handleArrowKey(press)
             }
@@ -137,7 +144,7 @@ struct RailServiceCell<ContextMenu: View>: View {
                     dockMagnification.endHover(for: link.id)
                 }
             },
-            isFocused: focusedLinkID.wrappedValue == link.id,
+            isFocused: showsKeyboardFocusRing && focusedLinkID.wrappedValue == link.id,
             action: select
         )
     }
@@ -186,6 +193,8 @@ struct RailServiceCell<ContextMenu: View>: View {
         default:
             return .ignored
         }
+
+        showsKeyboardFocusRing = true
 
         if press.modifiers.contains(.option) {
             if movesForward { moveDown() } else { moveUp() }

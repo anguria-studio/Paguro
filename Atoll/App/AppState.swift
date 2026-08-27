@@ -61,6 +61,7 @@ final class AppState {
     var iconRailMagnifiedSize: Double { shellPreferences.iconRailMagnifiedSize }
     var iconRailPosition: DockRailPosition { shellPreferences.iconRailPosition }
     var workspaceViewMode: WorkspaceViewMode { shellPreferences.workspaceViewMode }
+    var sidebarCollapsed: Bool { shellPreferences.sidebarCollapsed }
 
     @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
     var iconRailMagnification: Double {
@@ -436,6 +437,10 @@ final class AppState {
 
     func setWorkspaceViewMode(_ mode: WorkspaceViewMode) {
         shellPreferences.setWorkspaceViewMode(mode)
+    }
+
+    func setSidebarCollapsed(_ collapsed: Bool) {
+        shellPreferences.setSidebarCollapsed(collapsed)
     }
 
     func setShowBadgeCountInDock(_ enabled: Bool) {

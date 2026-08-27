@@ -67,20 +67,25 @@ public enum DockIconSizing {
         max(minimumBaseSize, displayedIconSize) + rowPadding
     }
 
-    /// Centers the base-size icon stack when it fits in the visible rail.
+    /// Centers the base-size icon stack in its container.
+    ///
+    /// `topInset` is the height already consumed above the local scroll
+    /// viewport. Subtracting it lets a shortened viewport align its content to
+    /// the complete window's centerline.
     public static func centeredTopPadding(
-        viewportHeight: Double,
+        containerHeight: Double,
         itemCount: Int,
         baseSize: Double,
+        topInset: Double = 0,
         bottomInset: Double,
         additionalContentHeight: Double = 0
     ) -> Double {
         guard itemCount > 0 else { return 0 }
-        let availableHeight = max(0, viewportHeight - bottomInset)
+        let availableHeight = max(0, containerHeight - bottomInset)
         let stackHeight = Double(itemCount) * rowHeight(
             displayedIconSize: self.baseSize(baseSize)
         ) + max(0, additionalContentHeight)
-        return max(0, (availableHeight - stackHeight) / 2)
+        return max(0, ((availableHeight - stackHeight) / 2) - max(0, topInset))
     }
 
     /// A vertical Dock on the left grows toward the content, not equally in

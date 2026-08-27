@@ -120,6 +120,9 @@ struct ServiceRowView: View {
         }
         .buttonStyle(.plain)
         .frame(height: isDockItem ? dockRowHeight : nil)
+        // The visible Dock tile stays square, while its outer hover target
+        // fills the row so adjacent targets meet without a dead area.
+        .contentShape(Rectangle())
         .offset(x: isDockItem ? dockIconHorizontalOffset : 0)
         .animation(
             reduceMotion

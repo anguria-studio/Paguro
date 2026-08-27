@@ -5,9 +5,10 @@ import AtollCore
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @SceneStorage(DefaultsKey.sidebarCollapsed) private var sidebarCollapsed = false
     @State private var collapsedToggleChromeVisible = false
     @State private var collapsedChromeRevealTask: Task<Void, Never>?
+
+    private var sidebarCollapsed: Bool { appState.sidebarCollapsed }
 
     var body: some View {
         @Bindable var state = appState
@@ -352,11 +353,12 @@ struct ContentView: View {
     }
 
     private func toggleSidebar() {
+        let collapsed = !sidebarCollapsed
         if reduceMotion {
-            sidebarCollapsed.toggle()
+            appState.setSidebarCollapsed(collapsed)
         } else {
             withAnimation(.smooth(duration: AtollMotion.sidebarTransitionSeconds)) {
-                sidebarCollapsed.toggle()
+                appState.setSidebarCollapsed(collapsed)
             }
         }
     }

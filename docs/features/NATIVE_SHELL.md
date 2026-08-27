@@ -59,6 +59,10 @@ stay within that workspace. Moving a service between workspaces remains an
 explicit context-menu action. A workspace section menu can add a service to
 that workspace, including when the workspace is empty. The same menu can mute
 the workspace.
+When more than one workspace exists, the Add Service dialog shows a Workspace
+menu for catalog and custom services. It starts with the workspace that opened
+the dialog. The chosen workspace receives the new service and becomes active.
+The dialog hides this menu when only one workspace exists.
 The workspace editor can leave the emoji empty. Atoll then shows the workspace
 name without a replacement symbol or leading space.
 
@@ -99,14 +103,16 @@ It uses the current Window glass style and shell transparency tint.
 It does not take pointer events or replace the VoiceOver service name.
 Hover entry is immediate. Hover exit has a short delay so a changing pointer
 target does not make the icon and label flicker.
+Adjacent icon hover targets fill their rows and meet without a dead area.
 Reduce Motion keeps the size change and removes its animation.
 The Vertical position setting offers Top and Center.
-Top is the default. Center centers the base-size stack in the available height.
+Top is the default. Center aligns the base-size stack with the complete app
+window's vertical centerline, not the shortened dock viewport's centerline.
 The icon viewport ends at the inner top and bottom edges of the dock surface.
 It clips vertical overflow and permits vertical scrolling when items do not fit.
 It keeps horizontal overflow visible for magnification and tooltips.
 
-The sidebar state belongs to the window scene.
+Atoll saves the main-window sidebar state and restores it after a new launch.
 Use the sidebar button or `Command-Control-S` to change the state.
 
 When exactly one workspace exists, the rail does not show its name or switcher.
@@ -195,8 +201,8 @@ The Reset Glass Lab action restores Regular glass and 100 percent transparency.
 
 `ShellPreferences` owns shell-setting load, normalization, and persistence.
 Layout and appearance use the transactional app preferences row. Glass,
-icon-rail, and workspace-view settings use `UserDefaults` so they remain
-available while Atoll repairs or restores the content store.
+icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so
+they remain available while Atoll repairs or restores the content store.
 
 On a fresh install, Atoll follows the system appearance, uses the left rail,
 shows all workspaces, and appears in both the Dock and menu bar. The Dock badge
@@ -208,6 +214,20 @@ The expanded sidebar footer contains a native bordered add-service button.
 The footer is 52 points high.
 It places the button slightly above its center.
 
+## Menu-bar window
+
+The Atoll status item uses the native window presentation.
+The window shows the visible unread total and a global notification mute
+control. Global mute does not hide the unread total. Workspace sections show
+their services with the same icons, unread badges, mute marks, and selected
+state as the main window.
+
+Selecting a service opens the main window at that service. A bounded scrolling
+area keeps a large service list inside the available screen. The footer opens
+Atoll or Settings. These routes remain available in Menu bar only mode. The
+complete window follows the Window glass and Shell transparency settings. The
+content also follows the selected Atoll appearance.
+
 See [Web appearance](WEB-APPEARANCE.md) for the service appearance control.
 
 ## Accessibility
@@ -215,6 +235,10 @@ See [Web appearance](WEB-APPEARANCE.md) for the service appearance control.
 Each icon-only service has a tooltip and a complete VoiceOver label.
 The label includes unread, mute, hibernation, media, and health states when they
 apply.
+
+The first focusable service does not show a focus ring only because the window
+opened. Tab or arrow-key navigation enables the ring when focus differs from
+selection.
 
 The collapse action has a keyboard route and a VoiceOver label.
 Reduce Motion removes the animated sidebar transition.

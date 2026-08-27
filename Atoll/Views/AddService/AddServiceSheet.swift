@@ -1,13 +1,14 @@
 import SwiftUI
+import SwiftData
 import AtollCore
 
 struct AddServiceSheet: View {
-    let spaceID: UUID
-
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    @Query(sort: \Space.sortOrder) private var spaces: [Space]
     @State private var searchText = ""
     @State private var selectedTab: AddServiceTab = .catalog
+    @State private var selectedSpaceID: UUID
     @State private var customURL = ""
     @State private var customLabel = ""
     @State private var customIconData: Data?
@@ -17,6 +18,14 @@ struct AddServiceSheet: View {
     enum AddServiceTab: String, CaseIterable {
         case catalog = "Browse"
         case custom = "Custom URL"
+    }
+
+    init(spaceID: UUID) {
+        _selectedSpaceID = State(initialValue: spaceID)
+    }
+
+    private var liveSpaces: [Space] {
+        spaces.filter { $0.modelContext != nil }
     }
 
     var body: some View {
@@ -33,6 +42,18 @@ struct AddServiceSheet: View {
             .accessibilityLabel("Add service by")
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
+
+            if liveSpaces.count > 1 {
+                Picker("Workspace", selection: $selectedSpaceID) {
+                    ForEach(liveSpaces) { space in
+                        Text(space.displayNameWithEmoji)
+                            .tag(space.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+            }
 
             if !AppCapabilities.passkeysSupported {
                 passkeyNotice
@@ -104,7 +125,7 @@ struct AddServiceSheet: View {
 
             CatalogGridView(
                 searchText: searchText,
-                spaceID: spaceID,
+                spaceID: selectedSpaceID,
                 onAdd: { dismiss() }
             )
         }
@@ -162,7 +183,7 @@ struct AddServiceSheet: View {
             label: label,
             url: url,
             customIconData: customIconData,
-            to: spaceID
+            to: selectedSpaceID
         ) != nil else {
             urlError = "Atoll could not save this service. Try again."
             return

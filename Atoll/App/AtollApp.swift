@@ -170,7 +170,9 @@ struct AtollApp: App {
                 .environment(appState)
                 .environment(appModel)
                 .modelContainer(appState.modelContainer)
+                .preferredColorScheme(appState.appearanceColorScheme)
         }
+        .menuBarExtraStyle(.window)
 
         Settings {
             #if canImport(Sparkle)

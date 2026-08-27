@@ -41,7 +41,10 @@ final class NativeShellTests: XCTestCase {
         let state = DockMagnificationState()
 
         state.beginHover(for: first)
-        state.endHover(for: first, after: .milliseconds(10))
+        state.endHover(for: first, after: .milliseconds(40))
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertEqual(state.hoveredLinkID, first)
+
         state.beginHover(for: second)
         try? await Task.sleep(for: .milliseconds(50))
 

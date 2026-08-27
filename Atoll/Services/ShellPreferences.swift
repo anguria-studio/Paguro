@@ -11,6 +11,7 @@ struct ShellPreferences: Equatable {
     private(set) var iconRailMagnifiedSize: Double
     private(set) var iconRailPosition: DockRailPosition
     private(set) var workspaceViewMode: WorkspaceViewMode
+    private(set) var sidebarCollapsed: Bool
     private(set) var railLayout: RailLayout
     private(set) var appearanceMode: AppearanceMode
 
@@ -63,6 +64,7 @@ struct ShellPreferences: Equatable {
             workspaceViewMode: WorkspaceViewMode.resolving(
                 defaults.string(forKey: DefaultsKey.workspaceViewMode)
             ),
+            sidebarCollapsed: defaults.bool(forKey: DefaultsKey.sidebarCollapsed),
             railLayout: preferencesStore.railLayout,
             appearanceMode: preferencesStore.appearanceMode
         )
@@ -136,6 +138,14 @@ struct ShellPreferences: Equatable {
     ) {
         workspaceViewMode = mode
         defaults.set(mode.rawValue, forKey: DefaultsKey.workspaceViewMode)
+    }
+
+    mutating func setSidebarCollapsed(
+        _ collapsed: Bool,
+        defaults: UserDefaults = .standard
+    ) {
+        sidebarCollapsed = collapsed
+        defaults.set(collapsed, forKey: DefaultsKey.sidebarCollapsed)
     }
 
     @discardableResult

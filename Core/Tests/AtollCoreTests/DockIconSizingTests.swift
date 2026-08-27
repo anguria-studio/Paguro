@@ -84,7 +84,7 @@ final class DockIconSizingTests: XCTestCase {
     func testCenteredRailUsesTheBaseStackHeight() {
         XCTAssertEqual(
             DockIconSizing.centeredTopPadding(
-                viewportHeight: 600,
+                containerHeight: 600,
                 itemCount: 5,
                 baseSize: 24,
                 bottomInset: 8
@@ -93,7 +93,7 @@ final class DockIconSizingTests: XCTestCase {
         )
         XCTAssertEqual(
             DockIconSizing.centeredTopPadding(
-                viewportHeight: 200,
+                containerHeight: 200,
                 itemCount: 5,
                 baseSize: 44,
                 bottomInset: 8
@@ -102,7 +102,7 @@ final class DockIconSizingTests: XCTestCase {
         )
         XCTAssertEqual(
             DockIconSizing.centeredTopPadding(
-                viewportHeight: 600,
+                containerHeight: 600,
                 itemCount: 5,
                 baseSize: 24,
                 bottomInset: 8,
@@ -110,6 +110,20 @@ final class DockIconSizingTests: XCTestCase {
             ),
             171
         )
+    }
+
+    func testCenteredRailCanUseTheCompleteWindowCenterline() {
+        let topInset = 60.0
+        let padding = DockIconSizing.centeredTopPadding(
+            containerHeight: 600,
+            itemCount: 5,
+            baseSize: 24,
+            topInset: topInset,
+            bottomInset: 0
+        )
+        let stackHeight = 5 * DockIconSizing.rowHeight(displayedIconSize: 24)
+
+        XCTAssertEqual(topInset + padding + (stackHeight / 2), 300)
     }
 
     func testStackMovesUpToKeepTheHoveredIconCentered() {

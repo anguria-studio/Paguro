@@ -43,6 +43,9 @@ struct UnifiedRailView: View {
     /// each cell's `.focused`, so a click or Tab that focuses a cell records it
     /// here and the arrow keys move relative to it.
     @FocusState private var focusedLinkID: UUID?
+    /// SwiftUI gives the first focusable row focus when the window opens. Keep
+    /// that automatic focus invisible until the user starts keyboard navigation.
+    @State private var showsKeyboardFocusRing = false
     var liveSpaces: [Space] {
         spaces.filter { $0.modelContext != nil }
     }
@@ -466,7 +469,8 @@ struct UnifiedRailView: View {
                 : nil,
             dockLayout: dockLayout,
             dockMagnification: dockMagnification,
-            focusedLinkID: $focusedLinkID
+            focusedLinkID: $focusedLinkID,
+            showsKeyboardFocusRing: $showsKeyboardFocusRing
         ) {
             serviceContextMenu(for: link)
         }
@@ -477,10 +481,15 @@ struct UnifiedRailView: View {
               appState.iconRailPosition == .center
         else { return 0 }
 
+        let topInset = sidebarPresentation.contentTopInset
+        let windowHeight = viewportHeight
+            + topInset
+            + sidebarPresentation.surfaceBottomInset
         return CGFloat(DockIconSizing.centeredTopPadding(
-            viewportHeight: Double(viewportHeight),
+            containerHeight: Double(windowHeight),
             itemCount: dockLinks.count,
             baseSize: appState.iconRailBaseSize,
+            topInset: Double(topInset),
             bottomInset: 0,
             additionalContentHeight: Double(dockDividerCount)
                 * Double(AtollMetric.Sidebar.workspaceDividerHeight)

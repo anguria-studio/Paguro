@@ -64,6 +64,27 @@ final class WorkspaceStoreMutationTests: XCTestCase {
     }
 
     @MainActor
+    func testAddServiceUsesExplicitWorkspaceWhenSeveralExist() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let first = Space(name: "First", sortOrder: 0)
+        let selected = Space(name: "Selected", sortOrder: 1)
+        context.insert(first)
+        context.insert(selected)
+        try context.save()
+        let store = makeStore(context: context)
+
+        let serviceID = try XCTUnwrap(store.addService(
+            label: "Chat",
+            url: "https://chat.example",
+            to: selected.id
+        ))
+
+        XCTAssertTrue(store.servicesForSpace(first.id).isEmpty)
+        XCTAssertEqual(store.servicesForSpace(selected.id).map(\.id), [serviceID])
+    }
+
+    @MainActor
     func testMoveServiceRelocatesFetchedLinkToTargetTail() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext

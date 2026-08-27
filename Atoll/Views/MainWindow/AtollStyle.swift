@@ -368,6 +368,24 @@ enum AtollColor {
     static let shellBorder = Color(nsColor: .separatorColor)
     static let hairline = AtollColor.ink(light: 0.08, dark: 0.08)
 
+    /// The full protective tint used above the native window material.
+    static func shellTint(intensity: Double) -> Color {
+        AtollColor.dynamic(
+            light: NSColor(
+                srgbRed: 0.95,
+                green: 0.95,
+                blue: 0.96,
+                alpha: GlassIntensityScale.shellOpacity(intensity)
+            ),
+            dark: NSColor(
+                srgbRed: CGFloat(36) / 255,
+                green: CGFloat(33) / 255,
+                blue: CGFloat(37) / 255,
+                alpha: GlassIntensityScale.shellOpacity(intensity)
+            )
+        )
+    }
+
     /// The protective tint over the window material.
     ///
     /// The RGB value stays stable. Only its opacity changes, so the setting

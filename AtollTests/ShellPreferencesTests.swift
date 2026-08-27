@@ -21,6 +21,7 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertFalse(row.autoDismissCookieBanners)
         XCTAssertEqual(preferences.appearanceMode, .system)
         XCTAssertEqual(preferences.railLayout, .sidebar)
+        XCTAssertFalse(preferences.sidebarCollapsed)
         XCTAssertEqual(preferences.workspaceViewMode, .all)
         XCTAssertEqual(preferences.iconRailBaseSize, 22)
         XCTAssertEqual(preferences.iconRailMagnification, 0.26, accuracy: 0.000_001)
@@ -38,6 +39,7 @@ final class ShellPreferencesTests: XCTestCase {
         defaults.set(68.0, forKey: DefaultsKey.iconRailMagnifiedSize)
         defaults.set(DockRailPosition.center.rawValue, forKey: DefaultsKey.iconRailPosition)
         defaults.set(WorkspaceViewMode.current.rawValue, forKey: DefaultsKey.workspaceViewMode)
+        defaults.set(true, forKey: DefaultsKey.sidebarCollapsed)
         defaults.set(0.8, forKey: DefaultsKey.retiredBackdropFrostIntensity)
         let fixture = try makePreferencesStore(
             AppPreferences(
@@ -60,6 +62,7 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.iconRailMagnifiedSize, 68)
         XCTAssertEqual(preferences.iconRailPosition, .center)
         XCTAssertEqual(preferences.workspaceViewMode, .current)
+        XCTAssertTrue(preferences.sidebarCollapsed)
         XCTAssertEqual(preferences.railLayout, .topBars)
         XCTAssertEqual(preferences.appearanceMode, .dark)
         XCTAssertNil(defaults.object(forKey: DefaultsKey.retiredBackdropFrostIntensity))
@@ -129,6 +132,7 @@ final class ShellPreferencesTests: XCTestCase {
         preferences.setIconRailMagnification(0.5, defaults: defaults)
         preferences.setIconRailPosition(.center, defaults: defaults)
         preferences.setWorkspaceViewMode(.current, defaults: defaults)
+        preferences.setSidebarCollapsed(true, defaults: defaults)
         XCTAssertTrue(preferences.setRailLayout(.topBars, preferencesStore: store))
         XCTAssertTrue(preferences.setAppearanceMode(.dark, preferencesStore: store))
 
@@ -145,6 +149,29 @@ final class ShellPreferencesTests: XCTestCase {
         )
         XCTAssertEqual(store.railLayout, .topBars)
         XCTAssertEqual(store.appearanceMode, .dark)
+    }
+
+    @MainActor
+    func testSidebarStateRoundTripsAcrossLaunches() throws {
+        let sandbox = try StoreSandbox(testCase: self, label: "sidebar-state")
+        let fixture = try makePreferencesStore(AppPreferences())
+        defer { withExtendedLifetime(fixture.container) {} }
+        var preferences = ShellPreferences.load(
+            defaults: sandbox.defaults,
+            preferencesStore: fixture.store
+        )
+
+        preferences.setSidebarCollapsed(true, defaults: sandbox.defaults)
+        XCTAssertTrue(ShellPreferences.load(
+            defaults: sandbox.defaults,
+            preferencesStore: fixture.store
+        ).sidebarCollapsed)
+
+        preferences.setSidebarCollapsed(false, defaults: sandbox.defaults)
+        XCTAssertFalse(ShellPreferences.load(
+            defaults: sandbox.defaults,
+            preferencesStore: fixture.store
+        ).sidebarCollapsed)
     }
 
     @MainActor
