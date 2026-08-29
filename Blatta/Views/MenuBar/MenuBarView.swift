@@ -43,7 +43,10 @@ struct MenuBarView: View {
         HStack(spacing: 12) {
             Image("MenuBarIcon")
                 .resizable()
-                .frame(width: 20, height: 20)
+                // The glyph is slightly taller than it is wide (990 x 1065
+                // viewBox), so the frame keeps that aspect ratio instead of
+                // stretching it to a square.
+                .frame(width: 18.6, height: 20)
                 .foregroundStyle(.tint)
                 .frame(width: 32, height: 32)
                 .accessibilityHidden(true)

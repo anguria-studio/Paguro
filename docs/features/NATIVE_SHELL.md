@@ -43,10 +43,24 @@ Manual global mute adds a barred bell to every visible service in both states.
 It does not hide unread badges.
 The collapsed barred bell has no background tile. It uses a small contrast
 shadow over the service icon.
-An expanded service row uses a visible neutral hover fill. The fill remains
-quieter than the selected service fill.
+An expanded service row uses a neutral hover fill. The fill remains quieter
+than the selected service fill. A top-bar tab uses a lighter hover fill in dark
+appearance, because the material behind the bar is a lighter ground than the
+rail canvas. The selected fill is the same in both rails.
 
-The Workspace view setting controls the sidebar layout.
+The Icon Rail settings shape the collapsed sidebar dock. Blatta hides that
+settings section while the layout is the bar along the top.
+
+In the icons-only top bar, a hovered tab shows its name under the bar. The bar
+draws this tooltip, not the tab, so the scrolling tab strip cannot cut it off.
+
+Eight points separate two tabs. A top-bar tab uses a 16 point icon, and 18
+points when it shows no name. Both
+stay under the 18 point sidebar icon, because the bar is 42 points tall.
+The workspace control in the bar takes the width of its own name, up to 150
+points. A longer name truncates there rather than push the tabs sideways.
+
+The Workspace view setting controls both rail layouts.
 Current workspace keeps the workspace palette model.
 All workspaces is the default and shows an accordion section for each workspace
 in the expanded sidebar. Sections start expanded. Users can collapse them for
@@ -111,15 +125,65 @@ window's vertical centerline, not the shortened dock viewport's centerline.
 The icon viewport ends at the inner top and bottom edges of the dock surface.
 It clips vertical overflow and permits vertical scrolling when items do not fit.
 It keeps horizontal overflow visible for magnification and tooltips.
+A collapsed tooltip follows the visible icon edge and stands one gap after it.
+The edge of the drawn rail surface is its floor, not the rail frame. A small
+icon then keeps the tooltip beside the rail rather than an inset away from it.
+
+The main window holds a minimum content width of 800 points. A drag of the
+window edge stops there, so the shell cannot overlap its own content. The
+window has no minimum height: a short window compresses the rail and the web
+content instead.
 
 Blatta saves the main-window sidebar state and restores it after a new launch.
 Use the sidebar button or `Command-Control-S` to change the state.
 
 When exactly one workspace exists, the rail does not show its name or switcher.
 The top bar still keeps service tabs clear of the traffic lights.
+
+In All workspaces mode, the top bar groups its tabs by workspace. Each group
+starts with the workspace name, and a divider separates adjacent groups. A
+click on a name opens that workspace. The bar hides the current-workspace
+control while it groups, because each name already says which workspace its
+tabs belong to.
+
+The Show icons only setting appears for the top bar alone, in both workspace
+views. It removes the service names from the tabs. Workspace names stay in
+both workspace views. Tooltips and VoiceOver labels keep every service name
+available. A stored icons-only value never reaches the sidebar, because
+`RailBarPresentationPolicy` resolves it against the current layout.
 The File menu can add a workspace.
 A secondary click on the sidebar background can add a service or workspace.
 Service rows keep their own context menus.
+
+## Service reorder
+
+A service moves inside its workspace like an icon in the macOS Dock.
+Press a service and move the pointer 6 points to start the reorder.
+A shorter movement stays a click and opens the service.
+
+The pressed cell follows the pointer along the rail axis only.
+It grows a small amount, takes a shadow, and draws above its neighbors.
+The other cells move away and open a space at the target position.
+The rail applies each step after the pointer passes one half of the cell pitch.
+The cell pitch adds the gap of that rail to the cell length.
+Release the pointer to save the new order.
+The cell then settles into its space.
+
+The same drag works in all three arrangements:
+the expanded sidebar rows, the collapsed icon dock, and the top bar of tabs.
+The rail holds icon magnification during a drag, so the cell pitch keeps one
+measure.
+Reorder stays inside one workspace. The service context menu moves a service to
+another workspace.
+
+The vertical rail scrolls when it holds more services than its viewport shows.
+A drag that holds the pointer within 28 points of the top or bottom edge scrolls
+the rail. The speed increases near the edge.
+The top bar shows a plain row of tabs and scrolls only when the tabs do not fit.
+That fallback does not scroll during a drag.
+
+The `Move up` and `Move down` VoiceOver actions and `Option` with an arrow key
+give the same order change without a pointer.
 
 ## Content header
 
@@ -344,3 +408,5 @@ selection.
 
 The collapse action has a keyboard route and a VoiceOver label.
 Reduce Motion removes the animated sidebar transition.
+Reduce Motion keeps the service reorder and removes its lift and its spring.
+Each cell then moves directly to its new position.

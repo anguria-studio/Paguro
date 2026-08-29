@@ -26,3 +26,35 @@ public enum WorkspaceNavigationPolicy {
         sourceWorkspaceID == targetWorkspaceID
     }
 }
+
+/// Rules for the rail that groups its services by workspace.
+///
+/// Both rail axes can show every workspace. The vertical rail draws one
+/// disclosure section for each workspace; the top bar draws a workspace name
+/// followed by that workspace's tabs. Icons-only drops the service names alone,
+/// and it belongs to the top bar, so a stored `true` must never reach the
+/// vertical rail.
+public enum RailBarPresentationPolicy {
+    /// The rail groups its services under workspace names.
+    ///
+    /// One workspace needs no name above its own services, so the rail keeps
+    /// its plain form until a second workspace exists.
+    public static func groupsByWorkspace(
+        mode: WorkspaceViewMode,
+        workspaceCount: Int
+    ) -> Bool {
+        mode == .all && workspaceCount > 1
+    }
+
+    /// The icons-only option is offered for the top bar alone. A sidebar row is
+    /// a full-width row whose name costs no space, so it keeps its name in both
+    /// workspace views.
+    public static func offersIconsOnly(isTopBar: Bool) -> Bool {
+        isTopBar
+    }
+
+    /// The rail drops its service names and workspace names.
+    public static func showsIconsOnly(isTopBar: Bool, iconsOnlyPreference: Bool) -> Bool {
+        iconsOnlyPreference && offersIconsOnly(isTopBar: isTopBar)
+    }
+}

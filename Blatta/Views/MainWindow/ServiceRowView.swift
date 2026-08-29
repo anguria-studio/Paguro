@@ -43,6 +43,9 @@ struct ServiceRowView: View {
     var dockIconHorizontalOffset: CGFloat = 0
     var dockTooltipLeadingOffset: CGFloat = 0
     var supplementaryWorkspaceName: String?
+    /// Draws the tab as its icon alone. The top bar uses this when it groups
+    /// its tabs under workspace names and the person asked for icons only.
+    var hidesLabel: Bool = false
     var isDockHovered = false
     var dockMagnificationActive = false
     var onDockHoverChange: (Bool) -> Void = { _ in }
@@ -60,6 +63,9 @@ struct ServiceRowView: View {
     static let rowHeight = BlattaMetric.Sidebar.rowHeight
     /// Tab height in the horizontal bar.
     static let tabHeight: CGFloat = 32
+    /// The gap between two tabs in the horizontal bar. The reorder drag adds it
+    /// to a measured tab to get the pitch of that rail.
+    static let tabSpacing: CGFloat = 8
     /// Roughly what a labelled tab measures. Used only as the drop-midpoint
     /// fallback before the first geometry pass records a real width.
     static let tabTypicalWidth: CGFloat = 120
@@ -93,7 +99,9 @@ struct ServiceRowView: View {
                         isFocused: isFocused,
                         isHovering: presentsHover
                     )
-                    let adaptiveProgress = axis == .vertical && mark.fill == .selected
+                    // The tab bar and the sidebar stand on the same material,
+                    // so a selected cell adapts the same way in both.
+                    let adaptiveProgress = mark.fill == .selected
                         ? GlassIntensityScale.adaptiveSelectionProgress(glassIntensity)
                         : 0
 
@@ -143,10 +151,10 @@ struct ServiceRowView: View {
         .modifier(
             ServiceHelpModifier(
                 label: contextualName,
-                isEnabled: !isDockItem
+                isEnabled: !isDockItem && !hidesLabel
             )
         )
-        .zIndex(isDockItem && presentsHover ? 10 : 0)
+        .zIndex((isDockItem || hidesLabel) && presentsHover ? 10 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ServiceAccessibility.label(
             name: contextualName,
@@ -165,14 +173,59 @@ struct ServiceRowView: View {
     private var content: some View {
         if isDockItem {
             dockContent
+        } else if hidesLabel {
+            iconOnlyContent
         } else {
             labelledContent
         }
     }
 
+    /// The icons-only tab. It carries the same marks as the collapsed Dock
+    /// item, on the icon rather than beside it, so a tab stays square. The name
+    /// remains in the tooltip and in the accessibility text.
+    private var iconOnlyContent: some View {
+        serviceIcon(size: BlattaMetric.Sidebar.barIconOnlySize)
+            .overlay(alignment: .topLeading) {
+                if isMuted {
+                    MutedNotificationGlyph()
+                        .offset(x: -5, y: -5)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if badgeCount > 0 && instance.showBadge {
+                    BadgeCountView(count: badgeCount)
+                        .scaleEffect(0.86)
+                        .offset(x: 7, y: -6)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if cameraActive || micActive || micMuted {
+                    MediaIndicatorGlyph(
+                        cameraActive: cameraActive,
+                        micActive: micActive,
+                        micMuted: micMuted
+                    )
+                    .offset(x: -5, y: 5)
+                }
+            }
+            .frame(width: Self.tabHeight, height: Self.tabHeight)
+            // The bar draws the tooltip, not the tab: a tooltip drawn here
+            // would be cut off by the scrolling strip that holds the tabs when
+            // they do not fit.
+            .anchorPreference(key: RailTabTooltipKey.self, value: .bounds) { anchor in
+                presentsHover
+                    ? RailTabTooltip(text: contextualName, anchor: anchor)
+                    : nil
+            }
+    }
+
     private var labelledContent: some View {
         HStack(spacing: Self.gutter) {
-            serviceIcon(size: BlattaMetric.Sidebar.expandedIconSize)
+            serviceIcon(
+                size: axis == .vertical
+                    ? BlattaMetric.Sidebar.expandedIconSize
+                    : BlattaMetric.Sidebar.barIconSize
+            )
 
             Text(instance.label)
                 .font(isSelected ? .blattaSidebarLabelSelected : .blattaSidebarLabel)
@@ -204,9 +257,19 @@ struct ServiceRowView: View {
         .fixedSize(horizontal: axis == .horizontal, vertical: false)
     }
 
+    /// Each rail hovers against its own ground, so each takes its own fill.
+    /// The Dock item keeps the shared one: it hovers over service artwork.
+    private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
+        guard mark.fill == .hover, !isDockItem else { return mark.fillStyle }
+        return AnyShapeStyle(
+            axis == .vertical
+                ? BlattaColor.Fill.railRowHover
+                : BlattaColor.Fill.barTabHover
+        )
+    }
+
     private var serviceNameColor: Color {
         guard isSelected else { return BlattaColor.Text.primary }
-        guard axis == .vertical else { return BlattaColor.Fill.sidebarSelectedTint }
         return SidebarSelectionContrastPolicy.usesHighContrastText(
             shellTransparency: glassIntensity
         )
@@ -214,14 +277,6 @@ struct ServiceRowView: View {
             : BlattaColor.Fill.sidebarSelectedTint
     }
 
-    private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
-        if axis == .vertical,
-           sidebarPresentation == .expanded,
-           mark.fill == .hover {
-            return AnyShapeStyle(BlattaColor.Fill.sidebarRowHover)
-        }
-        return mark.fillStyle
-    }
 
     /// The collapsed sidebar keeps only the service icon and its live marks.
     /// The label remains available through the tooltip and accessibility text.
@@ -265,29 +320,11 @@ struct ServiceRowView: View {
     }
 
     private var dockTooltip: some View {
-        Text(contextualName)
-            .font(.callout)
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .modifier(
-                DockTooltipSurfaceModifier(
-                    glassStyle: glassStyle,
-                    glassIntensity: glassIntensity
-                )
-            )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: BlattaRadius.surface,
-                    style: .continuous
-                )
-                .strokeBorder(BlattaColor.shellBorder, lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
-            .fixedSize()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        RailTooltipView(
+            text: contextualName,
+            glassStyle: glassStyle,
+            glassIntensity: glassIntensity
+        )
     }
 
     private func serviceIcon(size: CGFloat) -> some View {
@@ -333,6 +370,55 @@ struct ServiceRowView: View {
         }
     }
 
+}
+
+/// The floating name of a cell that shows its icon alone. The collapsed dock
+/// puts it beside the icon; the top bar puts it under the tab.
+struct RailTooltipView: View {
+    let text: String
+    var glassStyle = GlassLabDefaults.style
+    var glassIntensity = GlassIntensityScale.defaultValue
+
+    var body: some View {
+        Text(text)
+            .font(.callout)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .modifier(
+                DockTooltipSurfaceModifier(
+                    glassStyle: glassStyle,
+                    glassIntensity: glassIntensity
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: BlattaRadius.surface,
+                    style: .continuous
+                )
+                .strokeBorder(BlattaColor.shellBorder, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
+            .fixedSize()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The name and the frame of the hovered icons-only tab, sent up to the bar
+/// that draws its tooltip.
+struct RailTabTooltip {
+    let text: String
+    let anchor: Anchor<CGRect>
+}
+
+struct RailTabTooltipKey: PreferenceKey {
+    static let defaultValue: RailTabTooltip? = nil
+
+    static func reduce(value: inout RailTabTooltip?, nextValue: () -> RailTabTooltip?) {
+        value = nextValue() ?? value
+    }
 }
 
 private struct DockTooltipSurfaceModifier: ViewModifier {

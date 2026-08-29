@@ -102,15 +102,15 @@ struct ContentView: View {
             // window. SwiftUI then centers and clips the complete shell, which
             // removes the header and bottom gutter. Let the web content and
             // sidebar scroll area absorb all vertical compression.
-            .frame(minWidth: 800)
+            .frame(minWidth: BlattaMetric.Window.minimumContentWidth)
             // Extend up into the (hidden) title-bar area so the tab bar sits at
             // the very top of the window; the traffic-light insets keep the
             // top-left clear.
             .ignoresSafeArea(.container, edges: .top)
         }
-        // The top-bar and hybrid layouts put draggable tabs in the title-bar
-        // drag band, so turn the OS window drag off there (a click-drag on a tab
-        // would otherwise move the window instead of reordering) and let the
+        // The top-bar layout puts draggable tabs in the title-bar drag band, so
+        // turn the OS window drag off there (a click-drag on a tab would
+        // otherwise move the window instead of reordering) and let the
         // WindowDragHandles move the window instead. The sidebar keeps the
         // normal title-bar drag.
         .background(
@@ -307,6 +307,8 @@ struct ContentView: View {
         case .topBars:
             VStack(spacing: 0) {
                 rail(axis: .horizontal, spaceSelection: spaceSelection, serviceSelection: serviceSelection, contentInset: lightsWidth)
+                    // A tab tooltip hangs below the bar, over the web content.
+                    .zIndex(1)
                 webContent
                     .padding(.horizontal, BlattaMetric.Sidebar.surfaceInset)
                     .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)

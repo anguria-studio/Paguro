@@ -11,12 +11,20 @@ struct RailServiceCell<ContextMenu: View>: View {
     let axis: Axis
     let sidebarPresentation: SidebarPresentation
     let supplementaryWorkspaceName: String?
+    /// Draws the cell as its icon alone. Only the grouped top bar sets it.
+    let hidesLabel: Bool
     let dockLayout: DockMagnificationLayout
     let dockMagnification: DockMagnificationState
+    /// The live order and the drag state that the rail container owns.
+    let railReorder: RailReorderState
+    /// The gap that the container puts between two cells. The cell adds it to
+    /// its own measured length to get the pitch of the rail.
+    let railSpacing: CGFloat
     let focusedLinkID: FocusState<UUID?>.Binding
     @Binding var showsKeyboardFocusRing: Bool
 
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var measuredSize: CGSize?
     private let contextMenuContent: () -> ContextMenu
 
@@ -29,8 +37,11 @@ struct RailServiceCell<ContextMenu: View>: View {
         axis: Axis,
         sidebarPresentation: SidebarPresentation,
         supplementaryWorkspaceName: String?,
+        hidesLabel: Bool = false,
         dockLayout: DockMagnificationLayout,
         dockMagnification: DockMagnificationState,
+        railReorder: RailReorderState,
+        railSpacing: CGFloat,
         focusedLinkID: FocusState<UUID?>.Binding,
         showsKeyboardFocusRing: Binding<Bool>,
         @ViewBuilder contextMenu: @escaping () -> ContextMenu
@@ -43,8 +54,11 @@ struct RailServiceCell<ContextMenu: View>: View {
         self.axis = axis
         self.sidebarPresentation = sidebarPresentation
         self.supplementaryWorkspaceName = supplementaryWorkspaceName
+        self.hidesLabel = hidesLabel
         self.dockLayout = dockLayout
         self.dockMagnification = dockMagnification
+        self.railReorder = railReorder
+        self.railSpacing = railSpacing
         self.focusedLinkID = focusedLinkID
         self._showsKeyboardFocusRing = showsKeyboardFocusRing
         self.contextMenuContent = contextMenu
@@ -52,16 +66,6 @@ struct RailServiceCell<ContextMenu: View>: View {
 
     var body: some View {
         row
-            .draggable(link.id.uuidString) {
-                Text(link.service.label)
-                    .font(.caption)
-                    .padding(6)
-                    .blattaMaterialBackground(.ultraThickMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: BlattaRadius.control))
-            }
-            .dropDestination(for: String.self) { items, location in
-                handleDrop(items: items, location: location)
-            }
             .background(
                 GeometryReader { proxy in
                     Color.clear.onChange(of: proxy.size, initial: true) {
@@ -69,6 +73,28 @@ struct RailServiceCell<ContextMenu: View>: View {
                     }
                 }
             )
+            .scaleEffect(isLifted ? CGFloat(RailReorderRule.liftScale) : 1)
+            .shadow(
+                color: BlattaColor.railLiftShadow.opacity(isLifted ? 1 : 0),
+                radius: isLifted ? CGFloat(RailReorderRule.liftShadowRadius) : 0,
+                y: isLifted ? 3 : 0
+            )
+            .animation(liftAnimation, value: isLifted)
+            .offset(
+                x: axis == .horizontal ? dragOffset : 0,
+                y: axis == .vertical ? dragOffset : 0
+            )
+            .zIndex(isDragging ? 1 : 0)
+            // The other cells move to their new positions with this spring,
+            // which is the visible Dock reflow. The dragged cell opts out, so
+            // its compensating offset can hold it under the pointer.
+            .animation(reorderAnimation, value: reorderToken)
+            // Kept for a drag that starts outside the rail. An internal
+            // reorder uses the gesture below instead of a system drag.
+            .dropDestination(for: String.self) { items, location in
+                handleDrop(items: items, location: location)
+            }
+            .simultaneousGesture(reorderGesture)
             .accessibilityAction(named: "Move up") { moveUp() }
             .accessibilityAction(named: "Move down") { moveDown() }
             .contextMenu(menuItems: contextMenuContent)
@@ -131,9 +157,11 @@ struct RailServiceCell<ContextMenu: View>: View {
             )),
             dockTooltipLeadingOffset: CGFloat(DockIconSizing.tooltipLeadingOffset(
                 baseSize: baseIconSize,
-                displayedIconSize: Double(displayedIconSize)
+                displayedIconSize: Double(displayedIconSize),
+                railInset: Double(BlattaMetric.Sidebar.surfaceInset)
             )),
             supplementaryWorkspaceName: supplementaryWorkspaceName,
+            hidesLabel: hidesLabel,
             isDockHovered: dockMagnification.hoveredLinkID == link.id,
             dockMagnificationActive: dockMagnification.hoveredLinkID != nil
                 && appState.iconRailMagnificationEnabled,
@@ -145,9 +173,114 @@ struct RailServiceCell<ContextMenu: View>: View {
                 }
             },
             isFocused: showsKeyboardFocusRing && focusedLinkID.wrappedValue == link.id,
-            action: select
+            action: openAfterClick
         )
     }
+
+    // MARK: - Dock-style reorder
+
+    private var isDragging: Bool {
+        railReorder.isDragging(link.id)
+    }
+
+    /// Reduce Motion keeps the reorder and removes the lift.
+    private var isLifted: Bool {
+        isDragging && !reduceMotion
+    }
+
+    private var dragOffset: CGFloat {
+        isDragging ? railReorder.offset : 0
+    }
+
+    private var reorderToken: RailReorderToken {
+        RailReorderToken(
+            order: railReorder.order,
+            draggingLinkID: railReorder.draggingLinkID
+        )
+    }
+
+    private var liftAnimation: Animation? {
+        reduceMotion ? nil : .smooth(duration: BlattaMotion.railLiftSeconds)
+    }
+
+    /// Reduce Motion moves each cell directly to its new position.
+    private var reorderAnimation: Animation? {
+        guard !reduceMotion, !isDragging else { return nil }
+        return .spring(
+            response: BlattaMotion.railReorderResponse,
+            dampingFraction: BlattaMotion.railReorderDamping
+        )
+    }
+
+    /// The distance between two cell centers along the rail axis.
+    ///
+    /// The measured cell plus the container gap covers both presentations: a
+    /// 28 point row with a 2 point gap, and a dock item that grows with its
+    /// icon size.
+    private var pitch: CGFloat {
+        let length = if axis == .vertical {
+            measuredSize?.height ?? sidebarPresentation.serviceRowHeight
+        } else {
+            measuredSize?.width ?? ServiceRowView.tabTypicalWidth
+        }
+        return length + railSpacing
+    }
+
+    private var reorderGesture: some Gesture {
+        DragGesture(
+            minimumDistance: CGFloat(RailReorderRule.minimumDragDistance),
+            coordinateSpace: .named(RailCoordinateSpace.name)
+        )
+        .onChanged { value in
+            if !railReorder.isDragging(link.id) {
+                beginDrag()
+            }
+            guard railReorder.isDragging(link.id) else { return }
+            applyDrag(value)
+        }
+        .onEnded { value in
+            guard railReorder.isDragging(link.id) else { return }
+            applyDrag(value)
+            commitDrag()
+        }
+    }
+
+    private func beginDrag() {
+        guard !railReorder.isDragging, workspaceLinks.count > 1 else { return }
+        // A magnified neighbor would change the pitch under the drag.
+        dockMagnification.clearHover()
+        railReorder.begin(
+            linkID: link.id,
+            in: link.space.id,
+            ids: workspaceLinks.map(\.id)
+        )
+    }
+
+    private func applyDrag(_ value: DragGesture.Value) {
+        railReorder.update(
+            translation: axis == .vertical
+                ? value.translation.height
+                : value.translation.width,
+            pitch: pitch,
+            pointerPosition: axis == .vertical
+                ? value.location.y
+                : value.location.x
+        )
+    }
+
+    private func commitDrag() {
+        guard let commit = railReorder.end() else { return }
+        let moved = appState.reorderService(
+            droppedLinkID: commit.linkID,
+            relativeTo: commit.targetLinkID,
+            placement: commit.placement
+        )
+        if !moved {
+            railReorder.clear()
+        }
+    }
+
+    // MARK: - Drops from outside the rail
 
     private func handleDrop(items: [String], location: CGPoint) -> Bool {
         guard let droppedIDString = items.first,
@@ -175,6 +308,15 @@ struct RailServiceCell<ContextMenu: View>: View {
             relativeTo: link.id,
             placement: placement
         )
+    }
+
+    // MARK: - Selection, keys, and VoiceOver moves
+
+    /// The cell button and the reorder gesture see the same mouse events. A
+    /// release that ends a drag must not open the service.
+    private func openAfterClick() {
+        guard !railReorder.consumesClick(for: link.id) else { return }
+        select()
     }
 
     private func select() {
@@ -233,4 +375,10 @@ struct RailServiceCell<ContextMenu: View>: View {
             placement: .after
         )
     }
+}
+
+/// The values that make a rail cell move to a new position.
+struct RailReorderToken: Equatable {
+    let order: [UUID]
+    let draggingLinkID: UUID?
 }

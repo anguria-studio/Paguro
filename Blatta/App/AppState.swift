@@ -65,6 +65,7 @@ final class AppState {
     var iconRailMagnifiedSize: Double { shellPreferences.iconRailMagnifiedSize }
     var iconRailPosition: DockRailPosition { shellPreferences.iconRailPosition }
     var workspaceViewMode: WorkspaceViewMode { shellPreferences.workspaceViewMode }
+    var railBarIconsOnly: Bool { shellPreferences.railBarIconsOnly }
     var sidebarCollapsed: Bool { shellPreferences.sidebarCollapsed }
 
     @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
@@ -456,6 +457,10 @@ final class AppState {
 
     func setWorkspaceViewMode(_ mode: WorkspaceViewMode) {
         shellPreferences.setWorkspaceViewMode(mode)
+    }
+
+    func setRailBarIconsOnly(_ iconsOnly: Bool) {
+        shellPreferences.setRailBarIconsOnly(iconsOnly)
     }
 
     func setSidebarCollapsed(_ collapsed: Bool) {

@@ -156,15 +156,20 @@ private final class WindowShellTintView: NSView {
 ///
 /// With `.windowStyle(.hiddenTitleBar)` the top ~32px stays a title-bar drag
 /// band. In the bar layout the rail sits in that band, so a click-drag on a tab
-/// was grabbed by the window move before SwiftUI's `.draggable` reorder could
-/// start — the window slid instead of the tab reordering. A view nested in a
-/// SwiftUI `ScrollView` can't opt out of that drag (the scroll view
-/// short-circuits AppKit hit-testing, so a `mouseDownCanMoveWindow == false`
-/// nested view is never consulted).
+/// was grabbed by the window move before the SwiftUI reorder could start — the
+/// window slid instead of the tab reordering. A view nested in a SwiftUI
+/// `ScrollView` can't opt out of that drag (the scroll view short-circuits
+/// AppKit hit-testing, so a `mouseDownCanMoveWindow == false` nested view is
+/// never consulted).
 ///
 /// So we turn the OS window drag off for that layout and hand dragging to
 /// explicit `WindowDragHandle`s instead (Chrome's model). The sidebar layout,
 /// whose rail doesn't hold draggable tabs in the band, keeps the normal drag.
+///
+/// The Dock-style reorder in `RailServiceCell` uses a SwiftUI `DragGesture`
+/// rather than a system drag. AppKit steals a mouse drag in the band before any
+/// SwiftUI recognizer, so this rule still applies without a change. Keep
+/// `isMovable` false for the bar layout.
 struct WindowChromeConfigurator: NSViewRepresentable {
     let isMovable: Bool
     let glassStyle: ShellGlassStyle
@@ -221,6 +226,14 @@ struct WindowChromeConfigurator: NSViewRepresentable {
                 transparency: glassIntensity
             )
             WindowChromeConfigurator.applyReferenceTrafficLightGeometry(to: window)
+            // The SwiftUI minimum width does not reach the window, which a
+            // drag of its edge can then narrow until the shell overlaps its
+            // own content. Only the width is held: a short window still
+            // compresses, which the rail and the web content both accept.
+            window.contentMinSize = NSSize(
+                width: BlattaMetric.Window.minimumContentWidth,
+                height: window.contentMinSize.height
+            )
 
             guard self.window !== window else { return }
             removeObservers()

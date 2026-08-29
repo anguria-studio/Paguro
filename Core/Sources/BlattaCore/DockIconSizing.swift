@@ -98,19 +98,29 @@ public enum DockIconSizing {
         max(0, displayedIconSize - self.baseSize(baseSize)) / 2
     }
 
-    /// Places the label after both the rail edge and the visible icon edge.
-    /// The result is relative to the leading edge of the selection area.
+    /// Places the label after both the visible icon edge and the drawn rail
+    /// surface. The result is relative to the leading edge of the selection
+    /// area.
+    ///
+    /// The icon edge is the leading term, so the label moves out as an icon
+    /// magnifies. The surface edge is only a floor, which keeps the label off
+    /// the rail while the icon is small. `railInset` is the padding between the
+    /// rail frame and the surface it draws; measuring the floor against the
+    /// frame instead would hold the label a whole inset too far out at every
+    /// size.
     public static func tooltipLeadingOffset(
         baseSize: Double,
-        displayedIconSize: Double
+        displayedIconSize: Double,
+        railInset: Double
     ) -> Double {
         let base = self.baseSize(baseSize)
         let selection = selectionSize(baseSize: base)
         let iconEdge = (selection / 2)
             + horizontalOffset(baseSize: base, displayedIconSize: displayedIconSize)
             + (displayedIconSize / 2)
-        let railEdge = (railWidth(baseSize: base) + selection) / 2
-        return max(iconEdge, railEdge) + tooltipGap
+        let surfaceWidth = max(0, railWidth(baseSize: base) - (max(0, railInset) * 2))
+        let surfaceEdge = (surfaceWidth + selection) / 2
+        return max(iconEdge, surfaceEdge) + tooltipGap
     }
 
     /// Returns the size for one icon while another icon is under the pointer.

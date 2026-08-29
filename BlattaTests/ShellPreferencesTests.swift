@@ -23,6 +23,7 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.railLayout, .sidebar)
         XCTAssertFalse(preferences.sidebarCollapsed)
         XCTAssertEqual(preferences.workspaceViewMode, .all)
+        XCTAssertFalse(preferences.railBarIconsOnly)
         XCTAssertEqual(preferences.iconRailBaseSize, 22)
         XCTAssertEqual(preferences.iconRailMagnification, 0.26, accuracy: 0.000_001)
         XCTAssertEqual(preferences.iconRailPosition, .top)
@@ -132,6 +133,7 @@ final class ShellPreferencesTests: XCTestCase {
         preferences.setIconRailMagnification(0.5, defaults: defaults)
         preferences.setIconRailPosition(.center, defaults: defaults)
         preferences.setWorkspaceViewMode(.current, defaults: defaults)
+        preferences.setRailBarIconsOnly(true, defaults: defaults)
         preferences.setSidebarCollapsed(true, defaults: defaults)
         XCTAssertTrue(preferences.setRailLayout(.topBars, preferencesStore: store))
         XCTAssertTrue(preferences.setAppearanceMode(.dark, preferencesStore: store))
@@ -149,6 +151,7 @@ final class ShellPreferencesTests: XCTestCase {
         )
         XCTAssertEqual(store.railLayout, .topBars)
         XCTAssertEqual(store.appearanceMode, .dark)
+        XCTAssertTrue(defaults.bool(forKey: DefaultsKey.railBarIconsOnly))
     }
 
     @MainActor

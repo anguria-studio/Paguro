@@ -40,8 +40,9 @@ enum WorkspaceSectionHeader {
 /// spaces are available in `SpacePaletteView` rather than always on screen.
 ///
 /// The vertical header uses the same width and inset as each service row. The
-/// horizontal header stays 150 by 32 points so a space change does not move the
-/// service tabs. The rail places the header clear of the traffic lights.
+/// horizontal header takes the width of its own name, up to 150 points, so a
+/// short workspace name leaves its space to the tabs. The rail places the
+/// header clear of the traffic lights.
 struct SpaceHeaderView: View {
     let spaceName: String?
     let emoji: String
@@ -59,10 +60,9 @@ struct SpaceHeaderView: View {
     /// the services below it line up on both edges.
     static let headerWidth = BlattaMetric.Sidebar.rowWidth
     static let headerHeight = BlattaMetric.Sidebar.headerHeight
-    /// The horizontal bar's header is a fixed width rather than hugging its
-    /// name: it is the leftmost thing in the bar and a header that resized on
-    /// every space switch would shove every service tab sideways.
-    static let barHeaderWidth: CGFloat = 150
+    /// The most the horizontal bar's header takes. A longer workspace name
+    /// truncates here rather than push the service tabs across the bar.
+    static let barHeaderMaximumWidth: CGFloat = 150
     static let barHeaderHeight: CGFloat = 32
 
     private static let cornerRadius = BlattaMetric.Sidebar.rowRadius
@@ -131,9 +131,13 @@ struct SpaceHeaderView: View {
         }
         .padding(.horizontal, axis == .vertical ? 4 : Self.gutter)
         .frame(
-            width: axis == .vertical ? Self.headerWidth : Self.barHeaderWidth,
+            width: axis == .vertical ? Self.headerWidth : nil,
             height: axis == .vertical ? Self.headerHeight : Self.barHeaderHeight
         )
+        // The bar gives the header the width of its own parts. This cap keeps
+        // a long workspace name from pushing the service tabs across the bar;
+        // the name truncates instead.
+        .frame(maxWidth: axis == .vertical ? nil : Self.barHeaderMaximumWidth)
     }
 
     private var displayName: String {
@@ -223,6 +227,70 @@ struct WorkspaceSectionHeaderView: View {
             isExpanded: isExpanded
         ))
         .accessibilityHint(isExpanded ? "Collapse workspace" : "Expand workspace")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// One workspace name in the top bar that shows every workspace.
+///
+/// The label marks where a workspace's tabs start, and a click makes that
+/// workspace current. It keeps its name even while the tabs show icons alone:
+/// the name is what tells the runs of tabs apart.
+struct BarWorkspaceLabelView: View {
+    let workspaceName: String
+    let emoji: String
+    let isCurrent: Bool
+    let isMuted: Bool
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let emoji = WorkspaceEmoji.displayValue(emoji) {
+                    Text(emoji)
+                        .font(.system(size: 13))
+                        .opacity(isMuted ? 0.5 : 1)
+                        .accessibilityHidden(true)
+                }
+
+                Text(workspaceName)
+                    .font(.blattaSidebarSection)
+                    .foregroundStyle(
+                        isCurrent
+                            ? BlattaColor.Text.secondary
+                            : BlattaColor.Text.tertiary
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if isMuted {
+                    Image(systemName: "bell.slash.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: ServiceRowView.tabHeight)
+            .background {
+                RoundedRectangle(cornerRadius: BlattaMetric.Sidebar.rowRadius)
+                    .fill(isHovering ? BlattaColor.Fill.rowHover : Color.clear)
+            }
+            .contentShape(Rectangle())
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(workspaceName)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(SpaceHeader.label(
+            spaceName: workspaceName,
+            badgeCount: 0,
+            isMuted: isMuted
+        ))
+        .accessibilityHint("Open this workspace")
         .accessibilityAddTraits(.isButton)
     }
 }

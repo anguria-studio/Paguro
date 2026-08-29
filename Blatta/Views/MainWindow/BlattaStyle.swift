@@ -42,6 +42,14 @@ extension Font {
 
 /// Main-window geometry that is shared by the rail views.
 enum BlattaMetric {
+    enum Window {
+        /// The narrowest content the shell lays out without overlap: the
+        /// expanded rail, the web content beside it, and the header controls.
+        /// The window carries it as its own minimum, so a drag of the window
+        /// edge stops here.
+        static let minimumContentWidth: CGFloat = 800
+    }
+
     enum Sidebar {
         static let surfaceInset: CGFloat = 8
         static let surfaceWidth: CGFloat = 218
@@ -66,6 +74,13 @@ enum BlattaMetric {
         static let headerHeight: CGFloat = 24
         static let rowRadius: CGFloat = 7
         static let expandedIconSize: CGFloat = 18
+        /// The icon of a top-bar tab. It stays under the sidebar size, because
+        /// the bar is 42 points tall and holds every service of every open
+        /// workspace.
+        static let barIconSize: CGFloat = 16
+        /// The icon of a top-bar tab that carries no name. It carries the tab
+        /// on its own, so it stays a little larger than the labelled one.
+        static let barIconOnlySize: CGFloat = 18
         static let collapsedIconSize = CGFloat(DockIconSizing.defaultBaseSize)
         static let topBarHeight: CGFloat = 52
         static let collapsedSurfaceTopInset: CGFloat = topBarHeight
@@ -120,6 +135,14 @@ enum BlattaMotion {
     static let collapsedChromeFadeSeconds = 0.08
     static let dockMagnificationSeconds = 0.16
     static let dockHoverExitDelay: Duration = .milliseconds(140)
+    /// The lift and the return of a service cell during a reorder drag.
+    static let railLiftSeconds = 0.12
+    /// The spring that moves the other cells out of the way, and that settles
+    /// the dragged cell into its new position.
+    static let railReorderResponse = 0.28
+    static let railReorderDamping = 0.78
+    /// One frame of automatic rail scroll during a reorder drag.
+    static let railAutoscrollInterval: Duration = .milliseconds(16)
 }
 
 /// The user-facing transparency scale for the Blatta shell.
@@ -325,6 +348,19 @@ enum BlattaColor {
             light: .black.withAlphaComponent(0.04),
             dark: .white.withAlphaComponent(0.08)
         )
+        /// The hover fill of an expanded rail row. In dark appearance it lifts
+        /// more than the bar fill below, because the rail canvas is a darker
+        /// ground than the material behind the top bar, and the same lift reads
+        /// weaker on it.
+        static let railRowHover = BlattaColor.dynamic(
+            light: .black.withAlphaComponent(0.04),
+            dark: .white.withAlphaComponent(0.12)
+        )
+        /// The hover fill of a top-bar tab.
+        static let barTabHover = BlattaColor.dynamic(
+            light: .black.withAlphaComponent(0.04),
+            dark: .white.withAlphaComponent(0.08)
+        )
         static let rowHover = BlattaColor.ink(light: 0.04, dark: 0.03)
         static let control = BlattaColor.ink(light: 0.07, dark: 0.09)
         static let controlHover = BlattaColor.ink(light: 0.12, dark: 0.14)
@@ -367,6 +403,9 @@ enum BlattaColor {
     /// Increase Contrast.
     static let shellBorder = Color(nsColor: .separatorColor)
     static let hairline = BlattaColor.ink(light: 0.08, dark: 0.08)
+
+    /// The shadow under a service cell that a person moves in the rail.
+    static let railLiftShadow = BlattaColor.ink(light: 0.28, dark: 0.45)
 
     /// The full protective tint used above the native window material.
     static func shellTint(intensity: Double) -> Color {

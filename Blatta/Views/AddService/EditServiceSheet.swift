@@ -55,104 +55,107 @@ struct EditServiceSheet: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Name")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    TextField("Service name", text: $label)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Service name")
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Address")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    TextField("https://example.com", text: $url)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Service address")
-                }
-
-                ServiceIconEditor(
-                    label: label.isEmpty ? service.label : label,
-                    serviceURL: url,
-                    fallbackIconData: service.fetchedIconData,
-                    fallbackCatalogID: service.catalogEntryID,
-                    customIconData: $customIconData,
-                    websiteURL: $iconWebsiteURL
-                )
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Picker("Hibernate", selection: $hibernationPolicy) {
-                        Text("Follow global setting").tag(HibernationPolicy.followGlobal)
-                        Text("When I switch to another service").tag(HibernationPolicy.immediate)
-                        Text("After a set idle time").tag(HibernationPolicy.after)
-                        Text("Never (keep loaded)").tag(HibernationPolicy.never)
-                    }
-                    .help("Blatta frees a service's memory and CPU while it runs in the background. The one you're viewing always stays loaded. \"Never\" also keeps calls and notifications working in the background, at the cost of more memory.")
-                    .disabled(service.isNotificationCritical)
-
-                    if hibernationPolicy == .after && !service.isNotificationCritical {
-                        Stepper(value: $hibernateAfterMinutes, in: 1...120) {
-                            Text("Idle for \(hibernateAfterMinutes) minute\(hibernateAfterMinutes == 1 ? "" : "s")")
-                        }
-                        .accessibilityLabel("Hibernate after \(hibernateAfterMinutes) minutes idle")
-                    }
-
-                    if service.isNotificationCritical {
-                        Text("Chat apps stay loaded so their messages reach you the instant they arrive. This setting won't hibernate this one.")
-                            .font(.caption)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Name")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        TextField("Service name", text: $label)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Service name")
                     }
-                }
 
-                Toggle("Mobile view", isOn: $mobileView)
-                    .help("Loads this service as if on an iPhone, so it serves its mobile web layout. Applied on save.")
-
-                Toggle("Open outside links in Blatta", isOn: $openLinksInApp)
-                    .help("When a link in this service points somewhere no Blatta service covers, open it in a Blatta window instead of your browser. Links that another service does cover still switch to that service.")
-
-                Toggle("Always appear active", isOn: $stayActive)
-                    .help("Keeps this service from showing you as away or idle while Blatta is in the background, so your status stays active even when you work in other apps. Useful for Microsoft Teams. May hold back some of this service's notifications, since it now thinks you're looking at it.")
-
-                Picker("Web appearance", selection: $webAppearance) {
-                    ForEach(ServiceAppearanceMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Address")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("https://example.com", text: $url)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Service address")
                     }
+
+                    ServiceIconEditor(
+                        label: label.isEmpty ? service.label : label,
+                        serviceURL: url,
+                        fallbackIconData: service.fetchedIconData,
+                        fallbackCatalogID: service.catalogEntryID,
+                        customIconData: $customIconData,
+                        websiteURL: $iconWebsiteURL
+                    )
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Hibernate", selection: $hibernationPolicy) {
+                            Text("Follow global setting").tag(HibernationPolicy.followGlobal)
+                            Text("When I switch to another service").tag(HibernationPolicy.immediate)
+                            Text("After a set idle time").tag(HibernationPolicy.after)
+                            Text("Never (keep loaded)").tag(HibernationPolicy.never)
+                        }
+                        .help("Blatta frees a service's memory and CPU while it runs in the background. The one you're viewing always stays loaded. \"Never\" also keeps calls and notifications working in the background, at the cost of more memory.")
+                        .disabled(service.isNotificationCritical)
+
+                        if hibernationPolicy == .after && !service.isNotificationCritical {
+                            Stepper(value: $hibernateAfterMinutes, in: 1...120) {
+                                Text("Idle for \(hibernateAfterMinutes) minute\(hibernateAfterMinutes == 1 ? "" : "s")")
+                            }
+                            .accessibilityLabel("Hibernate after \(hibernateAfterMinutes) minutes idle")
+                        }
+
+                        if service.isNotificationCritical {
+                            Text("Chat apps stay loaded so their messages reach you the instant they arrive. This setting won't hibernate this one.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Toggle("Mobile view", isOn: $mobileView)
+                        .help("Loads this service as if on an iPhone, so it serves its mobile web layout. Applied on save.")
+
+                    Toggle("Open outside links in Blatta", isOn: $openLinksInApp)
+                        .help("When a link in this service points somewhere no Blatta service covers, open it in a Blatta window instead of your browser. Links that another service does cover still switch to that service.")
+
+                    Toggle("Always appear active", isOn: $stayActive)
+                        .help("Keeps this service from showing you as away or idle while Blatta is in the background, so your status stays active even when you work in other apps. Useful for Microsoft Teams. May hold back some of this service's notifications, since it now thinks you're looking at it.")
+
+                    Picker("Web appearance", selection: $webAppearance) {
+                        ForEach(ServiceAppearanceMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Blatta sends this color scheme to websites that support it. Blatta does not recolor the page.")
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("Error: \(errorMessage)")
+                    }
+
+                    Divider()
+
+                    notificationsSection
+
+                    Divider()
+
+                    cameraMicrophoneSection
+
+                    Divider()
+
+                    customCSSSection
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        confirmingClearSession = true
+                    } label: {
+                        Label("Clear session (log out)", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                    .help("Signs you out by clearing this service's cookies and storage. Its place in your workspaces is kept.")
                 }
-                .pickerStyle(.segmented)
-                .help("Blatta sends this color scheme to websites that support it. Blatta does not recolor the page.")
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("Error: \(errorMessage)")
-                }
-
-                Divider()
-
-                notificationsSection
-
-                Divider()
-
-                cameraMicrophoneSection
-
-                Divider()
-
-                customCSSSection
-
-                Divider()
-
-                Button(role: .destructive) {
-                    confirmingClearSession = true
-                } label: {
-                    Label("Clear session (log out)", systemImage: "rectangle.portrait.and.arrow.right")
-                }
-                .help("Signs you out by clearing this service's cookies and storage. Its place in your workspaces is kept.")
+                .padding(20)
             }
-            .padding(20)
+            .scrollBounceBehavior(.basedOnSize)
 
             Divider()
 
@@ -168,7 +171,7 @@ struct EditServiceSheet: View {
             }
             .padding(20)
         }
-        .frame(width: 420)
+        .frame(width: 420, height: 520)
         .onAppear {
             label = service.label
             url = service.url
@@ -274,7 +277,7 @@ struct EditServiceSheet: View {
 
             TextEditor(text: $customCSS)
                 .font(.system(.caption, design: .monospaced))
-                .frame(height: 120)
+                .frame(height: 90)
                 .overlay(
                     RoundedRectangle(cornerRadius: BlattaRadius.control)
                         .stroke(Color(nsColor: .separatorColor))

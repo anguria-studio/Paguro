@@ -11,6 +11,10 @@ struct ShellPreferences: Equatable {
     private(set) var iconRailMagnifiedSize: Double
     private(set) var iconRailPosition: DockRailPosition
     private(set) var workspaceViewMode: WorkspaceViewMode
+    /// Drops the service names and the workspace names from the top bar.
+    /// Read through `RailBarPresentationPolicy`, which keeps it out of every
+    /// rail that must show its names.
+    private(set) var railBarIconsOnly: Bool
     private(set) var sidebarCollapsed: Bool
     private(set) var railLayout: RailLayout
     private(set) var appearanceMode: AppearanceMode
@@ -64,6 +68,7 @@ struct ShellPreferences: Equatable {
             workspaceViewMode: WorkspaceViewMode.resolving(
                 defaults.string(forKey: DefaultsKey.workspaceViewMode)
             ),
+            railBarIconsOnly: defaults.bool(forKey: DefaultsKey.railBarIconsOnly),
             sidebarCollapsed: defaults.bool(forKey: DefaultsKey.sidebarCollapsed),
             railLayout: preferencesStore.railLayout,
             appearanceMode: preferencesStore.appearanceMode
@@ -138,6 +143,14 @@ struct ShellPreferences: Equatable {
     ) {
         workspaceViewMode = mode
         defaults.set(mode.rawValue, forKey: DefaultsKey.workspaceViewMode)
+    }
+
+    mutating func setRailBarIconsOnly(
+        _ iconsOnly: Bool,
+        defaults: UserDefaults = .standard
+    ) {
+        railBarIconsOnly = iconsOnly
+        defaults.set(iconsOnly, forKey: DefaultsKey.railBarIconsOnly)
     }
 
     mutating func setSidebarCollapsed(

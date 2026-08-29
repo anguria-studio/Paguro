@@ -70,15 +70,38 @@ final class DockIconSizingTests: XCTestCase {
         )
     }
 
-    func testTooltipClearsTheRailAndTheMagnifiedIcon() {
+    func testTooltipClearsTheRailSurfaceAndTheMagnifiedIcon() {
+        // A 24 point icon sits inside a 64 point rail that draws a 48 point
+        // surface, so the surface edge places the label.
         XCTAssertEqual(
-            DockIconSizing.tooltipLeadingOffset(baseSize: 24, displayedIconSize: 24),
-            63
+            DockIconSizing.tooltipLeadingOffset(
+                baseSize: 24,
+                displayedIconSize: 24,
+                railInset: 8
+            ),
+            55
         )
+        // A magnified icon reaches past that surface and takes the label with
+        // it, one gap beyond its own edge.
         XCTAssertEqual(
-            DockIconSizing.tooltipLeadingOffset(baseSize: 24, displayedIconSize: 64),
+            DockIconSizing.tooltipLeadingOffset(
+                baseSize: 24,
+                displayedIconSize: 64,
+                railInset: 8
+            ),
             83
         )
+    }
+
+    func testTooltipFollowsEveryStepOfMagnificationPastTheSurface() {
+        let offsets = [40.0, 48.0, 56.0].map {
+            DockIconSizing.tooltipLeadingOffset(
+                baseSize: 24,
+                displayedIconSize: $0,
+                railInset: 8
+            )
+        }
+        XCTAssertEqual(offsets, [59, 67, 75])
     }
 
     func testCenteredRailUsesTheBaseStackHeight() {

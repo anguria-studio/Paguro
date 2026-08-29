@@ -12,6 +12,10 @@ import BlattaCore
 /// The rail supports `ServiceReorder`, drag and drop, arrow keys, and VoiceOver
 /// move actions. The related space controls live in `SpacePaletteView`, which
 /// the header opens.
+///
+/// This view owns the live order of a reorder drag. `RailReorderState` holds
+/// that order, and `links(in:)` gives it to every cell. `BlattaCore` owns the
+/// index rules in `RailReorderRule`.
 struct UnifiedRailView: View {
     @Binding var selectedSpaceID: UUID?
     @Binding var selectedServiceID: UUID?
@@ -32,6 +36,11 @@ struct UnifiedRailView: View {
     @State var confirmingDelete: SpaceServiceLink?
     @State var editingService: ServiceInstance?
     @State private var dockMagnification = DockMagnificationState()
+    /// The live order and the drag state of a Dock-style reorder.
+    @State private var railReorder = RailReorderState()
+    /// The scroll values that automatic scroll reads during a reorder drag.
+    @State private var railScroll = RailScrollGeometry()
+    @State private var railScrollPosition = ScrollPosition()
     /// Empty means every workspace starts expanded. Keeping only collapsed IDs
     /// also makes a newly created workspace appear without another state sync.
     @State private var collapsedWorkspaceIDs: Set<UUID> = []
@@ -61,10 +70,33 @@ struct UnifiedRailView: View {
             }
     }
 
+    /// The saved order of one workspace, with the live drag order applied.
+    ///
+    /// Every rail arrangement reads its cells through this method, so a drag
+    /// reflows the icon dock, the expanded rows, and the top bar in one place.
     private func links(in workspaceID: UUID) -> [SpaceServiceLink] {
+        railReorder.ordered(modelLinks(in: workspaceID), in: workspaceID)
+    }
+
+    /// The saved order of one workspace, without the live drag order.
+    private func modelLinks(in workspaceID: UUID) -> [SpaceServiceLink] {
         liveLinks
             .filter { $0.space.id == workspaceID }
             .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    /// The saved order of the workspace that waits for its committed drag.
+    ///
+    /// The live order stays until this value matches it. A cell then never
+    /// shows the old position for one frame after the release.
+    private var pendingSettleOrder: [UUID]? {
+        guard let groupID = railReorder.settlingGroupID else { return nil }
+        return modelLinks(in: groupID).map(\.id)
+    }
+
+    /// The gap between two cells in the vertical rail.
+    private var verticalRailSpacing: CGFloat {
+        sidebarPresentation == .expanded ? 2 : 0
     }
 
     private var filteredLinks: [SpaceServiceLink] {
@@ -72,12 +104,35 @@ struct UnifiedRailView: View {
         return links(in: spaceID)
     }
 
-    /// All-workspaces is a sidebar presentation. The top-bar layout stays a
-    /// compact current-workspace switcher and service tab strip.
+    /// Both axes can group their services under workspace names: the vertical
+    /// rail as disclosure sections, the top bar as a name before each run of
+    /// tabs.
+    private var groupsByWorkspace: Bool {
+        RailBarPresentationPolicy.groupsByWorkspace(
+            mode: appState.workspaceViewMode,
+            workspaceCount: liveSpaces.count
+        )
+    }
+
     private var showsAllWorkspaces: Bool {
-        axis == .vertical
-            && appState.workspaceViewMode == .all
-            && liveSpaces.count > 1
+        axis == .vertical && groupsByWorkspace
+    }
+
+    /// The top bar drops every name and keeps the icons.
+    private var showsIconsOnly: Bool {
+        RailBarPresentationPolicy.showsIconsOnly(
+            isTopBar: axis == .horizontal,
+            iconsOnlyPreference: appState.railBarIconsOnly
+        )
+    }
+
+    /// The runs of tabs in the top bar. The grouped bar names each workspace;
+    /// the plain bar is the current workspace alone, with no name.
+    private var barGroups: [RailBarGroup] {
+        guard axis == .horizontal && groupsByWorkspace else {
+            return [RailBarGroup(space: nil, links: filteredLinks)]
+        }
+        return workspaceGroups.map { RailBarGroup(space: $0.space, links: $0.links) }
     }
 
     private var workspaceGroups: [WorkspaceLinkGroup] {
@@ -99,6 +154,8 @@ struct UnifiedRailView: View {
     }
 
     private var duplicateServiceIDs: Set<UUID> {
+        // The grouped top bar already names the workspace before each run of
+        // tabs, so a tab there needs no workspace suffix of its own.
         guard showsAllWorkspaces else { return [] }
         let counts = Dictionary(grouping: liveLinks, by: { $0.service.id })
         return Set(counts.compactMap { serviceID, links in
@@ -115,6 +172,13 @@ struct UnifiedRailView: View {
 
     var body: some View {
         content
+        .onChange(of: pendingSettleOrder) { _, modelOrder in
+            guard let modelOrder else { return }
+            railReorder.settle(modelOrder: modelOrder)
+        }
+        .onDisappear {
+            railReorder.clear()
+        }
         .sheet(item: $editingService) { service in
             EditServiceSheet(service: service)
         }
@@ -166,19 +230,21 @@ struct UnifiedRailView: View {
         if axis == .vertical {
             verticalBody
         } else {
-            let links = filteredLinks
             HorizontalRailView(
-                links: links,
+                groups: barGroups,
                 selectedSpaceID: selectedSpaceID,
                 selectedServiceID: selectedServiceID,
-                showsSpaceSwitcher: showsSpaceSwitcher,
+                // The grouped bar names every workspace already. A current
+                // workspace control beside those names would say it twice.
+                showsSpaceSwitcher: showsSpaceSwitcher && !groupsByWorkspace,
                 contentInset: contentInset,
                 dockMagnification: dockMagnification,
                 spaceHeader: { spaceHeader },
-                serviceCell: { link, dockLayout in
+                workspaceLabel: { space in barWorkspaceLabel(for: space) },
+                serviceCell: { link, groupLinks, dockLayout in
                     serviceRow(
                         for: link,
-                        workspaceLinks: links,
+                        workspaceLinks: groupLinks,
                         dockLayout: dockLayout
                     )
                 }
@@ -192,7 +258,10 @@ struct UnifiedRailView: View {
             linkIDs: dockLinks.map(\.id),
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
-            magnificationEnabled: appState.iconRailMagnificationEnabled,
+            // Magnification changes the item pitch. Hold it while a person
+            // moves a cell, so the reorder keeps one measure.
+            magnificationEnabled: appState.iconRailMagnificationEnabled
+                && !railReorder.isDragging,
             isCollapsed: sidebarPresentation == .collapsed
         )
 
@@ -209,7 +278,7 @@ struct UnifiedRailView: View {
 
             GeometryReader { geometry in
                 ScrollView {
-                    LazyVStack(spacing: sidebarPresentation == .expanded ? 2 : 0) {
+                    LazyVStack(spacing: verticalRailSpacing) {
                         verticalRailContent(dockLayout: dockLayout)
                     }
                     .frame(maxWidth: .infinity)
@@ -222,8 +291,24 @@ struct UnifiedRailView: View {
                             : .smooth(duration: BlattaMotion.dockMagnificationSeconds),
                         value: dockLayout.stackVerticalOffset
                     )
+                    // The drag measures inside the scrolling stack. A pointer
+                    // position then stays correct while the rail scrolls.
+                    .coordinateSpace(.named(RailCoordinateSpace.name))
                 }
                 .scrollClipDisabled(sidebarPresentation == .collapsed)
+                .scrollPosition($railScrollPosition)
+                .onScrollGeometryChange(for: RailScrollGeometry.self) { scroll in
+                    RailScrollGeometry(
+                        offset: scroll.contentOffset.y,
+                        viewportLength: scroll.containerSize.height,
+                        contentLength: scroll.contentSize.height
+                    )
+                } action: { _, updated in
+                    railScroll = updated
+                }
+                .task(id: railReorder.draggingLinkID) {
+                    await runRailAutoscroll()
+                }
             }
             .clipShape(VerticalRailClipShape())
             .padding(
@@ -449,6 +534,24 @@ struct UnifiedRailView: View {
         }
     }
 
+    /// One workspace name in the grouped top bar. It opens that workspace.
+    private func barWorkspaceLabel(for space: Space) -> some View {
+        BarWorkspaceLabelView(
+            workspaceName: space.name,
+            emoji: space.emoji,
+            isCurrent: space.id == selectedSpaceID,
+            isMuted: NotificationMutePresentation.showsMutedState(
+                scopeMuted: space.isMutedEffective,
+                manualGlobalMute: appState.doNotDisturb
+            )
+        ) {
+            selectedSpaceID = space.id
+        }
+        .contextMenu {
+            workspaceContextMenu(for: space)
+        }
+    }
+
     // MARK: - Service cells
 
     private func serviceRow(
@@ -467,13 +570,59 @@ struct UnifiedRailView: View {
             supplementaryWorkspaceName: duplicateServiceIDs.contains(link.service.id)
                 ? link.space.name
                 : nil,
+            hidesLabel: showsIconsOnly,
             dockLayout: dockLayout,
             dockMagnification: dockMagnification,
+            railReorder: railReorder,
+            railSpacing: axis == .vertical
+                ? verticalRailSpacing
+                : ServiceRowView.tabSpacing,
             focusedLinkID: $focusedLinkID,
             showsKeyboardFocusRing: $showsKeyboardFocusRing
         ) {
             serviceContextMenu(for: link)
         }
+    }
+
+    // MARK: - Automatic scroll
+
+    /// Scrolls the rail while a drag holds the pointer near an edge.
+    ///
+    /// The vertical rail scrolls when it holds more services than its viewport
+    /// shows. The loop runs only during a drag, and it stops when the drag ends
+    /// or the rail goes away.
+    private func runRailAutoscroll() async {
+        guard railReorder.isDragging else { return }
+
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: BlattaMotion.railAutoscrollInterval)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, railReorder.isDragging else { return }
+            advanceRailAutoscroll()
+        }
+    }
+
+    private func advanceRailAutoscroll() {
+        guard railScroll.scrolls else { return }
+
+        // The drag reports a position inside the scrolling stack. Remove the
+        // current scroll offset to get the position inside the viewport.
+        let pointerInViewport = railReorder.pointerPosition - railScroll.offset
+        let step = RailReorderRule.autoscrollStep(
+            pointerPosition: Double(pointerInViewport),
+            viewportLength: Double(railScroll.viewportLength)
+        )
+        guard step != 0 else { return }
+
+        let next = min(max(railScroll.offset + CGFloat(step), 0), railScroll.maximumOffset)
+        let applied = next - railScroll.offset
+        guard abs(applied) > 0.01 else { return }
+
+        railScrollPosition.scrollTo(y: next)
+        railReorder.extend(byScroll: applied)
     }
 
     private func dockRailTopPadding(viewportHeight: CGFloat) -> CGFloat {

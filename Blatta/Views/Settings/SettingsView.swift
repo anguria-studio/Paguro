@@ -150,55 +150,71 @@ struct GeneralSettingsView: View {
                     Text("Current workspace").tag(WorkspaceViewMode.current)
                     Text("All workspaces").tag(WorkspaceViewMode.all)
                 }
-                .help("Shows one workspace or all workspace sections in the sidebar layout.")
+                .help("Shows one workspace, or every workspace with its services grouped under its name. It applies to both layouts.")
+
+                // A sidebar row is full width, so its name costs no space.
+                // Icons-only is offered for the top bar alone.
+                if RailBarPresentationPolicy.offersIconsOnly(
+                    isTopBar: appState.railLayout == .topBars
+                ) {
+                    Toggle("Show icons only", isOn: Binding(
+                        get: { appState.railBarIconsOnly },
+                        set: { appState.setRailBarIconsOnly($0) }
+                    ))
+                    .help("Keeps the service icons in the top bar and removes their names. A workspace with an icon shows the icon alone; one without an icon keeps its name.")
+                }
             }
 
-            Section("Icon Rail") {
-                LabeledContent("Size") {
-                    Slider(
-                        value: Binding(
-                            get: { appState.iconRailBaseSize },
-                            set: { appState.setIconRailBaseSize($0) }
-                        ),
-                        in: DockIconSizing.minimumBaseSize...DockIconSizing.maximumBaseSize,
-                        step: 1
-                    )
-                    .frame(width: 240)
-                    .accessibilityLabel("Icon rail size")
-                    .accessibilityValue("\(Int(appState.iconRailBaseSize.rounded())) points")
-                }
-
-                LabeledContent("Magnification") {
-                    Slider(
-                        value: Binding(
-                            get: { appState.iconRailMagnification },
-                            set: { appState.setIconRailMagnification($0) }
-                        ),
-                        in: DockIconSizing.minimumMagnification...DockIconSizing.maximumMagnification,
-                        step: 0.01
-                    )
-                    .frame(width: 240)
-                    .accessibilityLabel("Icon rail magnification")
-                    .accessibilityValue(
-                        appState.iconRailMagnification == 0
-                            ? "Off"
-                            : "\(Int((appState.iconRailMagnification * 100).rounded())) percent"
-                    )
-                }
-
-                Picker("Vertical position", selection: Binding(
-                    get: { appState.iconRailPosition },
-                    set: { appState.setIconRailPosition($0) }
-                )) {
-                    ForEach(DockRailPosition.allCases, id: \.self) { position in
-                        Text(position.displayName).tag(position)
+            // Every one of these settings shapes the collapsed sidebar dock,
+            // which the top-bar layout does not have.
+            if appState.railLayout == .sidebar {
+                Section("Icon Rail") {
+                    LabeledContent("Size") {
+                        Slider(
+                            value: Binding(
+                                get: { appState.iconRailBaseSize },
+                                set: { appState.setIconRailBaseSize($0) }
+                            ),
+                            in: DockIconSizing.minimumBaseSize...DockIconSizing.maximumBaseSize,
+                            step: 1
+                        )
+                        .frame(width: 240)
+                        .accessibilityLabel("Icon rail size")
+                        .accessibilityValue("\(Int(appState.iconRailBaseSize.rounded())) points")
                     }
-                }
-                .pickerStyle(.segmented)
 
-                Text("These settings apply when the sidebar is collapsed.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    LabeledContent("Magnification") {
+                        Slider(
+                            value: Binding(
+                                get: { appState.iconRailMagnification },
+                                set: { appState.setIconRailMagnification($0) }
+                            ),
+                            in: DockIconSizing.minimumMagnification...DockIconSizing.maximumMagnification,
+                            step: 0.01
+                        )
+                        .frame(width: 240)
+                        .accessibilityLabel("Icon rail magnification")
+                        .accessibilityValue(
+                            appState.iconRailMagnification == 0
+                                ? "Off"
+                                : "\(Int((appState.iconRailMagnification * 100).rounded())) percent"
+                        )
+                    }
+
+                    Picker("Vertical position", selection: Binding(
+                        get: { appState.iconRailPosition },
+                        set: { appState.setIconRailPosition($0) }
+                    )) {
+                        ForEach(DockRailPosition.allCases, id: \.self) { position in
+                            Text(position.displayName).tag(position)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text("These settings apply when the sidebar is collapsed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Web Content") {
