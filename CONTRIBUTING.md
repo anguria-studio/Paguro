@@ -1,8 +1,8 @@
-# Contributing to Atoll
+# Contributing to Blatta
 
-Thank you for your interest in Atoll.
+Thank you for your interest in Blatta.
 
-Atoll is an early project.
+Blatta is an early project.
 Open an [issue](https://github.com/tommasoltrz/Atoll/issues) before you make a large change.
 This step helps contributors avoid duplicate work.
 
@@ -13,11 +13,11 @@ This step helps contributors avoid duplicate work.
 3. Run `xcodegen generate` in the repository root.
 4. Run `swift test --package-path Core`.
 5. Run `scripts/test_compatibility_fixture.sh`.
-6. Run the Atoll scheme tests in Xcode.
+6. Run the Blatta scheme tests in Xcode.
 
 ## Sign a local Debug build
 
-An ad-hoc signed app can run most Atoll tests.
+An ad-hoc signed app can run most Blatta tests.
 macOS does not allow that app to request notification authorization.
 Use an Apple Development identity for notification and permission tests.
 
@@ -25,7 +25,7 @@ Use an Apple Development identity for notification and permission tests.
    `Configuration/LocalSigning.xcconfig`.
 2. Replace `YOUR_TEAM_ID` with your Apple Developer Team ID.
 3. Run `xcodegen generate`.
-4. Build Atoll again.
+4. Build Blatta again.
 
 Git ignores `LocalSigning.xcconfig`.
 Do not commit a personal team value.
@@ -39,14 +39,14 @@ Do not commit a personal team value.
 5. Add an entry to `docs/ERRORS.md` when you find a durable gotcha.
 6. Run the build and all related tests.
 
-Do not edit `Atoll.xcodeproj` by hand.
+Do not edit `Blatta.xcodeproj` by hand.
 Edit `project.yml`, and then run `xcodegen generate`.
 
 ## Code rules
 
 - Use Swift 6 concurrency checks.
 - Keep UI state on the main actor.
-- Put pure rules and value types in `AtollCore`.
+- Put pure rules and value types in `BlattaCore`.
 - Keep AppKit and WebKit code in the app target.
 - Use public Apple APIs only.
 - Treat each web message as untrusted input.

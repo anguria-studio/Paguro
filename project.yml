@@ -1,4 +1,4 @@
-name: Atoll
+name: Blatta
 
 # XcodeGen creates the Xcode project from this file.
 # Run `xcodegen generate` after each change to this file.
@@ -15,31 +15,31 @@ configs:
   Release: release
 
 packages:
-  AtollCore:
+  BlattaCore:
     path: Core
 
 targets:
-  Atoll:
+  Blatta:
     type: application
     platform: macOS
     configFiles:
-      Debug: Configuration/AtollDebug.xcconfig
-      Compatibility: Configuration/AtollDebug.xcconfig
+      Debug: Configuration/BlattaDebug.xcconfig
+      Compatibility: Configuration/BlattaDebug.xcconfig
     sources:
-      - path: Atoll
+      - path: Blatta
         excludes:
           - "**/.DS_Store"
     resources:
-      - path: Atoll/Resources/ServiceCatalog.json
-      - path: Atoll/Resources/hagezi-light.json
-      - path: Atoll/Resources/fanboy-annoyance.json
+      - path: Blatta/Resources/ServiceCatalog.json
+      - path: Blatta/Resources/hagezi-light.json
+      - path: Blatta/Resources/fanboy-annoyance.json
     dependencies:
-      - package: AtollCore
-        product: AtollCore
+      - package: BlattaCore
+        product: BlattaCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll
-        PRODUCT_NAME: Atoll
+        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Blatta
+        PRODUCT_NAME: Blatta
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "6.0"
@@ -48,62 +48,62 @@ targets:
 
         ENABLE_APP_SANDBOX: YES
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_ENTITLEMENTS: Atoll/Atoll.entitlements
+        CODE_SIGN_ENTITLEMENTS: Blatta/Blatta.entitlements
 
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_FILE: Atoll/Info.plist
+        INFOPLIST_FILE: Blatta/Info.plist
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_LSUIElement: NO
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll.debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Blatta.debug
         Compatibility:
-          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Atoll.compatibility
+          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Blatta.compatibility
     scheme:
       testTargets:
-        - AtollTests
+        - BlattaTests
 
-  AtollTests:
+  BlattaTests:
     type: bundle.unit-test
     platform: macOS
     configFiles:
-      Debug: Configuration/AtollDebug.xcconfig
-      Compatibility: Configuration/AtollDebug.xcconfig
+      Debug: Configuration/BlattaDebug.xcconfig
+      Compatibility: Configuration/BlattaDebug.xcconfig
     sources:
-      - path: AtollTests
+      - path: BlattaTests
     dependencies:
-      - target: Atoll
-      - package: AtollCore
-        product: AtollCore
+      - target: Blatta
+      - package: BlattaCore
+        product: BlattaCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.AtollTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.BlattaTests
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         MACOSX_DEPLOYMENT_TARGET: "26.0"
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  Atoll Island Preview:
+  Blatta Island Preview:
     build:
       targets:
-        Atoll: all
+        Blatta: all
     run:
       config: Debug
       commandLineArguments:
-        "--atoll-fake-notch": true
+        "--blatta-fake-notch": true
 
-  Atoll Compatibility:
+  Blatta Compatibility:
     build:
       targets:
-        Atoll: all
+        Blatta: all
     run:
       config: Compatibility
       commandLineArguments:
-        "--atoll-compatibility-fixture": true
+        "--blatta-compatibility-fixture": true
     test:
       config: Debug
       targets:
-        - AtollTests
+        - BlattaTests

@@ -1,4 +1,4 @@
-"""Tests for the Atoll compatibility fixture server."""
+"""Tests for the Blatta compatibility fixture server."""
 
 from __future__ import annotations
 
@@ -69,9 +69,9 @@ class FixtureServerTests(unittest.TestCase):
         with self.get("/download") as response:
             self.assertEqual(
                 response.headers["Content-Disposition"],
-                'attachment; filename="atoll-fixture.txt"',
+                'attachment; filename="blatta-fixture.txt"',
             )
-            self.assertIn(b"Atoll compatibility fixture", response.read())
+            self.assertIn(b"Blatta compatibility fixture", response.read())
 
     def test_download_supports_a_head_request(self) -> None:
         request = Request(f"{self.base_url}/download", method="HEAD")
@@ -80,11 +80,11 @@ class FixtureServerTests(unittest.TestCase):
             self.assertEqual(response.read(), b"")
             self.assertEqual(
                 response.headers["Content-Disposition"],
-                'attachment; filename="atoll-fixture.txt"',
+                'attachment; filename="blatta-fixture.txt"',
             )
 
     def test_upload_reports_the_received_byte_count(self) -> None:
-        boundary = "AtollBoundary"
+        boundary = "BlattaBoundary"
         body = (
             f"--{boundary}\r\n"
             'Content-Disposition: form-data; name="file"; filename="probe.txt"\r\n'

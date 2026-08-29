@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - atoll/main
+      - blatta/main
 
 permissions:
   contents: read

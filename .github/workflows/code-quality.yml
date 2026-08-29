@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - atoll/main
+      - blatta/main
 
 permissions:
   contents: read
@@ -24,11 +24,11 @@ jobs:
       - name: Generate the project
         run: xcodegen generate
 
-      - name: Test AtollCore
+      - name: Test BlattaCore
         run: swift test --package-path Core
 
       - name: Test the compatibility fixture
         run: scripts/test_compatibility_fixture.sh
 
       - name: Test the application
-        run: xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug test
+        run: xcodebuild -project Blatta.xcodeproj -scheme Blatta -configuration Debug test

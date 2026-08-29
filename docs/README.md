@@ -1,4 +1,4 @@
-# Atoll documentation
+# Blatta documentation
 
 Start with these documents:
 

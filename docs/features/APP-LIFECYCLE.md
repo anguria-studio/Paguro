@@ -4,16 +4,16 @@ Status: active
 
 ## Purpose
 
-Atoll can keep web services active after the main window closes. Quitting the
+Blatta can keep web services active after the main window closes. Quitting the
 application is different: it must stop every service before the process exits.
 
 ## Ownership
 
-`AtollApp` creates one `AppModel`. `AppModel` is the composition root and owns
+`BlattaApp` creates one `AppModel`. `AppModel` is the composition root and owns
 the process-lifetime application state and presence controller.
 
 `AppDelegate` adapts AppKit lifecycle events. Deterministic activation and
-shutdown rules live in AtollCore.
+shutdown rules live in BlattaCore.
 
 `AppState` uses two startup phases. Its initializer opens the store, creates
 the service graph, and loads saved values. `AppDelegate` calls `AppState.start()`
@@ -23,7 +23,7 @@ Repeated start calls and start calls after shutdown do nothing.
 
 The notification manager installs its macOS notification delegate while the
 composition root initializes the application state. This timing allows a
-notification action that launches Atoll to wait until navigation is ready.
+notification action that launches Blatta to wait until navigation is ready.
 
 `StoreLoader` opens or repairs the SwiftData store.
 `StoreRecoveryCoordinator` then prepares any recovery notice and backup picker.
@@ -38,31 +38,31 @@ removes these callbacks and observers before the web-view pool shuts down.
 
 A normal launch uses regular activation. A login-item launch starts in
 accessory mode unless the user explicitly keeps the Dock icon visible.
-After a normal launch, Atoll activates the application and orders its initial
+After a normal launch, Blatta activates the application and orders its initial
 main window forward when the SwiftUI scene makes that window available.
 
-Before Atoll opens a main or Settings window, it changes to regular activation
+Before Blatta opens a main or Settings window, it changes to regular activation
 and activates the application. After the final main-capable window closes, it
 returns to accessory mode unless the Dock preference keeps the icon visible.
 Command-Tab orders an existing visible main window forward. A Dock reopen
 request also restores an existing main window or asks SwiftUI to create it.
 Closing a window does not stop badge polling or notification detection.
-On a fresh install, Atoll appears in both the Dock and menu bar and shows the
+On a fresh install, Blatta appears in both the Dock and menu bar and shows the
 unread badge on its Dock icon. Existing saved choices remain unchanged.
 
-The "Show Atoll in" setting has three modes:
+The "Show Blatta in" setting has three modes:
 
-- Dock only: Atoll removes the menu-bar item and keeps the Dock icon.
-- Menu bar only: Atoll hides the Dock icon after the last window closes.
-- Both: Atoll shows the Dock icon and the menu-bar item.
+- Dock only: Blatta removes the menu-bar item and keeps the Dock icon.
+- Menu bar only: Blatta hides the Dock icon after the last window closes.
+- Both: Blatta shows the Dock icon and the menu-bar item.
 
-When the user drags the item off the menu bar, Atoll changes the mode to
+When the user drags the item off the menu bar, Blatta changes the mode to
 "Dock only" so the app stays reachable.
 
 The menu-bar item opens a native status window. The window can select a
 service, toggle global notification mute, open the main window, open Settings,
 or change a presence preference. This window is the complete application route
-while Atoll runs in Menu bar only mode.
+while Blatta runs in Menu bar only mode.
 
 ## Quit behavior
 
@@ -86,7 +86,7 @@ The process has no helper that continues after termination.
 
 ## Verification
 
-AtollCore tests cover launch activation, window-close activation, Dock
+BlattaCore tests cover launch activation, window-close activation, Dock
 preference behavior, and repeated shutdown requests. The application test
 suite builds the AppKit adapter and the two-phase startup path with Swift 6
 strict concurrency.

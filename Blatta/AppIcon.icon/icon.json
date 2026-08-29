@@ -1,0 +1,203 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.64600,0.47754,0.89697,1.00000",
+      "display-p3:0.41504,0.27759,0.71289,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 1
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.3
+      }
+    }
+  },
+  "groups" : [
+    {
+      "hidden" : true,
+      "layers" : [
+        {
+          "image-name" : "Vector-1.svg",
+          "name" : "Vector-1",
+          "position" : {
+            "scale" : 0.91,
+            "translation-in-points" : [
+              -133.47288823888016,
+              -119.86866291007249
+            ]
+          }
+        },
+        {
+          "image-name" : "Vector-2.svg",
+          "name" : "Vector-2",
+          "position" : {
+            "scale" : 0.91,
+            "translation-in-points" : [
+              123.47288823888016,
+              -119.86866291007249
+            ]
+          }
+        },
+        {
+          "image-name" : "Vector-3.svg",
+          "name" : "Vector-3",
+          "position" : {
+            "scale" : 0.91,
+            "translation-in-points" : [
+              -133.47288823888016,
+              128.86866291007254
+            ]
+          }
+        },
+        {
+          "image-name" : "Vector.svg",
+          "name" : "Vector",
+          "position" : {
+            "scale" : 0.91,
+            "translation-in-points" : [
+              123.47288823888016,
+              128.86866291007254
+            ]
+          }
+        },
+        {
+          "image-name" : "eee.svg",
+          "name" : "eee",
+          "position" : {
+            "scale" : 0.72,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.64600,0.47754,0.89697,1.00000",
+                  "display-p3:0.41504,0.27759,0.71289,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0.1795226871521187
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0.7
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.72852,0.61084,0.97559,1.00000",
+                  "display-p3:0.53223,0.38721,0.88525,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0.7
+                  }
+                }
+              }
+            }
+          ],
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "Blattttta.svg",
+          "name" : "Blattttta",
+          "position" : {
+            "scale" : 0.71,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.93359,0.91797,0.95410,1.00000",
+              "display-p3:0.93359,0.91797,0.95410,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5,
+                "y" : 0
+              },
+              "stop" : {
+                "x" : 0.5,
+                "y" : 0.7
+              }
+            }
+          },
+          "glass" : true,
+          "image-name" : "blttt.svg",
+          "name" : "blttt",
+          "position-specializations" : [
+            {
+              "idiom" : "square",
+              "value" : {
+                "scale" : 0.17,
+                "translation-in-points" : [
+                  0,
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

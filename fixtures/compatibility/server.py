@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serve the Atoll compatibility fixture on two loopback HTTPS origins."""
+"""Serve the Blatta compatibility fixture on two loopback HTTPS origins."""
 
 from __future__ import annotations
 
@@ -61,12 +61,12 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/download":
-            payload = b"Atoll compatibility fixture download.\n"
+            payload = b"Blatta compatibility fixture download.\n"
             self._send_bytes(
                 payload,
                 content_type="text/plain; charset=utf-8",
                 extra_headers={
-                    "Content-Disposition": 'attachment; filename="atoll-fixture.txt"'
+                    "Content-Disposition": 'attachment; filename="blatta-fixture.txt"'
                 },
                 send_body=send_body,
             )

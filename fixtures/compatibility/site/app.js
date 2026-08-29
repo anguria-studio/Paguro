@@ -1,5 +1,5 @@
 const fixtureLog = document.querySelector("#fixture-log");
-const markerKey = "atoll-compatibility-marker";
+const markerKey = "blatta-compatibility-marker";
 const sessionAccountLabel = new URLSearchParams(window.location.search).get("account")
   ?.trim()
   .slice(0, 40) || "Unlabeled account";
@@ -44,7 +44,7 @@ async function requestNotificationPermission() {
   return Notification.requestPermission();
 }
 
-async function sendPageNotification(title = "Atoll fixture", tag = "page-notification") {
+async function sendPageNotification(title = "Blatta fixture", tag = "page-notification") {
   await requestNotificationPermission();
   new Notification(title, {
     body: "The page called the Notification constructor.",
@@ -85,7 +85,7 @@ control("worker-notification").addEventListener("click", async () => {
     if (!serviceWorkerRegistration) {
       throw new Error("No service worker registration is available");
     }
-    await serviceWorkerRegistration.showNotification("Atoll fixture worker call", {
+    await serviceWorkerRegistration.showNotification("Blatta fixture worker call", {
       body: "The page called showNotification on its worker registration.",
       tag: "worker-notification",
     });
@@ -98,7 +98,7 @@ control("worker-notification").addEventListener("click", async () => {
 control("delayed-notification").addEventListener("click", () => {
   log("Delayed notification button clicked. A page notification will run in 10 seconds.");
   window.setTimeout(() => {
-    sendPageNotification("Delayed Atoll fixture event", "delayed-notification").catch((error) => {
+    sendPageNotification("Delayed Blatta fixture event", "delayed-notification").catch((error) => {
       log(`Delayed notification failed: ${error.message}`);
     });
   }, 10_000);
@@ -106,20 +106,20 @@ control("delayed-notification").addEventListener("click", () => {
 
 control("increment-badge").addEventListener("click", () => {
   unreadCount += 1;
-  document.title = `(${unreadCount}) Atoll compatibility fixture`;
+  document.title = `(${unreadCount}) Blatta compatibility fixture`;
   log(`Document title unread count changed to ${unreadCount}.`);
 });
 
 control("reset-badge").addEventListener("click", () => {
   unreadCount = 0;
-  document.title = "Atoll compatibility fixture";
+  document.title = "Blatta compatibility fixture";
   log("Document title unread count reset.");
 });
 
 control("open-popup").addEventListener("click", () => {
   const popup = window.open(
     "/popup.html",
-    "atollFixturePopup",
+    "blattaFixturePopup",
     "popup,width=720,height=540,resizable=yes"
   );
   log(popup ? "Test pop-up requested." : "The test pop-up was blocked.");
@@ -354,11 +354,11 @@ control("clear-marker").addEventListener("click", () => {
 });
 
 control("simulate-process-failure").addEventListener("click", () => {
-  window.location.href = "atoll-fixture://web-content-process-failure";
+  window.location.href = "blatta-fixture://web-content-process-failure";
 });
 
 window.addEventListener("message", (event) => {
-  if (event.data && event.data.source === "atoll-compatibility-fixture") {
+  if (event.data && event.data.source === "blatta-compatibility-fixture") {
     log(`${event.data.frame}: ${event.data.message}`);
   }
 });

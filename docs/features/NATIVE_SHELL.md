@@ -63,14 +63,14 @@ When more than one workspace exists, the Add Service dialog shows a Workspace
 menu for catalog and custom services. It starts with the workspace that opened
 the dialog. The chosen workspace receives the new service and becomes active.
 The dialog hides this menu when only one workspace exists.
-The workspace editor can leave the emoji empty. Atoll then shows the workspace
+The workspace editor can leave the emoji empty. Blatta then shows the workspace
 name without a replacement symbol or leading space.
 
 Removing a service from a workspace keeps the service when it is also in
-another workspace. When that workspace was its last one, Atoll saves the
+another workspace. When that workspace was its last one, Blatta saves the
 change and then deletes the service and its sign-in data.
 Deleting a workspace asks for confirmation. The message states how many
-services exist only in that workspace. Atoll deletes those services and their
+services exist only in that workspace. Blatta deletes those services and their
 sign-in data with the workspace. Services that are also in other workspaces
 stay available. The rail and the workspace editor show the same message.
 Return or Space opens the service that has keyboard focus.
@@ -96,7 +96,7 @@ Affected rows grow to move neighboring icons apart.
 The hovered icon keeps its original vertical center. Icons above it move up,
 and icons below it move down.
 Icons grow toward the right and can extend over the web content edge.
-Atoll hides dock selection and hover tiles while magnification is active.
+Blatta hides dock selection and hover tiles while magnification is active.
 Hovering an icon shows its service name in a material label on the right.
 The label keeps a 12 point gap after the rail or the magnified icon.
 It uses the current Window glass style and shell transparency tint.
@@ -112,7 +112,7 @@ The icon viewport ends at the inner top and bottom edges of the dock surface.
 It clips vertical overflow and permits vertical scrolling when items do not fit.
 It keeps horizontal overflow visible for magnification and tooltips.
 
-Atoll saves the main-window sidebar state and restores it after a new launch.
+Blatta saves the main-window sidebar state and restores it after a new launch.
 Use the sidebar button or `Command-Control-S` to change the state.
 
 When exactly one workspace exists, the rail does not show its name or switcher.
@@ -124,16 +124,115 @@ Service rows keep their own context menus.
 ## Content header
 
 The content header is 52 points high.
-It shows the active service name and reload.
-Reload and global notification mute use separate circular Liquid Glass
-controls. Their hover fills use the same circular shape.
+It shows the active service name on the leading edge.
+The trailing edge holds the service controls in this order:
+
+1. The download indicator.
+2. Back.
+3. Forward.
+4. Reload.
+5. Global notification mute.
+
+Each control uses its own circular Liquid Glass surface. Their hover fills use
+the same circular shape.
 The global notification mute suppresses new notification banners. It keeps
 unread badges visible and adds a barred bell to each visible workspace header
 and service.
-The service page owns back, forward, and home navigation.
-Atoll does not repeat these controls in permanent window chrome.
 Web appearance stays in the service editor because websites can ignore or
 override the browser preference.
+
+### Page history
+
+Back and forward move inside the page history of the active service.
+Blatta reads `canGoBack` and `canGoForward` from the web view.
+A control without a target stays in place and dims.
+The View menu repeats both actions as `Command-[` and `Command-]`.
+The service page keeps its own home action, and Blatta does not repeat it.
+
+### Download indicator
+
+The download indicator appears when the service has one download record.
+It stays in the header until the user removes the last record.
+No record disappears on its own, so the route to a finished file remains
+available after the transfer ends.
+
+The control draws the Blatta download mark from the `DownloadIcon` asset.
+The mark is a tray with an arrow above it.
+The asset is a template image, so the mark follows the control color.
+It is 15 points wide, which matches the system symbols beside it.
+
+The control carries a small badge with the number of new downloads.
+The badge counts the running downloads and the results the user has not seen.
+Three transfers at one time therefore show `3` before any of them ends.
+It prints `9+` above nine, so it stays narrow on a 28 point control.
+The badge uses the accent color, not the unread red, because a download does
+not wait for a reply.
+
+A result stops counting after 12 seconds, or when the user opens the list.
+The earlier of the two events applies.
+Opening the list marks every result in it as seen.
+A download that is still running keeps its unseen state, because the user
+cannot have seen a result that has not happened.
+
+The badge is short-lived feedback, not a list to empty.
+When it reaches zero, the control stays in the header without it.
+The record itself remains, so the route back to the file remains.
+
+A download shows a progress ring only after it runs for 500 milliseconds.
+Most downloads end sooner. A ring for such a download would appear and
+disappear inside one or two frames, which reads as a flicker.
+A fast download therefore moves from hidden to the resting mark and its badge.
+The badge is the signal that a fast download arrived.
+
+A young download does not replace a mark that the header already shows.
+It keeps the earlier resting or failed mark until it earns its ring.
+A young download with no earlier record shows nothing at all.
+
+The ring is 24 points across, so it clears the corners of the mark and stays
+inside the 28 point control.
+A download without a reported size shows a turning arc instead of a value.
+A still track would read as a stalled transfer.
+The indicator rests as the plain mark when no download shows a ring.
+A failed record uses the system exclamation mark instead, so a failure never
+looks the same as a group of successful downloads. This difference does not
+depend on color.
+
+### Download indicator motion
+
+The control grows from 85 percent with a fade when it enters the header.
+A completed ring reaches its end, pulses one time to 112 percent, and settles
+on the resting mark.
+Reduce Motion replaces all three of these movements with an opacity change.
+It removes the turning arc, the growth, and the pulse.
+
+A finished download never opens the list. The user opens it with a click.
+
+Clicking the indicator opens the download list.
+The list names each download and reports its state.
+
+Clicking a finished line shows its file in the Finder.
+That line draws a quiet hover fill, so the user can see the action.
+Its tooltip and VoiceOver label both name the file and the Finder.
+The action keeps the record, because the user can need that route again.
+
+A running line and a failed line have no line action.
+A running line has no file yet, and a failed line has none at all.
+Neither line draws the hover fill, so a line without a target never looks
+clickable.
+
+Each line keeps its own trailing control beside the line action.
+A running download has a stop control.
+An ended download has a dismiss control.
+The two controls never share a hit area with the line action.
+Keyboard focus reaches the line action before its dismiss control.
+Clear All removes every ended record at one time.
+
+The VoiceOver label of the indicator always reports the number of records.
+It adds the completed percentage during a download.
+
+Records exist for the current app run only. `Command-Q` removes them.
+
+See [Web sessions](WEB-SESSIONS.md) for the download destination rules.
 
 One persistent sidebar button moves with the sidebar edge.
 It rests at the trailing edge of the expanded sidebar.
@@ -156,7 +255,7 @@ The AppKit content view contains four layers in this order:
 The protective color layer is not a child of the glass view.
 This separation prevents AppKit from treating an opaque color as vibrant
 content.
-The sidebar samples the desktop or the window below Atoll.
+The sidebar samples the desktop or the window below Blatta.
 The expanded surface has an 8 point inset rounded border.
 The collapsed surface keeps an 8 point gutter on its horizontal and bottom
 edges.
@@ -168,7 +267,7 @@ The header starts at the window top and uses the native 52 point centerline.
 The header does not compress when the window becomes short.
 The browser and sidebar scroll viewport use the remaining height.
 The browser top aligns with the top edge of the collapsed dock.
-The Atoll header is part of the shell and has no browser outline or corner mask.
+The Blatta header is part of the shell and has no browser outline or corner mask.
 The native web view is the browser surface.
 Its host clips all four corners with a 14 point continuous radius.
 
@@ -181,8 +280,8 @@ The native visual-effect view uses full strength for Regular and Off. It uses
 The shell controls update the main window live.
 They do not change the Settings window, system-owned surfaces, or web pages.
 The sidebar button uses a 32 point target.
-Atoll removes its permanent surface in the expanded state.
-Atoll gives it a circular material, border, and hover fill in the collapsed
+Blatta removes its permanent surface in the expanded state.
+Blatta gives it a circular material, border, and hover fill in the collapsed
 state.
 The service list does not use strong glass because it contains dense text.
 At 60 percent shell transparency, the sidebar selection starts to change from
@@ -196,15 +295,15 @@ The web page stays on an opaque or quiet semantic background.
 The opaque dark shell tint uses `#242125`.
 The transparency slider changes its opacity and does not change its RGB values.
 At 0 percent, the protective layer is opaque across the complete window.
-At 100 percent, Atoll adds no protective tint.
+At 100 percent, Blatta adds no protective tint.
 The Reset Glass Lab action restores Regular glass and 100 percent transparency.
 
 `ShellPreferences` owns shell-setting load, normalization, and persistence.
 Layout and appearance use the transactional app preferences row. Glass,
 icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so
-they remain available while Atoll repairs or restores the content store.
+they remain available while Blatta repairs or restores the content store.
 
-On a fresh install, Atoll follows the system appearance, uses the left rail,
+On a fresh install, Blatta follows the system appearance, uses the left rail,
 shows all workspaces, and appears in both the Dock and menu bar. The Dock badge
 is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
@@ -216,7 +315,10 @@ It places the button slightly above its center.
 
 ## Menu-bar window
 
-The Atoll status item uses the native window presentation.
+The Blatta status item uses the native window presentation.
+Its icon is the Blatta mark from the `MenuBarIcon` asset.
+The asset is a template image, so macOS tints the icon for the current
+menu-bar appearance.
 The window shows the visible unread total and a global notification mute
 control. Global mute does not hide the unread total. Workspace sections show
 their services with the same icons, unread badges, mute marks, and selected
@@ -224,9 +326,9 @@ state as the main window.
 
 Selecting a service opens the main window at that service. A bounded scrolling
 area keeps a large service list inside the available screen. The footer opens
-Atoll or Settings. These routes remain available in Menu bar only mode. The
+Blatta or Settings. These routes remain available in Menu bar only mode. The
 complete window follows the Window glass and Shell transparency settings. The
-content also follows the selected Atoll appearance.
+content also follows the selected Blatta appearance.
 
 See [Web appearance](WEB-APPEARANCE.md) for the service appearance control.
 

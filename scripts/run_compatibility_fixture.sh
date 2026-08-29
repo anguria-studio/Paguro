@@ -2,7 +2,7 @@
 set -eu
 
 REPOSITORY_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-TLS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/atoll-compatibility.XXXXXX")
+TLS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/blatta-compatibility.XXXXXX")
 
 cleanup() {
     rm -rf -- "$TLS_DIR"

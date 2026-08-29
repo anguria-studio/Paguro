@@ -1,11 +1,11 @@
-# Atoll
+# Blatta
 
-Atoll is a native macOS workspace for web services.
+Blatta is a native macOS workspace for web services.
 
 It keeps each service account in a separate WebKit data store.
 It also provides native controls, notifications, and a small island near the MacBook notch.
 
-Atoll is in early development.
+Blatta is in early development.
 Do not use it as your only way to access an important account.
 
 ## Product goals
@@ -31,8 +31,8 @@ The build service runs Vale for each pull request.
 ```sh
 xcodegen generate
 xcodebuild \
-  -project Atoll.xcodeproj \
-  -scheme Atoll \
+  -project Blatta.xcodeproj \
+  -scheme Blatta \
   -configuration Debug \
   build
 ```
@@ -47,8 +47,8 @@ Run the app tests with this command:
 
 ```sh
 xcodebuild \
-  -project Atoll.xcodeproj \
-  -scheme Atoll \
+  -project Blatta.xcodeproj \
+  -scheme Blatta \
   -configuration Debug \
   test
 ```
@@ -77,7 +77,7 @@ xcodebuild \
 
 ## Project history
 
-Atoll uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
+Blatta uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
 Chorus is an MIT-licensed project by Nico Jan.
 The Git history keeps the upstream work and its authorship.
 
@@ -85,8 +85,8 @@ See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for other sources and licen
 
 ## License
 
-Atoll uses the MIT License.
+Blatta uses the MIT License.
 See [LICENSE](LICENSE).
 
 Service names and logos belong to their respective owners.
-Atoll uses them only to identify a service.
+Blatta uses them only to identify a service.

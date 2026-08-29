@@ -4,7 +4,7 @@ Status: active
 
 ## Scope
 
-Atoll uses Apple system frameworks, AtollCore, build tools, and GitHub Actions.
+Blatta uses Apple system frameworks, BlattaCore, build tools, and GitHub Actions.
 Add a third-party runtime package only when a system framework or a small local
 implementation cannot meet the requirement safely.
 
@@ -28,7 +28,7 @@ pass.
 
 ## Adding a dependency
 
-A pull request that adds a runtime dependency must state why Atoll needs it and
+A pull request that adds a runtime dependency must state why Blatta needs it and
 why a system API is not suitable. It must pin a reviewed version, add tests at
 the adapter boundary, and update `THIRD_PARTY_NOTICES.md` when the license or
 bundled material requires a notice.

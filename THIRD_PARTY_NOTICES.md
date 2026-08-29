@@ -1,11 +1,11 @@
 # Third-party notices
 
-Atoll contains work from other open-source projects.
+Blatta contains work from other open-source projects.
 Keep this file current when you add, remove, or update third-party work.
 
 ## Chorus
 
-Atoll uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
+Blatta uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
 
 - Copyright: 2026 Nico Jan
 - License: MIT
@@ -36,7 +36,7 @@ The release audit must confirm the obligations for converted rule data.
 - License: GPL-3.0
 - Use: offline build tool only
 
-Atoll does not link this tool into the application.
+Blatta does not link this tool into the application.
 
 ## The SVG project and service marks
 

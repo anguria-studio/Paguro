@@ -1,0 +1,395 @@
+import SwiftUI
+import SwiftData
+import BlattaCore
+
+struct ContentView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var collapsedToggleChromeVisible = false
+    @State private var collapsedChromeRevealTask: Task<Void, Never>?
+
+    private var sidebarCollapsed: Bool { appState.sidebarCollapsed }
+
+    var body: some View {
+        @Bindable var state = appState
+        @Bindable var recovery = appState.storeRecovery
+
+        VStack(spacing: 0) {
+            // All notices share one shape. `NoticeStrip` carries severity in the
+            // icon and lower rule, plus the window-drag handle each notice needs.
+            if let banner = recovery.banner {
+                NoticeStrip(severity: .error) {
+                    Text(banner.message)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    Spacer()
+                    if let url = banner.folderURL {
+                        Button("Reveal in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                        .font(.caption)
+                    }
+                    if recovery.offer != nil {
+                        Button("Review backups…") {
+                            recovery.isShowingPicker = true
+                        }
+                        .font(.caption)
+                    }
+                    if banner.isDismissible {
+                        Button {
+                            recovery.dismissBanner()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .help("Dismiss")
+                        .accessibilityLabel("Dismiss")
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Warning: \(banner.message)")
+            }
+
+            if recovery.banner == nil, recovery.offer != nil {
+                NoticeStrip(severity: .info) {
+                    Text("Blatta has a backup with more of your workspaces and services than it can see now.")
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer()
+                    Button("Review backups…") {
+                        recovery.isShowingPicker = true
+                    }
+                    .font(.caption)
+                    Button("Not now") { recovery.declineOffer() }
+                        .font(.caption)
+                }
+                // No accessibility-label override here, unlike the warning
+                // banner above: an explicit label replaces what `.combine`
+                // would otherwise speak, and on this banner the buttons ARE
+                // the point — overriding would drop "Review backups…" and
+                // "Not now" from VoiceOver's reading, leaving them reachable
+                // only as custom actions.
+                .accessibilityElement(children: .combine)
+            }
+
+            if !appState.networkMonitor.isOnline {
+                NoticeStrip(severity: .warning) {
+                    Text("You're offline. Services won't load new content until your connection returns.")
+                        .font(.caption)
+                    Spacer()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Offline")
+            }
+
+            if let feedback = appState.mediaPermissions.microphoneActionFeedback {
+                NoticeStrip(severity: .info, systemImage: "mic.slash.fill") {
+                    Text(feedback)
+                        .font(.caption)
+                    Spacer()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(feedback)
+            }
+
+            mainLayout(
+                spaceSelection: $state.selectedSpaceID,
+                serviceSelection: $state.selectedServiceID
+            )
+            // A minimum height here makes the shell larger than a short
+            // window. SwiftUI then centers and clips the complete shell, which
+            // removes the header and bottom gutter. Let the web content and
+            // sidebar scroll area absorb all vertical compression.
+            .frame(minWidth: 800)
+            // Extend up into the (hidden) title-bar area so the tab bar sits at
+            // the very top of the window; the traffic-light insets keep the
+            // top-left clear.
+            .ignoresSafeArea(.container, edges: .top)
+        }
+        // The top-bar and hybrid layouts put draggable tabs in the title-bar
+        // drag band, so turn the OS window drag off there (a click-drag on a tab
+        // would otherwise move the window instead of reordering) and let the
+        // WindowDragHandles move the window instead. The sidebar keeps the
+        // normal title-bar drag.
+        .background(
+            WindowChromeConfigurator(
+                isMovable: appState.railLayout == .sidebar,
+                glassStyle: appState.liquidGlassStyle,
+                glassIntensity: appState.liquidGlassIntensity
+            )
+        )
+        .containerBackground(.clear, for: .window)
+        .onAppear {
+            collapsedToggleChromeVisible = sidebarCollapsed
+        }
+        .onChange(of: sidebarCollapsed) { _, isCollapsed in
+            collapsedChromeRevealTask?.cancel()
+            collapsedChromeRevealTask = nil
+
+            guard isCollapsed else {
+                collapsedToggleChromeVisible = false
+                return
+            }
+            guard !reduceMotion else {
+                collapsedToggleChromeVisible = true
+                return
+            }
+
+            // The button has one identity. Add its compact circle after the
+            // movement duration plus one small render margin, so the circle
+            // cannot travel across the window from the expanded rail.
+            collapsedToggleChromeVisible = false
+            collapsedChromeRevealTask = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: BlattaMotion.collapsedChromeDelay)
+                } catch {
+                    return
+                }
+                guard sidebarCollapsed else { return }
+                withAnimation(.easeOut(duration: BlattaMotion.collapsedChromeFadeSeconds)) {
+                    collapsedToggleChromeVisible = true
+                }
+            }
+        }
+        .onDisappear {
+            collapsedChromeRevealTask?.cancel()
+            collapsedChromeRevealTask = nil
+        }
+        // The macOS notification permission is NOT requested here. This view
+        // never appears for a login-item launch, which closes the main window,
+        // nor in "Menu bar only" presence mode — and the request would then
+        // never happen at all. NotificationRuntime.start() owns it instead: it
+        // runs from applicationDidFinishLaunching for every launch.
+        .onChange(of: appState.selectedSpaceID) { _, newSpaceID in
+            if let spaceID = newSpaceID {
+                appState.preloadServicesForSpace(spaceID)
+                // Don't overwrite a serviceID that was set in the same
+                // render tick by QuickSwitcher or the menu-bar handler
+                // (they write spaceID + serviceID together). Only fall
+                // back to selectFirstService when the current selection
+                // isn't valid for the new space — e.g., the user clicked
+                // a space chip in SpaceStripView.
+                let validIDs = Set(appState.servicesForSpace(spaceID).map(\.id))
+                if let currentID = appState.selectedServiceID, validIDs.contains(currentID) {
+                    return
+                }
+                selectFirstService(in: spaceID)
+            }
+        }
+        .sheet(isPresented: $state.showAddService) {
+            if let spaceID = appState.selectedSpaceID {
+                AddServiceSheet(spaceID: spaceID)
+            } else {
+                // Defensive: ⌘N is disabled without a selected space, but if the
+                // sheet is ever presented in that state, give it a way out rather
+                // than a blank, un-dismissable panel.
+                VStack(spacing: 16) {
+                    Text("Select or create a workspace before adding a service.")
+                        .multilineTextAlignment(.center)
+                    Button("OK") { state.showAddService = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(40)
+                .frame(minWidth: 320)
+            }
+        }
+        .sheet(isPresented: $state.showAddSpace) {
+            SpaceEditorSheet(
+                editingSpace: nil,
+                selectedSpaceID: $state.selectedSpaceID
+            )
+        }
+        .sheet(isPresented: $state.showQuickSwitcher) {
+            QuickSwitcherView()
+                .environment(appState)
+                .modelContainer(appState.modelContainer)
+        }
+        .sheet(isPresented: $recovery.isShowingPicker, onDismiss: {
+            // Only quits when the user actually picked a backup. It has to
+            // happen here rather than in the button: a quit requested while
+            // this sheet is still attached is refused and dropped.
+            recovery.quitForScheduledRestore()
+        }) {
+            StoreRecoveryView()
+        }
+        .alert(
+            appState.mediaPermissions.pendingRequest?.title ?? "",
+            isPresented: Binding(
+                get: { appState.mediaPermissions.pendingRequest != nil },
+                set: { _ in }   // dismissal always routes through a button below
+            ),
+            presenting: appState.mediaPermissions.pendingRequest
+        ) { request in
+            Button("Allow") { appState.mediaPermissions.answerRequest(request.id, allow: true) }
+            Button("Don't Allow", role: .cancel) {
+                appState.mediaPermissions.answerRequest(request.id, allow: false)
+            }
+        } message: { request in
+            Text(request.message)
+        }
+        .alert(
+            "Always appear active in \(appState.mediaPermissions.presencePrompt?.serviceLabel ?? "")?",
+            isPresented: Binding(
+                get: { appState.mediaPermissions.presencePrompt != nil },
+                set: { _ in }   // dismissal always routes through a button below
+            ),
+            presenting: appState.mediaPermissions.presencePrompt
+        ) { prompt in
+            Button("Always Appear Active") {
+                appState.mediaPermissions.answerPresencePrompt(prompt.id, enable: true)
+            }
+            Button("Not Now", role: .cancel) {
+                appState.mediaPermissions.answerPresencePrompt(prompt.id, enable: false)
+            }
+        } message: { prompt in
+            Text("\(prompt.serviceLabel) shows you as away when its window isn't focused. Turn this on to stay active even while you work in other apps. You can change it later in the service's settings. It may hold back some of its notifications while Blatta is in the background.")
+        }
+        .overlay {
+            if appState.isLocked {
+                LockView()
+                    .environment(appState)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// Arranges the rail and the web content per the chosen layout: the rail
+    /// down the left, or along the top as a bar of tabs.
+    ///
+    /// The single rail supports two arrangements. The current space is the rail
+    /// header instead of having a separate rail.
+    @ViewBuilder
+    private func mainLayout(
+        spaceSelection: Binding<UUID?>,
+        serviceSelection: Binding<UUID?>
+    ) -> some View {
+        // The title bar is hidden, so content runs to the top edge. Reserve the
+        // top-left for the traffic lights: push the horizontal rail clear of the
+        // complete 79 point native button group and add an 8 point gap.
+        let lightsWidth: CGFloat = 80
+
+        switch appState.railLayout {
+        case .sidebar:
+            let presentation: SidebarPresentation = sidebarCollapsed ? .collapsed : .expanded
+            HStack(spacing: 0) {
+                rail(
+                    axis: .vertical,
+                    spaceSelection: spaceSelection,
+                    serviceSelection: serviceSelection,
+                    sidebarPresentation: presentation
+                )
+                .zIndex(1)
+                webContent
+                    .padding(.trailing, BlattaMetric.Sidebar.surfaceInset)
+                    .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
+            }
+            .overlay(alignment: .topLeading) {
+                // Keep one button alive for both sidebar states. The stock
+                // NavigationSplitView toggle uses the same ownership model, so
+                // its control follows the moving column edge instead of being
+                // removed from one header and inserted into another.
+                SidebarToggleButton(
+                    isCollapsed: sidebarCollapsed,
+                    showsCollapsedChrome: collapsedToggleChromeVisible,
+                    action: toggleSidebar
+                )
+                .position(
+                    x: presentation.toggleCenterX,
+                    y: BlattaMetric.Toolbar.height / 2
+                )
+                .animation(
+                    reduceMotion ? nil : .smooth(duration: BlattaMotion.sidebarTransitionSeconds),
+                    value: presentation
+                )
+            }
+        case .topBars:
+            VStack(spacing: 0) {
+                rail(axis: .horizontal, spaceSelection: spaceSelection, serviceSelection: serviceSelection, contentInset: lightsWidth)
+                webContent
+                    .padding(.horizontal, BlattaMetric.Sidebar.surfaceInset)
+                    .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
+            }
+        }
+    }
+
+    private func rail(
+        axis: Axis,
+        spaceSelection: Binding<UUID?>,
+        serviceSelection: Binding<UUID?>,
+        contentInset: CGFloat = 0,
+        sidebarPresentation: SidebarPresentation = .expanded
+    ) -> some View {
+        UnifiedRailView(
+            selectedSpaceID: spaceSelection,
+            selectedServiceID: serviceSelection,
+            axis: axis,
+            sidebarPresentation: sidebarPresentation,
+            contentInset: contentInset
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Workspaces and services")
+    }
+
+    private var webContent: some View {
+        WebContentView(
+            selectedServiceID: appState.selectedServiceID,
+            sidebarIsCollapsed: sidebarCollapsed,
+            collapsedSidebarWidth: BlattaMetric.Sidebar.collapsedWidth(
+                iconSize: appState.iconRailBaseSize
+            )
+        )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Web content")
+    }
+
+    private func selectFirstService(in spaceID: UUID) {
+        appState.selectedServiceID = appState.servicesForSpace(spaceID).first?.id
+    }
+
+    private func toggleSidebar() {
+        let collapsed = !sidebarCollapsed
+        if reduceMotion {
+            appState.setSidebarCollapsed(collapsed)
+        } else {
+            withAnimation(.smooth(duration: BlattaMotion.sidebarTransitionSeconds)) {
+                appState.setSidebarCollapsed(collapsed)
+            }
+        }
+    }
+}
+
+/// The source project that Blatta uses as its base.
+enum UpstreamProjectLink {
+    static let url = URL(string: "https://github.com/nicojan/Chorus")!
+}
+
+/// Opaque cover shown while the app is locked, hiding all content until the user
+/// authenticates. Prompts for Touch ID on appear; the button retries.
+struct LockView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("Blatta is locked")
+                .font(.title2)
+                .bold()
+            Button("Unlock") {
+                appState.authenticate()
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            appState.authenticate()
+        }
+    }
+}

@@ -4,7 +4,7 @@ Status: in progress
 
 ## Purpose
 
-The island gives the user a small view of current Atoll activity.
+The island gives the user a small view of current Blatta activity.
 It can show a new event and a few common controls.
 
 The island is not the notification engine.
@@ -12,7 +12,7 @@ It receives validated events from the notification pipeline.
 
 ## State and history rules
 
-`NotificationIslandReducer` owns the pure state rules in `AtollCore`.
+`NotificationIslandReducer` owns the pure state rules in `BlattaCore`.
 It does not create a panel or start a timer.
 
 The model has these phases:
@@ -27,20 +27,31 @@ The model has these phases:
 The dismissed phase keeps the current event until the exit animation ends.
 It then returns to the collapsed state.
 
-The recent list keeps all events that Atoll receives in the current session.
+The recent list keeps all events that Blatta receives in the current session.
 It is in memory only. The count shows `99+` when it is greater than 99.
 Opening or dismissing one event decreases the count by one. Dismiss All clears
 the count and the recent list.
+
+The island also drops the events of one service account when the user reads
+that conversation in Blatta. Two conditions start this rule:
+
+- the user selects that service account in the main window, or Blatta becomes
+  the active application with that service account active;
+- the unread count of that service account becomes zero.
+
+The count then decreases by the number of removed events. The island keeps the
+events of the other service accounts. It collapses when the list becomes empty.
+A compact alert of that service account uses the dismissed transition.
 
 A burst does not create a sequence of compact alerts. Each new event replaces
 the compact preview and restarts one display time. The recent view keeps all
 session details in newest-first order.
 Hiding or stopping the island clears the recent list and count.
-The state clears all event content when Atoll stops.
+The state clears all event content when Blatta stops.
 
 ## Layout rules
 
-`NotificationIslandLayout` owns the pure layout rules in `AtollCore`.
+`NotificationIslandLayout` owns the pure layout rules in `BlattaCore`.
 It holds constants only and it measures no view.
 
 The type uses these values:
@@ -102,7 +113,7 @@ It shows the unreviewed count when that count is not zero.
 The counter badge stays legible on the black surface.
 Clicking it pins the expanded state open.
 Moving the pointer over it opens the complete recent view without activating
-Atoll when history is not empty.
+Blatta when history is not empty.
 
 The island collapses completely when the pointer leaves it. This rule applies
 to the hover view and to the pinned expanded view. The collapse starts 180
@@ -161,7 +172,7 @@ The card holds the stop line without motion from depth 0 to depth 1. The card
 above it slides over it in this range. From depth 1 to depth 2 it eases 8
 points down and becomes the second strip. It scales by 6 percent for each
 level, anchored at its bottom edge, and reaches 0.88 at level 2. It fades out
-between depth 2 and depth 3. Atoll hides it at depth 3 and builds no view for
+between depth 2 and depth 3. Blatta hides it at depth 3 and builds no view for
 it.
 
 At the end of the scroll the last card lands exactly on the stop line.
@@ -177,7 +188,7 @@ with a destination-out blend of its own shape. It then draws its fill, a
 1-point hairline border, and its content. The list puts these steps in one
 compositing group. Overlapping cards therefore never add up. The screen behind
 the island stays visible through the front card. The front card hides the
-covered card, and the border marks the edge between the two. Atoll never clips
+covered card, and the border marks the edge between the two. Blatta never clips
 or fades the card content.
 
 The row computes its depth, offset, scale, and opacity in one `visualEffect`.
@@ -197,7 +208,7 @@ Reduce Motion replaces these animations with a fade.
 Each card keeps its dismiss button and Dismiss All stays available.
 
 The user can click a card and drag it to the right to dismiss it.
-`NotificationIslandSwipeRule` in `AtollCore` holds the pure rules for this
+`NotificationIslandSwipeRule` in `BlattaCore` holds the pure rules for this
 gesture. A drag starts after 8 points. The card follows the pointer only when
 the first movement is more horizontal than vertical. The card moves without
 resistance to the right. It resists a leftward drag at 35 percent.
@@ -250,7 +261,7 @@ Use a borderless AppKit panel for exact screen placement.
 SwiftUI renders the panel content.
 
 `IslandPanelController` creates its panel only after an island event needs it.
-The panel starts hidden and does not activate Atoll.
+The panel starts hidden and does not activate Blatta.
 The panel keeps one SwiftUI hosting view for its complete lifetime.
 State changes update one observable presentation model.
 They must not replace the hosting view.
@@ -289,7 +300,7 @@ collapsed panel extends 6 points past each side of the housing. A nonzero
 counter gives the panel a wider wing on the left side. These side wings supply
 a public AppKit hover target. An AppKit tracking area on the panel content view
 supplies the hover events.
-Atoll does not try to receive events from the obscured camera area.
+Blatta does not try to receive events from the obscured camera area.
 
 The panel must not cover a system camera privacy indicator.
 The final hardware test must verify this condition.
@@ -305,14 +316,14 @@ housing and attaches it to the top screen edge.
 It returns no island placement for a display without a camera housing.
 
 `SystemScreenGeometryProvider` reads a fresh `NSScreen` snapshot on request.
-It uses the visible main Atoll window display when one exists.
+It uses the visible main Blatta window display when one exists.
 It otherwise uses the primary display whose frame starts at the global origin.
 It does not cache screen values.
 
 `IslandScreenChangeMonitor` observes public AppKit notifications while the
 island is visible. It requests a new geometry snapshot after these changes:
 
-- the main Atoll window moves to another display;
+- the main Blatta window moves to another display;
 - a display connects, disconnects, or changes resolution;
 - the backing scale changes;
 - the main window enters or leaves full screen;
@@ -320,7 +331,7 @@ island is visible. It requests a new geometry snapshot after these changes:
 - the Mac wakes from sleep.
 
 The monitor ignores the island panel's own movement.
-It removes all observers when the user disables the island or quits Atoll.
+It removes all observers when the user disables the island or quits Blatta.
 
 The system provider uses these values:
 
@@ -335,7 +346,7 @@ The simulated provider returns fixed test values.
 ## Debug simulation
 
 macOS has no general Mac notch simulator.
-Atoll therefore includes debug geometry presets.
+Blatta therefore includes debug geometry presets.
 
 Required presets:
 
@@ -353,12 +364,12 @@ The overlay and the real island panel must be separate objects.
 UI tests select a preset with a launch argument.
 Release builds must not include the fake housing control.
 
-Debug builds accept `--atoll-island-screen=<preset>`.
+Debug builds accept `--blatta-island-screen=<preset>`.
 The preset values are stable strings such as `notched-14-inch` and
 `two-display-arrangement`.
 Release builds ignore the simulation argument.
 
-The **Atoll Island Preview** scheme uses `--atoll-fake-notch`.
+The **Blatta Island Preview** scheme uses `--blatta-fake-notch`.
 This argument keeps the real display frame and adds a simulated camera housing
 to its top edge. It gives a non-notched development Mac a stable manual test
 path. Release builds ignore this argument.
@@ -377,11 +388,19 @@ off the separate system-notification route.
 
 This rule prevents a permanent fake island on standard and external displays.
 
+The router reads the camera housing of the selected display for each event, not
+once at startup. Moving the window to another display therefore changes the
+route for the next event.
+
+The fallback uses the macOS notification permission. Without that permission the
+user sees nothing on a display without a notch. The notification document gives
+the permission rule and its Settings warning.
+
 ## Multiple displays
 
-The island follows the display that contains the active Atoll window when that
+The island follows the display that contains the active Blatta window when that
 display has a camera housing.
-When no Atoll window is active, it uses the configured primary display.
+When no Blatta window is active, it uses the configured primary display.
 
 The panel must move after these changes:
 

@@ -4,9 +4,9 @@ Status: active
 
 ## Purpose
 
-Atoll is a native macOS shell for web services.
+Blatta is a native macOS shell for web services.
 Each service runs in a separate `WKWebView` session.
-Atoll owns the native window, service navigation, notifications, and island.
+Blatta owns the native window, service navigation, notifications, and island.
 
 ## System rules
 
@@ -21,10 +21,10 @@ Atoll owns the native window, service navigation, notifications, and island.
 ## Repository map
 
 ```text
-Atoll/
-├── Atoll/                 macOS application target
-├── AtollTests/            application and WebKit tests
-├── Core/                  AtollCore Swift package
+Blatta/
+├── Blatta/                macOS application target
+├── BlattaTests/           application and WebKit tests
+├── Core/                  BlattaCore Swift package
 ├── docs/                  public project documents
 ├── scripts/               repeatable maintenance tools
 ├── .project/              private work plan, ignored by Git
@@ -33,8 +33,8 @@ Atoll/
 
 ## Dependency direction
 
-`AtollCore` must not import SwiftUI, AppKit, WebKit, or SwiftData.
-The application target can import `AtollCore`.
+`BlattaCore` must not import SwiftUI, AppKit, WebKit, or SwiftData.
+The application target can import `BlattaCore`.
 The application target owns all platform adapters.
 
 ```text
@@ -42,7 +42,7 @@ SwiftUI views
       ↓
 App model and feature controllers
       ↓
-Platform adapters     AtollCore rules
+Platform adapters     BlattaCore rules
       ↓                    ↑
 AppKit, WebKit, SwiftData  pure values and policies
 ```
@@ -52,7 +52,7 @@ Use the application model or a feature controller.
 
 ## Application composition
 
-`AtollApp` creates the SwiftUI scenes.
+`BlattaApp` creates the SwiftUI scenes.
 `AppModel` is the application composition root.
 It creates each long-lived service one time.
 `AppState.init` constructs the graph and loads saved values.
@@ -75,6 +75,7 @@ The main services and startup adapters are:
 - `AuthPopupController` for popup windows and sign-in completion.
 - `WebDialogPresenter` for file pickers and page dialogs.
 - `WebDownloadHandler` for download lifetime, destinations, and cancellation.
+- `DownloadTracker` for the download list that the content header shows.
 - `ErrorPage` for escaped local WebKit recovery pages.
 - `NotificationManager` for WebKit badge polling and notification authorization.
 - `NotificationPresenter` for validated native notification requests and delivery.
@@ -108,7 +109,7 @@ tracks these changes.
 
 ## App lifecycle
 
-Atoll has one process in version 1.
+Blatta has one process in version 1.
 It has no helper process and no push server.
 
 Closing the main window keeps the menu-bar item active.
@@ -148,11 +149,12 @@ requests, and web process failure. It forwards component-specific work:
 
 - `AuthPopupController` owns new-window and sign-in popup lifecycle;
 - `WebDialogPresenter` owns upload pickers and page dialogs;
-- `WebDownloadHandler` owns downloads after navigation handoff;
+- `WebDownloadHandler` owns downloads after navigation handoff and reports
+  each one to `DownloadTracker`;
 - `ErrorPage` builds local failure and crash recovery pages.
 
 It converts navigation actions to `NavigationRequestContext` values.
-`AtollCore` owns the deterministic navigation decision and its routing order.
+`BlattaCore` owns the deterministic navigation decision and its routing order.
 
 See [Web sessions](features/WEB-SESSIONS.md).
 See [Web appearance](features/WEB-APPEARANCE.md).
@@ -173,24 +175,24 @@ safe click route to the service
 ```
 
 The WebKit bridge adapter sends normalized origins and the raw payload to
-`AtollCore`. Core validates the frame origin and decodes a bounded
+`BlattaCore`. Core validates the frame origin and decodes a bounded
 `NotificationPayload`. The handler then applies the app policy and posts the
 macOS notification.
 `NotificationRuntime` coordinates live and transient badge polling, manual and
 scheduled Do Not Disturb, sleep and network suspension, and safe click routing.
 The backlog tracks the split of that handler into detection and presentation
-parts, and a shared event type in `AtollCore` for the island.
+parts, and a shared event type in `BlattaCore` for the island.
 
 The island does not detect notifications.
 It only presents events from the notification pipeline.
-`NotificationIslandTiming` keeps its deterministic alert times in `AtollCore`.
+`NotificationIslandTiming` keeps its deterministic alert times in `BlattaCore`.
 The panel controller owns the cancellable transition schedule.
 
 See [Notification system](features/NOTIFICATIONS.md).
 
 ## Data ownership
 
-SwiftData stores Atoll settings, spaces, service records, and links.
+SwiftData stores Blatta settings, spaces, service records, and links.
 WebKit stores service cookies, caches, and local storage.
 
 `PreferencesStore` loads or creates one `AppPreferences` row. It is the only
@@ -198,15 +200,15 @@ type that writes that row.
 `WorkspaceStore` is the SwiftData facade for spaces, services, links, default
 seeding, passkey-notice state, favicons, page zoom, and window selection.
 
-Atoll must not store account passwords.
-Atoll must not copy full message history into its data store.
-Atoll must not persist notification bodies by default.
+Blatta must not store account passwords.
+Blatta must not copy full message history into its data store.
+Blatta must not persist notification bodies by default.
 
 ## Concurrency
 
 The project uses Swift 6 strict concurrency.
 UI state and WebKit objects stay on the main actor.
-Pure values in `AtollCore` conform to `Sendable` where possible.
+Pure values in `BlattaCore` conform to `Sendable` where possible.
 
 Background work must return immutable results to the main actor.
 Do not send a WebKit object across actors.
@@ -221,12 +223,12 @@ It must not provide a general native command channel.
 Subframe messages must have an approved origin.
 Each string and URL must have a size and format limit.
 
-Atoll does not use private WebKit selectors.
-Atoll does not disable Intelligent Tracking Prevention.
+Blatta does not use private WebKit selectors.
+Blatta does not disable Intelligent Tracking Prevention.
 
 ## Project generation
 
-XcodeGen creates `Atoll.xcodeproj` from `project.yml`.
+XcodeGen creates `Blatta.xcodeproj` from `project.yml`.
 Do not edit the generated project by hand.
 
 The repository tracks the generated project only when the project policy requires it.
@@ -234,8 +236,8 @@ The current setup generates it during local work.
 
 ## Test layers
 
-`AtollCoreTests` test pure values and policies.
-`AtollTests` test application services and WebKit adapters.
+`BlattaCoreTests` test pure values and policies.
+`BlattaTests` test application services and WebKit adapters.
 UI tests will use launch arguments and simulated screen geometry.
 
 A local web fixture will test notifications, frames, downloads, and media requests.

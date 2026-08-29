@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "AtollCore",
+    name: "BlattaCore",
     platforms: [.macOS("26.0")],
     products: [
-        .library(name: "AtollCore", targets: ["AtollCore"])
+        .library(name: "BlattaCore", targets: ["BlattaCore"])
     ],
     targets: [
         .target(
-            name: "AtollCore",
+            name: "BlattaCore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
-            name: "AtollCoreTests",
-            dependencies: ["AtollCore"],
+            name: "BlattaCoreTests",
+            dependencies: ["BlattaCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]

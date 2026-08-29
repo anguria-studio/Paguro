@@ -14,13 +14,13 @@ Read these files before you change a major feature:
 
 ## Protect the architecture
 
-- Put deterministic rules in `AtollCore`.
+- Put deterministic rules in `BlattaCore`.
 - Keep WebKit and AppKit in the app target.
 - Keep one data store for each service account.
 - Use public Apple APIs only.
 - Keep notification detection separate from presentation.
 - Keep the island optional.
-- Make `Command-Q` stop all Atoll work.
+- Make `Command-Q` stop all Blatta work.
 
 Do not add private WebKit selectors.
 Do not add a hidden browser or an automation browser.
@@ -63,7 +63,7 @@ Use these commands for a full local check:
 xcodegen generate
 swift test --package-path Core
 scripts/test_compatibility_fixture.sh
-xcodebuild -project Atoll.xcodeproj -scheme Atoll -configuration Debug test
+xcodebuild -project Blatta.xcodeproj -scheme Blatta -configuration Debug test
 scripts/lint_docs.sh
 ```
 

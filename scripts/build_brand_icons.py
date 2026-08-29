@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Download brand icons from thesvg (github.com/GLINCKER/thesvg) and bundle them
-as asset-catalog imagesets under Atoll/Resources/Assets.xcassets.
+as asset-catalog imagesets under Blatta/Resources/Assets.xcassets.
 
 Monochrome marks are flagged as template assets so SwiftUI tints them .primary
 and they stay visible in dark mode; colored marks render as-is. Re-run to refresh
@@ -14,7 +14,7 @@ import json, os, re, subprocess, sys
 
 RAW = "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons"
 ASSETS = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "Atoll", "Resources", "Assets.xcassets")
+    os.path.join(os.path.dirname(__file__), "..", "Blatta", "Resources", "Assets.xcassets")
 )
 
 # catalog id -> thesvg slug (verified to exist). fastmail has no thesvg icon and

@@ -1,0 +1,140 @@
+import SwiftUI
+import SwiftData
+import BlattaCore
+
+struct SpaceEditorSheet: View {
+    let editingSpace: Space?
+    @Binding var selectedSpaceID: UUID?
+    /// Called with the newly created space right after it's saved and selected.
+    /// Lets a caller act on the new space — e.g. move a service into it. Not
+    /// called when editing an existing space.
+    var onCreate: ((Space) -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
+    @Query(sort: \Space.sortOrder) private var spaces: [Space]
+
+    @State private var name: String = ""
+    @State private var selectedEmoji: String = "📁"
+    @State private var confirmingDeleteSpace: Space?
+
+    var isEditing: Bool { editingSpace != nil }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(isEditing ? "Edit workspace" : "New workspace")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.escape)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            VStack(spacing: 20) {
+                HStack(spacing: 16) {
+                    emojiPreview
+                        .frame(width: 60, height: 60)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: BlattaRadius.surface))
+                        .accessibilityLabel(
+                            WorkspaceEmoji.displayValue(selectedEmoji).map { "Selected emoji: \($0)" }
+                                ?? "No emoji selected"
+                        )
+                        .accessibilityHint("Use the picker below to change")
+
+                    TextField("Workspace name", text: $name, prompt: Text("Work, Personal, etc."))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.title3)
+                }
+
+                EmojiPickerView(selectedEmoji: $selectedEmoji)
+            }
+            .padding(20)
+
+            Divider()
+
+            HStack {
+                if isEditing {
+                    Button("Delete Workspace", role: .destructive) {
+                        confirmingDeleteSpace = editingSpace
+                    }
+                    .deleteSpaceConfirmation(space: $confirmingDeleteSpace) { space in
+                        deleteSpace(space)
+                    }
+                }
+                Spacer()
+                Button(isEditing ? "Save" : "Create") {
+                    saveSpace()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 420, height: 520)
+        .onAppear {
+            if let space = editingSpace {
+                name = space.name
+                selectedEmoji = space.emoji
+            }
+        }
+    }
+
+    private func saveSpace() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+
+        var createdSpace: Space?
+        if let space = editingSpace {
+            space.name = trimmed
+            space.emoji = WorkspaceEmoji.storedValue(selectedEmoji)
+        } else {
+            let nextOrder = (spaces.map(\.sortOrder).max() ?? -1) + 1
+            let space = Space(
+                name: trimmed,
+                emoji: WorkspaceEmoji.storedValue(selectedEmoji),
+                sortOrder: nextOrder
+            )
+            modelContext.insert(space)
+            createdSpace = space
+        }
+
+        guard modelContext.saveOrRollback(reason: "save space") else { return }
+
+        // Switch to a freshly created space. It has no services yet, so clear the
+        // service selection — the content area shows the empty state for it.
+        // A caller can hook `onCreate` to place something in it (e.g. move a
+        // service), which may re-set the service selection.
+        if let createdSpace {
+            selectedSpaceID = createdSpace.id
+            appState.selectedServiceID = nil
+            onCreate?(createdSpace)
+        }
+        dismiss()
+    }
+
+    @ViewBuilder
+    private var emojiPreview: some View {
+        if let emoji = WorkspaceEmoji.displayValue(selectedEmoji) {
+            Text(emoji)
+                .font(.system(size: 40))
+        } else {
+            Image(systemName: "minus")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func deleteSpace(_ space: Space) {
+        // Routes through AppState so services orphaned by the deletion are
+        // reclaimed and selection is moved off the deleted space.
+        appState.deleteSpace(space.id)
+        dismiss()
+    }
+}

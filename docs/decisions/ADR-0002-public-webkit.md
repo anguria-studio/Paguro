@@ -14,15 +14,15 @@ Their use can also prevent App Store approval.
 
 ## Decision
 
-Atoll uses public WebKit APIs only.
+Blatta uses public WebKit APIs only.
 It keeps standard WebKit tracking prevention active.
 
 The compatibility matrix will record a service that cannot sign in.
-Atoll will not hide this limit with a private selector.
+Blatta will not hide this limit with a private selector.
 
 ## Cost
 
 Some Microsoft or enterprise sign-in flows can fail.
-Atoll can support fewer services than a less strict fork.
+Blatta can support fewer services than a less strict fork.
 
 This cost protects release stability, privacy, and review options.
