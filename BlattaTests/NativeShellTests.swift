@@ -1,5 +1,7 @@
 import XCTest
+import AppKit
 import SwiftData
+import SwiftUI
 import BlattaCore
 @testable import Blatta
 
@@ -480,5 +482,51 @@ final class NativeShellTests: XCTestCase {
         XCTAssertTrue(AppState.shouldBustCachesOnLaunch(previousVersion: "1.5.2", currentVersion: "1.5.3"))
         // Unknown current version (missing Info key) — don't bust spuriously.
         XCTAssertFalse(AppState.shouldBustCachesOnLaunch(previousVersion: "1.5.2", currentVersion: ""))
+    }
+
+    // MARK: - Menu-bar window layout
+
+    /// The menu-bar window has no height of its own. It asks its content for a
+    /// height, and it offers none while it asks. This measures the service
+    /// list under that same question.
+    @MainActor
+    private func menuBarServiceListHeight(rowCount: Int) -> CGFloat {
+        let list = MenuBarServiceList {
+            ForEach(0..<rowCount, id: \.self) { index in
+                Text("Service \(index)")
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            }
+        }
+        let controller = NSHostingController(rootView: AnyView(list.frame(width: 340)))
+        return controller.sizeThatFits(in: CGSize(width: 340, height: 0)).height
+    }
+
+    /// A scroll view accepts a height of zero. Before the fix the list
+    /// answered zero here, the window closed around its header and its footer,
+    /// and no service row reached the screen.
+    @MainActor
+    func testMenuBarServiceListKeepsItsRowsWhenTheWindowOffersNoHeight() {
+        let height = menuBarServiceListHeight(rowCount: 9)
+
+        XCTAssertGreaterThanOrEqual(height, 9 * 34)
+        XCTAssertLessThanOrEqual(height, MenuBarServiceListMetrics.maximumHeight)
+    }
+
+    /// A short list must not pad the window to the maximum height.
+    @MainActor
+    func testMenuBarServiceListTakesOnlyTheHeightOfAShortList() {
+        // Two rows of 34 points, one 14-point gap, and 10 points of padding
+        // above and below.
+        XCTAssertEqual(menuBarServiceListHeight(rowCount: 2), 102, accuracy: 1)
+    }
+
+    /// A long list stops at the maximum height and scrolls inside it.
+    @MainActor
+    func testMenuBarServiceListStopsAtItsMaximumHeight() {
+        XCTAssertEqual(
+            menuBarServiceListHeight(rowCount: 30),
+            MenuBarServiceListMetrics.maximumHeight,
+            accuracy: 1
+        )
     }
 }

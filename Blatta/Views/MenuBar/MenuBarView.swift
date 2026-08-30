@@ -82,16 +82,11 @@ struct MenuBarView: View {
     @ViewBuilder
     private var serviceList: some View {
         if hasServices {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(spaces) { space in
-                        workspaceSection(space)
-                    }
+            MenuBarServiceList {
+                ForEach(spaces) { space in
+                    workspaceSection(space)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 10)
             }
-            .frame(maxHeight: 380)
         } else {
             ContentUnavailableView(
                 "No Services",
@@ -266,6 +261,45 @@ struct MenuBarView: View {
         } else {
             openWindow(id: "main")
         }
+    }
+}
+
+/// Vertical limits for the menu-bar service list.
+enum MenuBarServiceListMetrics {
+    /// The greatest height the list may take. A longer list scrolls inside it.
+    static let maximumHeight: CGFloat = 380
+}
+
+/// Puts the menu-bar service rows in a bounded scrolling area.
+///
+/// The vertical size needs care. A scroll view accepts every height that its
+/// parent offers, and it accepts zero. The menu-bar window takes its own
+/// height from this content, so it offers no height while it measures. A
+/// scroll view answers that question with zero. The window then keeps only its
+/// header and its footer, and the user sees no row. That result is stable,
+/// because the next measurement asks the same question and gets the same
+/// answer. `fixedSize` makes the scroll view report the height of its rows
+/// instead, and `frame(maxHeight:)` still limits a long list.
+struct MenuBarServiceList<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView {
+            // A plain stack builds every row. The list holds one row for each
+            // service, so laziness saves nothing and would tie the rows to the
+            // scroll view's height a second time.
+            VStack(alignment: .leading, spacing: 14) {
+                content
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+        }
+        .frame(maxHeight: MenuBarServiceListMetrics.maximumHeight)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
