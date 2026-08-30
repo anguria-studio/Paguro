@@ -24,6 +24,8 @@ struct WorkspaceRailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var dockMagnification = DockMagnificationState()
+    /// The scroll values that the magnification rise measures itself against.
+    @State private var railScroll = RailScrollGeometry()
     @State private var editingSpace: Space?
     @State private var confirmingDeleteSpace: Space?
 
@@ -47,14 +49,24 @@ struct WorkspaceRailView: View {
             .accessibilityLabel("Workspaces")
     }
 
-    private var rail: some View {
-        let dockLayout = dockMagnification.layout(
-            linkIDs: liveSpaces.map(\.id),
+    /// What the cells need to size themselves. It holds no pointer, so the
+    /// rail does not rebuild when the pointer moves.
+    private var dockSizing: DockSizing {
+        DockSizing(
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
             magnificationEnabled: appState.iconRailMagnificationEnabled,
-            isCollapsed: isCollapsed
+            isCollapsed: isCollapsed,
+            itemCount: liveSpaces.count,
+            spaceAbove: Double(
+                dockTopPadding(viewportHeight: railScroll.viewportLength)
+                    + railScroll.offset
+            )
         )
+    }
+
+    private var rail: some View {
+        let dockSizing = dockSizing
 
         return VStack(spacing: 0) {
             Color.clear
@@ -63,22 +75,29 @@ struct WorkspaceRailView: View {
             GeometryReader { geometry in
                 ScrollView {
                     LazyVStack(spacing: isCollapsed ? 0 : 2) {
-                        ForEach(liveSpaces) { space in
-                            cell(for: space, dockLayout: dockLayout)
+                        ForEach(Array(liveSpaces.enumerated()), id: \.element.id) { index, space in
+                            cell(for: space, index: index, dockSizing: dockSizing)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, dockTopPadding(viewportHeight: geometry.size.height))
                     .padding(.bottom, isCollapsed ? 0 : 8)
-                    .offset(y: dockLayout.stackVerticalOffset)
-                    .animation(
-                        reduceMotion
-                            ? nil
-                            : .smooth(duration: BlattaMotion.dockMagnificationSeconds),
-                        value: dockLayout.stackVerticalOffset
-                    )
                 }
                 .scrollClipDisabled(isCollapsed)
+                .onScrollGeometryChange(for: RailScrollGeometry.self) { scroll in
+                    RailScrollGeometry(
+                        offset: scroll.contentOffset.y,
+                        viewportLength: scroll.containerSize.height,
+                        contentLength: scroll.contentSize.height
+                    )
+                } action: { _, updated in
+                    railScroll = updated
+                }
+                // Measured by the rail rather than by its cells, which the
+                // pointer has already resized. See `UnifiedRailView`.
+                .onContinuousHover(coordinateSpace: .local) { phase in
+                    updatePointer(phase, viewportHeight: geometry.size.height)
+                }
             }
             .clipShape(WorkspaceRailClipShape())
             .padding(.bottom, isCollapsed ? BlattaMetric.Sidebar.surfaceInset : 0)
@@ -136,7 +155,8 @@ struct WorkspaceRailView: View {
 
     private func cell(
         for space: Space,
-        dockLayout: DockMagnificationLayout
+        index: Int,
+        dockSizing: DockSizing
     ) -> some View {
         let isCurrent = space.id == selectedSpaceID
         let serviceIDs = appState.servicesForSpace(space.id).map(\.id)
@@ -151,6 +171,14 @@ struct WorkspaceRailView: View {
             ? appState.badgeManager.aggregateCount(for: serviceIDs)
             : 0
 
+        // Read here rather than in the rail, so a pointer move re-renders the
+        // cells alone. See `DockMagnificationState`.
+        let transform = dockMagnification.iconTransform(
+            atIndex: index,
+            sizing: dockSizing
+        )
+        let displayedIconSize = dockSizing.baseIconSize * transform.scale
+
         return WorkspaceCellView(
             space: space,
             isSelected: isCurrent,
@@ -162,30 +190,25 @@ struct WorkspaceRailView: View {
             ),
             glassStyle: appState.liquidGlassStyle,
             glassIntensity: appState.liquidGlassIntensity,
-            dockIconSize: dockLayout.iconSize(for: space.id),
+            dockIconSize: dockSizing.baseIconSize,
             dockItemSize: BlattaMetric.Sidebar.dockItemSize(
-                displayedIconSize: Double(dockLayout.iconSize(for: space.id))
+                displayedIconSize: Double(dockSizing.baseIconSize)
             ),
             dockRowHeight: BlattaMetric.Sidebar.dockRowHeight(
-                displayedIconSize: Double(dockLayout.iconSize(for: space.id))
+                displayedIconSize: Double(dockSizing.baseIconSize)
             ),
-            dockIconHorizontalOffset: CGFloat(DockIconSizing.horizontalOffset(
-                baseSize: appState.iconRailBaseSize,
-                displayedIconSize: Double(dockLayout.iconSize(for: space.id))
-            )),
+            dockTransform: transform,
             dockTooltipLeadingOffset: CGFloat(DockIconSizing.tooltipLeadingOffset(
                 baseSize: appState.iconRailBaseSize,
-                displayedIconSize: Double(dockLayout.iconSize(for: space.id)),
+                displayedIconSize: Double(displayedIconSize),
                 railInset: Double(BlattaMetric.Sidebar.surfaceInset)
             )),
             isDockHovered: dockMagnification.hoveredLinkID == space.id,
-            dockMagnificationActive: dockMagnification.hoveredLinkID != nil
-                && appState.iconRailMagnificationEnabled,
             onDockHoverChange: { hovering in
                 if hovering {
                     dockMagnification.beginHover(for: space.id)
                 } else {
-                    dockMagnification.endHover(for: space.id)
+                    dockMagnification.endHover(for: space.id, reduceMotion: reduceMotion)
                 }
             }
         ) {
@@ -217,6 +240,27 @@ struct WorkspaceRailView: View {
         .controlSize(.small)
         .frame(width: ServiceRowView.rowWidth)
         .help("Add workspace")
+    }
+
+    private func updatePointer(_ phase: HoverPhase, viewportHeight: CGFloat) {
+        guard isCollapsed, appState.iconRailMagnificationEnabled else {
+            dockMagnification.endPointerTracking(reduceMotion: reduceMotion)
+            return
+        }
+
+        switch phase {
+        case .active(let location):
+            dockMagnification.movePointer(
+                toRows: DockIconSizing.pointerRows(
+                    pointerPosition: Double(location.y + railScroll.offset),
+                    topPadding: Double(dockTopPadding(viewportHeight: viewportHeight)),
+                    baseSize: appState.iconRailBaseSize
+                ),
+                reduceMotion: reduceMotion
+            )
+        case .ended:
+            dockMagnification.endRailPointer(reduceMotion: reduceMotion)
+        }
     }
 
     private func dockTopPadding(viewportHeight: CGFloat) -> CGFloat {

@@ -17,10 +17,9 @@ struct WorkspaceCellView: View {
     var dockIconSize = BlattaMetric.Sidebar.collapsedIconSize
     var dockItemSize = BlattaMetric.Sidebar.dockItemSize
     var dockRowHeight = BlattaMetric.Sidebar.dockRowHeight
-    var dockIconHorizontalOffset: CGFloat = 0
+    var dockTransform = DockIconTransform()
     var dockTooltipLeadingOffset: CGFloat = 0
     var isDockHovered = false
-    var dockMagnificationActive = false
     var onDockHoverChange: (Bool) -> Void = { _ in }
     let action: () -> Void
 
@@ -73,18 +72,21 @@ struct WorkspaceCellView: View {
                                 .opacity(adaptiveProgress)
                         }
                     }
-                    .opacity(isDockItem && dockMagnificationActive ? 0 : 1)
+                    // See `ServiceRowView`: the fill belongs to a resting
+                    // tile, so it leaves and returns with the effect.
+                    .opacity(isDockItem && !dockTransform.isResting ? 0 : 1)
                 }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(height: isDockItem ? dockRowHeight : nil)
-        .contentShape(Rectangle())
-        .offset(x: isDockItem ? dockIconHorizontalOffset : 0)
-        .animation(
-            reduceMotion ? nil : .smooth(duration: BlattaMotion.dockMagnificationSeconds),
-            value: dockIconSize
+        .frame(
+            maxWidth: isDockItem ? .infinity : nil,
+            maxHeight: isDockItem ? dockRowHeight : nil
         )
+        // Declared before the move, so the target travels with the icon. See
+        // `ServiceRowView`.
+        .contentShape(Rectangle())
+        .offset(y: isDockItem ? dockTransform.verticalOffset : 0)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: presentsHover)
         .onHover { hovering in
             isHovering = hovering
@@ -151,6 +153,7 @@ struct WorkspaceCellView: View {
                         .offset(x: 7, y: -6)
                 }
             }
+            .scaleEffect(dockTransform.scale, anchor: .leading)
             .frame(width: dockItemSize, height: dockItemSize)
             .overlay(alignment: .leading) {
                 RailTooltipView(

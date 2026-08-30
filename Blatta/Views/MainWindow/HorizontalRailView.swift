@@ -54,7 +54,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
     private let serviceCell: (
         SpaceServiceLink,
         [SpaceServiceLink],
-        DockMagnificationLayout
+        DockSizing
     ) -> ServiceCell
 
     init(
@@ -69,7 +69,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
         @ViewBuilder serviceCell: @escaping (
             SpaceServiceLink,
             [SpaceServiceLink],
-            DockMagnificationLayout
+            DockSizing
         ) -> ServiceCell
     ) {
         self.groups = groups
@@ -175,13 +175,14 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
 
     /// A plain stack lets `ViewThatFits` measure the complete tab row.
     private var tabRow: some View {
-        let links = allLinks
-        let dockLayout = dockMagnification.layout(
-            linkIDs: links.map(\.id),
+        // The bar never magnifies: its tabs are a fixed height, and the band
+        // has no room to grow one.
+        let dockSizing = DockSizing(
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
             magnificationEnabled: false,
-            isCollapsed: false
+            isCollapsed: false,
+            itemCount: allLinks.count
         )
 
         return HStack(spacing: ServiceRowView.tabSpacing) {
@@ -198,7 +199,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
                 }
 
                 ForEach(group.links) { link in
-                    serviceCell(link, group.links, dockLayout)
+                    serviceCell(link, group.links, dockSizing)
                         .id(link.service.id)
                 }
             }

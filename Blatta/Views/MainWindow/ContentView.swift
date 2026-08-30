@@ -129,7 +129,14 @@ struct ContentView: View {
             collapsedChromeRevealTask = nil
 
             guard isCollapsed else {
-                collapsedToggleChromeVisible = false
+                // Already cleared by `toggleSidebar` before the movement
+                // started. This covers a change from anywhere else, and it
+                // leaves the animation of that change out of the removal.
+                var immediate = Transaction()
+                immediate.disablesAnimations = true
+                withTransaction(immediate) {
+                    collapsedToggleChromeVisible = false
+                }
                 return
             }
             guard !reduceMotion else {
@@ -430,6 +437,16 @@ struct ContentView: View {
 
     private func toggleSidebar() {
         let collapsed = !sidebarCollapsed
+        if !collapsed {
+            // Take the compact circle off the control before the control
+            // starts travelling. Left to the change below, the circle is
+            // removed inside that animation: it does not travel with the
+            // control, so it draws one frame at the far end of the movement
+            // and fades from there.
+            collapsedChromeRevealTask?.cancel()
+            collapsedChromeRevealTask = nil
+            collapsedToggleChromeVisible = false
+        }
         if reduceMotion {
             appState.setSidebarCollapsed(collapsed)
         } else {

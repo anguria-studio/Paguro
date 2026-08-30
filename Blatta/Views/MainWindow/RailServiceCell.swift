@@ -13,7 +13,10 @@ struct RailServiceCell<ContextMenu: View>: View {
     let supplementaryWorkspaceName: String?
     /// Draws the cell as its icon alone. Only the grouped top bar sets it.
     let hidesLabel: Bool
-    let dockLayout: DockMagnificationLayout
+    /// Where this cell sits in the dock stack, which is what the pointer
+    /// distance is measured against.
+    let dockIndex: Int
+    let dockSizing: DockSizing
     let dockMagnification: DockMagnificationState
     /// The live order and the drag state that the rail container owns.
     let railReorder: RailReorderState
@@ -38,7 +41,8 @@ struct RailServiceCell<ContextMenu: View>: View {
         sidebarPresentation: SidebarPresentation,
         supplementaryWorkspaceName: String?,
         hidesLabel: Bool = false,
-        dockLayout: DockMagnificationLayout,
+        dockIndex: Int,
+        dockSizing: DockSizing,
         dockMagnification: DockMagnificationState,
         railReorder: RailReorderState,
         railSpacing: CGFloat,
@@ -55,7 +59,8 @@ struct RailServiceCell<ContextMenu: View>: View {
         self.sidebarPresentation = sidebarPresentation
         self.supplementaryWorkspaceName = supplementaryWorkspaceName
         self.hidesLabel = hidesLabel
-        self.dockLayout = dockLayout
+        self.dockIndex = dockIndex
+        self.dockSizing = dockSizing
         self.dockMagnification = dockMagnification
         self.railReorder = railReorder
         self.railSpacing = railSpacing
@@ -127,8 +132,14 @@ struct RailServiceCell<ContextMenu: View>: View {
         let health = hibernated
             ? ServiceHealth.live
             : appState.webViewPool.health(for: link.service.id)
-        let displayedIconSize = dockLayout.iconSize(for: link.id)
+        // Read here rather than in the rail: the rail would then rebuild every
+        // cell, and re-run the fetches behind them, on every pointer move.
+        let transform = dockMagnification.iconTransform(
+            atIndex: dockIndex,
+            sizing: dockSizing
+        )
         let baseIconSize = appState.iconRailBaseSize
+        let displayedIconSize = dockSizing.baseIconSize * transform.scale
 
         return ServiceRowView(
             instance: link.service,
@@ -144,17 +155,14 @@ struct RailServiceCell<ContextMenu: View>: View {
             health: health,
             glassStyle: appState.liquidGlassStyle,
             glassIntensity: appState.liquidGlassIntensity,
-            dockIconSize: displayedIconSize,
+            dockIconSize: dockSizing.baseIconSize,
             dockItemSize: BlattaMetric.Sidebar.dockItemSize(
-                displayedIconSize: Double(displayedIconSize)
+                displayedIconSize: Double(dockSizing.baseIconSize)
             ),
             dockRowHeight: BlattaMetric.Sidebar.dockRowHeight(
-                displayedIconSize: Double(displayedIconSize)
+                displayedIconSize: Double(dockSizing.baseIconSize)
             ),
-            dockIconHorizontalOffset: CGFloat(DockIconSizing.horizontalOffset(
-                baseSize: baseIconSize,
-                displayedIconSize: Double(displayedIconSize)
-            )),
+            dockTransform: transform,
             dockTooltipLeadingOffset: CGFloat(DockIconSizing.tooltipLeadingOffset(
                 baseSize: baseIconSize,
                 displayedIconSize: Double(displayedIconSize),
@@ -163,13 +171,11 @@ struct RailServiceCell<ContextMenu: View>: View {
             supplementaryWorkspaceName: supplementaryWorkspaceName,
             hidesLabel: hidesLabel,
             isDockHovered: dockMagnification.hoveredLinkID == link.id,
-            dockMagnificationActive: dockMagnification.hoveredLinkID != nil
-                && appState.iconRailMagnificationEnabled,
             onDockHoverChange: { hovering in
                 if hovering {
                     dockMagnification.beginHover(for: link.id)
                 } else {
-                    dockMagnification.endHover(for: link.id)
+                    dockMagnification.endHover(for: link.id, reduceMotion: reduceMotion)
                 }
             },
             isFocused: showsKeyboardFocusRing && focusedLinkID.wrappedValue == link.id,

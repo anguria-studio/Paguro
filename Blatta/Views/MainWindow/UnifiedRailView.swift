@@ -242,29 +242,37 @@ struct UnifiedRailView: View {
                 dockMagnification: dockMagnification,
                 spaceHeader: { spaceHeader },
                 workspaceLabel: { space in barWorkspaceLabel(for: space) },
-                serviceCell: { link, groupLinks, dockLayout in
+                serviceCell: { link, groupLinks, dockSizing in
                     serviceRow(
                         for: link,
                         workspaceLinks: groupLinks,
-                        dockLayout: dockLayout
+                        dockSizing: dockSizing,
+                        dockIndex: 0
                     )
                 }
             )
         }
     }
 
-    /// A compact source list in expanded form and an icon dock when collapsed.
-    private var verticalBody: some View {
-        let dockLayout = dockMagnification.layout(
-            linkIDs: dockLinks.map(\.id),
+    /// What the cells need to size themselves. It holds no pointer, so the
+    /// rail does not rebuild when the pointer moves.
+    private var dockSizing: DockSizing {
+        DockSizing(
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
             // Magnification changes the item pitch. Hold it while a person
             // moves a cell, so the reorder keeps one measure.
             magnificationEnabled: appState.iconRailMagnificationEnabled
                 && !railReorder.isDragging,
-            isCollapsed: sidebarPresentation == .collapsed
+            isCollapsed: sidebarPresentation == .collapsed,
+            itemCount: dockLinks.count,
+            spaceAbove: Double(railSpaceAboveStack)
         )
+    }
+
+    /// A compact source list in expanded form and an icon dock when collapsed.
+    private var verticalBody: some View {
+        let dockSizing = dockSizing
 
         return VStack(spacing: 0) {
             Color.clear
@@ -280,18 +288,14 @@ struct UnifiedRailView: View {
             GeometryReader { geometry in
                 ScrollView {
                     LazyVStack(spacing: verticalRailSpacing) {
-                        verticalRailContent(dockLayout: dockLayout)
+                        verticalRailContent(dockSizing: dockSizing)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.top, dockRailTopPadding(viewportHeight: geometry.size.height))
-                    .padding(.bottom, sidebarPresentation == .expanded ? 8 : 0)
-                    .offset(y: dockLayout.stackVerticalOffset)
-                    .animation(
-                        reduceMotion
-                            ? nil
-                            : .smooth(duration: BlattaMotion.dockMagnificationSeconds),
-                        value: dockLayout.stackVerticalOffset
+                    .padding(
+                        .top,
+                        dockRailTopPadding(viewportHeight: geometry.size.height)
                     )
+                    .padding(.bottom, sidebarPresentation == .expanded ? 8 : 0)
                     // The drag measures inside the scrolling stack. A pointer
                     // position then stays correct while the rail scrolls.
                     .coordinateSpace(.named(RailCoordinateSpace.name))
@@ -309,6 +313,13 @@ struct UnifiedRailView: View {
                 }
                 .task(id: railReorder.draggingLinkID) {
                     await runRailAutoscroll()
+                }
+                // The rail measures the pointer, not its cells: a cell reports
+                // a position inside a cell the pointer has already resized,
+                // which feeds the size back into its own input. This frame
+                // does not resize, so the reading stays stable.
+                .onContinuousHover(coordinateSpace: .local) { phase in
+                    updatePointer(phase, viewportHeight: geometry.size.height)
                 }
             }
             .clipShape(VerticalRailClipShape())
@@ -401,14 +412,19 @@ struct UnifiedRailView: View {
     }
 
     @ViewBuilder
-    private func verticalRailContent(
-        dockLayout: DockMagnificationLayout
-    ) -> some View {
+    private func verticalRailContent(dockSizing: DockSizing) -> some View {
+        // One index for each cell in the dock stack, which is what the pointer
+        // distance is measured against.
+        let dockIndexes = Dictionary(
+            uniqueKeysWithValues: dockLinks.enumerated().map { ($0.element.id, $0.offset) }
+        )
+
         if showsAllWorkspaces && sidebarPresentation == .expanded {
             ForEach(Array(workspaceGroups.enumerated()), id: \.element.id) { index, group in
                 workspaceSection(
                     group,
-                    dockLayout: dockLayout,
+                    dockSizing: dockSizing,
+                    dockIndexes: dockIndexes,
                     topSpacing: index == 0
                         ? 0
                         : BlattaMetric.Sidebar.workspaceSectionTopSpacing
@@ -429,14 +445,20 @@ struct UnifiedRailView: View {
                     serviceRow(
                         for: link,
                         workspaceLinks: group.links,
-                        dockLayout: dockLayout
+                        dockSizing: dockSizing,
+                        dockIndex: dockIndexes[link.id] ?? 0
                     )
                 }
             }
         } else {
             let links = filteredLinks
             ForEach(links) { link in
-                serviceRow(for: link, workspaceLinks: links, dockLayout: dockLayout)
+                serviceRow(
+                    for: link,
+                    workspaceLinks: links,
+                    dockSizing: dockSizing,
+                    dockIndex: dockIndexes[link.id] ?? 0
+                )
             }
         }
     }
@@ -444,7 +466,8 @@ struct UnifiedRailView: View {
     @ViewBuilder
     private func workspaceSection(
         _ group: WorkspaceLinkGroup,
-        dockLayout: DockMagnificationLayout,
+        dockSizing: DockSizing,
+        dockIndexes: [UUID: Int],
         topSpacing: CGFloat
     ) -> some View {
         let space = group.space
@@ -483,7 +506,8 @@ struct UnifiedRailView: View {
                 serviceRow(
                     for: link,
                     workspaceLinks: group.links,
-                    dockLayout: dockLayout
+                    dockSizing: dockSizing,
+                    dockIndex: dockIndexes[link.id] ?? 0
                 )
             }
         }
@@ -562,7 +586,8 @@ struct UnifiedRailView: View {
     private func serviceRow(
         for link: SpaceServiceLink,
         workspaceLinks: [SpaceServiceLink],
-        dockLayout: DockMagnificationLayout
+        dockSizing: DockSizing,
+        dockIndex: Int
     ) -> some View {
         RailServiceCell(
             link: link,
@@ -576,7 +601,8 @@ struct UnifiedRailView: View {
                 ? link.space.name
                 : nil,
             hidesLabel: showsIconsOnly,
-            dockLayout: dockLayout,
+            dockIndex: dockIndex,
+            dockSizing: dockSizing,
             dockMagnification: dockMagnification,
             railReorder: railReorder,
             railSpacing: axis == .vertical
@@ -628,6 +654,39 @@ struct UnifiedRailView: View {
 
         railScrollPosition.scrollTo(y: next)
         railReorder.extend(byScroll: applied)
+    }
+
+    /// Converts a pointer position in the rail viewport to a position in the
+    /// resting stack, in rows. The resting stack is the one measure that the
+    /// magnification does not change, so sizes taken from it cannot oscillate.
+    private func updatePointer(_ phase: HoverPhase, viewportHeight: CGFloat) {
+        guard sidebarPresentation == .collapsed,
+              appState.iconRailMagnificationEnabled,
+              !railReorder.isDragging
+        else {
+            dockMagnification.endPointerTracking(reduceMotion: reduceMotion)
+            return
+        }
+
+        switch phase {
+        case .active(let location):
+            dockMagnification.movePointer(
+                toRows: DockIconSizing.pointerRows(
+                    pointerPosition: Double(location.y + railScroll.offset),
+                    topPadding: Double(dockRailTopPadding(viewportHeight: viewportHeight)),
+                    baseSize: appState.iconRailBaseSize
+                ),
+                reduceMotion: reduceMotion
+            )
+        case .ended:
+            dockMagnification.endRailPointer(reduceMotion: reduceMotion)
+        }
+    }
+
+    /// How far the icon stack can rise before it leaves the rail: the padding
+    /// that centers it, plus the distance it has already scrolled.
+    private var railSpaceAboveStack: CGFloat {
+        dockRailTopPadding(viewportHeight: railScroll.viewportLength) + railScroll.offset
     }
 
     private func dockRailTopPadding(viewportHeight: CGFloat) -> CGFloat {

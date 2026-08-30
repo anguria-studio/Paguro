@@ -37,17 +37,18 @@ struct ServiceRowView: View {
     var health: ServiceHealth = .live
     var glassStyle = GlassLabDefaults.style
     var glassIntensity = GlassIntensityScale.defaultValue
+    /// The resting size the Dock item lays out at. The pointer changes what it
+    /// draws through `dockTransform`, never this.
     var dockIconSize = BlattaMetric.Sidebar.collapsedIconSize
     var dockItemSize = BlattaMetric.Sidebar.dockItemSize
     var dockRowHeight = BlattaMetric.Sidebar.dockRowHeight
-    var dockIconHorizontalOffset: CGFloat = 0
+    var dockTransform = DockIconTransform()
     var dockTooltipLeadingOffset: CGFloat = 0
     var supplementaryWorkspaceName: String?
     /// Draws the tab as its icon alone. The top bar uses this when it groups
     /// its tabs under workspace names and the person asked for icons only.
     var hidesLabel: Bool = false
     var isDockHovered = false
-    var dockMagnificationActive = false
     var onDockHoverChange: (Bool) -> Void = { _ in }
     /// Whether the keyboard is on this row. A ring appears only when keyboard
     /// focus differs from selection — see `RowMark`.
@@ -122,22 +123,29 @@ struct ServiceRowView: View {
                                 lineWidth: 2
                             )
                     }
-                    .opacity(isDockItem && dockMagnificationActive ? 0 : 1)
+                    // The fill sits behind a resting tile. A magnified icon
+                    // has left it, in size and in place, so it goes with the
+                    // effect and comes back with it: both changes belong to
+                    // the same animation, which is why this reads the
+                    // transform rather than the hover that started it.
+                    .opacity(isDockItem && !dockTransform.isResting ? 0 : 1)
                 }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(height: isDockItem ? dockRowHeight : nil)
-        // The visible Dock tile stays square, while its outer hover target
-        // fills the row so adjacent targets meet without a dead area.
-        .contentShape(Rectangle())
-        .offset(x: isDockItem ? dockIconHorizontalOffset : 0)
-        .animation(
-            reduceMotion
-                ? nil
-                : .smooth(duration: BlattaMotion.dockMagnificationSeconds),
-            value: dockIconSize
+        // The Dock tile stays square while its target fills the rail, so the
+        // sides of the rail belong to the icon in them rather than to nothing.
+        .frame(
+            maxWidth: isDockItem ? .infinity : nil,
+            maxHeight: isDockItem ? dockRowHeight : nil
         )
+        // Declared before the move below. A shape declared after it is placed
+        // against the frame the cell lays out in, which the move does not
+        // change: the icon would travel and its target would stay behind.
+        .contentShape(Rectangle())
+        // Moves the complete cell, so the fill, the target and the tooltip all
+        // travel with the icon.
+        .offset(y: isDockItem ? dockTransform.verticalOffset : 0)
         .animation(
             reduceMotion ? nil : .easeOut(duration: 0.1),
             value: presentsHover
@@ -280,6 +288,11 @@ struct ServiceRowView: View {
 
     /// The collapsed sidebar keeps only the service icon and its live marks.
     /// The label remains available through the tooltip and accessibility text.
+    ///
+    /// The tile lays out at its resting size and the pointer scales it from
+    /// there. A scale changes no frame, so the stack and the scroll view around
+    /// it do not measure themselves again for every step of the pointer. The
+    /// tooltip stays outside the scale: it is a label, not part of the icon.
     private var dockContent: some View {
         serviceIcon(size: dockIconSize)
             .overlay(alignment: .topLeading) {
@@ -305,6 +318,7 @@ struct ServiceRowView: View {
                     .offset(x: -5, y: 5)
                 }
             }
+            .scaleEffect(dockTransform.scale, anchor: .leading)
             .frame(
                 width: dockItemSize,
                 height: dockItemSize

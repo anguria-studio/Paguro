@@ -163,6 +163,21 @@ window's vertical centerline, not the shortened dock viewport's centerline.
 The icon viewport ends at the inner top and bottom edges of the dock surface.
 It clips vertical overflow and permits vertical scrolling when items do not fit.
 It keeps horizontal overflow visible for magnification and tooltips.
+Icon sizes follow the pointer position along the rail, on a continuous curve
+that is level at both of its ends. A pointer move carries no animation. The
+effect fades in when the pointer enters the rail and out when it leaves, so an
+icon never appears at its magnified size.
+
+Each cell reads the pointer itself, so a mouse move re-renders the cells rather
+than the rail and its fetches. The cells lay out at their resting size and draw
+the effect as a scale and a move. A mouse move then measures no layout at all.
+
+A magnified icon reaches past the rail. The cell under the pointer then holds
+the effect open, and the position holds still until the pointer leaves the cell
+as well.
+The vertical rise that keeps the point under the pointer in place stops at the
+room the rail has above its stack. A top-aligned rail at rest has none, so its first icon
+grows downward from a fixed top edge rather than up into the clip.
 A collapsed tooltip follows the visible icon edge and stands one gap after it.
 The edge of the drawn rail surface is its floor, not the rail frame. A small
 icon then keeps the tooltip beside the rail rather than an inset away from it.
