@@ -4,34 +4,82 @@ import BlattaCore
 @testable import Blatta
 
 final class NativeShellTests: XCTestCase {
-    @MainActor
-    func testDockMagnificationBuildsOneIndexedLayout() {
-        let linkIDs = (0..<5).map { _ in UUID() }
-        let state = DockMagnificationState()
-        state.beginHover(for: linkIDs[2])
-
-        let layout = state.layout(
-            linkIDs: linkIDs,
+    private var dockSizing: DockSizing {
+        DockSizing(
             baseSize: 22,
             magnifiedSize: 44,
             magnificationEnabled: true,
-            isCollapsed: true
+            isCollapsed: true,
+            itemCount: 5,
+            spaceAbove: .infinity
         )
+    }
 
-        XCTAssertEqual(layout.iconSize(for: linkIDs[2]), 44)
-        XCTAssertGreaterThan(layout.iconSize(for: linkIDs[1]), layout.iconSize(for: linkIDs[0]))
-        XCTAssertEqual(layout.iconSize(for: linkIDs[1]), layout.iconSize(for: linkIDs[3]))
-        XCTAssertEqual(layout.iconSize(for: UUID()), 22)
+    @MainActor
+    func testDockMagnificationSizesEveryIconFromThePointer() {
+        let state = DockMagnificationState()
+        let sizing = dockSizing
+
+        // Nothing is magnified until the pointer is in the rail.
+        XCTAssertEqual(state.iconTransform(atIndex: 2, sizing: sizing), DockIconTransform())
+
+        state.movePointer(toRows: 2, reduceMotion: true)
+        let hovered = state.iconTransform(atIndex: 2, sizing: sizing)
+        let neighbor = state.iconTransform(atIndex: 1, sizing: sizing)
+        let far = state.iconTransform(atIndex: 0, sizing: sizing)
+
+        XCTAssertEqual(hovered.scale, 2, accuracy: 0.000_001)
         XCTAssertEqual(
-            layout.stackVerticalOffset,
-            CGFloat(DockIconSizing.stackVerticalOffset(
-                baseSize: 22,
-                magnifiedSize: 44,
-                magnificationEnabled: true,
-                itemCount: linkIDs.count,
-                hoveredIndex: 2
-            ))
+            neighbor.scale,
+            state.iconTransform(atIndex: 3, sizing: sizing).scale,
+            accuracy: 0.000_001
         )
+        XCTAssertGreaterThan(neighbor.scale, far.scale)
+        XCTAssertGreaterThan(far.scale, 1)
+
+        // The icon under the pointer keeps its place. The ones above it move
+        // up, out of its way.
+        XCTAssertEqual(hovered.verticalOffset, 0, accuracy: 0.000_001)
+        XCTAssertLessThan(far.verticalOffset, neighbor.verticalOffset)
+        XCTAssertLessThan(neighbor.verticalOffset, 0)
+    }
+
+    @MainActor
+    func testDockMagnificationRestsAgainWhenThePointerLeaves() {
+        let state = DockMagnificationState()
+        let sizing = dockSizing
+
+        state.movePointer(toRows: 1, reduceMotion: true)
+        XCTAssertFalse(state.iconTransform(atIndex: 1, sizing: sizing).isResting)
+
+        state.endPointerTracking(reduceMotion: true)
+        XCTAssertEqual(state.iconTransform(atIndex: 1, sizing: sizing), DockIconTransform())
+    }
+
+    /// A pointer that comes back while the effect is fading raises it again.
+    /// Asking only whether the rail has a position would leave the effect down
+    /// with the pointer inside the rail.
+    @MainActor
+    func testDockMagnificationRisesAgainForAPointerThatReturns() {
+        let state = DockMagnificationState()
+        let sizing = dockSizing
+
+        state.movePointer(toRows: 1, reduceMotion: true)
+        state.endPointerTracking(reduceMotion: true)
+        state.movePointer(toRows: 1, reduceMotion: true)
+
+        XCTAssertEqual(state.iconTransform(atIndex: 1, sizing: sizing).scale, 2, accuracy: 0.000_001)
+    }
+
+    @MainActor
+    func testDockMagnificationExpandedRailNeverMagnifies() {
+        let state = DockMagnificationState()
+        var sizing = dockSizing
+        sizing.isCollapsed = false
+
+        state.movePointer(toRows: 2, reduceMotion: true)
+
+        XCTAssertEqual(state.iconTransform(atIndex: 2, sizing: sizing), DockIconTransform())
     }
 
     @MainActor

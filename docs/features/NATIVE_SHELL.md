@@ -105,6 +105,13 @@ the current window session. A collapsed section shows the aggregate badge.
 Visible service rows show unread status while users keep a section expanded.
 An 8 point gap separates adjacent workspace sections. Each disclosure chevron
 aligns with the service icon column.
+A workspace opens on the service it was last left on. A workspace with nothing
+recorded, or one whose recorded service has since left it, opens its first
+service. A service named together with a workspace wins over both. The quick
+switcher and the menu bar name the two together. Blatta keeps the record
+outside the model store, as a window state. It drops the record of a workspace
+that is deleted.
+
 Selecting a service selects its workspace. Arrow navigation and drag reorder
 stay within that workspace. Moving a service between workspaces remains an
 explicit context-menu action. A workspace section menu can add a service to

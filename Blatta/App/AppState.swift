@@ -66,6 +66,9 @@ final class AppState {
     var iconRailPosition: DockRailPosition { shellPreferences.iconRailPosition }
     var workspaceViewMode: WorkspaceViewMode { shellPreferences.workspaceViewMode }
     var railBarIconsOnly: Bool { shellPreferences.railBarIconsOnly }
+
+    /// What each workspace was last left on. See `WorkspaceServiceMemory`.
+    @ObservationIgnored private var workspaceSelection = WorkspaceSelectionStore()
     var sidebarCollapsed: Bool { shellPreferences.sidebarCollapsed }
 
     @ObservationIgnored private var lastEffectiveShellAppearanceDark: Bool?
@@ -905,12 +908,29 @@ final class AppState {
             selectedSpaceID = outcome.remainingSpaceID
             selectedServiceID = nil
         }
+        workspaceSelection.forget(workspaceID: spaceID)
 
         websiteDataReclaimer.cleanUpOrphanedDataStores()
     }
 
     func servicesForSpace(_ spaceID: UUID) -> [ServiceInstance] {
         workspaceStore.servicesForSpace(spaceID)
+    }
+
+    /// Records what a workspace is left on, so returning to it returns to the
+    /// work in it rather than to its first service.
+    func rememberSelection(serviceID: UUID, in spaceID: UUID) {
+        workspaceSelection.remember(serviceID: serviceID, in: spaceID)
+    }
+
+    /// The service a workspace opens on: the one already chosen for it in this
+    /// same step, else the one it was left on, else its first.
+    func serviceToOpen(in spaceID: UUID, currentServiceID: UUID?) -> UUID? {
+        workspaceSelection.serviceToOpen(
+            in: spaceID,
+            memberServiceIDs: servicesForSpace(spaceID).map(\.id),
+            currentServiceID: currentServiceID
+        )
     }
 
     /// Preloads web views for all services in the currently selected space.

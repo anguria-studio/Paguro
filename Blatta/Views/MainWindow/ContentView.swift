@@ -172,18 +172,19 @@ struct ContentView: View {
         .onChange(of: appState.selectedSpaceID) { _, newSpaceID in
             if let spaceID = newSpaceID {
                 appState.preloadServicesForSpace(spaceID)
-                // Don't overwrite a serviceID that was set in the same
-                // render tick by QuickSwitcher or the menu-bar handler
-                // (they write spaceID + serviceID together). Only fall
-                // back to selectFirstService when the current selection
-                // isn't valid for the new space — e.g., the user clicked
-                // a space chip in SpaceStripView.
-                let validIDs = Set(appState.servicesForSpace(spaceID).map(\.id))
-                if let currentID = appState.selectedServiceID, validIDs.contains(currentID) {
-                    return
-                }
-                selectFirstService(in: spaceID)
+                // A workspace opens on the service it was left on. A serviceID
+                // set in this same render tick wins: QuickSwitcher and the
+                // menu-bar handler write a spaceID and a serviceID together,
+                // and this must not answer for the service they chose.
+                appState.selectedServiceID = appState.serviceToOpen(
+                    in: spaceID,
+                    currentServiceID: appState.selectedServiceID
+                )
             }
+        }
+        .onChange(of: appState.selectedServiceID) { _, newServiceID in
+            guard let spaceID = appState.selectedSpaceID, let newServiceID else { return }
+            appState.rememberSelection(serviceID: newServiceID, in: spaceID)
         }
         .sheet(isPresented: $state.showAddService) {
             if let spaceID = appState.selectedSpaceID {
@@ -429,10 +430,6 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Web content")
-    }
-
-    private func selectFirstService(in spaceID: UUID) {
-        appState.selectedServiceID = appState.servicesForSpace(spaceID).first?.id
     }
 
     private func toggleSidebar() {

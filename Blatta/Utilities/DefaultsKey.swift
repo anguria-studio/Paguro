@@ -10,6 +10,7 @@ enum DefaultsKey {
     static let iconRailPosition = "Blatta.iconRailPosition"
     static let workspaceViewMode = "Blatta.workspaceViewMode"
     static let railBarIconsOnly = "Blatta.railBarIconsOnly"
+    static let workspaceServiceMemory = "Blatta.workspaceServiceMemory"
     static let retiredBackdropFrostIntensity = "Blatta.backdropFrostIntensity"
     static let systemNotificationRouteEnabled = "Blatta.systemNotificationRouteEnabled"
     static let islandNotificationRouteEnabled = "Blatta.islandNotificationRouteEnabled"
