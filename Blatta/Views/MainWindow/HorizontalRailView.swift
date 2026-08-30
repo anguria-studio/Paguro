@@ -7,7 +7,7 @@ import BlattaCore
 /// name above them. A named space is one group of the all-workspaces bar.
 struct RailBarGroup: Identifiable {
     let space: Space?
-    let links: [SpaceServiceLink]
+    let links: [LiveSpaceServiceLink]
 
     /// The identity of the single unnamed group. It is fixed, so the one group
     /// of the current-workspace bar keeps its identity across a space switch.
@@ -54,8 +54,8 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
     private let spaceHeaderContent: () -> SpaceHeader
     private let workspaceLabel: (Space) -> WorkspaceLabel
     private let serviceCell: (
-        SpaceServiceLink,
-        [SpaceServiceLink],
+        LiveSpaceServiceLink,
+        [LiveSpaceServiceLink],
         DockSizing
     ) -> ServiceCell
 
@@ -70,8 +70,8 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
         @ViewBuilder spaceHeader: @escaping () -> SpaceHeader,
         @ViewBuilder workspaceLabel: @escaping (Space) -> WorkspaceLabel,
         @ViewBuilder serviceCell: @escaping (
-            SpaceServiceLink,
-            [SpaceServiceLink],
+            LiveSpaceServiceLink,
+            [LiveSpaceServiceLink],
             DockSizing
         ) -> ServiceCell
     ) {
@@ -87,7 +87,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
         self.serviceCell = serviceCell
     }
 
-    private var allLinks: [SpaceServiceLink] {
+    private var allLinks: [LiveSpaceServiceLink] {
         groups.flatMap(\.links)
     }
 

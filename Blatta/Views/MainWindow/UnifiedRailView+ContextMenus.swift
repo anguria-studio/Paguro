@@ -30,7 +30,7 @@ extension UnifiedRailView {
     }
 
     @ViewBuilder
-    func serviceContextMenu(for link: SpaceServiceLink) -> some View {
+    func serviceContextMenu(for link: LiveSpaceServiceLink) -> some View {
         Button("Edit Service…") {
             editingService = link.service
         }
@@ -122,12 +122,8 @@ extension UnifiedRailView {
     private func eligibleSpaces(for service: ServiceInstance) -> [Space] {
         let memberIDs = Set(
             allLinks
-                .filter {
-                    $0.modelContext != nil
-                        && $0.service.modelContext != nil
-                        && $0.space.modelContext != nil
-                        && $0.service.id == service.id
-                }
+                .compactMap(\.liveEnds)
+                .filter { $0.service.id == service.id }
                 .map { $0.space.id }
         )
         let eligible = Set(SpaceMove.eligibleSpaceIDs(
@@ -138,7 +134,7 @@ extension UnifiedRailView {
     }
 
     /// Fixes selection before `AppState` removes the membership.
-    private func removeFromSpace(link: SpaceServiceLink) {
+    private func removeFromSpace(link: LiveSpaceServiceLink) {
         if selectedServiceID == link.service.id && selectedSpaceID == link.space.id {
             selectedServiceID = nil
         }

@@ -3,9 +3,9 @@ import BlattaCore
 
 /// Renders and operates one service membership in either rail axis.
 struct RailServiceCell<ContextMenu: View>: View {
-    let link: SpaceServiceLink
-    let workspaceLinks: [SpaceServiceLink]
-    let liveLinks: [SpaceServiceLink]
+    let link: LiveSpaceServiceLink
+    let workspaceLinks: [LiveSpaceServiceLink]
+    let liveLinks: [LiveSpaceServiceLink]
     @Binding var selectedSpaceID: UUID?
     @Binding var selectedServiceID: UUID?
     let axis: Axis
@@ -34,9 +34,9 @@ struct RailServiceCell<ContextMenu: View>: View {
     private let contextMenuContent: () -> ContextMenu
 
     init(
-        link: SpaceServiceLink,
-        workspaceLinks: [SpaceServiceLink],
-        liveLinks: [SpaceServiceLink],
+        link: LiveSpaceServiceLink,
+        workspaceLinks: [LiveSpaceServiceLink],
+        liveLinks: [LiveSpaceServiceLink],
         selectedSpaceID: Binding<UUID?>,
         selectedServiceID: Binding<UUID?>,
         axis: Axis,

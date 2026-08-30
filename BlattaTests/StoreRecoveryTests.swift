@@ -171,6 +171,37 @@ final class StoreRecoveryTests: XCTestCase {
             ["id", "sortOrder"],
             "SpaceServiceLink stored attributes changed without a new schema version"
         )
+
+        // Both ends must stay optional. Non-optional is what made a cascade
+        // delete trap on macOS 15 and kill the app on deleting a space, and the
+        // attribute set above cannot see it because a relationship is not an
+        // attribute — so assert it directly.
+        let link = try entity("SpaceServiceLink")
+        for name in ["space", "service"] {
+            let relationship = try XCTUnwrap(
+                link.relationships.first { $0.name == name },
+                "SpaceServiceLink lost its \(name) relationship"
+            )
+            XCTAssertTrue(
+                relationship.isOptional,
+                "SpaceServiceLink.\(name) must stay optional: a .cascade delete has to clear it, and SwiftData traps on macOS 15 when it cannot"
+            )
+        }
+
+        // Control, so the check above cannot pass vacuously: the frozen 1.5.13
+        // shape is the same relationships NOT optional, and `isOptional` has to
+        // tell them apart or it is measuring nothing.
+        let frozenLink = try XCTUnwrap(
+            Schema(versionedSchema: BlattaSchemaV1_5_13.self)
+                .entities.first { $0.name == "SpaceServiceLink" }
+        )
+        for name in ["space", "service"] {
+            let relationship = try XCTUnwrap(frozenLink.relationships.first { $0.name == name })
+            XCTAssertFalse(
+                relationship.isOptional,
+                "the frozen 1.5.13 shape is meant to be the non-optional one"
+            )
+        }
         XCTAssertEqual(
             Set(try entity("AppPreferences").attributes.map(\.name)),
             [
@@ -297,8 +328,8 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(links.count, 1)
         let l = try XCTUnwrap(links.first)
         XCTAssertEqual(l.sortOrder, 5)
-        XCTAssertEqual(l.space.id, spaceID)
-        XCTAssertEqual(l.service.id, serviceID)
+        XCTAssertEqual(l.liveSpace?.id, spaceID)
+        XCTAssertEqual(l.liveService?.id, serviceID)
     }
 
     /// The second stage (1.5.12 → current). A 1.5.12 store already has
@@ -1785,5 +1816,134 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(StoreRelocation.resolveStoreURL(legacy: legacy, scoped: scoped), scoped)
         XCTAssertEqual(StoreRepair.spaceCount(at: scoped), 1, "the store already in place must win")
         XCTAssertEqual(StoreRepair.spaceCount(at: legacy), 9, "and the old path must be left alone, not consumed")
+    }
+
+    // MARK: - Optional link ends
+
+    /// 1.5.13 (the shape Blatta inherited) opens at the current shape with its
+    /// links intact, and both ends of every link still resolve.
+    ///
+    /// This is the stage that relaxes `SpaceServiceLink.space` and `.service` to
+    /// optional. Dropping a constraint should carry every row across untouched,
+    /// and the assertions below are about the ends specifically, because a
+    /// migration that quietly nulled them would leave a store full of links
+    /// pointing at nothing.
+    @MainActor
+    func testMigratesFrom1_5_13PreservingLinkEnds() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appending(path: "blatta-migr-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "default.store")
+
+        let serviceID = UUID(), spaceID = UUID(), linkID = UUID()
+
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: BlattaSchemaV1_5_13.self)
+            let config = ModelConfiguration(schema: schema, url: url)
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let ctx = container.mainContext
+            let space = BlattaSchemaV1_5_13.Space(id: spaceID, name: "Work", emoji: "🏢", sortOrder: 3)
+            let service = BlattaSchemaV1_5_13.ServiceInstance(id: serviceID, label: "Slack", url: "https://slack.com")
+            service.hibernationPolicyRaw = "never"
+            service.hibernateAfterMinutes = 42
+            let link = BlattaSchemaV1_5_13.SpaceServiceLink(id: linkID, sortOrder: 7, space: space, service: service)
+            ctx.insert(space); ctx.insert(service); ctx.insert(link)
+            try ctx.save()
+        }
+
+        let schema = Schema(versionedSchema: BlattaSchemaVCurrent.self)
+        let config = ModelConfiguration(schema: schema, url: url)
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: BlattaMigrationPlan.self,
+            configurations: [config]
+        )
+        let ctx = container.mainContext
+
+        let link = try XCTUnwrap(try ctx.fetch(FetchDescriptor<SpaceServiceLink>()).first)
+        XCTAssertEqual(link.id, linkID)
+        XCTAssertEqual(link.sortOrder, 7)
+        XCTAssertEqual(link.space?.id, spaceID, "the migration must not drop the link's space")
+        XCTAssertEqual(link.service?.id, serviceID, "the migration must not drop the link's service")
+        XCTAssertNotNil(link.liveEnds, "both ends must still resolve after the migration")
+
+        let service = try XCTUnwrap(try ctx.fetch(FetchDescriptor<ServiceInstance>()).first)
+        XCTAssertEqual(service.hibernationPolicyRaw, "never")
+        XCTAssertEqual(service.hibernateAfterMinutes, 42)
+        XCTAssertEqual(service.spaceLinks.count, 1, "the inverse must survive too")
+    }
+
+    /// Deleting either end of a link must not trap, on any OS.
+    ///
+    /// `Space.serviceLinks` and `ServiceInstance.spaceLinks` both cascade, so a
+    /// delete has to clear the link's reference first. While those references
+    /// were non-optional there was nothing to clear them to, and macOS 15
+    /// trapped —
+    ///
+    ///   Cannot remove Blatta.Space from relationship space on
+    ///   Blatta.SpaceServiceLink because an appropriate default value is not
+    ///   configured
+    ///
+    /// — so deleting a workspace killed the app for anyone below macOS 26. This
+    /// covers both ends and both orders, since the trap fired on whichever end
+    /// went first.
+    @MainActor
+    func testDeletingEitherEndOfALinkNeverTraps() throws {
+        let schema = Self.storeSchema
+
+        // Hold each container: `mainContext` does not keep its container alive,
+        // and a released container leaves the context pointing at nothing.
+        var containers: [ModelContainer] = []
+        func freshContext() throws -> ModelContext {
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let container = try ModelContainer(for: schema, configurations: [config])
+            containers.append(container)
+            return container.mainContext
+        }
+
+        // Workspace first, then the service it orphaned — AppState.deleteSpace.
+        let a = try freshContext()
+        let spaceA = Space(name: "A", emoji: "🅰️", sortOrder: 0)
+        let serviceA = ServiceInstance(label: "a", url: "https://a.example", catalogEntryID: "a")
+        a.insert(spaceA); a.insert(serviceA)
+        a.insert(SpaceServiceLink(sortOrder: 0, space: spaceA, service: serviceA))
+        try a.save()
+        a.delete(spaceA)
+        try a.save()
+        XCTAssertTrue(
+            try a.fetch(FetchDescriptor<SpaceServiceLink>()).isEmpty,
+            "the workspace's cascade must take the link"
+        )
+        a.delete(serviceA)
+        try a.save()
+
+        // Service first, then the workspace — the rail's deleteService.
+        let b = try freshContext()
+        let spaceB = Space(name: "B", emoji: "🅱️", sortOrder: 0)
+        let serviceB = ServiceInstance(label: "b", url: "https://b.example", catalogEntryID: "b")
+        b.insert(spaceB); b.insert(serviceB)
+        b.insert(SpaceServiceLink(sortOrder: 0, space: spaceB, service: serviceB))
+        try b.save()
+        b.delete(serviceB)
+        try b.save()
+        XCTAssertTrue(
+            try b.fetch(FetchDescriptor<SpaceServiceLink>()).isEmpty,
+            "the service's cascade must take the link"
+        )
+
+        // Both in one batch, which is the shape that trapped first.
+        let c = try freshContext()
+        let spaceC = Space(name: "C", emoji: "🇨", sortOrder: 0)
+        let serviceC = ServiceInstance(label: "c", url: "https://c.example", catalogEntryID: "c")
+        c.insert(spaceC); c.insert(serviceC)
+        c.insert(SpaceServiceLink(sortOrder: 0, space: spaceC, service: serviceC))
+        try c.save()
+        c.delete(serviceC)
+        c.delete(spaceC)
+        try c.save()
+        XCTAssertTrue(try c.fetch(FetchDescriptor<SpaceServiceLink>()).isEmpty)
+
+        XCTAssertEqual(containers.count, 3)
     }
 }

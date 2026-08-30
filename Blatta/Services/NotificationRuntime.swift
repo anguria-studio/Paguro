@@ -456,12 +456,10 @@ final class NotificationRuntime {
 
     private func navigateToService(_ serviceID: UUID) {
         guard let service = service(serviceID) else { return }
-        let links = service.spaceLinks.filter {
-            $0.modelContext != nil && $0.space.modelContext != nil
-        }
+        let spaces = service.spaceLinks.compactMap(\.liveSpace)
         let current = currentSpaceID()
-        let isInCurrentSpace = links.contains { $0.space.id == current }
-        let targetSpaceID = isInCurrentSpace ? nil : links.first?.space.id
+        let isInCurrentSpace = spaces.contains { $0.id == current }
+        let targetSpaceID = isInCurrentSpace ? nil : spaces.first?.id
         selectService(targetSpaceID, serviceID)
     }
 

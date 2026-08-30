@@ -104,15 +104,12 @@ final class WorkspaceStore {
         }
     }
 
-    func liveLinks() throws -> [SpaceServiceLink] {
-        try context.fetch(FetchDescriptor<SpaceServiceLink>()).filter {
-            $0.modelContext != nil
-                && $0.space.modelContext != nil
-                && $0.service.modelContext != nil
-        }
+    func liveLinks() throws -> [LiveSpaceServiceLink] {
+        try context.fetch(FetchDescriptor<SpaceServiceLink>())
+            .compactMap(LiveSpaceServiceLink.init)
     }
 
-    static func memberships(from links: [SpaceServiceLink]) -> [UUID: Set<UUID>] {
+    static func memberships(from links: [LiveSpaceServiceLink]) -> [UUID: Set<UUID>] {
         var memberships: [UUID: Set<UUID>] = [:]
         for link in links {
             memberships[link.service.id, default: []].insert(link.space.id)
@@ -212,8 +209,8 @@ final class WorkspaceStore {
         let targetOrders = links
             .filter { $0.space.id == targetSpaceID }
             .map(\.sortOrder)
-        link.sortOrder = (targetOrders.max() ?? -1) + 1
-        link.space = targetSpace
+        link.link.sortOrder = (targetOrders.max() ?? -1) + 1
+        link.link.space = targetSpace
         guard context.saveOrRollback(reason: "move service") else { return nil }
         return ServiceMoveOutcome(
             serviceID: serviceID,
@@ -280,7 +277,7 @@ final class WorkspaceStore {
         let reorderedLinks = reorderedIDs.compactMap { linksByID[$0] }
         guard reorderedLinks.count == reorderedIDs.count else { return false }
         for (index, link) in reorderedLinks.enumerated() {
-            link.sortOrder = index
+            link.link.sortOrder = index
         }
         return context.saveOrRollback(reason: "reorder service")
     }
@@ -369,7 +366,7 @@ final class WorkspaceStore {
         let dataStoreIdentifier = service.dataStoreIdentifier
         let hasOtherLinks = links.contains { $0.id != linkID && $0.service.id == serviceID }
 
-        context.delete(link)
+        context.delete(link.link)
         if !hasOtherLinks {
             context.delete(service)
         }

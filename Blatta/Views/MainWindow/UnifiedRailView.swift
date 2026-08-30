@@ -33,7 +33,7 @@ struct UnifiedRailView: View {
     @State private var showingPalette = false
     @State var editingSpace: Space?
     @State var confirmingDeleteSpace: Space?
-    @State var confirmingDelete: SpaceServiceLink?
+    @State var confirmingDelete: LiveSpaceServiceLink?
     @State var editingService: ServiceInstance?
     @State private var dockMagnification = DockMagnificationState()
     /// The live order and the drag state of a Dock-style reorder.
@@ -52,7 +52,7 @@ struct UnifiedRailView: View {
     /// The link whose service is being moved into a brand-new space: set when the
     /// user picks "New Workspace…", it presents the workspace editor and, on create,
     /// moves the service into the freshly made space.
-    @State var movingToNewSpace: SpaceServiceLink?
+    @State var movingToNewSpace: LiveSpaceServiceLink?
     /// The service cell that currently holds keyboard focus. Two-way bound to
     /// each cell's `.focused`, so a click or Tab that focuses a cell records it
     /// here and the arrow keys move relative to it.
@@ -64,27 +64,22 @@ struct UnifiedRailView: View {
         spaces.filter { $0.modelContext != nil }
     }
 
-    private var liveLinks: [SpaceServiceLink] {
-        return allLinks
-            // Guard all three relationships before reading `$0.space.id`: a
-            // deleted relationship would fault the freed model on this render path.
-            .filter {
-                $0.modelContext != nil
-                    && $0.service.modelContext != nil
-                    && $0.space.modelContext != nil
-            }
+    private var liveLinks: [LiveSpaceServiceLink] {
+        // Resolving here keeps every rail arrangement below from unwrapping a
+        // link's ends, and drops a link whose space or service has gone.
+        allLinks.compactMap(LiveSpaceServiceLink.init)
     }
 
     /// The saved order of one workspace, with the live drag order applied.
     ///
     /// Every rail arrangement reads its cells through this method, so a drag
     /// reflows the icon dock, the expanded rows, and the top bar in one place.
-    private func links(in workspaceID: UUID) -> [SpaceServiceLink] {
+    private func links(in workspaceID: UUID) -> [LiveSpaceServiceLink] {
         railReorder.ordered(modelLinks(in: workspaceID), in: workspaceID)
     }
 
     /// The saved order of one workspace, without the live drag order.
-    private func modelLinks(in workspaceID: UUID) -> [SpaceServiceLink] {
+    private func modelLinks(in workspaceID: UUID) -> [LiveSpaceServiceLink] {
         liveLinks
             .filter { $0.space.id == workspaceID }
             .sorted { $0.sortOrder < $1.sortOrder }
@@ -104,7 +99,7 @@ struct UnifiedRailView: View {
         sidebarPresentation == .expanded ? 2 : 0
     }
 
-    private var filteredLinks: [SpaceServiceLink] {
+    private var filteredLinks: [LiveSpaceServiceLink] {
         guard let spaceID = selectedSpaceID else { return [] }
         return links(in: spaceID)
     }
@@ -176,7 +171,7 @@ struct UnifiedRailView: View {
         workspaceGroups.filter { !$0.links.isEmpty }
     }
 
-    private var dockLinks: [SpaceServiceLink] {
+    private var dockLinks: [LiveSpaceServiceLink] {
         showsAllWorkspaces ? dockWorkspaceGroups.flatMap(\.links) : filteredLinks
     }
 
@@ -664,8 +659,8 @@ struct UnifiedRailView: View {
     // MARK: - Service cells
 
     private func serviceRow(
-        for link: SpaceServiceLink,
-        workspaceLinks: [SpaceServiceLink],
+        for link: LiveSpaceServiceLink,
+        workspaceLinks: [LiveSpaceServiceLink],
         dockSizing: DockSizing,
         dockIndex: Int
     ) -> some View {
@@ -809,7 +804,7 @@ struct UnifiedRailView: View {
 
 private struct WorkspaceLinkGroup: Identifiable {
     let space: Space
-    let links: [SpaceServiceLink]
+    let links: [LiveSpaceServiceLink]
 
     var id: UUID { space.id }
 }

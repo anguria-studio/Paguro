@@ -372,9 +372,7 @@ final class AppState {
         // Make sure we're in a space that contains this service so the
         // sidebar selection becomes visible. If the service lives in
         // multiple spaces, pick the first.
-        if let firstSpace = service.spaceLinks.first(where: {
-            $0.modelContext != nil && $0.space.modelContext != nil
-        })?.space.id {
+        if let firstSpace = service.spaceLinks.compactMap(\.liveSpace).first?.id {
             selectedSpaceID = firstSpace
         }
         selectedServiceID = service.id

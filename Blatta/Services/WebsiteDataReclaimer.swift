@@ -97,12 +97,9 @@ final class WebsiteDataReclaimer {
             return
         }
 
-        let linkedServiceIDs = Set(links.compactMap { link -> UUID? in
-            guard link.modelContext != nil,
-                  link.space.modelContext != nil,
-                  link.service.modelContext != nil else { return nil }
-            return link.service.id
-        })
+        // Both ends have to resolve before the service counts as linked: a
+        // link that outlived either end still holds a freed model.
+        let linkedServiceIDs = Set(links.compactMap { $0.liveEnds?.service.id })
         let orphans = services.filter { !linkedServiceIDs.contains($0.id) }
         guard !orphans.isEmpty else { return }
 

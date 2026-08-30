@@ -45,10 +45,10 @@ final class StoreIntegrityTests: XCTestCase {
             let doomed = try context.fetch(
                 FetchDescriptor<Space>(predicate: #Predicate { $0.id == workID })
             ).first!
-            let linkedServices = doomed.serviceLinks.map(\.service)
+            let linkedServices = doomed.serviceLinks.compactMap(\.liveService)
             var memberships: [UUID: Set<UUID>] = [:]
             for service in linkedServices {
-                memberships[service.id] = Set(service.spaceLinks.map { $0.space.id })
+                memberships[service.id] = Set(service.spaceLinks.compactMap { $0.liveSpace?.id })
             }
             // The inverse must be wired for this to be non-empty — the bug was
             // that it read 0, so nothing was reclaimed and the space's links
@@ -82,8 +82,8 @@ final class StoreIntegrityTests: XCTestCase {
         XCTAssertEqual(links.count, 2, "Only Personal's two links should remain")
         for l in links {
             XCTAssertNotNil(l.modelContext)
-            XCTAssertNotNil(l.space.modelContext, "Link's space must not dangle")
-            XCTAssertNotNil(l.service.modelContext, "Link's service must not dangle")
+            XCTAssertNotNil(l.liveSpace, "Link's space must not dangle")
+            XCTAssertNotNil(l.liveService, "Link's service must not dangle")
         }
 
         let spaces = try context.fetch(FetchDescriptor<Space>())
@@ -163,8 +163,8 @@ final class StoreIntegrityTests: XCTestCase {
         let links = try context.fetch(FetchDescriptor<SpaceServiceLink>())
         XCTAssertEqual(links.count, 2, "only Personal's two links should survive")
         for l in links {
-            _ = l.space.id     // the badge-sweep read that crashed pre-fix
-            _ = l.service.id
+            _ = l.liveSpace?.id     // the badge-sweep read that crashed pre-fix
+            _ = l.liveService?.id
         }
         let spaces = try context.fetch(FetchDescriptor<Space>())
         XCTAssertEqual(spaces.map(\.name), ["Personal"], "the live space must be intact")
