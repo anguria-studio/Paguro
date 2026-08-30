@@ -25,8 +25,12 @@ struct NotificationPresentationPolicyTests {
         #expect(plan.suppressionReason == nil)
     }
 
+    /// The island wins when both routes are on, rather than both firing.
+    ///
+    /// Routing to both put two banners on screen for one message: the island,
+    /// and a macOS notification that outlived it and had to be cleared by hand.
     @Test
-    func explicitRouteSettingsCanEnableBothDestinations() {
+    func theIslandTakesTheEventWhenBothRoutesAreEnabled() {
         let plan = NotificationPresentationPolicy.plan(
             for: NotificationPresentationOptions(
                 isSystemNotificationEnabled: true,
@@ -34,7 +38,7 @@ struct NotificationPresentationPolicyTests {
             )
         )
 
-        #expect(plan.routes == [.systemNotification, .island])
+        #expect(plan.routes == [.island])
         #expect(plan.suppressionReason == nil)
     }
 

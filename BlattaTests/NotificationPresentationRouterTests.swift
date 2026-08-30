@@ -20,7 +20,12 @@ final class NotificationPresentationRouterTests: XCTestCase {
         XCTAssertTrue(islandPresenter.eventIDs.isEmpty)
     }
 
-    func testExplicitSettingsCanPresentBothRoutes() throws {
+    /// One event reaches one destination, even with both routes switched on.
+    ///
+    /// The system route stays enabled by default, so turning the island on used
+    /// to mean every message arrived twice: once in the island, and once as a
+    /// macOS banner that outlived it and had to be cleared by hand.
+    func testTheIslandTakesTheEventInsteadOfPresentingItTwice() throws {
         let systemPresenter = RecordingNotificationPresenter()
         let islandPresenter = RecordingNotificationPresenter()
         let router = makeRouter(
@@ -32,8 +37,11 @@ final class NotificationPresentationRouterTests: XCTestCase {
 
         router.present(event: event, requestID: "request", traceID: "trace")
 
-        XCTAssertEqual(systemPresenter.eventIDs, [event.id])
         XCTAssertEqual(islandPresenter.eventIDs, [event.id])
+        XCTAssertTrue(
+            systemPresenter.eventIDs.isEmpty,
+            "macOS must not post its own banner for an event the island took"
+        )
     }
 
     func testMuteSuppressesEveryPresenter() throws {

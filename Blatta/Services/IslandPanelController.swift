@@ -726,8 +726,14 @@ final class IslandPanelController {
             if let housing = screen.cameraHousingFrame {
                 // The collapsed island grows to the side of the housing only.
                 // Its height stays the housing height, so the collapsed island
-                // reads as the camera housing itself, only wider.
-                let counterWidth = state.unreviewedCount > 0 ? 76.0 : 12.0
+                // reads as the camera housing itself.
+                //
+                // With nothing unreviewed it takes no extra width at all. On
+                // hardware any surplus reads as a wider notch rather than as
+                // part of the island, because the collapsed surface is the same
+                // black as the housing and the seam is invisible. The island is
+                // still present at housing size, so it keeps its hover target.
+                let counterWidth = state.unreviewedCount > 0 ? 76.0 : 0.0
                 return IslandScreenSize(
                     width: panelWidth(
                         bodyWidth: housing.size.width + counterWidth

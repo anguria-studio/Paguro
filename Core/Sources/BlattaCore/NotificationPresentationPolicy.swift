@@ -63,14 +63,19 @@ public enum NotificationPresentationPolicy {
             )
         }
 
+        // One event is one notification. The island takes the event when it
+        // can, and macOS is the fallback rather than a second copy: routing to
+        // both put two banners on screen for the same message, one of which
+        // outlives the island and has to be cleared by hand.
         var routes: [NotificationPresentationRoute] = []
-        let needsSystemFallback = options.isIslandEnabled
-            && !options.isIslandAvailable
-        if options.isSystemNotificationEnabled || needsSystemFallback {
-            routes.append(.systemNotification)
-        }
-        if options.isIslandEnabled && options.isIslandAvailable {
+        let islandHandlesEvent = options.isIslandEnabled
+            && options.isIslandAvailable
+        if islandHandlesEvent {
             routes.append(.island)
+        } else if options.isSystemNotificationEnabled || options.isIslandEnabled {
+            // The second case is the fallback: the island was asked for and
+            // cannot run, so the event still has somewhere to go.
+            routes.append(.systemNotification)
         }
 
         return NotificationPresentationPlan(

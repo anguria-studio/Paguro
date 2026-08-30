@@ -598,7 +598,13 @@ final class IslandPanelControllerTests: XCTestCase {
         )
     }
 
-    func testCollapsedIslandWithoutACountKeepsTheNarrowWings() async throws {
+    /// An idle island must measure exactly the camera housing.
+    ///
+    /// It used to carry 12 points of wing on each side. The collapsed surface
+    /// is the same black as the housing, so on hardware that surplus does not
+    /// read as an island at all — it reads as a notch that got wider when
+    /// Blatta launched.
+    func testCollapsedIslandWithoutACountAddsNoWidthToTheHousing() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)
 
@@ -609,7 +615,13 @@ final class IslandPanelControllerTests: XCTestCase {
         let housing = try XCTUnwrap(show.cameraHousingSize)
         XCTAssertEqual(
             show.placement.frame.size.width,
-            NotificationIslandLayout.panelWidth(bodyWidth: housing.width + 12)
+            NotificationIslandLayout.panelWidth(bodyWidth: housing.width),
+            "an idle island must be exactly as wide as the housing"
+        )
+        XCTAssertEqual(
+            show.placement.frame.size.height,
+            housing.height,
+            "and exactly as tall, so the notch keeps its shape"
         )
     }
 
