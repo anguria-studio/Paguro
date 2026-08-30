@@ -44,6 +44,8 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
     let selectedSpaceID: UUID?
     let selectedServiceID: UUID?
     let showsSpaceSwitcher: Bool
+    /// The rules between runs of tabs. A folded bar has no runs to separate.
+    var showsGroupDividers = true
     let contentInset: CGFloat
     let dockMagnification: DockMagnificationState
 
@@ -62,6 +64,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
         selectedSpaceID: UUID?,
         selectedServiceID: UUID?,
         showsSpaceSwitcher: Bool,
+        showsGroupDividers: Bool = true,
         contentInset: CGFloat,
         dockMagnification: DockMagnificationState,
         @ViewBuilder spaceHeader: @escaping () -> SpaceHeader,
@@ -76,6 +79,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
         self.selectedSpaceID = selectedSpaceID
         self.selectedServiceID = selectedServiceID
         self.showsSpaceSwitcher = showsSpaceSwitcher
+        self.showsGroupDividers = showsGroupDividers
         self.contentInset = contentInset
         self.dockMagnification = dockMagnification
         self.spaceHeaderContent = spaceHeader
@@ -188,7 +192,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
         return HStack(spacing: ServiceRowView.tabSpacing) {
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 if let space = group.space {
-                    if index > 0 {
+                    if index > 0 && showsGroupDividers {
                         Divider()
                             .frame(width: 1, height: 18)
                             .padding(.horizontal, 2)

@@ -86,19 +86,21 @@ final class RailReorderState {
         draggingLinkID == linkID
     }
 
-    /// Puts one group of links in the live order.
+    /// Puts one group of cells in the live order.
     ///
-    /// A link that the live order does not name keeps its model position at the
-    /// end. The result equals the input when no drag touches this group.
-    func ordered(
-        _ links: [SpaceServiceLink],
+    /// A cell that the live order does not name keeps its model position at the
+    /// end. The result equals the input when no drag touches this group. The
+    /// services and the workspaces both come through here, so it asks only for
+    /// something with an identifier.
+    func ordered<Item: Identifiable>(
+        _ items: [Item],
         in groupID: UUID
-    ) -> [SpaceServiceLink] {
-        guard self.groupID == groupID, !order.isEmpty else { return links }
+    ) -> [Item] where Item.ID == UUID {
+        guard self.groupID == groupID, !order.isEmpty else { return items }
 
-        var remaining = links
-        var result: [SpaceServiceLink] = []
-        result.reserveCapacity(links.count)
+        var remaining = items
+        var result: [Item] = []
+        result.reserveCapacity(items.count)
         for id in order {
             guard let index = remaining.firstIndex(where: { $0.id == id }) else {
                 continue

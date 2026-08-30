@@ -758,6 +758,25 @@ final class AppState {
     }
 
     @discardableResult
+    func reorderSpace(
+        droppedSpaceID: UUID,
+        relativeTo targetSpaceID: UUID,
+        placement: ServiceReorderPlacement
+    ) -> Bool {
+        do {
+            return try workspaceStore.reorderSpace(
+                droppedSpaceID: droppedSpaceID,
+                relativeTo: targetSpaceID,
+                placement: placement
+            )
+        } catch {
+            AppLogger.dataStore.error(
+                "Failed to reorder workspaces; rolled back: \(error.localizedDescription)"
+            )
+            return false
+        }
+    }
+
     func reorderService(
         droppedLinkID: UUID,
         relativeTo targetLinkID: UUID,

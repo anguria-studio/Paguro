@@ -165,6 +165,54 @@ final class WorkspaceStoreMutationTests: XCTestCase {
     }
 
     @MainActor
+    func testReorderSpacePersistsContiguousOrder() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let spaces = ["First", "Second", "Third"].enumerated().map { index, name in
+            Space(name: name, emoji: "", sortOrder: index)
+        }
+        spaces.forEach(context.insert)
+        try context.save()
+        let store = makeStore(context: context)
+
+        XCTAssertTrue(try store.reorderSpace(
+            droppedSpaceID: spaces[2].id,
+            relativeTo: spaces[0].id,
+            placement: .before
+        ))
+
+        let reordered = spaces.sorted { $0.sortOrder < $1.sortOrder }
+        XCTAssertEqual(reordered.map(\.name), ["Third", "First", "Second"])
+        XCTAssertEqual(reordered.map(\.sortOrder), [0, 1, 2])
+    }
+
+    /// A move onto the cell that is already there changes nothing, and says so
+    /// rather than saving the same order again.
+    @MainActor
+    func testReorderSpaceReportsAMoveThatChangesNothing() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let spaces = ["First", "Second"].enumerated().map { index, name in
+            Space(name: name, emoji: "", sortOrder: index)
+        }
+        spaces.forEach(context.insert)
+        try context.save()
+        let store = makeStore(context: context)
+
+        XCTAssertFalse(try store.reorderSpace(
+            droppedSpaceID: spaces[0].id,
+            relativeTo: spaces[0].id,
+            placement: .before
+        ))
+        XCTAssertFalse(try store.reorderSpace(
+            droppedSpaceID: spaces[0].id,
+            relativeTo: spaces[1].id,
+            placement: .before
+        ))
+        XCTAssertEqual(spaces.map(\.sortOrder), [0, 1])
+    }
+
+    @MainActor
     func testDeleteServiceRemovesEveryMembership() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext

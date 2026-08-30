@@ -237,6 +237,14 @@ The cell then settles into its space.
 
 The same drag works in all three arrangements:
 the expanded sidebar rows, the collapsed icon dock, and the top bar of tabs.
+It moves a workspace as well, in every rail that shows more than one. Those are
+the workspace rail, the workspace bar, the all-workspaces sidebar, and the
+grouped top bar. `ServiceReorder` answers for services and workspaces alike.
+
+A workspace drag folds the services away while it lasts. The sidebar folds its
+sections and the grouped bar folds its tabs. Each is then one workspace name
+after another. Everything returns on release. A release that ends a drag
+neither folds a section nor opens a workspace.
 The rail holds icon magnification during a drag, so the cell pitch keeps one
 measure.
 Reorder stays inside one workspace. The service context menu moves a service to

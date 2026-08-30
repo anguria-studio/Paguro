@@ -222,6 +222,36 @@ final class WorkspaceStore {
         )
     }
 
+    /// Moves a workspace among the others and saves the new order.
+    ///
+    /// The same rule as the services, on the workspaces themselves:
+    /// `ServiceReorder` answers for both.
+    func reorderSpace(
+        droppedSpaceID: UUID,
+        relativeTo targetSpaceID: UUID,
+        placement: ServiceReorderPlacement
+    ) throws -> Bool {
+        let spaces = (try? context.fetch(
+            FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
+        )) ?? []
+        let live = spaces.filter { $0.modelContext != nil }
+        let spacesByID = Dictionary(uniqueKeysWithValues: live.map { ($0.id, $0) })
+
+        guard let reorderedIDs = ServiceReorder.reorderedIDs(
+            live.map(\.id),
+            moving: droppedSpaceID,
+            relativeTo: targetSpaceID,
+            placement: placement
+        ) else { return false }
+
+        let reordered = reorderedIDs.compactMap { spacesByID[$0] }
+        guard reordered.count == reorderedIDs.count else { return false }
+        for (index, space) in reordered.enumerated() {
+            space.sortOrder = index
+        }
+        return context.saveOrRollback(reason: "reorder workspace")
+    }
+
     func reorderService(
         droppedLinkID: UUID,
         relativeTo targetLinkID: UUID,

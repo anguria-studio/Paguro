@@ -19,10 +19,20 @@ struct WorkspaceBarView: View {
 
     @State private var editingSpace: Space?
     @State private var confirmingDeleteSpace: Space?
+    /// The live order and the drag state of a Dock-style reorder.
+    @State private var railReorder = RailReorderState()
 
-    private var liveSpaces: [Space] {
+    private var modelSpaces: [Space] {
         spaces.filter { $0.modelContext != nil }
     }
+
+    /// The saved order with the live drag order applied.
+    private var liveSpaces: [Space] {
+        railReorder.ordered(modelSpaces, in: Self.reorderGroupID)
+    }
+
+    /// The workspaces are one set, so their live order has one group.
+    private static let reorderGroupID = UUID()
 
     var body: some View {
         HStack(spacing: 8) {
@@ -40,6 +50,10 @@ struct WorkspaceBarView: View {
                 .padding(.trailing, 10)
         }
         .railBarSurface()
+        .onChange(of: modelSpaces.map(\.id)) { _, modelOrder in
+            railReorder.settle(modelOrder: modelOrder)
+        }
+        .onDisappear { railReorder.clear() }
         .sheet(item: $editingSpace) { space in
             SpaceEditorSheet(editingSpace: space, selectedSpaceID: $selectedSpaceID)
         }
@@ -81,6 +95,9 @@ struct WorkspaceBarView: View {
         }
         .padding(.trailing, 8)
         .padding(.vertical, 2)
+        // The drag measures inside the chip row, so a pointer position stays
+        // correct while the row scrolls.
+        .coordinateSpace(.named(RailCoordinateSpace.name))
     }
 
     private func chip(for space: Space) -> some View {
@@ -109,8 +126,26 @@ struct WorkspaceBarView: View {
             showsSelection: true,
             glassIntensity: appState.liquidGlassIntensity
         ) {
+            // A release that ends a drag must not switch workspace.
+            guard !railReorder.consumesClick(for: space.id) else { return }
             selectedSpaceID = space.id
         }
+        .railReorder(
+            itemID: space.id,
+            siblingIDs: liveSpaces.map(\.id),
+            groupID: Self.reorderGroupID,
+            axis: .horizontal,
+            railSpacing: ServiceRowView.tabSpacing,
+            fallbackLength: SpaceHeaderView.barHeaderMaximumWidth,
+            railReorder: railReorder,
+            commit: { commit in
+                appState.reorderSpace(
+                    droppedSpaceID: commit.linkID,
+                    relativeTo: commit.targetLinkID,
+                    placement: commit.placement
+                )
+            }
+        )
         .contextMenu {
             WorkspaceContextMenuItems(
                 space: space,

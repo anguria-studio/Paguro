@@ -28,6 +28,8 @@ struct RailServiceCell<ContextMenu: View>: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Measured for the drop midpoint of a drag that starts outside the rail.
+    /// The reorder drag inside the rail measures its own cell.
     @State private var measuredSize: CGSize?
     private let contextMenuContent: () -> ContextMenu
 
@@ -71,6 +73,31 @@ struct RailServiceCell<ContextMenu: View>: View {
 
     var body: some View {
         row
+            .railReorder(
+                itemID: link.id,
+                siblingIDs: workspaceLinks.map(\.id),
+                groupID: link.space.id,
+                axis: axis,
+                railSpacing: railSpacing,
+                fallbackLength: axis == .vertical
+                    ? sidebarPresentation.serviceRowHeight
+                    : ServiceRowView.tabTypicalWidth,
+                railReorder: railReorder,
+                // A magnified neighbor would change the pitch under the drag.
+                onBegin: { dockMagnification.clearHover() },
+                commit: { commit in
+                    appState.reorderService(
+                        droppedLinkID: commit.linkID,
+                        relativeTo: commit.targetLinkID,
+                        placement: commit.placement
+                    )
+                }
+            )
+            // Kept for a drag that starts outside the rail. An internal
+            // reorder uses the gesture above instead of a system drag.
+            .dropDestination(for: String.self) { items, location in
+                handleDrop(items: items, location: location)
+            }
             .background(
                 GeometryReader { proxy in
                     Color.clear.onChange(of: proxy.size, initial: true) {
@@ -78,28 +105,6 @@ struct RailServiceCell<ContextMenu: View>: View {
                     }
                 }
             )
-            .scaleEffect(isLifted ? CGFloat(RailReorderRule.liftScale) : 1)
-            .shadow(
-                color: BlattaColor.railLiftShadow.opacity(isLifted ? 1 : 0),
-                radius: isLifted ? CGFloat(RailReorderRule.liftShadowRadius) : 0,
-                y: isLifted ? 3 : 0
-            )
-            .animation(liftAnimation, value: isLifted)
-            .offset(
-                x: axis == .horizontal ? dragOffset : 0,
-                y: axis == .vertical ? dragOffset : 0
-            )
-            .zIndex(isDragging ? 1 : 0)
-            // The other cells move to their new positions with this spring,
-            // which is the visible Dock reflow. The dragged cell opts out, so
-            // its compensating offset can hold it under the pointer.
-            .animation(reorderAnimation, value: reorderToken)
-            // Kept for a drag that starts outside the rail. An internal
-            // reorder uses the gesture below instead of a system drag.
-            .dropDestination(for: String.self) { items, location in
-                handleDrop(items: items, location: location)
-            }
-            .simultaneousGesture(reorderGesture)
             .accessibilityAction(named: "Move up") { moveUp() }
             .accessibilityAction(named: "Move down") { moveDown() }
             .contextMenu(menuItems: contextMenuContent)
@@ -181,109 +186,6 @@ struct RailServiceCell<ContextMenu: View>: View {
             isFocused: showsKeyboardFocusRing && focusedLinkID.wrappedValue == link.id,
             action: openAfterClick
         )
-    }
-
-    // MARK: - Dock-style reorder
-
-    private var isDragging: Bool {
-        railReorder.isDragging(link.id)
-    }
-
-    /// Reduce Motion keeps the reorder and removes the lift.
-    private var isLifted: Bool {
-        isDragging && !reduceMotion
-    }
-
-    private var dragOffset: CGFloat {
-        isDragging ? railReorder.offset : 0
-    }
-
-    private var reorderToken: RailReorderToken {
-        RailReorderToken(
-            order: railReorder.order,
-            draggingLinkID: railReorder.draggingLinkID
-        )
-    }
-
-    private var liftAnimation: Animation? {
-        reduceMotion ? nil : .smooth(duration: BlattaMotion.railLiftSeconds)
-    }
-
-    /// Reduce Motion moves each cell directly to its new position.
-    private var reorderAnimation: Animation? {
-        guard !reduceMotion, !isDragging else { return nil }
-        return .spring(
-            response: BlattaMotion.railReorderResponse,
-            dampingFraction: BlattaMotion.railReorderDamping
-        )
-    }
-
-    /// The distance between two cell centers along the rail axis.
-    ///
-    /// The measured cell plus the container gap covers both presentations: a
-    /// 28 point row with a 2 point gap, and a dock item that grows with its
-    /// icon size.
-    private var pitch: CGFloat {
-        let length = if axis == .vertical {
-            measuredSize?.height ?? sidebarPresentation.serviceRowHeight
-        } else {
-            measuredSize?.width ?? ServiceRowView.tabTypicalWidth
-        }
-        return length + railSpacing
-    }
-
-    private var reorderGesture: some Gesture {
-        DragGesture(
-            minimumDistance: CGFloat(RailReorderRule.minimumDragDistance),
-            coordinateSpace: .named(RailCoordinateSpace.name)
-        )
-        .onChanged { value in
-            if !railReorder.isDragging(link.id) {
-                beginDrag()
-            }
-            guard railReorder.isDragging(link.id) else { return }
-            applyDrag(value)
-        }
-        .onEnded { value in
-            guard railReorder.isDragging(link.id) else { return }
-            applyDrag(value)
-            commitDrag()
-        }
-    }
-
-    private func beginDrag() {
-        guard !railReorder.isDragging, workspaceLinks.count > 1 else { return }
-        // A magnified neighbor would change the pitch under the drag.
-        dockMagnification.clearHover()
-        railReorder.begin(
-            linkID: link.id,
-            in: link.space.id,
-            ids: workspaceLinks.map(\.id)
-        )
-    }
-
-    private func applyDrag(_ value: DragGesture.Value) {
-        railReorder.update(
-            translation: axis == .vertical
-                ? value.translation.height
-                : value.translation.width,
-            pitch: pitch,
-            pointerPosition: axis == .vertical
-                ? value.location.y
-                : value.location.x
-        )
-    }
-
-    private func commitDrag() {
-        guard let commit = railReorder.end() else { return }
-        let moved = appState.reorderService(
-            droppedLinkID: commit.linkID,
-            relativeTo: commit.targetLinkID,
-            placement: commit.placement
-        )
-        if !moved {
-            railReorder.clear()
-        }
     }
 
     // MARK: - Drops from outside the rail

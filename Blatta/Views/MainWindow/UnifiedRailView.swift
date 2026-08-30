@@ -38,6 +38,11 @@ struct UnifiedRailView: View {
     @State private var dockMagnification = DockMagnificationState()
     /// The live order and the drag state of a Dock-style reorder.
     @State private var railReorder = RailReorderState()
+    /// The same, for a workspace moving among the workspaces. It is a second
+    /// state rather than a second group of the one above: a workspace drag
+    /// collapses the sections, so the two can never run at once, and keeping
+    /// them apart keeps each one's live order to itself.
+    @State private var workspaceReorder = RailReorderState()
     /// The scroll values that automatic scroll reads during a reorder drag.
     @State private var railScroll = RailScrollGeometry()
     @State private var railScrollPosition = ScrollPosition()
@@ -133,13 +138,38 @@ struct UnifiedRailView: View {
         guard axis == .horizontal && groupsByWorkspace else {
             return [RailBarGroup(space: nil, links: filteredLinks)]
         }
-        return workspaceGroups.map { RailBarGroup(space: $0.space, links: $0.links) }
+        // A workspace drag folds the tabs away, the way it folds the sections
+        // of the sidebar: the bar is then one name after another, which is a
+        // row a name can move through.
+        return workspaceGroups.map {
+            RailBarGroup(space: $0.space, links: isDraggingWorkspace ? [] : $0.links)
+        }
     }
 
     private var workspaceGroups: [WorkspaceLinkGroup] {
-        liveSpaces.map { space in
+        orderedSpaces.map { space in
             WorkspaceLinkGroup(space: space, links: links(in: space.id))
         }
+    }
+
+    /// The saved workspace order with the live drag order applied.
+    private var orderedSpaces: [Space] {
+        workspaceReorder.ordered(liveSpaces, in: Self.workspaceReorderGroupID)
+    }
+
+    /// The workspaces are one set, so their live order has one group to belong
+    /// to. Each workspace is the group for its own services.
+    private static let workspaceReorderGroupID = UUID()
+
+    /// A workspace drag collapses every section for as long as it lasts.
+    ///
+    /// A section is a header and the rows under it, so a stack of sections has
+    /// no single pitch to move by. Collapsed, the stack is one header after
+    /// another, which is a list a cell can move through. It is also the clearer
+    /// picture: a workspace moving among workspaces, with nothing else in the
+    /// way.
+    private var isDraggingWorkspace: Bool {
+        workspaceReorder.isDragging
     }
 
     private var dockWorkspaceGroups: [WorkspaceLinkGroup] {
@@ -176,6 +206,12 @@ struct UnifiedRailView: View {
         .onChange(of: pendingSettleOrder) { _, modelOrder in
             guard let modelOrder else { return }
             railReorder.settle(modelOrder: modelOrder)
+        }
+        .onChange(of: liveSpaces.map(\.id)) { _, modelOrder in
+            workspaceReorder.settle(modelOrder: modelOrder)
+        }
+        .onDisappear {
+            workspaceReorder.clear()
         }
         .onDisappear {
             railReorder.clear()
@@ -238,6 +274,10 @@ struct UnifiedRailView: View {
                 // The grouped bar names every workspace already. A current
                 // workspace control beside those names would say it twice.
                 showsSpaceSwitcher: showsSpaceSwitcher && !groupsByWorkspace,
+                // The dividers stand between runs of tabs. Folded, there are
+                // no runs, and a divider between two names would sit in the
+                // step the drag moves by.
+                showsGroupDividers: !isDraggingWorkspace,
                 contentInset: contentInset,
                 dockMagnification: dockMagnification,
                 spaceHeader: { spaceHeader },
@@ -420,11 +460,13 @@ struct UnifiedRailView: View {
         )
 
         if showsAllWorkspaces && sidebarPresentation == .expanded {
-            ForEach(Array(workspaceGroups.enumerated()), id: \.element.id) { index, group in
+            let groups = workspaceGroups
+            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 workspaceSection(
                     group,
                     dockSizing: dockSizing,
                     dockIndexes: dockIndexes,
+                    siblingIDs: groups.map(\.id),
                     topSpacing: index == 0
                         ? 0
                         : BlattaMetric.Sidebar.workspaceSectionTopSpacing
@@ -468,10 +510,11 @@ struct UnifiedRailView: View {
         _ group: WorkspaceLinkGroup,
         dockSizing: DockSizing,
         dockIndexes: [UUID: Int],
+        siblingIDs: [UUID],
         topSpacing: CGFloat
     ) -> some View {
         let space = group.space
-        let isExpanded = !collapsedWorkspaceIDs.contains(space.id)
+        let isExpanded = !collapsedWorkspaceIDs.contains(space.id) && !isDraggingWorkspace
         let workspaceMuted = space.isMutedEffective
         let showsMutedState = NotificationMutePresentation.showsMutedState(
             scopeMuted: workspaceMuted,
@@ -490,13 +533,32 @@ struct UnifiedRailView: View {
             isMuted: showsMutedState,
             isExpanded: isExpanded
         ) {
+            // The header and the reorder gesture see the same mouse events. A
+            // release that ends a drag must not also fold the section.
+            guard !workspaceReorder.consumesClick(for: space.id) else { return }
             if isExpanded {
                 collapsedWorkspaceIDs.insert(space.id)
             } else {
                 collapsedWorkspaceIDs.remove(space.id)
             }
         }
-        .padding(.top, topSpacing)
+        .padding(.top, isDraggingWorkspace ? 0 : topSpacing)
+        .railReorder(
+            itemID: space.id,
+            siblingIDs: siblingIDs,
+            groupID: Self.workspaceReorderGroupID,
+            axis: .vertical,
+            railSpacing: verticalRailSpacing,
+            fallbackLength: BlattaMetric.Sidebar.headerHeight,
+            railReorder: workspaceReorder,
+            commit: { commit in
+                appState.reorderSpace(
+                    droppedSpaceID: commit.linkID,
+                    relativeTo: commit.targetLinkID,
+                    placement: commit.placement
+                )
+            }
+        )
         .contextMenu {
             workspaceContextMenu(for: space)
         }
@@ -574,8 +636,26 @@ struct UnifiedRailView: View {
                 manualGlobalMute: appState.doNotDisturb
             )
         ) {
+            // A release that ends a drag must not switch workspace.
+            guard !workspaceReorder.consumesClick(for: space.id) else { return }
             selectedSpaceID = space.id
         }
+        .railReorder(
+            itemID: space.id,
+            siblingIDs: orderedSpaces.map(\.id),
+            groupID: Self.workspaceReorderGroupID,
+            axis: .horizontal,
+            railSpacing: ServiceRowView.tabSpacing,
+            fallbackLength: SpaceHeaderView.barHeaderMaximumWidth,
+            railReorder: workspaceReorder,
+            commit: { commit in
+                appState.reorderSpace(
+                    droppedSpaceID: commit.linkID,
+                    relativeTo: commit.targetLinkID,
+                    placement: commit.placement
+                )
+            }
+        )
         .contextMenu {
             workspaceContextMenu(for: space)
         }

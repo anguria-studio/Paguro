@@ -24,14 +24,25 @@ struct WorkspaceRailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var dockMagnification = DockMagnificationState()
+    /// The live order and the drag state of a Dock-style reorder.
+    @State private var railReorder = RailReorderState()
     /// The scroll values that the magnification rise measures itself against.
     @State private var railScroll = RailScrollGeometry()
     @State private var editingSpace: Space?
     @State private var confirmingDeleteSpace: Space?
 
-    private var liveSpaces: [Space] {
+    private var modelSpaces: [Space] {
         spaces.filter { $0.modelContext != nil }
     }
+
+    /// The saved order with the live drag order applied.
+    private var liveSpaces: [Space] {
+        railReorder.ordered(modelSpaces, in: Self.reorderGroupID)
+    }
+
+    /// The workspaces are one set, so their live order has one group to belong
+    /// to. The services have a workspace each.
+    private static let reorderGroupID = UUID()
 
     private var isCollapsed: Bool {
         sidebarPresentation == .collapsed
@@ -39,6 +50,10 @@ struct WorkspaceRailView: View {
 
     var body: some View {
         rail
+            .onChange(of: modelSpaces.map(\.id)) { _, modelOrder in
+                railReorder.settle(modelOrder: modelOrder)
+            }
+            .onDisappear { railReorder.clear() }
             .sheet(item: $editingSpace) { space in
                 SpaceEditorSheet(editingSpace: space, selectedSpaceID: $selectedSpaceID)
             }
@@ -74,11 +89,14 @@ struct WorkspaceRailView: View {
 
             GeometryReader { geometry in
                 ScrollView {
-                    LazyVStack(spacing: isCollapsed ? 0 : 2) {
+                    LazyVStack(spacing: railSpacing) {
                         ForEach(Array(liveSpaces.enumerated()), id: \.element.id) { index, space in
                             cell(for: space, index: index, dockSizing: dockSizing)
                         }
                     }
+                    // The drag measures inside the scrolling stack, so a
+                    // pointer position stays correct while the rail scrolls.
+                    .coordinateSpace(.named(RailCoordinateSpace.name))
                     .frame(maxWidth: .infinity)
                     .padding(.top, dockTopPadding(viewportHeight: geometry.size.height))
                     .padding(.bottom, isCollapsed ? 0 : 8)
@@ -142,6 +160,10 @@ struct WorkspaceRailView: View {
                 appState.showAddSpace = true
             }
         }
+    }
+
+    private var railSpacing: CGFloat {
+        isCollapsed ? 0 : 2
     }
 
     private var surfaceInsets: EdgeInsets {
@@ -212,8 +234,29 @@ struct WorkspaceRailView: View {
                 }
             }
         ) {
+            // The cell button and the reorder gesture see the same mouse
+            // events. A release that ends a drag must not switch workspace.
+            guard !railReorder.consumesClick(for: space.id) else { return }
             selectedSpaceID = space.id
         }
+        .railReorder(
+            itemID: space.id,
+            siblingIDs: liveSpaces.map(\.id),
+            groupID: Self.reorderGroupID,
+            axis: .vertical,
+            railSpacing: railSpacing,
+            fallbackLength: sidebarPresentation.serviceRowHeight,
+            railReorder: railReorder,
+            // A magnified neighbor would change the pitch under the drag.
+            onBegin: { dockMagnification.clearHover() },
+            commit: { commit in
+                appState.reorderSpace(
+                    droppedSpaceID: commit.linkID,
+                    relativeTo: commit.targetLinkID,
+                    placement: commit.placement
+                )
+            }
+        )
         .contextMenu {
             WorkspaceContextMenuItems(
                 space: space,
