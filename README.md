@@ -26,6 +26,23 @@ Do not use it as your only way to access an important account.
 Vale is optional for local work.
 The build service runs Vale for each pull request.
 
+## Open an unsigned build
+
+Blatta has no Developer ID signature yet, so macOS refuses to launch a build
+that arrived from another machine. AirDrop, Slack, Mail, and a browser download
+all attach a quarantine flag, and the app cannot start while it is set.
+
+Drag `Blatta.app` to `/Applications`, eject the disk image, then clear the flag
+from the copy you are going to run:
+
+```sh
+sudo xattr -dr com.apple.quarantine /Applications/Blatta.app
+```
+
+Clearing it on the copy still inside the disk image does nothing, because that
+volume is read only. A file copied from a USB drive never gets the flag, so
+that route skips this step.
+
 ## Build the app
 
 ```sh
