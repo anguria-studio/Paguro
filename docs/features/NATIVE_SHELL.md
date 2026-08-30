@@ -48,19 +48,56 @@ than the selected service fill. A top-bar tab uses a lighter hover fill in dark
 appearance, because the material behind the bar is a lighter ground than the
 rail canvas. The selected fill is the same in both rails.
 
-The Icon Rail settings shape the collapsed sidebar dock. Blatta hides that
-settings section while the layout is the bar along the top.
+The Icon Rail settings shape the collapsed rail on the left, whether it holds
+the services or the workspaces. Blatta hides that settings section while the
+layout is the bar along the top, which has no rail for them to shape.
 
 In the icons-only top bar, a hovered tab shows its name under the bar. The bar
 draws this tooltip, not the tab, so the scrolling tab strip cannot cut it off.
 
-Eight points separate two tabs. A top-bar tab uses a 16 point icon, and 18
-points when it shows no name. Both
-stay under the 18 point sidebar icon, because the bar is 42 points tall.
+The top bar is as tall as the content header of the sidebar layout, so the
+window keeps one top edge in both. Eight points separate two tabs. A top-bar
+tab uses a 16 point icon, and 18 points when it shows no name. Both stay under
+the 18 point sidebar icon, because one bar holds every service of every open
+workspace.
 The workspace control in the bar takes the width of its own name, up to 150
 points. A longer name truncates there rather than push the tabs sideways.
 
-The Workspace view setting controls both rail layouts.
+## Layouts
+
+Four layouts arrange the shell:
+
+- Rail on the left. One rail holds the workspaces and the services.
+- Bar along the top. One bar holds both.
+- Workspaces left, services on top.
+- Services left, workspaces on top.
+
+A rail down the left owns the complete left column, in a two-rail layout as
+much as in the sidebar layout. The bar starts at the rail's trailing edge, so
+collapsing the rail widens the bar with the content under it. The collapse
+control remains the single travelling control at the rail's moving edge.
+
+Beside an expanded rail the bar starts at the rail edge. Beside a collapsed
+rail the bar clears the window controls that the narrower rail leaves
+uncovered.
+
+The workspace rail follows the service rail: the same widths, the same two
+presentations, the same surface, the same reorder-free cells. It holds one
+workspace for each cell and an add control at its foot. The workspace bar holds
+one chip for each workspace, and the chips keep their names.
+
+Every workspace shows its unread total, except the current one. Its services
+are all in the other rail with badges of their own.
+
+The collapsed workspace rail shows a gray folder for a workspace with no emoji,
+because an icon-only cell would otherwise be empty. Every other place keeps a
+workspace with no emoji as its name alone.
+
+The retired `hybrid` layout value maps onto Workspaces left, services on top,
+which is the layout it named.
+
+The Workspace view setting controls the two one-rail layouts. A two-rail layout
+shows every workspace already, so Blatta hides the setting there.
 Current workspace keeps the workspace palette model.
 All workspaces is the default and shows an accordion section for each workspace
 in the expanded sidebar. Sections start expanded. Users can collapse them for
@@ -78,7 +115,8 @@ menu for catalog and custom services. It starts with the workspace that opened
 the dialog. The chosen workspace receives the new service and becomes active.
 The dialog hides this menu when only one workspace exists.
 The workspace editor can leave the emoji empty. Blatta then shows the workspace
-name without a replacement symbol or leading space.
+name without a replacement symbol or leading space. The collapsed workspace
+rail is the one exception, because it has no name to show.
 
 Removing a service from a workspace keeps the service when it is also in
 another workspace. When that workspace was its last one, Blatta saves the
@@ -146,8 +184,8 @@ click on a name opens that workspace. The bar hides the current-workspace
 control while it groups, because each name already says which workspace its
 tabs belong to.
 
-The Show icons only setting appears for the top bar alone, in both workspace
-views. It removes the service names from the tabs. Workspace names stay in
+The Show icons only setting appears where the services are in the bar, in both
+workspace views. It removes the service names from the tabs. Workspace names stay in
 both workspace views. Tooltips and VoiceOver labels keep every service name
 available. A stored icons-only value never reaches the sidebar, because
 `RailBarPresentationPolicy` resolves it against the current layout.

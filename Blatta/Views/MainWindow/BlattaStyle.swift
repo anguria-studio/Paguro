@@ -75,8 +75,7 @@ enum BlattaMetric {
         static let rowRadius: CGFloat = 7
         static let expandedIconSize: CGFloat = 18
         /// The icon of a top-bar tab. It stays under the sidebar size, because
-        /// the bar is 42 points tall and holds every service of every open
-        /// workspace.
+        /// one bar holds every service of every open workspace.
         static let barIconSize: CGFloat = 16
         /// The icon of a top-bar tab that carries no name. It carries the tab
         /// on its own, so it stays a little larger than the labelled one.

@@ -110,7 +110,8 @@ struct UnifiedRailView: View {
     private var groupsByWorkspace: Bool {
         RailBarPresentationPolicy.groupsByWorkspace(
             mode: appState.workspaceViewMode,
-            workspaceCount: liveSpaces.count
+            workspaceCount: liveSpaces.count,
+            hasWorkspaceRail: appState.railLayout.showsBothRails
         )
     }
 
@@ -121,7 +122,7 @@ struct UnifiedRailView: View {
     /// The top bar drops every name and keeps the icons.
     private var showsIconsOnly: Bool {
         RailBarPresentationPolicy.showsIconsOnly(
-            isTopBar: axis == .horizontal,
+            servicesInBar: axis == .horizontal,
             iconsOnlyPreference: appState.railBarIconsOnly
         )
     }
@@ -490,8 +491,12 @@ struct UnifiedRailView: View {
 
     // MARK: - The space header, and the palette it opens
 
+    /// The rail names the current workspace only while it is the one rail. A
+    /// workspace rail beside it already says which workspace is open, and says
+    /// it for every other workspace too.
     private var showsSpaceSwitcher: Bool {
         SpaceSwitcherVisibility.showsSwitcher(spaceCount: liveSpaces.count)
+            && !appState.railLayout.showsBothRails
     }
 
     private var spaceHeader: some View {

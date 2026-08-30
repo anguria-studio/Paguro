@@ -115,7 +115,7 @@ struct ContentView: View {
         // normal title-bar drag.
         .background(
             WindowChromeConfigurator(
-                isMovable: appState.railLayout == .sidebar,
+                isMovable: !appState.railLayout.servicesInBar,
                 glassStyle: appState.liquidGlassStyle,
                 glassIntensity: appState.liquidGlassIntensity
             )
@@ -272,36 +272,16 @@ struct ContentView: View {
 
         switch appState.railLayout {
         case .sidebar:
-            let presentation: SidebarPresentation = sidebarCollapsed ? .collapsed : .expanded
-            HStack(spacing: 0) {
+            sideRailLayout {
+                webContent
+                    .padding(.trailing, BlattaMetric.Sidebar.surfaceInset)
+                    .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
+            } sideRail: {
                 rail(
                     axis: .vertical,
                     spaceSelection: spaceSelection,
                     serviceSelection: serviceSelection,
-                    sidebarPresentation: presentation
-                )
-                .zIndex(1)
-                webContent
-                    .padding(.trailing, BlattaMetric.Sidebar.surfaceInset)
-                    .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
-            }
-            .overlay(alignment: .topLeading) {
-                // Keep one button alive for both sidebar states. The stock
-                // NavigationSplitView toggle uses the same ownership model, so
-                // its control follows the moving column edge instead of being
-                // removed from one header and inserted into another.
-                SidebarToggleButton(
-                    isCollapsed: sidebarCollapsed,
-                    showsCollapsedChrome: collapsedToggleChromeVisible,
-                    action: toggleSidebar
-                )
-                .position(
-                    x: presentation.toggleCenterX,
-                    y: BlattaMetric.Toolbar.height / 2
-                )
-                .animation(
-                    reduceMotion ? nil : .smooth(duration: BlattaMotion.sidebarTransitionSeconds),
-                    value: presentation
+                    sidebarPresentation: sidebarCollapsed ? .collapsed : .expanded
                 )
             }
         case .topBars:
@@ -313,7 +293,104 @@ struct ContentView: View {
                     .padding(.horizontal, BlattaMetric.Sidebar.surfaceInset)
                     .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
             }
+
+        case .workspacesLeft:
+            sideRailLayout {
+                VStack(spacing: 0) {
+                    rail(
+                        axis: .horizontal,
+                        spaceSelection: spaceSelection,
+                        serviceSelection: serviceSelection,
+                        contentInset: barLeadingInset
+                    )
+                    // A tab tooltip hangs below the bar, over the web content.
+                    .zIndex(1)
+
+                    webContent
+                        .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
+                }
+                .padding(.trailing, BlattaMetric.Sidebar.surfaceInset)
+            } sideRail: {
+                WorkspaceRailView(
+                    selectedSpaceID: spaceSelection,
+                    sidebarPresentation: sidebarCollapsed ? .collapsed : .expanded
+                )
+            }
+
+        case .servicesLeft:
+            sideRailLayout {
+                VStack(spacing: 0) {
+                    WorkspaceBarView(
+                        selectedSpaceID: spaceSelection,
+                        contentInset: barLeadingInset
+                    )
+
+                    webContent
+                        .padding(.bottom, BlattaMetric.Sidebar.surfaceInset)
+                }
+                .padding(.trailing, BlattaMetric.Sidebar.surfaceInset)
+            } sideRail: {
+                rail(
+                    axis: .vertical,
+                    spaceSelection: spaceSelection,
+                    serviceSelection: serviceSelection,
+                    sidebarPresentation: sidebarCollapsed ? .collapsed : .expanded
+                )
+            }
         }
+    }
+
+    /// The frame of every layout with a rail down the left.
+    ///
+    /// The rail owns the complete left column, and the content beside it starts
+    /// at the rail's trailing edge. A bar in that content therefore moves with
+    /// the rail, which is the whole point of being able to collapse it.
+    @ViewBuilder
+    private func sideRailLayout<Content: View, SideRail: View>(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder sideRail: () -> SideRail
+    ) -> some View {
+        let presentation: SidebarPresentation = sidebarCollapsed ? .collapsed : .expanded
+
+        HStack(spacing: 0) {
+            sideRail()
+                .zIndex(1)
+            content()
+        }
+        .overlay(alignment: .topLeading) {
+            // Keep one button alive for both sidebar states. The stock
+            // NavigationSplitView toggle uses the same ownership model, so
+            // its control follows the moving column edge instead of being
+            // removed from one header and inserted into another.
+            SidebarToggleButton(
+                isCollapsed: sidebarCollapsed,
+                showsCollapsedChrome: collapsedToggleChromeVisible,
+                action: toggleSidebar
+            )
+            .position(
+                x: presentation.toggleCenterX,
+                y: BlattaMetric.Toolbar.height / 2
+            )
+            .animation(
+                reduceMotion ? nil : .smooth(duration: BlattaMotion.sidebarTransitionSeconds),
+                value: presentation
+            )
+        }
+    }
+
+    /// What a bar beside the rail leaves clear at its leading end.
+    ///
+    /// The expanded rail is wider than the traffic lights and holds the collapse
+    /// control itself, so its bar starts at its own edge. The collapsed rail is
+    /// narrower than the lights, so the bar clears what the rail does not, the
+    /// way the content header does in the one-rail layout.
+    private var barLeadingInset: CGFloat {
+        guard sidebarCollapsed else { return 0 }
+        return BlattaMetric.Toolbar.collapsedLeadingInset(
+            sidebarWidth: BlattaMetric.Sidebar.collapsedWidth(
+                iconSize: appState.iconRailBaseSize
+            )
+        ) + BlattaMetric.Toolbar.sidebarToggleSize
     }
 
     private func rail(

@@ -97,7 +97,7 @@ final class PreferencesStoreTests: XCTestCase {
         XCTAssertTrue(store.appLockEnabled)
         XCTAssertFalse(store.lockOnLaunch)
         XCTAssertFalse(store.lockOnSleep)
-        XCTAssertEqual(store.railLayout, .topBars)
+        XCTAssertEqual(store.railLayout, .workspacesLeft)
         XCTAssertEqual(store.appearanceMode, .light)
         XCTAssertFalse(store.contentBlockingEnabled)
         XCTAssertTrue(store.annoyanceBlockingEnabled)

@@ -231,19 +231,30 @@ struct WorkspaceSectionHeaderView: View {
     }
 }
 
-/// One workspace name in the top bar that shows every workspace.
+/// One workspace in a top bar, and the click target that opens it.
 ///
-/// The label marks where a workspace's tabs start, and a click makes that
-/// workspace current. It keeps its name even while the tabs show icons alone:
-/// the name is what tells the runs of tabs apart.
+/// Two bars draw it. In the grouped service bar it is a label that marks where
+/// a workspace's tabs start, and it keeps its name even while those tabs show
+/// icons alone: the name is what tells the runs of tabs apart. In the workspace
+/// bar it is a chip of its own, so there it also carries a selected fill and
+/// the workspace's unread total.
 struct BarWorkspaceLabelView: View {
     let workspaceName: String
     let emoji: String
     let isCurrent: Bool
     let isMuted: Bool
+    var badgeCount: Int = 0
+    /// True where the chip is the thing you pick, rather than a label above the
+    /// things you pick.
+    var showsSelection: Bool = false
+    var glassIntensity = GlassIntensityScale.defaultValue
     let action: () -> Void
 
     @State private var isHovering = false
+
+    private var isSelected: Bool {
+        showsSelection && isCurrent
+    }
 
     var body: some View {
         Button(action: action) {
@@ -256,12 +267,8 @@ struct BarWorkspaceLabelView: View {
                 }
 
                 Text(workspaceName)
-                    .font(.blattaSidebarSection)
-                    .foregroundStyle(
-                        isCurrent
-                            ? BlattaColor.Text.secondary
-                            : BlattaColor.Text.tertiary
-                    )
+                    .font(isSelected ? .blattaSidebarLabelSelected : .blattaSidebarSection)
+                    .foregroundStyle(nameColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -271,12 +278,34 @@ struct BarWorkspaceLabelView: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
+
+                if badgeCount > 0 {
+                    BadgeCountView(count: badgeCount)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: ServiceRowView.tabHeight)
             .background {
-                RoundedRectangle(cornerRadius: BlattaMetric.Sidebar.rowRadius)
-                    .fill(isHovering ? BlattaColor.Fill.rowHover : Color.clear)
+                let mark = RowMark(
+                    isSelected: isSelected,
+                    isFocused: false,
+                    isHovering: isHovering
+                )
+                let adaptiveProgress = mark.fill == .selected
+                    ? GlassIntensityScale.adaptiveSelectionProgress(glassIntensity)
+                    : 0
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: BlattaMetric.Sidebar.rowRadius)
+                        .fill(fillStyle(for: mark))
+                        .opacity(1 - adaptiveProgress)
+
+                    if mark.fill == .selected {
+                        RoundedRectangle(cornerRadius: BlattaMetric.Sidebar.rowRadius)
+                            .fill(BlattaColor.Fill.sidebarAdaptiveSelection)
+                            .opacity(adaptiveProgress)
+                    }
+                }
             }
             .contentShape(Rectangle())
             .fixedSize(horizontal: true, vertical: false)
@@ -287,10 +316,26 @@ struct BarWorkspaceLabelView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(SpaceHeader.label(
             spaceName: workspaceName,
-            badgeCount: 0,
+            badgeCount: badgeCount,
             isMuted: isMuted
         ))
         .accessibilityHint("Open this workspace")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits([.isButton, isSelected ? .isSelected : []])
+    }
+
+    private var nameColor: Color {
+        guard isSelected else {
+            return isCurrent ? BlattaColor.Text.secondary : BlattaColor.Text.tertiary
+        }
+        return SidebarSelectionContrastPolicy.usesHighContrastText(
+            shellTransparency: glassIntensity
+        )
+            ? BlattaColor.Text.selectedOnGlass
+            : BlattaColor.Fill.sidebarSelectedTint
+    }
+
+    private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
+        guard mark.fill == .hover else { return mark.fillStyle }
+        return AnyShapeStyle(BlattaColor.Fill.barTabHover)
     }
 }

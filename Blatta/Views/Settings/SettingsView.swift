@@ -143,19 +143,25 @@ struct GeneralSettingsView: View {
                     }
                 }
 
-                Picker("Workspace view", selection: Binding(
-                    get: { appState.workspaceViewMode },
-                    set: { appState.setWorkspaceViewMode($0) }
-                )) {
-                    Text("Current workspace").tag(WorkspaceViewMode.current)
-                    Text("All workspaces").tag(WorkspaceViewMode.all)
+                // The two-rail layouts show every workspace in a rail of their
+                // own, which leaves this setting nothing to choose.
+                if RailBarPresentationPolicy.offersWorkspaceView(
+                    hasWorkspaceRail: appState.railLayout.showsBothRails
+                ) {
+                    Picker("Workspace view", selection: Binding(
+                        get: { appState.workspaceViewMode },
+                        set: { appState.setWorkspaceViewMode($0) }
+                    )) {
+                        Text("Current workspace").tag(WorkspaceViewMode.current)
+                        Text("All workspaces").tag(WorkspaceViewMode.all)
+                    }
+                    .help("Shows one workspace, or every workspace with its services grouped under its name.")
                 }
-                .help("Shows one workspace, or every workspace with its services grouped under its name. It applies to both layouts.")
 
-                // A sidebar row is full width, so its name costs no space.
-                // Icons-only is offered for the top bar alone.
+                // A rail row is full width, so its name costs no space.
+                // Icons-only is offered where the services are in the bar.
                 if RailBarPresentationPolicy.offersIconsOnly(
-                    isTopBar: appState.railLayout == .topBars
+                    servicesInBar: appState.railLayout.servicesInBar
                 ) {
                     Toggle("Show icons only", isOn: Binding(
                         get: { appState.railBarIconsOnly },
@@ -165,9 +171,10 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            // Every one of these settings shapes the collapsed sidebar dock,
-            // which the top-bar layout does not have.
-            if appState.railLayout == .sidebar {
+            // Every one of these settings shapes the collapsed rail on the
+            // left, whether it holds the services or the workspaces. The
+            // top-bar layout has no rail for them to shape.
+            if appState.railLayout.hasSideRail {
                 Section("Icon Rail") {
                     LabeledContent("Size") {
                         Slider(

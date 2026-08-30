@@ -17,28 +17,16 @@ extension UnifiedRailView {
 
     @ViewBuilder
     func workspaceContextMenu(for space: Space) -> some View {
-        Toggle("Mute Workspace", isOn: Binding(
-            get: { space.isMutedEffective },
-            set: { appState.setWorkspaceMuted($0, for: space.id) }
-        ))
-
-        Divider()
-
-        Button("Add Service…") {
-            selectedSpaceID = space.id
-            appState.showAddService = true
-        }
-
-        Button("Edit Workspace…") {
-            editingSpace = space
-        }
-
-        if liveSpaces.count > 1 {
-            Divider()
-            Button("Delete Workspace", role: .destructive) {
-                confirmingDeleteSpace = space
-            }
-        }
+        WorkspaceContextMenuItems(
+            space: space,
+            allowsDelete: liveSpaces.count > 1,
+            onAddService: {
+                selectedSpaceID = space.id
+                appState.showAddService = true
+            },
+            onEdit: { editingSpace = space },
+            onDelete: { confirmingDeleteSpace = space }
+        )
     }
 
     @ViewBuilder

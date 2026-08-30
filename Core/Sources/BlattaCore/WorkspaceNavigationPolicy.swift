@@ -27,34 +27,56 @@ public enum WorkspaceNavigationPolicy {
     }
 }
 
-/// Rules for the rail that groups its services by workspace.
+/// Rules for the rail that carries the services.
 ///
-/// Both rail axes can show every workspace. The vertical rail draws one
-/// disclosure section for each workspace; the top bar draws a workspace name
-/// followed by that workspace's tabs. Icons-only drops the service names alone,
-/// and it belongs to the top bar, so a stored `true` must never reach the
-/// vertical rail.
+/// A layout gives the services one rail and, in the two-rail layouts, gives the
+/// workspaces another. The service rail groups its own cells under workspace
+/// names only while it is the single rail: with a workspace rail beside it,
+/// every workspace is already on screen and the service rail carries the
+/// current workspace alone.
 public enum RailBarPresentationPolicy {
-    /// The rail groups its services under workspace names.
+    /// The service rail groups its cells under workspace names.
     ///
     /// One workspace needs no name above its own services, so the rail keeps
-    /// its plain form until a second workspace exists.
+    /// its plain form until a second workspace exists. A separate workspace
+    /// rail replaces the grouping altogether.
     public static func groupsByWorkspace(
         mode: WorkspaceViewMode,
-        workspaceCount: Int
+        workspaceCount: Int,
+        hasWorkspaceRail: Bool
     ) -> Bool {
-        mode == .all && workspaceCount > 1
+        !hasWorkspaceRail && mode == .all && workspaceCount > 1
     }
 
-    /// The icons-only option is offered for the top bar alone. A sidebar row is
-    /// a full-width row whose name costs no space, so it keeps its name in both
-    /// workspace views.
-    public static func offersIconsOnly(isTopBar: Bool) -> Bool {
-        isTopBar
+    /// The workspace-view setting is offered while one rail carries both
+    /// workspaces and services. With a workspace rail on screen there is
+    /// nothing left for it to choose.
+    public static func offersWorkspaceView(hasWorkspaceRail: Bool) -> Bool {
+        !hasWorkspaceRail
     }
 
-    /// The rail drops its service names and workspace names.
-    public static func showsIconsOnly(isTopBar: Bool, iconsOnlyPreference: Bool) -> Bool {
-        iconsOnlyPreference && offersIconsOnly(isTopBar: isTopBar)
+    /// The icons-only option is offered while the services are in the bar. A
+    /// rail row is a full-width row whose name costs no space, so a service
+    /// rail on the left keeps its names.
+    public static func offersIconsOnly(servicesInBar: Bool) -> Bool {
+        servicesInBar
+    }
+
+    /// The bar drops its service names.
+    public static func showsIconsOnly(servicesInBar: Bool, iconsOnlyPreference: Bool) -> Bool {
+        iconsOnlyPreference && offersIconsOnly(servicesInBar: servicesInBar)
+    }
+
+    /// A workspace cell falls back to a default icon.
+    ///
+    /// Only the collapsed workspace rail needs one: it shows icons alone, and a
+    /// workspace without an emoji would be an empty tile. Everywhere else a
+    /// workspace with no emoji keeps showing its name and nothing else, which
+    /// is a choice people make on purpose.
+    public static func showsWorkspaceFallbackIcon(
+        emoji: String,
+        isIconOnlyWorkspaceRail: Bool
+    ) -> Bool {
+        isIconOnlyWorkspaceRail && WorkspaceEmoji.displayValue(emoji) == nil
     }
 }

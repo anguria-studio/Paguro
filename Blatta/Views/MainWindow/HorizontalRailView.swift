@@ -16,6 +16,28 @@ struct RailBarGroup: Identifiable {
     var id: UUID { space?.id ?? Self.currentWorkspaceID }
 }
 
+/// The band a top rail draws itself in.
+///
+/// Both top rails take it: the service bar and the workspace bar. It is as tall
+/// as the content header of the sidebar layout, so the window keeps one top
+/// edge whichever layout draws it. Window dragging is off in these layouts so a
+/// cell drag can reorder, and the handle gives it back from every empty part of
+/// the band.
+struct RailBarSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(height: BlattaMetric.Toolbar.height)
+            .background(WindowDragHandle())
+            .blattaMaterialBackground(.regularMaterial)
+    }
+}
+
+extension View {
+    func railBarSurface() -> some View {
+        modifier(RailBarSurface())
+    }
+}
+
 /// Renders the top-bar rail while its parent owns queries and modal state.
 struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: View>: View {
     let groups: [RailBarGroup]
@@ -67,18 +89,16 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
 
     var body: some View {
         HStack(spacing: 8) {
+            // 72 points of traffic light, then 8, puts what follows at x 80.
+            // Beside a rail, it clears what the rail does not cover instead.
+            Color.clear
+                .frame(width: contentInset)
+                .accessibilityHidden(true)
+
             if showsSpaceSwitcher {
                 spaceHeaderContent()
-                    // 72 points of traffic light, then 8, puts the header at x 80.
-                    .padding(.leading, 8 + contentInset)
 
                 Divider().frame(width: 1, height: 20)
-            } else {
-                // The workspace control is gone, but service tabs must still
-                // start after the traffic lights.
-                Color.clear
-                    .frame(width: contentInset)
-                    .accessibilityHidden(true)
             }
 
             tabStrip
@@ -91,11 +111,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
             WebContentActions(webViewState: appState.webViewState)
                 .padding(.trailing, 10)
         }
-        .frame(height: 42)
-        // Window dragging is disabled for this layout so tab drags can reorder.
-        // This handle restores dragging from every empty part of the bar.
-        .background(WindowDragHandle())
-        .blattaMaterialBackground(.regularMaterial)
+        .railBarSurface()
         .overlayPreferenceValue(RailTabTooltipKey.self) { tooltip in
             tabTooltip(tooltip)
         }
@@ -117,6 +133,9 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
                 // point moves: `position` fills the container it is given, so
                 // an overlay added after it would align to the whole bar
                 // instead of to the point.
+                //
+                // The point sits below the bar rather than below the tab, so
+                // the gap under the bar stays the same whatever the bar holds.
                 Color.clear
                     .frame(width: 1, height: 1)
                     .overlay(alignment: .top) {
@@ -126,8 +145,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
                             glassIntensity: appState.liquidGlassIntensity
                         )
                     }
-                    // Clear of the lower edge of the bar, not on it.
-                    .position(x: frame.midX, y: frame.maxY + 11)
+                    .position(x: frame.midX, y: proxy.size.height + 6)
             }
         }
         .allowsHitTesting(false)

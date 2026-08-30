@@ -13,40 +13,66 @@ enum AppPresenceMode: String, Codable {
     var showsMenuBarItem: Bool { self != .dock }
 }
 
-/// Where the rail sits relative to the web content.
+/// Where the workspaces and the services sit around the web content.
 ///
-/// The single rail has two possible arrangements. `hybrid` is retired and its
-/// users are mapped onto
-/// `topBars` — see `resolving(_:)`, which is the only correct way to read a
-/// stored value.
+/// Two layouts give one rail both: down the left, or along the top. Two give
+/// each its own: the workspaces down the left with the services along the top,
+/// or the reverse. `hybrid` is retired and its users are mapped onto
+/// `workspacesLeft`, the layout it named — see `resolving(_:)`, which is the
+/// only correct way to read a stored value.
 enum RailLayout: String, Codable, CaseIterable {
-    /// The rail down the left (the default).
+    /// One rail down the left (the default).
     case sidebar
-    /// The rail along the top, as a bar of tabs.
+    /// One rail along the top, as a bar of tabs.
     case topBars
+    /// The workspaces down the left, the services along the top.
+    case workspacesLeft
+    /// The services down the left, the workspaces along the top.
+    case servicesLeft
 
     var displayName: String {
         switch self {
         case .sidebar: return "Rail on the left"
         case .topBars: return "Bar along the top"
+        case .workspacesLeft: return "Workspaces left, services on top"
+        case .servicesLeft: return "Services left, workspaces on top"
         }
     }
 
-    /// The raw value of the retired third case. Anyone still storing it chose a
-    /// layout with the services in a bar along the top, so that is where they
-    /// land.
+    /// The layout gives the workspaces a rail of their own.
+    var showsBothRails: Bool {
+        switch self {
+        case .sidebar, .topBars: return false
+        case .workspacesLeft, .servicesLeft: return true
+        }
+    }
+
+    /// The services live in the bar along the top.
+    var servicesInBar: Bool {
+        switch self {
+        case .topBars, .workspacesLeft: return true
+        case .sidebar, .servicesLeft: return false
+        }
+    }
+
+    /// The layout has a rail down the left, which can collapse to icons.
+    var hasSideRail: Bool {
+        self != .topBars
+    }
+
+    /// The raw value of the retired case. It named the layout with the
+    /// workspaces on the left and the services on top, which is back.
     static let retiredHybridRawValue = "hybrid"
 
     /// Reads a stored raw value, mapping the retired `hybrid` forward.
     ///
     /// The forward-map has to be explicit. A plain
     /// `RailLayout(rawValue:) ?? .sidebar` would send every `hybrid` user to
-    /// the sidebar, which is the layout furthest from the one they picked —
-    /// they chose tabs along the top and would get a rail down the left.
+    /// the sidebar, which is the layout furthest from the one they picked.
     static func resolving(_ raw: String?) -> RailLayout {
         guard let raw else { return .sidebar }
         if let known = RailLayout(rawValue: raw) { return known }
-        if raw == retiredHybridRawValue { return .topBars }
+        if raw == retiredHybridRawValue { return .workspacesLeft }
         return .sidebar
     }
 }

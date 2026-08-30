@@ -930,23 +930,49 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertEqual(AppPreferences(railLayoutRaw: nil).railLayout, .sidebar)
         XCTAssertEqual(AppPreferences(railLayoutRaw: "sidebar").railLayout, .sidebar)
         XCTAssertEqual(AppPreferences(railLayoutRaw: "topBars").railLayout, .topBars)
+        XCTAssertEqual(
+            AppPreferences(railLayoutRaw: "workspacesLeft").railLayout,
+            .workspacesLeft
+        )
+        XCTAssertEqual(
+            AppPreferences(railLayoutRaw: "servicesLeft").railLayout,
+            .servicesLeft
+        )
         XCTAssertEqual(AppPreferences(railLayoutRaw: "garbage").railLayout, .sidebar)
     }
 
-    /// The retired third case maps forward, and it must not take the `.sidebar`
-    /// fallback. A `hybrid` user picked their services as tabs along the top; the
-    /// fallback would hand them a rail down the left, which is the layout
-    /// furthest from what they chose.
-    func testRetiredHybridLayoutMapsForwardToTheBarRatherThanTheFallback() {
-        XCTAssertEqual(AppPreferences(railLayoutRaw: "hybrid").railLayout, .topBars)
-        XCTAssertEqual(RailLayout.resolving("hybrid"), .topBars)
+    /// The retired case named the layout that is back, so it maps onto that one
+    /// rather than the bar it was parked on while the layout did not exist. It
+    /// must not take the `.sidebar` fallback either.
+    func testRetiredHybridLayoutMapsForwardToTheLayoutItNamed() {
+        XCTAssertEqual(AppPreferences(railLayoutRaw: "hybrid").railLayout, .workspacesLeft)
+        XCTAssertEqual(RailLayout.resolving("hybrid"), .workspacesLeft)
         XCTAssertNotEqual(RailLayout.resolving("hybrid"), .sidebar)
     }
 
-    /// The enum is down to two cases, so the Settings picker offers two. If a
-    /// third ever comes back it needs its own forward-map story.
-    func testRailLayoutHasExactlyTheTwoSurvivingCases() {
-        XCTAssertEqual(RailLayout.allCases.map(\.rawValue), ["sidebar", "topBars"])
+    /// The Settings picker offers one row for each case, in this order.
+    func testRailLayoutHasFourCases() {
+        XCTAssertEqual(
+            RailLayout.allCases.map(\.rawValue),
+            ["sidebar", "topBars", "workspacesLeft", "servicesLeft"]
+        )
         XCTAssertNil(RailLayout(rawValue: RailLayout.retiredHybridRawValue))
+    }
+
+    /// Each layout answers what it holds where. The rails and the Settings
+    /// sections both read these instead of matching cases of their own.
+    func testRailLayoutDescribesWhereItsRailsAre() {
+        XCTAssertEqual(
+            RailLayout.allCases.filter(\.showsBothRails),
+            [.workspacesLeft, .servicesLeft]
+        )
+        XCTAssertEqual(
+            RailLayout.allCases.filter(\.servicesInBar),
+            [.topBars, .workspacesLeft]
+        )
+        XCTAssertEqual(
+            RailLayout.allCases.filter(\.hasSideRail),
+            [.sidebar, .workspacesLeft, .servicesLeft]
+        )
     }
 }
