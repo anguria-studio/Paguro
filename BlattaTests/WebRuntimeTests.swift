@@ -876,7 +876,6 @@ final class WebRuntimeTests: XCTestCase {
             id: "badge-test",
             name: "Badge Test",
             url: "https://example.com",
-            icon: "bell",
             category: "test",
             badgeJS: js,
             userAgent: nil,
