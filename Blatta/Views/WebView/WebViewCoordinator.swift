@@ -176,8 +176,11 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         return .allow
     }
 
-    // Exposed by name for the same reason as the alert panel below.
-    @objc(webView:didReceiveAuthenticationChallenge:completionHandler:)
+    // This one cannot take an explicit selector. Under the SDK that does not
+    // isolate the handler, `webView:didReceiveAuthenticationChallenge:completionHandler:`
+    // belongs to the async requirement `webView(_:respondTo:)`, so naming it
+    // here is a conflict rather than a fix. It stays on inference, and
+    // docs/ERRORS.md records that it is unexposed under that SDK.
     func webView(
         _ webView: WKWebView,
         didReceive challenge: URLAuthenticationChallenge,
