@@ -2,10 +2,28 @@ name: Code quality
 
 on:
   pull_request:
+    # A commit that only touches prose cannot break a build, and every macOS
+    # minute bills at ten times the rate.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".vale/**"
+      - ".vale.ini"
   push:
     branches:
       - main
       - blatta/main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".vale/**"
+      - ".vale.ini"
+
+# One run per branch. Pushing again cancels the run it replaced rather than
+# paying for both, which matters most while chasing a failure.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
