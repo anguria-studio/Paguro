@@ -13,12 +13,36 @@ final class AppModel {
     let notificationRouteSettings: NotificationRouteSettings
 
     private var shutdownState = ApplicationShutdownState()
+    @ObservationIgnored private let defaults: UserDefaults
+
+    /// Whether the first-run welcome has already run for this user.
+    private(set) var hasSeenWelcome: Bool
+
+    /// What to ask a new user, or nil when there is nothing worth asking.
+    ///
+    /// Both offers are things that were otherwise only reachable by finding
+    /// System Settings or the Settings window, which a new user has no reason
+    /// to look in yet.
+    var firstRunWelcome: FirstRunWelcome? {
+        FirstRunPolicy.welcome(
+            hasSeenWelcome: hasSeenWelcome,
+            authorization: appState.notificationManager.authorizationState,
+            islandIsAvailable: islandPanelController.canPresentIsland
+        )
+    }
+
+    /// Records that the welcome ran, so it never runs twice.
+    func markWelcomeSeen() {
+        hasSeenWelcome = true
+        defaults.set(true, forKey: DefaultsKey.hasSeenWelcome)
+    }
 
     init(
         appState: AppState? = nil,
         presenceController: AppPresenceController = AppPresenceController(),
         screenGeometryProvider: (any ScreenGeometryProvider)? = nil,
-        notificationRouteSettings: NotificationRouteSettings? = nil
+        notificationRouteSettings: NotificationRouteSettings? = nil,
+        defaults: UserDefaults = .standard
     ) {
         let resolvedScreenGeometryProvider = screenGeometryProvider
             ?? IslandScreenGeometryConfiguration.makeProvider()
@@ -31,6 +55,8 @@ final class AppModel {
         )
         let resolvedNotificationRouteSettings = notificationRouteSettings
             ?? NotificationRouteSettings()
+        self.defaults = defaults
+        self.hasSeenWelcome = defaults.bool(forKey: DefaultsKey.hasSeenWelcome)
         self.screenGeometryProvider = resolvedScreenGeometryProvider
         self.islandPanelController = islandPanelController
         self.notificationRouteSettings = resolvedNotificationRouteSettings

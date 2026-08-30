@@ -4,8 +4,11 @@ import BlattaCore
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var collapsedToggleChromeVisible = false
+    /// The first-run welcome, once there is something to ask.
+    @State private var pendingWelcome: FirstRunWelcome?
     @State private var collapsedChromeRevealTask: Task<Void, Never>?
 
     private var sidebarCollapsed: Bool { appState.sidebarCollapsed }
@@ -201,6 +204,33 @@ struct ContentView: View {
                 }
                 .padding(40)
                 .frame(minWidth: 320)
+            }
+        }
+        // The welcome waits for the launch read of the notification
+        // permission. Deciding at first render would see `unknown` and offer
+        // nothing, because Blatta cannot yet tell a refusal from a fresh install.
+        .onChange(
+            of: appState.notificationManager.authorizationState,
+            initial: true
+        ) { _, state in
+            guard state != .unknown,
+                  pendingWelcome == nil,
+                  !appModel.hasSeenWelcome else { return }
+            pendingWelcome = appModel.firstRunWelcome
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { pendingWelcome != nil },
+                set: { if !$0 { pendingWelcome = nil } }
+            )
+        ) {
+            if let welcome = pendingWelcome {
+                WelcomeSheet(welcome: welcome) {
+                    appModel.markWelcomeSeen()
+                    pendingWelcome = nil
+                }
+                .environment(appState)
+                .environment(appModel)
             }
         }
         .sheet(isPresented: $state.showAddSpace) {

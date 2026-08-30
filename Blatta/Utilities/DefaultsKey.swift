@@ -14,6 +14,7 @@ enum DefaultsKey {
     static let retiredBackdropFrostIntensity = "Blatta.backdropFrostIntensity"
     static let systemNotificationRouteEnabled = "Blatta.systemNotificationRouteEnabled"
     static let islandNotificationRouteEnabled = "Blatta.islandNotificationRouteEnabled"
+    static let hasSeenWelcome = "Blatta.hasSeenWelcome"
 
     static let recentEmojis = "recentEmojis"
     static let sidebarCollapsed = "Blatta.sidebarCollapsed"
