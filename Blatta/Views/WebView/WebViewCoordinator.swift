@@ -176,6 +176,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         return .allow
     }
 
+    // Exposed by name for the same reason as the alert panel below.
+    @objc(webView:didReceiveAuthenticationChallenge:completionHandler:)
     func webView(
         _ webView: WKWebView,
         didReceive challenge: URLAuthenticationChallenge,
@@ -439,6 +441,16 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// and Swift silently declines to treat this as the protocol witness — the
     /// method never reaches the Obj-C runtime, WebKit never calls it, and the
     /// page hangs. Same trap as `runOpenPanelWith` above.
+    // The selector is named explicitly because Swift only marks a method
+    // @objc when it decides the method witnesses the optional requirement, and
+    // that decision depends on the SDK. `WKFoundation.h` defines
+    // `WK_SWIFT_UI_ACTOR` as `NS_SWIFT_UI_ACTOR` only where Foundation defines
+    // that macro, and as nothing otherwise, so the handler is `@MainActor` in
+    // one SDK and unisolated in another. Under the SDK that does not isolate
+    // it, this declaration merely "nearly matches", Swift declines to expose
+    // it, and WebKit never calls it. Naming the selector exposes the method on
+    // every SDK and takes that inference out of the picture.
+    @objc(webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:)
     func webView(
         _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
