@@ -996,12 +996,7 @@ final class AppState {
         let alsoKeepLive = crossSpaceCriticalServices(excluding: Set(services.map(\.id)))
 
         launchPreloadTask?.cancel()
-        // Explicitly main-actor, because everything this touches already is:
-        // AppState, WebViewPool, and the ServiceInstance models, which are
-        // SwiftData objects and not Sendable. Without the annotation the
-        // Xcode 26.3 compiler reads the hop into preloadAll as sending those
-        // models across isolation and rejects it.
-        launchPreloadTask = Task { @MainActor [weak self] in
+        launchPreloadTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 if let selected {
@@ -1011,7 +1006,13 @@ final class AppState {
             await webViewPool.preloadAll(ordered)
             guard !Task.isCancelled else { return }
             if !alsoKeepLive.isEmpty {
-                AppLogger.webView.info("Preloading \(alsoKeepLive.count) chat service(s) outside the active space so they can post notifications")
+                // Read the count before the logger does. `Logger` builds its
+                // message through a Sendable autoclosure, so interpolating
+                // `alsoKeepLive.count` directly captures the array itself and
+                // defers the read, which sends a non-Sendable SwiftData model
+                // out of this isolation. An Int carries no such problem.
+                let keepLiveCount = alsoKeepLive.count
+                AppLogger.webView.info("Preloading \(keepLiveCount) chat service(s) outside the active space so they can post notifications")
                 await webViewPool.preloadAll(alsoKeepLive)
             }
         }
