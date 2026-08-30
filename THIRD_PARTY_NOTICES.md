@@ -18,7 +18,7 @@ Git keeps the upstream commit history.
 
 Blatta bundles two converted rule files under `Blatta/Resources`.
 Each file keeps the license of the list it came from.
-Neither file is covered by the Blatta MIT license.
+The Blatta MIT license does not cover either file.
 
 Blatta reads these files as data at runtime.
 It does not link them into the application.
