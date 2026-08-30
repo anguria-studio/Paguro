@@ -79,14 +79,18 @@ struct WorkspaceCellView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(
-            maxWidth: isDockItem ? .infinity : nil,
-            maxHeight: isDockItem ? dockRowHeight : nil
-        )
-        // Declared before the move, so the target travels with the icon. See
-        // `ServiceRowView`.
+        // The row keeps its exact resting height: the pointer is converted to
+        // a position in the stack through that height, so a row of any other
+        // height puts every icon somewhere the pointer does not agree with.
+        .frame(height: isDockItem ? dockRowHeight : nil)
+        // The Dock tile stays square while its target fills the rail, so the
+        // sides of the rail belong to the icon in them rather than to nothing.
+        .frame(maxWidth: isDockItem ? .infinity : nil)
         .contentShape(Rectangle())
-        .offset(y: isDockItem ? dockTransform.verticalOffset : 0)
+        // See `ServiceRowView`: the move is drawn, not laid out.
+        .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
+            content.offset(y: offset)
+        }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: presentsHover)
         .onHover { hovering in
             isHovering = hovering

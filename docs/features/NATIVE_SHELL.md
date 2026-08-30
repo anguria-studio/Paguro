@@ -175,9 +175,15 @@ the effect as a scale and a move. A mouse move then measures no layout at all.
 A magnified icon reaches past the rail. The cell under the pointer then holds
 the effect open, and the position holds still until the pointer leaves the cell
 as well.
-The vertical rise that keeps the point under the pointer in place stops at the
-room the rail has above its stack. A top-aligned rail at rest has none, so its first icon
-grows downward from a fixed top edge rather than up into the clip.
+
+A cell moves in the drawing alone. Its click and hover target stays where the
+cell rests, which is where the pointer is measured. Every point in the rail
+then belongs to the row drawn under it.
+The rise that keeps the point under the pointer in place stops at the room the
+rail has above its stack. A top-aligned rail at rest has none, so its first icon
+grows downward from a fixed top edge rather than up into the clip. The drawing
+then parts from the resting stack, where the cells are clicked, and part of the
+rail answers to no cell.
 A collapsed tooltip follows the visible icon edge and stands one gap after it.
 The edge of the drawn rail surface is its floor, not the rail frame. A small
 icon then keeps the tooltip beside the rail rather than an inset away from it.

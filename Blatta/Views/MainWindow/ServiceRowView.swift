@@ -133,19 +133,25 @@ struct ServiceRowView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The row keeps its exact resting height: the pointer is converted to
+        // a position in the stack through that height, so a row of any other
+        // height puts every icon somewhere the pointer does not agree with.
+        .frame(height: isDockItem ? dockRowHeight : nil)
         // The Dock tile stays square while its target fills the rail, so the
         // sides of the rail belong to the icon in them rather than to nothing.
-        .frame(
-            maxWidth: isDockItem ? .infinity : nil,
-            maxHeight: isDockItem ? dockRowHeight : nil
-        )
+        .frame(maxWidth: isDockItem ? .infinity : nil)
         // Declared before the move below. A shape declared after it is placed
         // against the frame the cell lays out in, which the move does not
         // change: the icon would travel and its target would stay behind.
         .contentShape(Rectangle())
-        // Moves the complete cell, so the fill, the target and the tooltip all
-        // travel with the icon.
-        .offset(y: isDockItem ? dockTransform.verticalOffset : 0)
+        // The move is drawn and nothing else. `offset` would move the target
+        // with it, and rows moved by different amounts leave a band between
+        // them that belongs to no row, where a click does nothing. The target
+        // stays in the resting stack, which is the same stack the pointer is
+        // measured in, so the row under the pointer is the row drawn there.
+        .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
+            content.offset(y: offset)
+        }
         .animation(
             reduceMotion ? nil : .easeOut(duration: 0.1),
             value: presentsHover
