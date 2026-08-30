@@ -698,3 +698,41 @@ struct BlattaSidebarButtonStyle: ButtonStyle {
             .onHover { isHovering = $0 }
     }
 }
+
+/// The round surface behind a toolbar control.
+///
+/// macOS 26 draws it with interactive Liquid Glass. Earlier systems have no
+/// such API, so they get the material capsule that stands in for glass
+/// everywhere else in the shell. Both forms read the same intensity, so the
+/// appearance slider keeps working below macOS 26.
+private struct ToolbarControlSurfaceModifier: ViewModifier {
+    let intensity: Double
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.glassEffect(
+                .regular
+                    .tint(BlattaColor.Fill.glassTint(intensity: intensity))
+                    .interactive(),
+                in: .circle
+            )
+        } else {
+            content.background {
+                ZStack {
+                    Circle().fill(.regularMaterial)
+                    Circle().fill(
+                        BlattaColor.Fill.shellMaterialTint(intensity: intensity)
+                    )
+                }
+            }
+        }
+    }
+}
+
+extension View {
+    /// Applies the toolbar control surface for the running system.
+    func toolbarControlSurface(intensity: Double) -> some View {
+        modifier(ToolbarControlSurfaceModifier(intensity: intensity))
+    }
+}

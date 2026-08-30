@@ -451,32 +451,38 @@ private struct DockTooltipSurfaceModifier: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
+        // Liquid Glass arrived in macOS 26. Earlier systems take the same
+        // material surface the Off style draws.
+        if #available(macOS 26, *), glassStyle != .off {
+            glassSurface(content)
+        } else {
+            materialSurface(content)
+        }
+    }
+
+    @available(macOS 26, *)
+    @ViewBuilder
+    private func glassSurface(_ content: Content) -> some View {
+        let tint = BlattaColor.Fill.glassTint(intensity: glassIntensity)
         switch glassStyle {
-        case .off:
-            content.background {
-                ZStack {
-                    shape.fill(.regularMaterial)
-                    shape.fill(
-                        BlattaColor.Fill.shellMaterialTint(
-                            intensity: glassIntensity
-                        )
-                    )
-                }
-            }
         case .clear:
-            content.glassEffect(
-                .clear.tint(
-                    BlattaColor.Fill.glassTint(intensity: glassIntensity)
-                ),
-                in: shape
-            )
-        case .regular:
-            content.glassEffect(
-                .regular.tint(
-                    BlattaColor.Fill.glassTint(intensity: glassIntensity)
-                ),
-                in: shape
-            )
+            content.glassEffect(.clear.tint(tint), in: shape)
+        case .off, .regular:
+            content.glassEffect(.regular.tint(tint), in: shape)
+        }
+    }
+
+    @ViewBuilder
+    private func materialSurface(_ content: Content) -> some View {
+        content.background {
+            ZStack {
+                shape.fill(.regularMaterial)
+                shape.fill(
+                    BlattaColor.Fill.shellMaterialTint(
+                        intensity: glassIntensity
+                    )
+                )
+            }
         }
     }
 }

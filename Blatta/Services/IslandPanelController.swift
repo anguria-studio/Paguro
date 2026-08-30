@@ -1283,26 +1283,28 @@ private struct NotificationIslandPanelView: View {
                     materialTint
                 }
             }
+        } else if #available(macOS 26, *), model.appearance.glassStyle != .off {
+            glassSurface
         } else {
-            switch model.appearance.glassStyle {
-            case .off:
-                islandContent.background {
-                    ZStack {
-                        shape.fill(.regularMaterial)
-                        materialTint
-                    }
+            // Liquid Glass arrived in macOS 26. Earlier systems take the same
+            // material surface the Off style draws.
+            islandContent.background {
+                ZStack {
+                    shape.fill(.regularMaterial)
+                    materialTint
                 }
-            case .clear:
-                islandContent.glassEffect(
-                    .clear.tint(glassTint),
-                    in: shape
-                )
-            case .regular:
-                islandContent.glassEffect(
-                    .regular.tint(glassTint),
-                    in: shape
-                )
             }
+        }
+    }
+
+    @available(macOS 26, *)
+    @ViewBuilder
+    private var glassSurface: some View {
+        switch model.appearance.glassStyle {
+        case .clear:
+            islandContent.glassEffect(.clear.tint(glassTint), in: shape)
+        case .off, .regular:
+            islandContent.glassEffect(.regular.tint(glassTint), in: shape)
         }
     }
 

@@ -19,7 +19,7 @@ Do not use it as your only way to access an important account.
 
 ## Requirements
 
-- macOS 26 or later
+- macOS 15 or later (Liquid Glass needs macOS 26)
 - Xcode 26 or later
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 

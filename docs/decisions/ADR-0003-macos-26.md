@@ -2,7 +2,7 @@
 
 Date: 2026-08-24
 
-Status: accepted for version 1
+Status: superseded by [ADR-0004](ADR-0004-macos-15.md)
 
 ## Context
 

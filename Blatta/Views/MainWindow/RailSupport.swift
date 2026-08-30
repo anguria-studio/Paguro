@@ -45,8 +45,13 @@ private enum WindowBackdropInstaller {
 /// optical style. The tint gives the transparency control exact endpoints.
 private final class WindowBackdropContainerView: NSView {
     private let frostView = NSVisualEffectView()
-    private let glassView = NSGlassEffectView()
     private let tintView = WindowShellTintView()
+    /// The Liquid Glass layer, present only on macOS 26 and later.
+    ///
+    /// `NSGlassEffectView` does not exist below macOS 26, so the property
+    /// cannot name that type. Earlier systems leave it nil and show the frost
+    /// and tint layers alone, which is the Off style.
+    private var glassView: NSView?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -59,16 +64,20 @@ private final class WindowBackdropContainerView: NSView {
         frostView.alphaValue = GlassLabDefaults.regularFrost
         addSubview(frostView)
 
-        glassView.frame = bounds
-        glassView.autoresizingMask = [.width, .height]
-        glassView.style = .clear
-        glassView.tintColor = nil
-        glassView.cornerRadius = 0
-        addSubview(glassView, positioned: .above, relativeTo: frostView)
+        if #available(macOS 26, *) {
+            let glass = NSGlassEffectView()
+            glass.frame = bounds
+            glass.autoresizingMask = [.width, .height]
+            glass.style = .clear
+            glass.tintColor = nil
+            glass.cornerRadius = 0
+            addSubview(glass, positioned: .above, relativeTo: frostView)
+            glassView = glass
+        }
 
         tintView.frame = bounds
         tintView.autoresizingMask = [.width, .height]
-        addSubview(tintView, positioned: .above, relativeTo: glassView)
+        addSubview(tintView, positioned: .above, relativeTo: glassView ?? frostView)
     }
 
     @available(*, unavailable)
@@ -82,15 +91,17 @@ private final class WindowBackdropContainerView: NSView {
     ) {
         frostView.alphaValue = glassStyle.frostOpacity
 
-        switch glassStyle {
-        case .off:
-            glassView.isHidden = true
-        case .clear:
-            glassView.isHidden = false
-            glassView.style = .clear
-        case .regular:
-            glassView.isHidden = false
-            glassView.style = .regular
+        if #available(macOS 26, *), let glass = glassView as? NSGlassEffectView {
+            switch glassStyle {
+            case .off:
+                glass.isHidden = true
+            case .clear:
+                glass.isHidden = false
+                glass.style = .clear
+            case .regular:
+                glass.isHidden = false
+                glass.style = .regular
+            }
         }
 
         tintView.transparency = GlassIntensityScale.normalized(transparency)

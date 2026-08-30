@@ -87,7 +87,7 @@ struct WebContentActions: View {
                 DownloadIndicatorButton(
                     state: downloadState,
                     serviceID: appState.selectedServiceID,
-                    glass: actionGlass
+                    glassIntensity: appState.liquidGlassIntensity
                 )
                 // The control grows into place, so a download that finished
                 // too fast for a ring still announces itself. Reduce Motion
@@ -106,10 +106,7 @@ struct WebContentActions: View {
                 Image(systemName: "chevron.left")
             }
             .buttonStyle(BlattaToolbarButtonStyle())
-            .glassEffect(
-                actionGlass,
-                in: .circle
-            )
+            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
             .disabled(!webViewState.canGoBack)
             .help("Back")
             .accessibilityLabel("Go back")
@@ -121,10 +118,7 @@ struct WebContentActions: View {
                 Image(systemName: "chevron.right")
             }
             .buttonStyle(BlattaToolbarButtonStyle())
-            .glassEffect(
-                actionGlass,
-                in: .circle
-            )
+            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
             .disabled(!webViewState.canGoForward)
             .help("Forward")
             .accessibilityLabel("Go forward")
@@ -140,10 +134,7 @@ struct WebContentActions: View {
                 Image(systemName: webViewState.isLoading ? "xmark" : "arrow.clockwise")
             }
             .buttonStyle(BlattaToolbarButtonStyle())
-            .glassEffect(
-                actionGlass,
-                in: .circle
-            )
+            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
             .disabled(webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
@@ -154,10 +145,7 @@ struct WebContentActions: View {
                 Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
             }
             .buttonStyle(BlattaToolbarButtonStyle(isSelected: appState.doNotDisturb))
-            .glassEffect(
-                actionGlass,
-                in: .circle
-            )
+            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
             .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
             .accessibilityLabel(
                 appState.doNotDisturb
@@ -175,16 +163,6 @@ struct WebContentActions: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Service controls")
     }
-
-    private var actionGlass: Glass {
-        .regular
-            .tint(
-                BlattaColor.Fill.glassTint(
-                    intensity: appState.liquidGlassIntensity
-                )
-            )
-            .interactive()
-    }
 }
 
 /// The header download control.
@@ -195,7 +173,7 @@ struct WebContentActions: View {
 struct DownloadIndicatorButton: View {
     let state: DownloadIndicatorState
     let serviceID: UUID?
-    let glass: Glass
+    let glassIntensity: Double
 
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -224,7 +202,7 @@ struct DownloadIndicatorButton: View {
             }
         }
         .buttonStyle(BlattaToolbarButtonStyle(isSelected: showsList))
-        .glassEffect(glass, in: .circle)
+        .toolbarControlSurface(intensity: glassIntensity)
         .scaleEffect(completionScale)
         .opacity(completionOpacity)
         .help(state.helpText)

@@ -66,16 +66,7 @@ struct MenuBarView: View {
                 Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
             }
             .buttonStyle(BlattaToolbarButtonStyle(isSelected: appState.doNotDisturb))
-            .glassEffect(
-                .regular
-                    .tint(
-                        BlattaColor.Fill.glassTint(
-                            intensity: appState.liquidGlassIntensity
-                        )
-                    )
-                    .interactive(),
-                in: .circle
-            )
+            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
             .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
             .accessibilityLabel(
                 appState.doNotDisturb
@@ -299,14 +290,24 @@ private struct MenuBarWindowSurface: View {
 
     @ViewBuilder
     private var glassLayer: some View {
-        switch glassStyle {
-        case .off:
+        // Below macOS 26 there is no glass layer to draw. The panel keeps the
+        // material behind it, which is the same result the Off style gives.
+        if #available(macOS 26, *), glassStyle != .off {
+            availableGlassLayer
+        } else {
             EmptyView()
+        }
+    }
+
+    @available(macOS 26, *)
+    @ViewBuilder
+    private var availableGlassLayer: some View {
+        switch glassStyle {
         case .clear:
             Rectangle()
                 .fill(.clear)
                 .glassEffect(.clear, in: .rect)
-        case .regular:
+        case .off, .regular:
             Rectangle()
                 .fill(.clear)
                 .glassEffect(.regular, in: .rect)
