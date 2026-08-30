@@ -20,7 +20,16 @@ jobs:
       # A failure on one says nothing about the other, so let both report.
       fail-fast: false
       matrix:
-        runner: [macos-26, macos-15]
+        include:
+          - runner: macos-26
+            # Builds the real Icon Composer icon, and is where releases come from.
+            appIconSetting: ""
+          - runner: macos-15
+            # macOS 15 cannot render the Icon Composer icon: actool ends with
+            # "Distill failed for unknown reasons" while every test passes. This
+            # job exists to run the suite on the support floor, so it skips the
+            # icon rather than the tests. See docs/ERRORS.md.
+            appIconSetting: "ASSETCATALOG_COMPILER_APPICON_NAME="
     steps:
       - uses: actions/checkout@v4
 
@@ -51,4 +60,6 @@ jobs:
         run: scripts/test_compatibility_fixture.sh
 
       - name: Test the application
-        run: xcodebuild -project Blatta.xcodeproj -scheme Blatta -configuration Debug test
+        run: |
+          xcodebuild -project Blatta.xcodeproj -scheme Blatta \
+            -configuration Debug ${{ matrix.appIconSetting }} test
