@@ -996,7 +996,12 @@ final class AppState {
         let alsoKeepLive = crossSpaceCriticalServices(excluding: Set(services.map(\.id)))
 
         launchPreloadTask?.cancel()
-        launchPreloadTask = Task { [weak self] in
+        // Explicitly main-actor, because everything this touches already is:
+        // AppState, WebViewPool, and the ServiceInstance models, which are
+        // SwiftData objects and not Sendable. Without the annotation the
+        // Xcode 26.3 compiler reads the hop into preloadAll as sending those
+        // models across isolation and rejects it.
+        launchPreloadTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
                 if let selected {
