@@ -12,11 +12,31 @@ permissions:
 
 jobs:
   test:
-    name: Build and test
-    runs-on: macos-26
+    name: Build and test on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    strategy:
+      # macOS 15 is the support floor and macOS 26 is where Liquid Glass runs.
+      # A failure on one says nothing about the other, so let both report.
+      fail-fast: false
+      matrix:
+        runner: [macos-26, macos-15]
     steps:
       - uses: actions/checkout@v4
+
+      # Blatta calls Liquid Glass behind an availability check, so it needs the
+      # macOS 26 SDK to compile even when the deployment target is 15. The
+      # macOS 15 image ships Xcode 26 but defaults to Xcode 16, whose SDK does
+      # not declare those symbols at all.
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "no Xcode 26 on this image; Liquid Glass will not compile" >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
