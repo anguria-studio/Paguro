@@ -14,21 +14,34 @@ Blatta uses [Chorus](https://github.com/nicojan/Chorus) as its code base.
 The `LICENSE` file contains the upstream MIT license and copyright notice.
 Git keeps the upstream commit history.
 
-## HaGeZi DNS blocklists
+## Bundled blocklist data
+
+Blatta bundles two converted rule files under `Blatta/Resources`.
+Each file keeps the license of the list it came from.
+Neither file is covered by the Blatta MIT license.
+
+Blatta reads these files as data at runtime.
+It does not link them into the application.
+`scripts/convert_blocklist.sh` records the pinned source for each file.
+
+### HaGeZi Light DNS blocklist
 
 - Project: [HaGeZi DNS Blocklists](https://github.com/hagezi/dns-blocklists)
-- License: see the upstream project for the selected list
+- License: GPL-3.0
+- Source: `adblock/light.txt` at the tag pinned in `scripts/convert_blocklist.sh`
+- Bundled file: `Blatta/Resources/hagezi-light.json`
 - Use: source data for bundled WebKit content rules
 
-The release audit must confirm the exact license for each pinned list.
-
-## EasyList and Fanboy's Annoyance List
+### Fanboy's Annoyance List (EasyList)
 
 - Project: [EasyList](https://easylist.to/)
-- License: GPL-3.0
+- License: CC BY 3.0, as declared in the list header
+- Source: `https://easylist-downloads.adblockplus.org/fanboy-annoyance.txt`
+- Bundled file: `Blatta/Resources/fanboy-annoyance.json`
 - Use: source data for bundled WebKit content rules
 
-The release audit must confirm the obligations for converted rule data.
+EasyList publishes this list as a moving file with no versioned download.
+Record the fetch date in the commit message when you regenerate it.
 
 ## SafariConverterLib
 

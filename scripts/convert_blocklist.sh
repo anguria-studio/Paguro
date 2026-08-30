@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-HAGEZI_REF="${HAGEZI_REF:-37522026.190.70475}"   # HaGezi release tag
+HAGEZI_REF="${HAGEZI_REF:-37522026.242.31972}"   # HaGezi release tag (GPL-3.0 data)
 CONVERTER_REF="${CONVERTER_REF:-v4.3.0}"          # SafariConverterLib tag
 SAFARI_VERSION="${SAFARI_VERSION:-14}"            # rule-syntax level for the converter, not the macOS target
 CAP=150000                                        # WKContentRuleList per-list rule cap
