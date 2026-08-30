@@ -97,16 +97,18 @@ struct GeneralSettingsView: View {
                     }
                 }
 
-                Picker("Window glass", selection: Binding(
-                    get: { appState.liquidGlassStyle },
-                    set: { appState.setLiquidGlassStyle($0) }
-                )) {
-                    ForEach(ShellGlassStyle.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
+                if AppCapabilities.liquidGlassSupported {
+                    Picker("Window glass", selection: Binding(
+                        get: { appState.liquidGlassStyle },
+                        set: { appState.setLiquidGlassStyle($0) }
+                    )) {
+                        ForEach(ShellGlassStyle.allCases, id: \.self) { style in
+                            Text(style.displayName).tag(style)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .help("Changes the native Liquid Glass style behind the main window shell.")
                 }
-                .pickerStyle(.segmented)
-                .help("Changes the native Liquid Glass style behind the main window shell.")
 
                 HStack(spacing: 12) {
                     Slider(

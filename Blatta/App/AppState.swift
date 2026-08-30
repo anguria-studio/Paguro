@@ -56,7 +56,14 @@ final class AppState {
 
     var railLayout: RailLayout { shellPreferences.railLayout }
     var appearanceMode: AppearanceMode { shellPreferences.appearanceMode }
-    var liquidGlassStyle: ShellGlassStyle { shellPreferences.liquidGlassStyle }
+    /// The glass style in force.
+    ///
+    /// Below macOS 26 this is always `.off`, whatever the stored preference
+    /// says, so the shell renders one predictable way rather than reading a
+    /// setting the user was never offered.
+    var liquidGlassStyle: ShellGlassStyle {
+        AppCapabilities.liquidGlassSupported ? shellPreferences.liquidGlassStyle : .off
+    }
     var liquidGlassIntensity: Double { shellPreferences.liquidGlassIntensity }
     var iconRailBaseSize: Double { shellPreferences.iconRailBaseSize }
     var iconRailMagnificationEnabled: Bool {

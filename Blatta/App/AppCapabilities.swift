@@ -14,6 +14,16 @@ enum AppCapabilities {
     /// entitlements file, and provisioned. See DISTRIBUTION.md.
     static let passkeysSupported = false
 
+    /// Liquid Glass arrived in macOS 26. Below that the shell draws the same
+    /// material surfaces for every glass style, so the style choice would show
+    /// the user three options where two are identical and none are glass.
+    ///
+    /// The transparency slider is a separate matter and stays available: it
+    /// feeds the material tint and the window backdrop on every system.
+    static var liquidGlassSupported: Bool {
+        if #available(macOS 26, *) { true } else { false }
+    }
+
     /// User-facing explanation shown where the passkey limitation is relevant
     /// (currently the Add Service sheet).
     static let passkeyUnavailableNotice =
