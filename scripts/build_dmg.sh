@@ -4,6 +4,12 @@
 #
 #   scripts/build_dmg.sh                 writes to ~/Desktop
 #   scripts/build_dmg.sh /some/dir       writes there instead
+#   scripts/build_dmg.sh --test-controls includes the Settings test controls
+#
+# --test-controls compiles with TEST_CONTROLS defined, which reveals the test
+# island alert in Settings. It does not turn on the other debug gates: logging,
+# the compatibility fixture and the simulated screen presets stay out. The disk
+# image is named with a -test suffix so it cannot be confused with a release.
 #
 # It signs with a Developer ID Application identity when the keychain holds one,
 # and ad hoc otherwise. The difference decides what a recipient has to do:
@@ -38,12 +44,26 @@
 set -euo pipefail
 
 REPOSITORY_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"
-OUTPUT_DIR="${1:-$HOME/Desktop}"
+TEST_CONTROLS=0
+OUTPUT_DIR="$HOME/Desktop"
+for ARGUMENT in "$@"; do
+    case "$ARGUMENT" in
+        --test-controls) TEST_CONTROLS=1 ;;
+        -*) echo "unknown option: $ARGUMENT" >&2; exit 2 ;;
+        *) OUTPUT_DIR="$ARGUMENT" ;;
+    esac
+done
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
 VERSION=$(awk -F'"' '/MARKETING_VERSION/ {print $2; exit}' "$REPOSITORY_DIR/project.yml")
-DMG_PATH="$OUTPUT_DIR/Blatta-$VERSION.dmg"
+if [ "$TEST_CONTROLS" -eq 1 ]; then
+    DMG_PATH="$OUTPUT_DIR/Blatta-$VERSION-test.dmg"
+    EXTRA_BUILD_ARGS=(SWIFT_ACTIVE_COMPILATION_CONDITIONS="TEST_CONTROLS")
+else
+    DMG_PATH="$OUTPUT_DIR/Blatta-$VERSION.dmg"
+    EXTRA_BUILD_ARGS=()
+fi
 
 echo "==> Generating the project"
 ( cd "$REPOSITORY_DIR" && xcodegen generate >/dev/null )
@@ -77,6 +97,7 @@ xcodebuild \
     -destination 'platform=macOS' \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
     "${SIGN_ARGS[@]}" \
+    ${EXTRA_BUILD_ARGS[@]+"${EXTRA_BUILD_ARGS[@]}"} \
     PROVISIONING_PROFILE_SPECIFIER="" \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     build >/dev/null
@@ -98,7 +119,7 @@ ln -s /Applications "$STAGE_DIR/Applications"
 echo "==> Writing $DMG_PATH"
 rm -f "$DMG_PATH"
 hdiutil create \
-    -volname "Blatta $VERSION" \
+    -volname "Blatta $VERSION$([ "$TEST_CONTROLS" -eq 1 ] && echo " test")" \
     -srcfolder "$STAGE_DIR" \
     -ov -format UDZO \
     "$DMG_PATH" >/dev/null

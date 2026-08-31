@@ -336,7 +336,7 @@ struct NotificationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                #if DEBUG
+                #if DEBUG || TEST_CONTROLS
                 Button("Show Test Island Alert") {
                     appModel.showIslandPreview(for: activeService)
                 }

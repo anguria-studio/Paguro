@@ -207,7 +207,9 @@ final class AppModel {
         }
     }
 
-    #if DEBUG
+    // TEST_CONTROLS lets a signed build carry this without carrying the rest
+    // of the debug surface. scripts/build_dmg.sh --test-controls sets it.
+    #if DEBUG || TEST_CONTROLS
     func showIslandPreview(for service: ServiceInstance?) {
         guard notificationRouteSettings.isIslandRouteEnabled else { return }
         guard let event = try? NotificationEvent.normalize(
