@@ -5,24 +5,34 @@
 #   scripts/build_dmg.sh                 writes to ~/Desktop
 #   scripts/build_dmg.sh /some/dir       writes there instead
 #
-# This produces a TEST build, not a release. It is signed ad hoc, because the
-# project has no Developer ID yet, so macOS refuses to launch it on any machine
-# it did not come from until the quarantine flag is cleared. The README says
-# how. Do not hand this to anyone without that instruction; the failure reads
-# as "the application cannot be opened", which looks like a crash rather than a
-# policy.
+# It signs with a Developer ID Application identity when the keychain holds one,
+# and ad hoc otherwise. The difference decides what a recipient has to do:
+#
+#   Developer ID + notarized   double-click, and macOS opens it.
+#   Developer ID, not notarized  right-click Open, once, and confirm.
+#   ad hoc                     nothing works until the quarantine flag is
+#                              cleared by hand. The failure reads as "the
+#                              application cannot be opened", which looks like
+#                              a crash rather than a policy.
+#
+# Notarization runs only when a stored notarytool profile exists. Create one
+# once with an app-specific password from appleid.apple.com:
+#
+#   xcrun notarytool store-credentials blatta \
+#       --apple-id <your-apple-id> --team-id L2P2KC4C69 --password <app-specific>
+#
+# Set BLATTA_NOTARY_PROFILE to use a different profile name.
 #
 # Two build settings are deliberate:
 #
-#   CODE_SIGN_IDENTITY=-                 sign ad hoc, since no Developer ID
-#                                        identity exists to sign with.
 #   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
-#                                        drop com.apple.security.get-task-allow,
-#                                        which Xcode adds on a plain `build`.
-#                                        That entitlement is for debugging, and
-#                                        with hardened runtime and the sandbox
-#                                        it stops the app launching on a machine
-#                                        that did not build it.
+#                        drops com.apple.security.get-task-allow, which Xcode
+#                        adds on a plain `build`. That entitlement is for
+#                        debugging, and with hardened runtime and the sandbox it
+#                        stops the app launching on a machine that did not build
+#                        it. Notarization also rejects a bundle carrying it.
+#   OTHER_CODE_SIGN_FLAGS=--timestamp
+#                        a secure timestamp, which notarization requires.
 #
 # The app icon needs macOS 26 to render. See docs/ERRORS.md.
 set -euo pipefail
@@ -38,16 +48,35 @@ DMG_PATH="$OUTPUT_DIR/Blatta-$VERSION.dmg"
 echo "==> Generating the project"
 ( cd "$REPOSITORY_DIR" && xcodegen generate >/dev/null )
 
-echo "==> Building Release"
+NOTARY_PROFILE="${BLATTA_NOTARY_PROFILE:-blatta}"
+DEVELOPER_ID=$(security find-identity -v -p codesigning \
+    | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)
+
+if [ -n "$DEVELOPER_ID" ]; then
+    TEAM_ID=$(printf '%s' "$DEVELOPER_ID" | sed -n 's/.*(\([A-Z0-9]*\))$/\1/p')
+    echo "==> Building Release, signed as $DEVELOPER_ID"
+    SIGN_ARGS=(
+        CODE_SIGN_IDENTITY="$DEVELOPER_ID"
+        CODE_SIGN_STYLE=Manual
+        DEVELOPMENT_TEAM="$TEAM_ID"
+        OTHER_CODE_SIGN_FLAGS="--timestamp"
+    )
+else
+    echo "==> Building Release, signed ad hoc (no Developer ID in the keychain)"
+    SIGN_ARGS=(
+        CODE_SIGN_IDENTITY="-"
+        CODE_SIGN_STYLE=Manual
+        DEVELOPMENT_TEAM=""
+    )
+fi
+
 xcodebuild \
     -project "$REPOSITORY_DIR/Blatta.xcodeproj" \
     -scheme Blatta \
     -configuration Release \
     -destination 'platform=macOS' \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
-    CODE_SIGN_IDENTITY="-" \
-    CODE_SIGN_STYLE=Manual \
-    DEVELOPMENT_TEAM="" \
+    "${SIGN_ARGS[@]}" \
     PROVISIONING_PROFILE_SPECIFIER="" \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     build >/dev/null
@@ -74,10 +103,32 @@ hdiutil create \
     -ov -format UDZO \
     "$DMG_PATH" >/dev/null
 
+if [ -n "$DEVELOPER_ID" ]; then
+    echo "==> Signing the disk image"
+    codesign --force --sign "$DEVELOPER_ID" --timestamp "$DMG_PATH"
+
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+        echo "==> Notarizing (this waits on Apple, usually a few minutes)"
+        xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+        echo "==> Stapling the ticket"
+        xcrun stapler staple "$DMG_PATH"
+    else
+        echo "==> Skipping notarization: no '$NOTARY_PROFILE' notarytool profile"
+        echo "    Recipients will have to right-click Open the first time."
+    fi
+fi
+
 echo "==> Done"
 echo "    $DMG_PATH"
 echo "    $(du -h "$DMG_PATH" | cut -f1), minimum macOS $(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP_PATH/Contents/Info.plist")"
 echo "    sha256 $(shasum -a 256 "$DMG_PATH" | cut -d' ' -f1)"
 echo
-echo "    On the receiving Mac, after dragging it to /Applications:"
-echo "      sudo xattr -dr com.apple.quarantine /Applications/Blatta.app"
+if xcrun stapler validate "$DMG_PATH" >/dev/null 2>&1; then
+    echo "    Notarized and stapled. Recipients can just open it."
+elif [ -n "$DEVELOPER_ID" ]; then
+    echo "    Signed but not notarized. Recipients: right-click the app, choose"
+    echo "    Open, and confirm once."
+else
+    echo "    Ad hoc. On the receiving Mac, after dragging it to /Applications:"
+    echo "      sudo xattr -dr com.apple.quarantine /Applications/Blatta.app"
+fi
