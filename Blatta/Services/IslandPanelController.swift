@@ -1244,6 +1244,17 @@ private struct NotificationIslandPanelView: View {
     @State private var isKeyboardFocusChange = false
 
     /// The island silhouette. Each state uses the notch form.
+    /// True when the island has nothing to show and must be invisible.
+    ///
+    /// The housing is already black, so anything drawn over it only adds the
+    /// antialiased edge of a second curve on top of the real one, which reads
+    /// as a border around the notch. Everything that paints checks this, and
+    /// it is the same test `desiredSize` uses to give an idle island exactly
+    /// the housing size: an island that takes no width must paint nothing.
+    private var isIdle: Bool {
+        isCollapsedShape && model.state.unreviewedCount == 0
+    }
+
     private var shape: NotchShape {
         NotchShape(
             topCornerRadius: Self.notchEarWidth,
@@ -1278,16 +1289,7 @@ private struct NotificationIslandPanelView: View {
 
     @ViewBuilder
     private var styledContent: some View {
-        if isCollapsedShape, model.state.unreviewedCount == 0 {
-            // Nothing to show, so paint nothing. `desiredSize` gives an idle
-            // island exactly the housing size, and the housing is already
-            // black, so filling it again only adds the antialiased edge of
-            // this shape's curve on top of the real one. That edge is what
-            // reads as a faint border around the notch. The panel stays, so
-            // it keeps its hover target.
-            //
-            // The count is the same test `desiredSize` uses. The two have to
-            // agree: an island that takes no width must paint no surface.
+        if isIdle {
             islandContent
         } else if isCollapsedShape {
             // With a count to show the island is wider than the housing, so it
@@ -1332,7 +1334,13 @@ private struct NotificationIslandPanelView: View {
 
     private var islandContent: some View {
         ZStack(alignment: .top) {
-            cameraBridge
+            // The bridge is one ear wider than the housing on each side, and
+            // those ears are concave, so an idle island drew two small black
+            // wedges either side of the notch. Nothing to show means nothing
+            // to draw.
+            if !isIdle {
+                cameraBridge
+            }
 
             Group {
                 if model.state.phase == .peek
