@@ -1278,9 +1278,20 @@ private struct NotificationIslandPanelView: View {
 
     @ViewBuilder
     private var styledContent: some View {
-        if isCollapsedShape {
-            // The collapsed island continues the camera housing, so it keeps
-            // one black surface for each glass style and each setting.
+        if isCollapsedShape, model.state.unreviewedCount == 0 {
+            // Nothing to show, so paint nothing. `desiredSize` gives an idle
+            // island exactly the housing size, and the housing is already
+            // black, so filling it again only adds the antialiased edge of
+            // this shape's curve on top of the real one. That edge is what
+            // reads as a faint border around the notch. The panel stays, so
+            // it keeps its hover target.
+            //
+            // The count is the same test `desiredSize` uses. The two have to
+            // agree: an island that takes no width must paint no surface.
+            islandContent
+        } else if isCollapsedShape {
+            // With a count to show the island is wider than the housing, so it
+            // needs its own black surface for the part that extends past it.
             islandContent.background(shape.fill(Color.black))
         } else if reduceTransparency {
             islandContent.background {
