@@ -46,7 +46,7 @@ struct MenuBarView: View {
                 // The glyph is square (974 x 974 viewBox), so the frame is
                 // square too.
                 .frame(width: 20, height: 20)
-                .foregroundStyle(.tint)
+                .foregroundStyle(BlattaColor.Text.primary)
                 .frame(width: 32, height: 32)
                 .accessibilityHidden(true)
 
