@@ -378,6 +378,13 @@ Debug Notification settings include a test-alert action.
 This action lets a person review the island without waiting for a service event.
 It uses the active service name and icon when you select a service.
 Release builds do not include this action.
+The action appears only with a connected notched display or one of the two
+launch arguments above.
+
+The island follows the display of the main window. On a notched laptop with an
+external display, the test action therefore shows nothing while the main window
+stays on the external display. Move the window to the laptop display for the
+test.
 
 ## Non-notched displays
 
@@ -387,6 +394,16 @@ notification as the fallback. This fallback also applies when the user turns
 off the separate system-notification route.
 
 This rule prevents a permanent fake island on standard and external displays.
+
+Settings hides the island controls when no connected display has a camera
+housing. The island switch, its caption, and the debug test action then have no
+result to show. The check reads a fresh snapshot from `ScreenGeometryProvider`,
+so it follows a docking change, a clamshell change, and a display change. It
+reads every connected screen, not the selected screen only.
+
+The check uses the same provider as the island, so `--blatta-fake-notch` and
+`--blatta-island-screen` also show these controls on a development Mac without
+a notch.
 
 The router reads the camera housing of the selected display for each event, not
 once at startup. Moving the window to another display therefore changes the

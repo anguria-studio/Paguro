@@ -134,6 +134,15 @@ public struct IslandScreenSnapshot: Equatable, Sendable {
         self.primaryScreenIdentifier = primaryScreenIdentifier
     }
 
+    /// Tells whether any connected display has a camera housing.
+    ///
+    /// The island can only appear on such a display, so a Mac without one has
+    /// no use for the island controls. This rule reads every screen, because a
+    /// notched display can be present while the selected screen is external.
+    public var hasCameraHousingScreen: Bool {
+        screens.contains { $0.hasCameraHousing }
+    }
+
     public var selectedScreen: IslandScreenGeometry? {
         screen(withIdentifier: activeScreenIdentifier)
             ?? screen(withIdentifier: primaryScreenIdentifier)

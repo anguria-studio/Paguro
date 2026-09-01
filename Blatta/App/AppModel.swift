@@ -1,3 +1,4 @@
+import AppKit
 import BlattaCore
 import Foundation
 import Observation
@@ -14,6 +15,16 @@ final class AppModel {
 
     private var shutdownState = ApplicationShutdownState()
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let notificationCenter: NotificationCenter
+    @ObservationIgnored private var screenObserverTokens: [NSObjectProtocol] = []
+    @ObservationIgnored private var notchedDisplayTask: Task<Void, Never>?
+
+    /// Whether a connected display has a camera housing.
+    ///
+    /// Settings offers the island controls only then. On a Mac without such a
+    /// display the island cannot appear, so its switch and its test action
+    /// would promise a result that no display can show.
+    private(set) var hasNotchedDisplay = false
 
     /// The AppKit adapter that shows the main window. AppKit owns the delegate,
     /// so this reference stays weak.
@@ -46,7 +57,8 @@ final class AppModel {
         presenceController: AppPresenceController = AppPresenceController(),
         screenGeometryProvider: (any ScreenGeometryProvider)? = nil,
         notificationRouteSettings: NotificationRouteSettings? = nil,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        notificationCenter: NotificationCenter = .default
     ) {
         let resolvedScreenGeometryProvider = screenGeometryProvider
             ?? IslandScreenGeometryConfiguration.makeProvider()
@@ -60,6 +72,7 @@ final class AppModel {
         let resolvedNotificationRouteSettings = notificationRouteSettings
             ?? NotificationRouteSettings()
         self.defaults = defaults
+        self.notificationCenter = notificationCenter
         self.hasSeenWelcome = defaults.bool(forKey: DefaultsKey.hasSeenWelcome)
         self.screenGeometryProvider = resolvedScreenGeometryProvider
         self.islandPanelController = islandPanelController
@@ -100,6 +113,35 @@ final class AppModel {
         appState.badgeManager.onUnreadCountCleared = { [weak self] serviceID in
             self?.islandPanelController.dismissEvents(forService: serviceID)
         }
+    }
+
+    /// Reads the displays again and updates `hasNotchedDisplay`.
+    ///
+    /// The value follows the current displays, because docking, clamshell
+    /// operation, and a display change can add or remove the camera housing
+    /// while Blatta runs. The read uses the island geometry provider, so the
+    /// Debug launch arguments that simulate a notch also reach this value.
+    func refreshNotchedDisplay() {
+        notchedDisplayTask?.cancel()
+        let provider = screenGeometryProvider
+        notchedDisplayTask = Task { @MainActor [weak self] in
+            let snapshot = await provider.currentSnapshot()
+            guard !Task.isCancelled, let self else { return }
+            self.hasNotchedDisplay = snapshot.hasCameraHousingScreen
+        }
+    }
+
+    private func observeScreenChanges() {
+        guard screenObserverTokens.isEmpty else { return }
+        screenObserverTokens.append(notificationCenter.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshNotchedDisplay()
+            }
+        })
     }
 
     private func dismissIslandEvents(forService serviceID: UUID?) {
@@ -191,6 +233,8 @@ final class AppModel {
         delegate.startAfterLaunch = { [weak self] in
             guard let self else { return }
             self.appState.start()
+            self.observeScreenChanges()
+            self.refreshNotchedDisplay()
             if self.notificationRouteSettings.isIslandRouteEnabled {
                 self.islandPanelController.showCollapsed()
             }
@@ -252,6 +296,12 @@ final class AppModel {
 
     func shutdown() async {
         guard shutdownState.begin() else { return }
+        notchedDisplayTask?.cancel()
+        notchedDisplayTask = nil
+        for token in screenObserverTokens {
+            notificationCenter.removeObserver(token)
+        }
+        screenObserverTokens.removeAll()
         islandPanelController.stop()
         await appState.shutdown()
         shutdownState.finish()

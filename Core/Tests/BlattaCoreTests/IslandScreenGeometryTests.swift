@@ -133,6 +133,20 @@ struct IslandScreenGeometryTests {
     }
 
     @Test
+    func snapshotReportsACameraHousingOnAnyScreen() {
+        #expect(SimulatedScreenGeometryPreset.notched14Inch
+            .scenario.snapshot.hasCameraHousingScreen)
+        // The external display is the selected screen of this arrangement, and
+        // the notched laptop still makes the island available.
+        #expect(SimulatedScreenGeometryPreset.twoDisplayArrangement
+            .scenario.snapshot.hasCameraHousingScreen)
+        #expect(!SimulatedScreenGeometryPreset.nonNotchedLaptop
+            .scenario.snapshot.hasCameraHousingScreen)
+        #expect(!SimulatedScreenGeometryPreset.externalDisplay
+            .scenario.snapshot.hasCameraHousingScreen)
+    }
+
+    @Test
     func simulatedProviderReturnsItsFixedSnapshot() async {
         let provider = SimulatedScreenGeometryProvider(preset: .notched14Inch)
 

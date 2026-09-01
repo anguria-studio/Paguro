@@ -325,25 +325,30 @@ struct NotificationSettingsView: View {
                     set: { appModel.setSystemNotificationRouteEnabled($0) }
                 ))
 
-                Toggle("Show island alerts on notched displays", isOn: Binding(
-                    get: {
-                        appModel.notificationRouteSettings.isIslandRouteEnabled
-                    },
-                    set: { appModel.setIslandNotificationRouteEnabled($0) }
-                ))
+                // A Mac without a notched display can never show the island, so
+                // these controls stay hidden there. The value follows the
+                // connected displays.
+                if appModel.hasNotchedDisplay {
+                    Toggle("Show island alerts on notched displays", isOn: Binding(
+                        get: {
+                            appModel.notificationRouteSettings.isIslandRouteEnabled
+                        },
+                        set: { appModel.setIslandNotificationRouteEnabled($0) }
+                    ))
 
-                Text("On a display without a notch, island alerts use macOS notifications. Service mute and Do Not Disturb apply to both routes.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("On a display without a notch, island alerts use macOS notifications. Service mute and Do Not Disturb apply to both routes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                #if DEBUG || TEST_CONTROLS
-                Button("Show Test Island Alert") {
-                    appModel.showIslandPreview(for: activeService)
+                    #if DEBUG || TEST_CONTROLS
+                    Button("Show Test Island Alert") {
+                        appModel.showIslandPreview(for: activeService)
+                    }
+                    .disabled(
+                        !appModel.notificationRouteSettings.isIslandRouteEnabled
+                    )
+                    #endif
                 }
-                .disabled(
-                    !appModel.notificationRouteSettings.isIslandRouteEnabled
-                )
-                #endif
             }
 
             Section {
@@ -371,6 +376,10 @@ struct NotificationSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // A display can change while Settings is closed, so read it again here.
+        .onAppear {
+            appModel.refreshNotchedDisplay()
+        }
     }
 
     private var activeService: ServiceInstance? {

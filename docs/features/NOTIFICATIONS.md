@@ -182,6 +182,8 @@ plan. The default plan selects only the system notification route. The page
 message handler no longer calls a platform presenter directly.
 
 Settings has separate controls for macOS notifications and island alerts.
+The island control appears only when a connected display has a camera housing.
+The island document gives that rule and its debug override.
 The system route is on by default. The island route is off by default.
 The user can turn on either route, both routes, or neither route. These local
 route choices use `UserDefaults` and do not change service session data.
