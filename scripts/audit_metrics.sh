@@ -38,6 +38,10 @@ BUDGET_LIFETIME_CPU_PCT="2.0 5.0"
 # The largest single service store. Judged on the heaviest rather than the mean
 # because most stores are near-empty and would hide one runaway service.
 BUDGET_STORE_MAX_MB="150 400"
+# Stores on disk that no ServiceInstance row points at. Judged on megabytes,
+# not directory count: a phantom store is a near-empty skeleton, so hundreds of
+# them cost little disk even though the count looks alarming.
+BUDGET_ORPHAN_MB="100 300"
 # Everything the app has written to disk.
 BUDGET_CONTAINER_MB="600 1500"
 
@@ -206,29 +210,53 @@ fi
 # --- Stored data ------------------------------------------------------------
 
 heading "Stored data"
-CATALOG_SERVICES=$(grep -c '"id"' "$REPOSITORY_DIR/Blatta/Resources/ServiceCatalog.json" 2>/dev/null || echo 0)
 for BUNDLE_ID in com.tommasolaterza.Blatta com.tommasolaterza.Blatta.debug; do
     CONTAINER="$HOME/Library/Containers/$BUNDLE_ID"
     [ -d "$CONTAINER" ] || continue
     printf '  %s\n' "$BUNDLE_ID"
     judge "container" "$(size_mb "$CONTAINER")" MB "$BUDGET_CONTAINER_MB"
+
     STORE_DIR="$CONTAINER/Data/Library/WebKit/WebsiteDataStore"
-    if [ -d "$STORE_DIR" ]; then
-        STORE_COUNT=$(find "$STORE_DIR" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
-        STORE_TOTAL=$(size_mb "$STORE_DIR")
-        # Judge the heaviest store, not the mean. Most stores are near-empty
-        # orphans, so an average hides the one service that is actually large.
-        STORE_MAX=$(du -sm "$STORE_DIR"/* 2>/dev/null | sort -rn | head -1 | cut -f1)
-        judge "heaviest store" "${STORE_MAX:-0}" MB "$BUDGET_STORE_MAX_MB" \
-            "$STORE_COUNT stores, $STORE_TOTAL MB total"
-        # More stores than the catalog can describe means WebsiteDataReclaimer
-        # is falling behind, or dev churn left orphans behind.
-        if [ "$STORE_COUNT" -gt "$CATALOG_SERVICES" ]; then
-            printf '  %-22s %8s      WATCH  catalog defines %s services\n' \
-                "orphan stores" "$((STORE_COUNT - CATALOG_SERVICES))" "$CATALOG_SERVICES"
-            WATCH_COUNT=$((WATCH_COUNT + 1))
-        fi
+    [ -d "$STORE_DIR" ] || continue
+
+    # An orphan is a store on disk with no ServiceInstance row pointing at it.
+    # Comparing against the catalog instead would be wrong: the catalog lists
+    # service types on offer, not the accounts the user actually configured.
+    SWIFT_DATA_STORE=$(find "$CONTAINER/Data/Library/Application Support" \
+        -maxdepth 2 -name 'default.store' -print 2>/dev/null | head -1)
+    find "$STORE_DIR" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; \
+        | tr 'A-Z' 'a-z' | sort > /tmp/blatta-ondisk.txt
+    if [ -n "$SWIFT_DATA_STORE" ] && command -v sqlite3 >/dev/null; then
+        sqlite3 "$SWIFT_DATA_STORE" \
+            'select lower(hex(ZDATASTOREIDENTIFIER)) from ZSERVICEINSTANCE;' 2>/dev/null \
+            | sed -E 's/(.{8})(.{4})(.{4})(.{4})(.{12})/\1-\2-\3-\4-\5/' \
+            | sort > /tmp/blatta-live.txt
+    else
+        : > /tmp/blatta-live.txt
     fi
+
+    sum_mb() {
+        while read -r STORE_UUID; do du -sk "$STORE_DIR/$STORE_UUID" 2>/dev/null | cut -f1; done \
+            | awk '{s+=$1} END {printf "%.0f", s/1024}'
+    }
+    LIVE_COUNT=$(wc -l < /tmp/blatta-live.txt | tr -d ' ')
+    ORPHAN_COUNT=$(comm -13 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt | wc -l | tr -d ' ')
+    ORPHAN_MB=$(comm -13 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt | sum_mb)
+    LIVE_MB=$(comm -12 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt | sum_mb)
+
+    if [ "$LIVE_COUNT" -eq 0 ]; then
+        printf '    %-20s %8s      could not read ServiceInstance rows\n' "orphans" "?"
+    else
+        printf '    %-20s %8s MB   %s services\n' "live services" "${LIVE_MB:-0}" "$LIVE_COUNT"
+        judge "orphaned stores" "${ORPHAN_MB:-0}" MB "$BUDGET_ORPHAN_MB" \
+            "$ORPHAN_COUNT dirs with no service row"
+        STORE_MAX=$(comm -12 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt \
+            | while read -r STORE_UUID; do du -sm "$STORE_DIR/$STORE_UUID" 2>/dev/null | cut -f1; done \
+            | sort -rn | head -1)
+        judge "heaviest live store" "${STORE_MAX:-0}" MB "$BUDGET_STORE_MAX_MB"
+    fi
+    rm -f /tmp/blatta-ondisk.txt /tmp/blatta-live.txt
+
     for SUBDIR in "Data/Library/WebKit/ContentRuleLists" "Data/Library/Caches"; do
         [ -d "$CONTAINER/$SUBDIR" ] || continue
         printf '    %-20s %8s MB\n' "$(basename "$SUBDIR")" "$(size_mb "$CONTAINER/$SUBDIR")"
