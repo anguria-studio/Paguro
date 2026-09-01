@@ -107,6 +107,13 @@ final class AppState {
     var scheduledDNDEnabled: Bool { notificationRuntime.scheduledDNDEnabled }
     var dndStartMinutes: Int { notificationRuntime.dndStartMinutes }
     var dndEndMinutes: Int { notificationRuntime.dndEndMinutes }
+
+    /// Shows the main window after a request that arrives from outside it, such
+    /// as a click on a macOS notification. `AppModel` fills this callback with
+    /// the AppKit route. It is a route out of the app state, not view state, so
+    /// it is `@ObservationIgnored`.
+    @ObservationIgnored var bringMainWindowForward: @MainActor () -> Void = {}
+
     @ObservationIgnored private var hasStarted = false
     @ObservationIgnored private var hasShutDown = false
 
@@ -280,6 +287,9 @@ final class AppState {
             selectService: { [weak self] spaceID, serviceID in
                 if let spaceID { self?.selectedSpaceID = spaceID }
                 self?.selectedServiceID = serviceID
+            },
+            bringWindowForward: { [weak self] in
+                self?.bringMainWindowForward()
             }
         )
         let didUpdate = Self.recordLaunchVersionAndCheckUpdate()

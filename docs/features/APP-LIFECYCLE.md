@@ -44,8 +44,31 @@ main window forward when the SwiftUI scene makes that window available.
 Before Blatta opens a main or Settings window, it changes to regular activation
 and activates the application. After the final main-capable window closes, it
 returns to accessory mode unless the Dock preference keeps the icon visible.
-Command-Tab orders an existing visible main window forward. A Dock reopen
-request also restores an existing main window or asks SwiftUI to create it.
+Command-Tab orders an existing visible main window forward. When no visible
+main-capable window exists, Command-Tab brings the main window back. Command-Tab
+sends no reopen request, so the activation is the only signal for this route. A
+visible Settings window counts as a visible window, and it keeps the main window
+closed.
+
+An activation that Blatta requests for itself restores no window. Such a request
+always precedes a window that Blatta is about to show, such as the Settings
+window of the menu-bar button. A restored main window would cover that window.
+The request marks itself for the activation that follows, and the mark expires
+after two seconds. A request that reaches no activation therefore cannot hide a
+later Command-Tab.
+
+A Dock reopen request also restores an existing main window or asks SwiftUI to
+create it. A Dock click can run the reopen handler and the activation restore.
+Both repeat safely, because the main window scene is unique and a second order
+request for the same window changes nothing.
+
+Four routes reach the main window from outside it. A Dock reopen request is one
+of them. The other three are the "Open Blatta" button of the menu-bar window, a
+click on an island alert, and a click on a macOS notification. These three share
+one route. That route promotes the activation policy. It then orders an existing
+main window forward, or asks SwiftUI to build the window again. Only SwiftUI can
+build the window of its own scene, so the view layer gives `AppDelegate` that
+action.
 Closing a window does not stop badge polling or notification detection.
 On a fresh install, Blatta appears in both the Dock and menu bar and shows the
 unread badge on its Dock icon. Existing saved choices remain unchanged.
@@ -86,7 +109,7 @@ The process has no helper that continues after termination.
 
 ## Verification
 
-BlattaCore tests cover launch activation, window-close activation, Dock
-preference behavior, and repeated shutdown requests. The application test
+BlattaCore tests cover launch activation, window-close activation, the window
+restore on activation, Dock preference behavior, and repeated shutdown requests. The application test
 suite builds the AppKit adapter and the two-phase startup path with Swift 6
 strict concurrency.

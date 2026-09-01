@@ -38,6 +38,7 @@ struct BlattaApp: App {
                 .environment(appModel)
                 .modelContainer(appState.modelContainer)
                 .preferredColorScheme(appState.appearanceColorScheme)
+                .modifier(MainWindowOpener(appDelegate: appDelegate))
                 .onDisappear {
                     appModel.saveWindowState()
                 }
@@ -183,6 +184,7 @@ struct BlattaApp: App {
                 .environment(appModel)
                 .modelContainer(appState.modelContainer)
                 .preferredColorScheme(appState.appearanceColorScheme)
+                .modifier(MainWindowOpener(appDelegate: appDelegate))
         } label: {
             // The status item glyph is a template asset, so macOS tints it for
             // the light and dark menu bar. The status item uses the intrinsic
@@ -256,6 +258,30 @@ struct BlattaApp: App {
             )
         )
         return credits
+    }
+}
+
+/// Gives `AppDelegate` a way to open the main window scene.
+///
+/// AppKit can order an existing window forward on its own, but only SwiftUI
+/// can build the window of a scene that the user closed. This modifier passes
+/// the scene action to the delegate, so an external request — a notification
+/// click, an island click, or the menu-bar window — reaches a visible window in
+/// every window state.
+///
+/// The assignment repeats without harm, and both the main window and the
+/// menu-bar window carry it. The menu-bar copy covers a login-item launch,
+/// which closes the main window right after the launch and leaves the main
+/// scene with no view that could make the assignment.
+private struct MainWindowOpener: ViewModifier {
+    let appDelegate: AppDelegate
+
+    @Environment(\.openWindow) private var openWindow
+
+    func body(content: Content) -> some View {
+        content.onAppear {
+            appDelegate.openMainWindow = { openWindow(id: "main") }
+        }
     }
 }
 

@@ -12,9 +12,9 @@ extension Notification.Name {
 struct MenuBarView: View {
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
     @Environment(AppState.self) private var appState
+    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openSettings) private var openSettings
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -253,14 +253,11 @@ struct MenuBarView: View {
         showMainWindow()
     }
 
+    /// Uses the shared route, which promotes the activation policy and then
+    /// orders the main window forward or asks SwiftUI to build it again.
     private func showMainWindow() {
         dismiss()
-        AppDelegate.prepareToShowWindow()
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            openWindow(id: "main")
-        }
+        appModel.bringMainWindowForward()
     }
 }
 

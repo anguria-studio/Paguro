@@ -15,6 +15,10 @@ final class AppModel {
     private var shutdownState = ApplicationShutdownState()
     @ObservationIgnored private let defaults: UserDefaults
 
+    /// The AppKit adapter that shows the main window. AppKit owns the delegate,
+    /// so this reference stays weak.
+    @ObservationIgnored private weak var appDelegate: AppDelegate?
+
     /// Whether the first-run welcome has already run for this user.
     private(set) var hasSeenWelcome: Bool
 
@@ -158,13 +162,24 @@ final class AppModel {
         )
     }
 
+    /// Activates Blatta and shows the main window, whatever the window state is.
+    /// Every route that starts outside the main window uses this one path.
+    func bringMainWindowForward() {
+        appDelegate?.bringMainWindowForward()
+    }
+
     func connect(to delegate: AppDelegate) {
         let mode = appState.preferencesStore.appPresenceMode
+        appDelegate = delegate
         presenceController.connect(to: delegate, initialMode: mode)
-        islandPanelController.onServiceRequested = {
-            [weak self, weak delegate] serviceID in
+        // The closure reaches the delegate through this model, so a route that
+        // is wired before or after `AppState.start()` uses the same reference.
+        appState.bringMainWindowForward = { [weak self] in
+            self?.bringMainWindowForward()
+        }
+        islandPanelController.onServiceRequested = { [weak self] serviceID in
             self?.appState.notificationManager.routeServiceRequest(serviceID)
-            delegate?.bringMainWindowForward()
+            self?.bringMainWindowForward()
         }
         delegate.didBecomeActive = { [weak self] in
             guard let self else { return }

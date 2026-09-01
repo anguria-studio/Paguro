@@ -41,6 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// hook, because the user then reads the active service account again.
     var didBecomeActive: (@MainActor () -> Void)?
 
+    /// Asks SwiftUI to open the main window scene.
+    ///
+    /// Only SwiftUI can create the window of the `Window(id: "main")` scene, so
+    /// the view layer fills this hook and AppKit calls it when no such window
+    /// exists any more.
+    var openMainWindow: (@MainActor () -> Void)?
+
     private var isSettlingLoginLaunch = false
     private var isTerminating = false
     private var hasFinishedLaunching = false
@@ -51,6 +58,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// It does not make the initial SwiftUI window key. Keep this request until
     /// the scene has produced a visible main-capable window.
     private var isAwaitingInitialWindowActivation = false
+
+    /// The moment until which an activation belongs to Blatta's own request.
+    ///
+    /// `takeFrontForUserAction` is static, because a view can start that route
+    /// without the delegate instance, so this marker is static too.
+    private static var selfActivationRequestDeadline: ContinuousClock.Instant?
+
+    /// A request that Blatta made for itself expires after this time.
+    ///
+    /// The system answers an activation request through the window server, so
+    /// the answer arrives several event-loop passes later. The value covers
+    /// that delay and stays far below the time a person needs to reach
+    /// Command-Tab.
+    private static let selfActivationRequestLifetime = Duration.seconds(2)
+
+    /// Tells whether the current activation follows a request of Blatta itself.
+    private var isSelfInitiatedActivation: Bool {
+        guard let deadline = Self.selfActivationRequestDeadline else {
+            return false
+        }
+        return ContinuousClock.now < deadline
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hasFinishedLaunching = true
@@ -101,24 +130,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    /// Command-Tab activates the process but does not issue a reopen request.
-    /// Re-order an existing visible main window so activation always has a
-    /// visible result. A window that AppKit already made key is that result
-    /// already, and the launch activation arrives here too, so the redundant
-    /// order request is skipped.
+    /// Command-Tab activates the process but does not issue a reopen request,
+    /// so this hook must give every activation a visible result.
+    ///
+    /// A visible main window comes forward. A window that AppKit already made
+    /// key is that result already, and the launch activation arrives here too,
+    /// so the redundant order request is skipped.
+    ///
+    /// With no visible main-capable window, the window comes back. A Dock click
+    /// runs the reopen handler and this restore, and both are safe to repeat:
+    /// `Window(id: "main")` is a unique scene, and a second order request for
+    /// the same window changes nothing.
     func applicationDidBecomeActive(_ notification: Notification) {
         hasActivatedSinceLaunch = true
         didBecomeActive?()
+
+        // Read the marker before any branch returns, and drop it at once. The
+        // request that set it describes this activation only.
+        let isSelfInitiated = isSelfInitiatedActivation
+        Self.selfActivationRequestDeadline = nil
+
+        let state = Self.activationState
         guard hasFinishedLaunching,
               !isSettlingLoginLaunch,
               !isTerminating,
-              NSApp.activationPolicy() == .regular,
-              let window = mainWindow,
-              window.isVisible,
-              !window.isKeyWindow
+              state == .regular
         else { return }
 
-        window.makeKeyAndOrderFront(nil)
+        if let window = mainWindow, window.isVisible {
+            guard !window.isKeyWindow else { return }
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let visibleMainWindowCount = NSApp.windows.filter {
+            Self.carriesMainWindowLifecycle($0) && $0.isVisible
+        }.count
+        guard ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: state,
+            isSelfInitiated: isSelfInitiated,
+            visibleMainWindowCount: visibleMainWindowCount
+        ) else { return }
+
+        bringMainWindowForward()
     }
 
     /// SwiftUI can create its Window scene after the launch callback. AppKit's
@@ -190,17 +244,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .none:
             return
         case .cooperative:
+            markSelfInitiatedActivation()
             NSApp.activate()
         case .takeFront:
             guard let frontApplication else { return }
+            markSelfInitiatedActivation()
             NSRunningApplication.current.activate(from: frontApplication)
         }
     }
 
-    /// Activates Blatta and shows its existing main window after an external action.
+    /// Marks the activation that Blatta requests for one of its own windows.
+    ///
+    /// `applicationDidBecomeActive` must not restore the main window for such a
+    /// request: the caller shows a window of its own directly after it, and a
+    /// restored main window would cover that window. The menu-bar Settings
+    /// button takes this route.
+    ///
+    /// The marker expires by time and never latches. A request can produce no
+    /// activation callback, and a marker that waited for one would then swallow
+    /// the next real Command-Tab.
+    private static func markSelfInitiatedActivation() {
+        selfActivationRequestDeadline = ContinuousClock.now
+            .advanced(by: selfActivationRequestLifetime)
+    }
+
+    /// The activation state that AppKit currently applies.
+    private static var activationState: ApplicationActivationState {
+        NSApp.activationPolicy() == .regular ? .regular : .accessory
+    }
+
+    /// Activates Blatta and shows its main window after an external action.
+    ///
+    /// A closed main window leaves AppKit with no window to order forward, so
+    /// the request goes to SwiftUI, which builds the window scene again.
     func bringMainWindowForward() {
         Self.prepareToShowWindow()
-        mainWindow?.makeKeyAndOrderFront(nil)
+        guard let window = mainWindow else {
+            openMainWindow?()
+            return
+        }
+        window.makeKeyAndOrderFront(nil)
     }
 
     private func observeWindows() {

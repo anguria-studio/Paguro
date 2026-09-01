@@ -365,6 +365,12 @@ service.
 A click first selects the service account.
 It then loads the approved target URL when one exists.
 
+A click also shows the main window. Blatta activates the application and orders
+that window forward, or asks SwiftUI to build the window again when the user
+closed it. The selection happens first, so the window shows the right service
+account as it appears. A click on a service account that no longer exists
+changes no selection and shows no window.
+
 The route policy must reject these values:
 
 - a non-HTTP scheme unless Blatta has a specific handler;

@@ -24,6 +24,7 @@ final class NotificationRuntime {
 
     private var currentSpaceID: @MainActor () -> UUID? = { nil }
     private var selectService: @MainActor (UUID?, UUID) -> Void = { _, _ in }
+    private var bringWindowForward: @MainActor () -> Void = { }
     private var quietHoursTask: Task<Void, Never>?
     private var activationTask: Task<Void, Never>?
     private var systemObserverTokens: [NSObjectProtocol] = []
@@ -82,12 +83,14 @@ final class NotificationRuntime {
     /// Installs lifecycle adapters and applies saved notification preferences.
     func start(
         currentSpaceID: @escaping @MainActor () -> UUID?,
-        selectService: @escaping @MainActor (UUID?, UUID) -> Void
+        selectService: @escaping @MainActor (UUID?, UUID) -> Void,
+        bringWindowForward: @escaping @MainActor () -> Void = { }
     ) {
         guard !hasStarted, !hasShutDown else { return }
         hasStarted = true
         self.currentSpaceID = currentSpaceID
         self.selectService = selectService
+        self.bringWindowForward = bringWindowForward
 
         // AppKit has finished launching by the time `start()` runs, which is
         // the first safe moment to touch `UNUserNotificationCenter`.
@@ -460,7 +463,10 @@ final class NotificationRuntime {
         let current = currentSpaceID()
         let isInCurrentSpace = spaces.contains { $0.id == current }
         let targetSpaceID = isInCurrentSpace ? nil : spaces.first?.id
+        // Select first and show second, so the window that reaches the screen
+        // already shows the service account that the user clicked.
         selectService(targetSpaceID, serviceID)
+        bringWindowForward()
     }
 
     private func service(_ serviceID: UUID) -> ServiceInstance? {

@@ -132,6 +132,57 @@ struct ApplicationLifecyclePolicyTests {
         ) == .cooperative)
     }
 
+    @Test("An external activation restores a closed main window")
+    func externalActivationRestoresTheClosedWindow() {
+        #expect(ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .regular,
+            isSelfInitiated: false,
+            visibleMainWindowCount: 0
+        ))
+    }
+
+    @Test("An activation that Blatta requested restores nothing")
+    func selfInitiatedActivationRestoresNothing() {
+        #expect(!ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .regular,
+            isSelfInitiated: true,
+            visibleMainWindowCount: 0
+        ))
+    }
+
+    @Test("A visible main window is the result of the activation already")
+    func visibleWindowNeedsNoRestore() {
+        #expect(!ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .regular,
+            isSelfInitiated: false,
+            visibleMainWindowCount: 1
+        ))
+        #expect(!ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .regular,
+            isSelfInitiated: true,
+            visibleMainWindowCount: 2
+        ))
+    }
+
+    @Test("An accessory application restores no main window")
+    func accessoryActivationRestoresNothing() {
+        #expect(!ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .accessory,
+            isSelfInitiated: false,
+            visibleMainWindowCount: 0
+        ))
+        #expect(!ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .accessory,
+            isSelfInitiated: true,
+            visibleMainWindowCount: 0
+        ))
+        #expect(!ApplicationLifecyclePolicy.restoresMainWindowOnActivation(
+            state: .accessory,
+            isSelfInitiated: false,
+            visibleMainWindowCount: 1
+        ))
+    }
+
     @Test("Closing the final main window returns to accessory mode")
     func closingFinalWindowReturnsAccessory() {
         #expect(ApplicationLifecyclePolicy.activationAfterClosingMainWindow(

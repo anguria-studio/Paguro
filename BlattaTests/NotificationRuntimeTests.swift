@@ -161,6 +161,87 @@ final class NotificationRuntimeTests: XCTestCase {
         XCTAssertEqual(selections[1].1, service.id)
     }
 
+    /// A banner click must select the service account and then show the main
+    /// window. Without the second step the selection changes behind a closed
+    /// window, and the click has no visible result.
+    @MainActor
+    func testNotificationRoutingSelectsTheServiceAndThenShowsTheWindow() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let space = Space(name: "Target", emoji: "T")
+        let service = ServiceInstance(label: "Chat", url: "https://chat.example")
+        context.insert(space)
+        context.insert(service)
+        context.insert(SpaceServiceLink(space: space, service: service))
+        try context.save()
+
+        enum Step: Equatable {
+            case select(UUID)
+            case showWindow
+        }
+        var steps: [Step] = []
+        fixture.runtime.start(
+            currentSpaceID: { nil },
+            selectService: { _, serviceID in steps.append(.select(serviceID)) },
+            bringWindowForward: { steps.append(.showWindow) }
+        )
+
+        fixture.notificationManager.routeServiceRequest(service.id)
+        await Task.yield()
+
+        XCTAssertEqual(steps, [.select(service.id), .showWindow])
+    }
+
+    /// A deleted service account has nowhere to go, so the click must show no
+    /// window either.
+    @MainActor
+    func testRoutingAnUnknownServiceShowsNoWindow() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+
+        var selections: [UUID] = []
+        var windowRequests = 0
+        fixture.runtime.start(
+            currentSpaceID: { nil },
+            selectService: { _, serviceID in selections.append(serviceID) },
+            bringWindowForward: { windowRequests += 1 }
+        )
+
+        fixture.notificationManager.routeServiceRequest(UUID())
+        await Task.yield()
+
+        XCTAssertTrue(selections.isEmpty)
+        XCTAssertEqual(windowRequests, 0)
+    }
+
+    /// A click that launches Blatta waits in the buffer until the runtime
+    /// starts. Each drained click must show the window as a live click does.
+    @MainActor
+    func testEachDrainedLaunchClickShowsTheWindow() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let space = Space(name: "Target", emoji: "T")
+        let service = ServiceInstance(label: "Chat", url: "https://chat.example")
+        context.insert(space)
+        context.insert(service)
+        context.insert(SpaceServiceLink(space: space, service: service))
+        try context.save()
+
+        fixture.notificationManager.routeServiceRequest(service.id)
+        var selections: [UUID] = []
+        var windowRequests = 0
+        fixture.runtime.start(
+            currentSpaceID: { nil },
+            selectService: { _, serviceID in selections.append(serviceID) },
+            bringWindowForward: { windowRequests += 1 }
+        )
+
+        XCTAssertEqual(selections, [service.id])
+        XCTAssertEqual(windowRequests, 1)
+    }
+
     @MainActor
     func testShutdownRemovesEveryOwnedCallbackAndObserver() async throws {
         let fixture = try makeFixture()

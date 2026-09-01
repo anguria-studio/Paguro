@@ -112,6 +112,27 @@ public enum ApplicationLifecyclePolicy {
         return hasOtherFrontApplication ? .takeFront : .cooperative
     }
 
+    /// Tells whether an activation must bring the main window back.
+    ///
+    /// Command-Tab activates the process but issues no reopen request, so a
+    /// closed main window leaves that activation without a visible result. The
+    /// Dock sends a reopen request instead, and both paths end in the same
+    /// restore work, which repeats safely.
+    ///
+    /// A request that Blatta made for itself must not restore the window. Such
+    /// a request always precedes a window that Blatta is about to show, and the
+    /// restored main window would appear in front of it.
+    ///
+    /// An accessory application has no Dock icon and no Command-Tab entry, so
+    /// it keeps its windows closed until a person asks for one.
+    public static func restoresMainWindowOnActivation(
+        state: ApplicationActivationState,
+        isSelfInitiated: Bool,
+        visibleMainWindowCount: Int
+    ) -> Bool {
+        state == .regular && !isSelfInitiated && visibleMainWindowCount == 0
+    }
+
     /// After the final main window closes, keep a requested Dock icon or return
     /// to menu-bar-only operation.
     public static func activationAfterClosingMainWindow(
