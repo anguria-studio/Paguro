@@ -384,7 +384,24 @@ final class NotificationRuntime {
             self?.startPolling(for: serviceID, webView: webView, mode: .background)
         }
         webViewPool.onServiceActivated = { [weak self] serviceID, webView in
-            self?.startPolling(for: serviceID, webView: webView, mode: .active)
+            guard let self else { return }
+            self.startPolling(for: serviceID, webView: webView, mode: .active)
+            // The user now looks at this page, so the badge must match it at
+            // once instead of after the first poll tick. This poll may clear:
+            // the recurring active poll reads the same page with the same
+            // clearing semantics a few seconds later, so an immediate read adds
+            // no new risk and removes only the blind window.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.notificationManager.pollNow(
+                    for: serviceID,
+                    webView: webView,
+                    isMuted: self.isServiceEffectivelyMuted(serviceID),
+                    showBadge: self.isServiceShowingBadge(serviceID),
+                    catalogEntry: self.catalogEntry(for: serviceID),
+                    resetToZero: true
+                )
+            }
         }
     }
 

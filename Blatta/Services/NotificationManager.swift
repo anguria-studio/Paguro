@@ -35,28 +35,54 @@ final class NotificationManager {
     /// 5 second poll reports a repeated value one time only.
     @ObservationIgnored private var lastLoggedPoll: [UUID: String] = [:]
 
+    /// The page-title observation of each active poll. Held here, next to
+    /// `pollTasks`, because both end at the same moment.
+    @ObservationIgnored private var titleObservations: [UUID: NSKeyValueObservation] = [:]
+
+    /// Service accounts whose page title changed since the last poll tick. The
+    /// active poll loop reads and clears this set on each tick.
+    @ObservationIgnored private var pendingPollKicks: Set<UUID> = []
+
+    /// The generation of the poll that runs for each service account, and the
+    /// counter that produces it. A generation is never reused, so a title
+    /// callback that arrives after its poll stopped or restarted can be told
+    /// apart from a live one and dropped.
+    @ObservationIgnored private var pollGenerations: [UUID: Int] = [:]
+    @ObservationIgnored private var nextPollGeneration = 0
+
     init(badgeManager: BadgeManager) {
         self.badgeManager = badgeManager
     }
 
     /// Polling cadence for a service.
-    /// - `active`: adaptive 5s→30s title polling + 2× DOM badge polling for
-    ///   the service currently displayed to the user.
-    /// - `background`: flat 30s title polling for preloaded or soft-hibernated
-    ///   services. No DOM badge polling because hidden views may have skipped
-    ///   rendering; the page title is enough signal for "(N)" badges.
+    /// - `active`: adaptive 5s→15s polling, plus a page-title kick, for the
+    ///   service currently displayed to the user.
+    /// - `background`: flat 30s polling for preloaded or soft-hibernated
+    ///   services. No title kick, because a hidden view changes its title while
+    ///   it preloads or rehydrates.
     enum PollMode {
         case active
         case background
     }
 
-    /// Title poll interval starts at 5s and steps up by 5s (capped at 30s) after
-    /// each run of 120 consecutive unchanged polls, so a quiet service gradually
-    /// slows down — reaching the 30s cap takes well over an hour of no change,
-    /// not 10 minutes — and it snaps back to 5s the moment the count changes. DOM
-    /// badge poll runs at 2× the title interval. `isMuted`/`showBadge` are passed
-    /// as closures so live toggles take effect on the next tick instead of
-    /// waiting for the polling task to be restarted.
+    /// Starts the poll loop of one service account.
+    ///
+    /// The active loop ticks every second and reads the count at an adaptive
+    /// interval. The interval starts at 5s and steps up by 5s, capped at 15s,
+    /// after each run of 120 unchanged polls, so a quiet service slows down
+    /// while a user who is reading still sees a badge follow the page.
+    ///
+    /// A change of the page title kicks the loop: the next tick polls at once
+    /// and the interval returns to 5s. A title change means the page state
+    /// moved, so the back-off restarts whether or not the count itself changed.
+    /// The 1 second tick is the debounce, so a burst of title changes costs one
+    /// poll.
+    ///
+    /// Each poll reads the authoritative source: the DOM `badgeJS` selector
+    /// when the catalog defines one, else the page title.
+    ///
+    /// `isMuted` and `showBadge` are passed as closures so live toggles take
+    /// effect on the next tick instead of waiting for a restart of the task.
     func startPolling(
         for instanceID: UUID,
         webView: WKWebView,
@@ -90,6 +116,49 @@ final class NotificationManager {
             }
         }
         pollTasks[instanceID] = task
+
+        if mode == .active {
+            observeTitleChanges(for: instanceID, webView: webView)
+        }
+    }
+
+    /// Watches the page title of an active service account, so the loop can
+    /// poll the moment the page reports a different unread count.
+    ///
+    /// The title is the one push signal that every page gives for free: a mail
+    /// service rewrites "(3) Inbox" as soon as the user reads a message, while
+    /// a poll alone can wait a full interval for the same fact.
+    private func observeTitleChanges(for instanceID: UUID, webView: WKWebView) {
+        nextPollGeneration &+= 1
+        let generation = nextPollGeneration
+        pollGenerations[instanceID] = generation
+
+        // WKWebView fires KVO on the main thread in practice, but this is not
+        // contractually guaranteed. Use DispatchQueue.main.async for safety —
+        // it's a no-op if already on main, and handles the off-main edge case
+        // without the crash risk of MainActor.assumeIsolated. The generation
+        // guard then drops a callback that arrives after this poll stopped or
+        // restarted, so a stopped service cannot kick a live one.
+        titleObservations[instanceID] = webView.observe(\.title, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                guard let self, self.pollGenerations[instanceID] == generation else { return }
+                self.kickPoll(for: instanceID)
+            }
+        }
+    }
+
+    /// Marks a service account for an immediate poll on the next loop tick.
+    ///
+    /// The title observation calls this. It is also the entry point that a test
+    /// drives, because a test cannot make WebKit deliver a title change at a
+    /// known moment.
+    func kickPoll(for instanceID: UUID) {
+        pendingPollKicks.insert(instanceID)
+    }
+
+    /// Reads and clears the kick of one service account.
+    func consumePollKick(for instanceID: UUID) -> Bool {
+        pendingPollKicks.remove(instanceID) != nil
     }
 
     private static func runActivePoll(
@@ -100,35 +169,25 @@ final class NotificationManager {
         showBadge: @MainActor () -> Bool,
         catalogEntry: ServiceCatalogEntry?
     ) async {
-        var interval = 5
-        var tick = 0
-        var unchangedCycles = 0
+        var schedule = ActivePollSchedule()
 
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard let manager = weakSelf(), let webView = weakWebView(), !Task.isCancelled else { break }
 
-            tick += 1
+            // The kick is read on every tick, so one title change costs one
+            // poll however many times the page rewrote its title in that second.
+            let kicked = manager.consumePollKick(for: instanceID)
+            guard schedule.advance(kicked: kicked) else { continue }
 
-            if tick % interval == 0 {
-                let previousCount = manager.badgeManager.rawCount(for: instanceID)
-                // Authoritative source (DOM selector if defined, else title).
-                // resetToZero: true — the user is looking, so an empty inbox
-                // clearing to 0 is correct.
-                await manager.pollPrimaryCount(webView: webView, instanceID: instanceID, isMuted: isMuted(), showBadge: showBadge(), catalogEntry: catalogEntry, resetToZero: true)
-                let newCount = manager.badgeManager.rawCount(for: instanceID)
+            let previousCount = manager.badgeManager.rawCount(for: instanceID)
+            // Authoritative source (DOM selector if defined, else title).
+            // resetToZero: true — the user is looking, so an empty inbox
+            // clearing to 0 is correct.
+            await manager.pollPrimaryCount(webView: webView, instanceID: instanceID, isMuted: isMuted(), showBadge: showBadge(), catalogEntry: catalogEntry, resetToZero: true)
+            let newCount = manager.badgeManager.rawCount(for: instanceID)
 
-                if newCount == previousCount {
-                    unchangedCycles += 1
-                    if unchangedCycles >= 120 {
-                        interval = min(interval + 5, 30)
-                        unchangedCycles = 0
-                    }
-                } else {
-                    interval = 5
-                    unchangedCycles = 0
-                }
-            }
+            schedule.recordResult(countChanged: newCount != previousCount)
         }
     }
 
@@ -156,6 +215,11 @@ final class NotificationManager {
         pollTasks[instanceID]?.cancel()
         pollTasks.removeValue(forKey: instanceID)
         lastLoggedPoll.removeValue(forKey: instanceID)
+        // The observation ends with the task it feeds. Dropping the generation
+        // makes a callback that is already in flight a no-op.
+        titleObservations.removeValue(forKey: instanceID)?.invalidate()
+        pollGenerations.removeValue(forKey: instanceID)
+        pendingPollKicks.remove(instanceID)
     }
 
     func stopAllPolling() {
@@ -164,25 +228,36 @@ final class NotificationManager {
         }
         pollTasks.removeAll()
         lastLoggedPoll.removeAll()
+        for observation in titleObservations.values {
+            observation.invalidate()
+        }
+        titleObservations.removeAll()
+        pollGenerations.removeAll()
+        pendingPollKicks.removeAll()
     }
 
-    /// Fires a single immediate poll (title + optional DOM badge) for a service
-    /// without starting or disturbing its recurring poll task. Used to populate
-    /// a badge the moment a page finishes loading — on startup or right after a
-    /// login redirect completes — instead of waiting for the next poll tick.
+    /// Fires a single immediate poll for a service without starting or
+    /// disturbing its recurring poll task. Used to fill a badge the moment a
+    /// page finishes loading, and to correct one the moment the user opens the
+    /// service, instead of waiting for the next poll tick.
     ///
-    /// Uses `resetToZero: false`: this opportunistic poll only ever *raises* a
-    /// badge, never clears one, so firing on an error page or login interstitial
-    /// can't wipe a correct count. The recurring poll handles authoritative
-    /// clearing.
+    /// The caller decides how much the poll may do:
+    ///
+    /// - `resetToZero: false`, the default, only ever *raises* a badge. A poll
+    ///   that fires on a login interstitial or an in-app error page then cannot
+    ///   wipe a correct count. Load-time polls use this.
+    /// - `resetToZero: true` also clears. Activation uses it, because the user
+    ///   is looking at a settled page, and a stale count is the visible fault
+    ///   there.
     func pollNow(
         for instanceID: UUID,
         webView: WKWebView,
         isMuted: Bool,
         showBadge: Bool,
-        catalogEntry: ServiceCatalogEntry?
+        catalogEntry: ServiceCatalogEntry?,
+        resetToZero: Bool = false
     ) async {
-        await pollPrimaryCount(webView: webView, instanceID: instanceID, isMuted: isMuted, showBadge: showBadge, catalogEntry: catalogEntry, resetToZero: false)
+        await pollPrimaryCount(webView: webView, instanceID: instanceID, isMuted: isMuted, showBadge: showBadge, catalogEntry: catalogEntry, resetToZero: resetToZero)
     }
 
     /// Reads the badge from the service's authoritative source: its DOM `badgeJS`
@@ -510,6 +585,59 @@ final class NotificationManager {
         )
         UNUserNotificationCenter.current().delegate = delegate
         NotificationCenterDelegate.retained = delegate
+    }
+}
+
+// MARK: - Active poll cadence
+
+/// The cadence of one active poll loop.
+///
+/// The loop ticks every second and asks this value when to read the count. The
+/// rule lives apart from the loop so each cadence decision can be tested
+/// without a running timer. It stays in the app target because it exists only
+/// to serve the WebKit poll loop.
+struct ActivePollSchedule {
+    /// The fastest cadence, and the cadence after any page change.
+    static let minimumInterval = 5
+    /// The slowest cadence. A user who reads a message in the window must not
+    /// wait longer than this for the badge to follow.
+    static let maximumInterval = 15
+    /// Unchanged polls needed before the cadence steps down one level. At one
+    /// poll every 5 seconds this is 10 minutes of silence for each step.
+    static let cyclesPerStep = 120
+
+    private(set) var interval = ActivePollSchedule.minimumInterval
+    private(set) var unchangedCycles = 0
+    private var tick = 0
+
+    /// Advances the loop by one second. Returns `true` when this tick polls.
+    ///
+    /// A kick is a page-title change. The page state moved, so the poll happens
+    /// on this tick and the back-off starts again at the fastest cadence.
+    mutating func advance(kicked: Bool) -> Bool {
+        guard !kicked else {
+            interval = Self.minimumInterval
+            unchangedCycles = 0
+            tick = 0
+            return true
+        }
+        tick += 1
+        return tick % interval == 0
+    }
+
+    /// Records what a poll found. An unchanged count moves the loop towards the
+    /// slowest cadence. A changed count returns it to the fastest one.
+    mutating func recordResult(countChanged: Bool) {
+        guard !countChanged else {
+            interval = Self.minimumInterval
+            unchangedCycles = 0
+            return
+        }
+        unchangedCycles += 1
+        if unchangedCycles >= Self.cyclesPerStep {
+            interval = min(interval + Self.minimumInterval, Self.maximumInterval)
+            unchangedCycles = 0
+        }
     }
 }
 

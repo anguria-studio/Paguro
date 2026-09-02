@@ -859,6 +859,61 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertEqual(badgeManager.badgeCount(for: serviceID), 5)
     }
 
+    /// A load-time poll can land on a login page or an in-app error page, so it
+    /// may only raise a badge. An activation poll reads a page the user is
+    /// looking at, so it must also be able to clear one.
+    @MainActor
+    func testOnlyAClearCapablePollResetsABadgeToZero() async throws {
+        let webView = WKWebView(frame: .zero)
+        webView.loadHTMLString(
+            "<html><head><title>Inbox</title></head><body>read</body></html>",
+            baseURL: URL(string: "https://example.com")
+        )
+        try await waitForTitle("Inbox", on: webView)
+
+        let badgeManager = BadgeManager()
+        let notifications = NotificationManager(badgeManager: badgeManager)
+        let serviceID = UUID()
+        badgeManager.updateBadge(for: serviceID, count: 4, isMuted: false)
+
+        await notifications.pollNow(
+            for: serviceID,
+            webView: webView,
+            isMuted: false,
+            showBadge: true,
+            catalogEntry: nil
+        )
+        XCTAssertEqual(
+            badgeManager.badgeCount(for: serviceID),
+            4,
+            "the raise-only default must keep the count"
+        )
+
+        await notifications.pollNow(
+            for: serviceID,
+            webView: webView,
+            isMuted: false,
+            showBadge: true,
+            catalogEntry: nil,
+            resetToZero: true
+        )
+        XCTAssertEqual(
+            badgeManager.badgeCount(for: serviceID),
+            0,
+            "a title without a count is an empty inbox for a clear-capable poll"
+        )
+    }
+
+    @MainActor
+    private func waitForTitle(_ title: String, on webView: WKWebView) async throws {
+        for _ in 0..<100 {
+            let current = try? await webView.evaluateJavaScript("document.title") as? String
+            if current == title { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTFail("Title fixture page never reported the expected title")
+    }
+
     @MainActor
     private func waitForBadgeFixture(_ webView: WKWebView) async throws {
         for _ in 0..<100 {

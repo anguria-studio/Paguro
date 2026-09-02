@@ -72,6 +72,35 @@ the Dock total with a negative or huge value.
 Each expression needs a test in `WebRuntimeTests` that runs it against a page
 shaped like the real DOM.
 
+### Badge poll cadence
+
+The service that the user sees runs the active poll. Its loop ticks every
+second and reads the count at an adaptive interval. The interval starts at 5
+seconds. It steps up by 5 seconds, up to 15 seconds, after each run of 120
+unchanged polls. A changed count returns the interval to 5 seconds.
+
+The 15 second cap is a promise to the user: a page in front of the user never
+holds a stale badge longer than that.
+
+A change of the page title kicks the loop. The next tick reads the count at
+once, and the interval returns to 5 seconds. A title change means the page
+state moved, so the back-off starts again whether or not the count changed. The
+1 second tick also debounces the signal, so a burst of title changes costs one
+poll. Blatta watches the title of an active service only. The title of a hidden
+view changes while the view preloads or rehydrates.
+
+A preloaded or soft-hibernated service polls every 30 seconds. It gets no title
+kick.
+
+Opening a service reads its count at once, and that read can clear the badge.
+The user looks at a settled page there, so a stale count is the visible fault.
+The active poll reads the same page with the same rule a few seconds later.
+
+A poll that runs when a page finishes loading can only raise a badge. That poll
+can meet a login page or an in-app error page, and neither page carries a
+count. A background poll of a service with a badge expression is also
+raise-only, because a hidden view may not have built the element yet.
+
 ### Service recipe
 
 Blatta bundles each recipe as a small rule for one service.

@@ -2,6 +2,7 @@ import AppKit
 import BlattaCore
 import SwiftData
 import UserNotifications
+import WebKit
 import XCTest
 @testable import Blatta
 
@@ -240,6 +241,45 @@ final class NotificationRuntimeTests: XCTestCase {
 
         XCTAssertEqual(selections, [service.id])
         XCTAssertEqual(windowRequests, 1)
+    }
+
+    /// Opening a service must correct its badge at once. Waiting for the first
+    /// poll tick left a count the user had already read on the screen for
+    /// seconds, which is the moment the user is most sure the badge is wrong.
+    @MainActor
+    func testActivatingAServiceClearsAStaleBadgeAtOnce() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let service = ServiceInstance(label: "Mail", url: "https://mail.example")
+        context.insert(service)
+        try context.save()
+
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        fixture.badgeManager.updateBadge(for: service.id, count: 4, isMuted: false)
+
+        let webView = WKWebView(frame: .zero)
+        webView.loadHTMLString(
+            "<html><head><title>Inbox</title></head><body>read</body></html>",
+            baseURL: URL(string: "https://mail.example")
+        )
+        for _ in 0..<100 {
+            let title = try? await webView.evaluateJavaScript("document.title") as? String
+            if title == "Inbox" { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        fixture.pool.onServiceActivated?(service.id, webView)
+        // Stop the recurring loop that activation also starts. It clears the
+        // same badge about 5 seconds later, so leaving it running would let the
+        // test pass without the immediate poll. Cancelling it leaves only the
+        // immediate poll, which the callback already started in its own task.
+        fixture.notificationManager.stopPolling(for: service.id)
+
+        for _ in 0..<100 where fixture.badgeManager.rawCount(for: service.id) != 0 {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(fixture.badgeManager.rawCount(for: service.id), 0)
     }
 
     @MainActor
