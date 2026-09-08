@@ -70,7 +70,8 @@ struct WorkspaceRailView: View {
         DockSizing(
             baseSize: appState.iconRailBaseSize,
             magnifiedSize: appState.iconRailMagnifiedSize,
-            magnificationEnabled: appState.iconRailMagnificationEnabled,
+            magnificationEnabled: appState.iconRailMagnificationEnabled
+                && !railReorder.isDragging,
             isCollapsed: isCollapsed,
             itemCount: liveSpaces.count,
             spaceAbove: Double(
@@ -102,6 +103,37 @@ struct WorkspaceRailView: View {
                     .padding(.bottom, isCollapsed ? 0 : 8)
                 }
                 .scrollClipDisabled(isCollapsed)
+                // One fixed viewport receives every primary click. The
+                // resolver decides which drawn icon, if any, owns the event;
+                // no animated cell frame participates in mouse targeting.
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    dockTapGesture(
+                        dockSizing: dockSizing,
+                        viewportHeight: geometry.size.height
+                    )
+                )
+                .overlay {
+                    if isCollapsed,
+                       dockSizing.magnificationEnabled,
+                       DockHitAreaDebugConfiguration.isEnabled {
+                        dockPointerDebugOverlay(
+                            dockSizing: dockSizing,
+                            viewportHeight: geometry.size.height
+                        )
+                    }
+                }
+                .contextMenu {
+                    if isCollapsed,
+                       dockSizing.magnificationEnabled,
+                       let contextSpace = dockPointerTarget(dockSizing: dockSizing) {
+                        workspaceContextMenu(for: contextSpace)
+                    } else {
+                        // An empty point in the Dock belongs to no workspace,
+                        // so it keeps the menu of the rail itself.
+                        addWorkspaceMenuItem
+                    }
+                }
                 .onScrollGeometryChange(for: RailScrollGeometry.self) { scroll in
                     RailScrollGeometry(
                         offset: scroll.contentOffset.y,
@@ -156,9 +188,15 @@ struct WorkspaceRailView: View {
             dockMagnification.clearHover()
         }
         .contextMenu {
-            Button("Add Workspace…") {
-                appState.showAddSpace = true
-            }
+            addWorkspaceMenuItem
+        }
+    }
+
+    /// The menu of the rail itself, which every point that holds no workspace
+    /// shows.
+    private var addWorkspaceMenuItem: some View {
+        Button("Add Workspace…") {
+            appState.showAddSpace = true
         }
     }
 
@@ -227,16 +265,25 @@ struct WorkspaceRailView: View {
             )),
             isDockHovered: dockMagnification.hoveredLinkID == space.id,
             onDockHoverChange: { hovering in
-                if hovering {
-                    dockMagnification.beginHover(for: space.id)
-                } else {
-                    dockMagnification.endHover(for: space.id, reduceMotion: reduceMotion)
-                }
+                dockMagnification.setCellPointer(
+                    hovering,
+                    for: space.id,
+                    reduceMotion: reduceMotion
+                )
             }
         ) {
             // The cell button and the reorder gesture see the same mouse
             // events. A release that ends a drag must not switch workspace.
             guard !railReorder.consumesClick(for: space.id) else { return }
+            if dockSizing.isCollapsed, dockSizing.magnificationEnabled {
+                // Inside the viewport, the rail spatial tap owns activation.
+                // A drawn icon can extend horizontally beyond that viewport;
+                // forward only that overflow through the same resolver.
+                if !dockMagnification.hasRailPointer {
+                    activateDockPointerTarget(dockSizing: dockSizing)
+                }
+                return
+            }
             selectedSpaceID = space.id
         }
         .railReorder(
@@ -257,18 +304,123 @@ struct WorkspaceRailView: View {
                 )
             }
         )
-        .contextMenu {
-            WorkspaceContextMenuItems(
-                space: space,
-                allowsDelete: liveSpaces.count > 1,
-                onAddService: {
-                    selectedSpaceID = space.id
-                    appState.showAddService = true
-                },
-                onEdit: { editingSpace = space },
-                onDelete: { confirmingDeleteSpace = space }
-            )
+        .accessibilityAction(.default) {
+            selectedSpaceID = space.id
         }
+        .contextMenu {
+            if let contextSpace = dockContextSpace(
+                fallback: space,
+                dockSizing: dockSizing
+            ) {
+                workspaceContextMenu(for: contextSpace)
+            }
+        }
+    }
+
+    /// The index under the pointer in the stack that is currently drawn.
+    private func dockPointerTargetIndex(dockSizing: DockSizing) -> Int? {
+        guard let targetIndex = dockMagnification.targetIndex(sizing: dockSizing),
+              liveSpaces.indices.contains(targetIndex)
+        else { return nil }
+        return targetIndex
+    }
+
+    private func dockPointerTarget(dockSizing: DockSizing) -> Space? {
+        guard let targetIndex = dockPointerTargetIndex(dockSizing: dockSizing) else {
+            return nil
+        }
+        return liveSpaces[targetIndex]
+    }
+
+    private func activateDockPointerTarget(dockSizing: DockSizing) {
+        guard let target = dockPointerTarget(dockSizing: dockSizing) else { return }
+        selectedSpaceID = target.id
+    }
+
+    private func dockContextSpace(fallback: Space, dockSizing: DockSizing) -> Space? {
+        guard dockSizing.isCollapsed,
+              dockSizing.magnificationEnabled,
+              dockMagnification.hasRailPointer
+        else {
+            return fallback
+        }
+        return dockPointerTarget(dockSizing: dockSizing)
+    }
+
+    private func dockTapGesture(
+        dockSizing: DockSizing,
+        viewportHeight: CGFloat
+    ) -> some Gesture {
+        SpatialTapGesture(coordinateSpace: .local)
+            .onEnded { value in
+                guard isCollapsed,
+                      dockSizing.magnificationEnabled,
+                      !railReorder.isDragging
+                else { return }
+
+                moveDockPointer(
+                    to: value.location,
+                    viewportHeight: viewportHeight,
+                    dockSizing: dockSizing
+                )
+                activateDockPointerTarget(dockSizing: dockSizing)
+            }
+    }
+
+    private func dockPointerDebugOverlay(
+        dockSizing: DockSizing,
+        viewportHeight: CGFloat
+    ) -> some View {
+        let spill = CGFloat(DockIconSizing.maximumTargetSpill(
+            baseSize: dockSizing.baseSize,
+            magnifiedSize: dockSizing.magnifiedSize,
+            magnificationEnabled: dockSizing.magnificationEnabled
+        ))
+        let restingTop = dockTopPadding(viewportHeight: viewportHeight)
+            - railScroll.offset
+        let restingHeight = CGFloat(dockSizing.itemCount)
+            * BlattaMetric.Sidebar.dockRowHeight(
+                displayedIconSize: dockSizing.baseSize
+            )
+
+        // The resolved outline reads the pointer, so this overlay re-renders on
+        // every pointer move. Only the DEBUG launch argument reaches it, and it
+        // takes no hit test, so the product pays nothing for it.
+        var resolvedTop: CGFloat?
+        var resolvedHeight: CGFloat = 0
+        if let index = dockPointerTargetIndex(dockSizing: dockSizing) {
+            let row = dockDrawnRow(
+                atIndex: index,
+                sizing: dockSizing,
+                transform: dockMagnification.iconTransform(
+                    atIndex: index,
+                    sizing: dockSizing
+                )
+            )
+            resolvedTop = restingTop + row.top
+            resolvedHeight = row.height
+        }
+
+        return DockPointerDebugOverlay(
+            targetTop: restingTop - spill,
+            targetHeight: restingHeight + (spill * 2),
+            resolvedTop: resolvedTop,
+            resolvedHeight: resolvedHeight
+        )
+    }
+
+    @ViewBuilder
+    private func workspaceContextMenu(for space: Space) -> some View {
+        WorkspaceContextMenuItems(
+            space: space,
+            allowsDelete: liveSpaces.count > 1,
+            onAddService: {
+                selectedSpaceID = space.id
+                appState.showAddService = true
+            },
+            onEdit: { editingSpace = space },
+            onDelete: { confirmingDeleteSpace = space }
+        )
     }
 
     private var addWorkspaceButton: some View {
@@ -286,24 +438,50 @@ struct WorkspaceRailView: View {
     }
 
     private func updatePointer(_ phase: HoverPhase, viewportHeight: CGFloat) {
-        guard isCollapsed, appState.iconRailMagnificationEnabled else {
+        guard isCollapsed,
+              appState.iconRailMagnificationEnabled,
+              !railReorder.isDragging
+        else {
             dockMagnification.endPointerTracking(reduceMotion: reduceMotion)
             return
         }
 
         switch phase {
         case .active(let location):
-            dockMagnification.movePointer(
-                toRows: DockIconSizing.pointerRows(
-                    pointerPosition: Double(location.y + railScroll.offset),
-                    topPadding: Double(dockTopPadding(viewportHeight: viewportHeight)),
-                    baseSize: appState.iconRailBaseSize
-                ),
-                reduceMotion: reduceMotion
+            moveDockPointer(
+                to: location,
+                viewportHeight: viewportHeight,
+                dockSizing: dockSizing
             )
         case .ended:
             dockMagnification.endRailPointer(reduceMotion: reduceMotion)
         }
+    }
+
+    private func moveDockPointer(
+        to location: CGPoint,
+        viewportHeight: CGFloat,
+        dockSizing: DockSizing
+    ) {
+        let topPadding = dockTopPadding(viewportHeight: viewportHeight)
+        let pointerPosition = DockIconSizing.stackPointerPosition(
+            viewportPosition: Double(location.y),
+            scrollOffset: Double(railScroll.offset),
+            topPadding: Double(topPadding)
+        )
+        dockMagnification.movePointer(
+            toRows: DockIconSizing.pointerRows(
+                pointerPosition: pointerPosition,
+                topPadding: 0,
+                baseSize: appState.iconRailBaseSize
+            ),
+            position: pointerPosition,
+            reduceMotion: reduceMotion
+        )
+        dockMagnification.routeHover(
+            to: dockPointerTarget(dockSizing: dockSizing)?.id,
+            reduceMotion: reduceMotion
+        )
     }
 
     private func dockTopPadding(viewportHeight: CGFloat) -> CGFloat {

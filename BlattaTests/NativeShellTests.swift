@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import Observation
 import SwiftData
 import SwiftUI
 import BlattaCore
@@ -101,6 +102,142 @@ final class NativeShellTests: XCTestCase {
         XCTAssertEqual(state.hoveredLinkID, second)
         state.clearHover()
         XCTAssertNil(state.hoveredLinkID)
+    }
+
+    @MainActor
+    func testDockTargetUsesThePointerPositionKeptByTheRail() {
+        let state = DockMagnificationState()
+        var sizing = dockSizing
+        sizing.spaceAbove = 0
+        let rowHeight = DockIconSizing.rowHeight(displayedIconSize: sizing.baseSize)
+        let lastIndex = sizing.itemCount - 1
+        let pointerPosition = (Double(sizing.itemCount) * rowHeight) + 5
+        let pointerRows = DockIconSizing.pointerRows(
+            pointerPosition: pointerPosition,
+            topPadding: 0,
+            baseSize: sizing.baseSize
+        )
+
+        state.movePointer(
+            toRows: pointerRows,
+            position: pointerPosition,
+            reduceMotion: true
+        )
+
+        XCTAssertEqual(state.targetIndex(sizing: sizing), lastIndex)
+    }
+
+    /// The model raises the progress to 1 as the animation starts, while the
+    /// drawing needs the complete duration. A click in that window must answer
+    /// for the stack that a person sees.
+    @MainActor
+    func testDockTargetFollowsTheDrawnProgressWhileTheRailMagnifies() async {
+        var sizing = dockSizing
+        sizing.spaceAbove = 0
+        let rowHeight = DockIconSizing.rowHeight(displayedIconSize: sizing.baseSize)
+        let lastIndex = sizing.itemCount - 1
+        // A point below the resting stack. It belongs to no item at rest, and
+        // to the last item once the magnification pushes the stack down.
+        let pointerPosition = (Double(sizing.itemCount) * rowHeight)
+            + (rowHeight * 0.25)
+        let pointerRows = DockIconSizing.pointerRows(
+            pointerPosition: pointerPosition,
+            topPadding: 0,
+            baseSize: sizing.baseSize
+        )
+
+        let rising = DockMagnificationState(magnificationSeconds: 30)
+        rising.movePointer(toRows: pointerRows, position: pointerPosition)
+        XCTAssertEqual(rising.magnificationProgress, 1)
+        XCTAssertNil(rising.targetIndex(sizing: sizing))
+        rising.clearHover()
+
+        let risen = DockMagnificationState(magnificationSeconds: 0.05)
+        risen.movePointer(toRows: pointerRows, position: pointerPosition)
+        try? await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(risen.targetIndex(sizing: sizing), lastIndex)
+        risen.clearHover()
+    }
+
+    /// The pointer stays on one item for many events. Repeating the route must
+    /// not write the identity that every cell reads, and it must keep the item.
+    @MainActor
+    func testRoutingToTheHoveredItemKeepsItAndCancelsAPendingExit() async {
+        let linkID = UUID()
+        let state = DockMagnificationState()
+
+        state.movePointer(toRows: 1, position: 70, reduceMotion: true)
+        state.routeHover(to: linkID, reduceMotion: true)
+        state.endHover(for: linkID, after: .milliseconds(40), reduceMotion: true)
+
+        // Observation reports a write, not a new value. A repeated route must
+        // make no write at all, because every cell reads this property.
+        let changed = ObservedChangeFlag()
+        withObservationTracking {
+            _ = state.hoveredLinkID
+        } onChange: {
+            changed.didChange = true
+        }
+        state.routeHover(to: linkID, reduceMotion: true)
+        XCTAssertFalse(changed.didChange)
+
+        try? await Task.sleep(for: .milliseconds(120))
+        XCTAssertEqual(state.hoveredLinkID, linkID)
+        state.clearHover()
+    }
+
+    @MainActor
+    func testRailOwnsHoverIdentityWhileACellKeepsThePointerAlive() {
+        let first = UUID()
+        let overflowCell = UUID()
+        let state = DockMagnificationState()
+
+        state.movePointer(toRows: 1, position: 70, reduceMotion: true)
+        state.routeHover(to: first, reduceMotion: true)
+        state.setCellPointer(true, for: overflowCell, reduceMotion: true)
+        state.endRailPointer(reduceMotion: true)
+
+        XCTAssertEqual(state.hoveredLinkID, first)
+        XCTAssertNotNil(state.pointerRows)
+        XCTAssertEqual(state.magnificationProgress, 1)
+
+        state.setCellPointer(false, for: overflowCell, reduceMotion: true)
+        state.clearHover()
+    }
+
+    @MainActor
+    func testHoverExitDoesNotDropAPointerThatRemainsInTheRail() async {
+        let linkID = UUID()
+        let state = DockMagnificationState()
+
+        state.movePointer(toRows: 1, position: 70, reduceMotion: true)
+        state.routeHover(to: linkID, reduceMotion: true)
+        state.endHover(for: linkID, after: .zero, reduceMotion: true)
+        try? await Task.sleep(for: .milliseconds(10))
+
+        XCTAssertNil(state.hoveredLinkID)
+        XCTAssertNotNil(state.pointerRows)
+        XCTAssertEqual(state.magnificationProgress, 1)
+    }
+
+    @MainActor
+    func testCellHoverCannotOverrideANilTargetResolvedByTheRail() async {
+        let linkID = UUID()
+        let state = DockMagnificationState()
+
+        state.movePointer(toRows: 1, position: 70, reduceMotion: true)
+        state.routeHover(to: linkID, reduceMotion: true)
+        state.endHover(for: linkID, after: .zero, reduceMotion: true)
+        state.setCellPointer(true, for: linkID, reduceMotion: true)
+        try? await Task.sleep(for: .milliseconds(10))
+
+        XCTAssertNil(state.hoveredLinkID)
+        XCTAssertNotNil(state.pointerRows)
+        XCTAssertEqual(state.magnificationProgress, 1)
+
+        state.setCellPointer(false, for: linkID, reduceMotion: true)
+        state.clearHover()
     }
 
     // MARK: - Notice shape and selection against focus
@@ -529,4 +666,10 @@ final class NativeShellTests: XCTestCase {
             accuracy: 1
         )
     }
+}
+
+/// Records one observation change from the tracking closure, which runs
+/// outside the actor of the test.
+private final class ObservedChangeFlag: @unchecked Sendable {
+    var didChange = false
 }

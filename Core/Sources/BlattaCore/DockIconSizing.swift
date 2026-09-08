@@ -142,6 +142,17 @@ public enum DockIconSizing {
         return ((pointerPosition - topPadding) / height) - 0.5
     }
 
+    /// Converts a viewport position to a position from the resting stack top.
+    /// The scroll offset moves the content up. The fixed top padding puts the
+    /// stack below the content origin.
+    public static func stackPointerPosition(
+        viewportPosition: Double,
+        scrollOffset: Double,
+        topPadding: Double
+    ) -> Double {
+        viewportPosition + scrollOffset - topPadding
+    }
+
     /// How many rows to each side of the pointer still grow.
     public static let magnificationInfluenceRows = 2.5
 
@@ -243,17 +254,14 @@ public enum DockIconSizing {
         let base = self.baseSize(baseSize)
         guard magnificationEnabled, pointerRows != nil else { return 0 }
 
-        let baseHeight = rowHeight(displayedIconSize: base)
         func growth(_ index: Int) -> Double {
-            let size = displayedSize(
+            rowGrowth(
+                itemIndex: index,
                 baseSize: base,
                 magnifiedSize: magnifiedSize,
-                magnificationEnabled: true,
-                itemIndex: index,
                 pointerRows: pointerRows,
                 magnificationProgress: magnificationProgress
             )
-            return rowHeight(displayedIconSize: size) - baseHeight
         }
 
         var spread = 0.0
@@ -273,6 +281,76 @@ public enum DockIconSizing {
             magnificationProgress: magnificationProgress,
             spaceAbove: spaceAbove
         )
+    }
+
+    /// How far the workspace divider moves from where it lays out.
+    ///
+    /// The divider stays centered between the two icons that it parts. The
+    /// icon above it takes all the growth before it plus half of its own. The
+    /// icon below it takes the same total less half of its own. Their drawn
+    /// edges therefore stay at the same distance from the resting center of
+    /// the divider, and that distance is the growth of every row up to and
+    /// including `afterIndex`, plus the move of the stack itself.
+    ///
+    /// `afterIndex` is the index of the last item before the divider. The
+    /// answer is 0 while the rail rests, as `iconVerticalOffset` is.
+    public static func separatorVerticalOffset(
+        afterIndex: Int,
+        baseSize: Double,
+        magnifiedSize: Double,
+        magnificationEnabled: Bool,
+        itemCount: Int,
+        pointerRows: Double?,
+        magnificationProgress: Double = 1,
+        spaceAbove: Double
+    ) -> Double {
+        let base = self.baseSize(baseSize)
+        guard magnificationEnabled, pointerRows != nil else { return 0 }
+
+        var spread = 0.0
+        let itemsAbove = min(afterIndex + 1, itemCount)
+        if itemsAbove > 0 {
+            for index in 0..<itemsAbove {
+                spread += rowGrowth(
+                    itemIndex: index,
+                    baseSize: base,
+                    magnifiedSize: magnifiedSize,
+                    pointerRows: pointerRows,
+                    magnificationProgress: magnificationProgress
+                )
+            }
+        }
+
+        return spread + stackVerticalOffset(
+            baseSize: base,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: magnificationEnabled,
+            itemCount: itemCount,
+            pointerRows: pointerRows,
+            magnificationProgress: magnificationProgress,
+            spaceAbove: spaceAbove
+        )
+    }
+
+    /// How much taller one row draws than it lays out. `baseSize` is the size
+    /// that `baseSize(_:)` has already limited.
+    private static func rowGrowth(
+        itemIndex: Int,
+        baseSize: Double,
+        magnifiedSize: Double,
+        pointerRows: Double?,
+        magnificationProgress: Double
+    ) -> Double {
+        let size = displayedSize(
+            baseSize: baseSize,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: true,
+            itemIndex: itemIndex,
+            pointerRows: pointerRows,
+            magnificationProgress: magnificationProgress
+        )
+        return rowHeight(displayedIconSize: size)
+            - rowHeight(displayedIconSize: baseSize)
     }
 
     /// Keeps the rail under the pointer where it was, as far as the rail can
@@ -328,5 +406,153 @@ public enum DockIconSizing {
         }
 
         return -min(rise, max(0, spaceAbove))
+    }
+
+    // MARK: - Pointer targets
+
+    /// Returns the item drawn at one position in the resting stack.
+    ///
+    /// The rail has one fixed pointer surface. A click can arrive through a
+    /// point whose resting row no longer holds the icon drawn there. This rule
+    /// resolves the item from the drawing at the time of the event. It does
+    /// not change a target or take part in animation.
+    ///
+    /// `pointerPosition` starts at the resting top of the first row. It includes
+    /// any workspace dividers. `separatorAfterIndices` contains the item index
+    /// before each divider. A bare divider has no target. A visible icon that
+    /// crosses a divider still receives the event.
+    public static func targetIndex(
+        pointerPosition: Double,
+        baseSize: Double,
+        magnifiedSize: Double,
+        magnificationEnabled: Bool,
+        itemCount: Int,
+        pointerRows: Double?,
+        magnificationProgress: Double = 1,
+        spaceAbove: Double,
+        separatorAfterIndices: [Int] = [],
+        separatorHeight: Double = 0
+    ) -> Int? {
+        guard pointerPosition.isFinite, itemCount > 0 else { return nil }
+
+        let base = self.baseSize(baseSize)
+        let baseHeight = rowHeight(displayedIconSize: base)
+        let gap = max(0, separatorHeight)
+        let separators = Set(
+            separatorAfterIndices.filter { $0 >= 0 && $0 < itemCount - 1 }
+        )
+
+        var restingTops: [Double] = []
+        restingTops.reserveCapacity(itemCount)
+        var restingTop = 0.0
+        for index in 0..<itemCount {
+            restingTops.append(restingTop)
+            restingTop += baseHeight
+            if separators.contains(index) {
+                restingTop += gap
+            }
+        }
+        let restingBottom = restingTop
+
+        let stackOffset = stackVerticalOffset(
+            baseSize: base,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: magnificationEnabled,
+            itemCount: itemCount,
+            pointerRows: pointerRows,
+            magnificationProgress: magnificationProgress,
+            spaceAbove: spaceAbove
+        )
+
+        var drawnTops: [Double] = []
+        var drawnBottoms: [Double] = []
+        var iconTops: [Double] = []
+        var iconBottoms: [Double] = []
+        drawnTops.reserveCapacity(itemCount)
+        drawnBottoms.reserveCapacity(itemCount)
+        iconTops.reserveCapacity(itemCount)
+        iconBottoms.reserveCapacity(itemCount)
+
+        var precedingGrowth = 0.0
+        for index in 0..<itemCount {
+            let displayed = displayedSize(
+                baseSize: base,
+                magnifiedSize: magnifiedSize,
+                magnificationEnabled: magnificationEnabled,
+                itemIndex: index,
+                pointerRows: pointerRows,
+                magnificationProgress: magnificationProgress
+            )
+            let displayedHeight = rowHeight(displayedIconSize: displayed)
+            let growth = displayedHeight - baseHeight
+            let offset = precedingGrowth + (growth / 2) + stackOffset
+            let center = restingTops[index] + (baseHeight / 2) + offset
+
+            drawnTops.append(center - (displayedHeight / 2))
+            drawnBottoms.append(center + (displayedHeight / 2))
+            iconTops.append(center - (displayed / 2))
+            iconBottoms.append(center + (displayed / 2))
+            precedingGrowth += growth
+        }
+
+        let targetTop = min(0, drawnTops[0])
+        let targetBottom = max(restingBottom, drawnBottoms[itemCount - 1])
+        guard pointerPosition >= targetTop, pointerPosition <= targetBottom else {
+            return nil
+        }
+
+        // A divider stays an intentional break in the rail. An icon can grow
+        // across it, in which case the visible icon has priority.
+        //
+        // The band moves with the stack that it parts, exactly as the drawn
+        // divider does. A band left at its resting place would refuse an event
+        // that the drawing gives to an icon.
+        for separatorIndex in separators {
+            let separatorOffset = separatorVerticalOffset(
+                afterIndex: separatorIndex,
+                baseSize: base,
+                magnifiedSize: magnifiedSize,
+                magnificationEnabled: magnificationEnabled,
+                itemCount: itemCount,
+                pointerRows: pointerRows,
+                magnificationProgress: magnificationProgress,
+                spaceAbove: spaceAbove
+            )
+            let top = restingTops[separatorIndex] + baseHeight + separatorOffset
+            let bottom = top + gap
+            guard pointerPosition >= top, pointerPosition < bottom else { continue }
+
+            if let visibleIndex = (0..<itemCount).first(where: { index in
+                pointerPosition >= iconTops[index]
+                    && pointerPosition <= iconBottoms[index]
+            }) {
+                return visibleIndex
+            }
+            return nil
+        }
+
+        for index in 0..<(itemCount - 1) {
+            let boundary = (drawnBottoms[index] + drawnTops[index + 1]) / 2
+            if pointerPosition < boundary {
+                return index
+            }
+        }
+        return itemCount - 1
+    }
+
+    /// The largest distance the drawn stack can leave its resting end.
+    ///
+    /// The debug overlay uses this fixed bound to show the complete target
+    /// envelope. The value changes only with size settings, not pointer
+    /// movement.
+    public static func maximumTargetSpill(
+        baseSize: Double,
+        magnifiedSize: Double,
+        magnificationEnabled: Bool
+    ) -> Double {
+        guard magnificationEnabled else { return 0 }
+        let base = self.baseSize(baseSize)
+        let peak = self.magnifiedSize(magnifiedSize, baseSize: base)
+        return (peak - base) * magnificationInfluenceRows
     }
 }

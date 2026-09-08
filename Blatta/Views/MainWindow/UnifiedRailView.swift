@@ -179,6 +179,17 @@ struct UnifiedRailView: View {
         showsAllWorkspaces ? max(0, dockWorkspaceGroups.count - 1) : 0
     }
 
+    /// Item indices followed by a workspace divider in the collapsed Dock.
+    private var dockSeparatorAfterIndices: [Int] {
+        guard showsAllWorkspaces else { return [] }
+
+        var itemCount = 0
+        return dockWorkspaceGroups.dropLast().map { group in
+            itemCount += group.links.count
+            return itemCount - 1
+        }
+    }
+
     private var duplicateServiceIDs: Set<UUID> {
         // The grouped top bar already names the workspace before each run of
         // tabs, so a tab there needs no workspace suffix of its own.
@@ -336,6 +347,37 @@ struct UnifiedRailView: View {
                     .coordinateSpace(.named(RailCoordinateSpace.name))
                 }
                 .scrollClipDisabled(sidebarPresentation == .collapsed)
+                // One fixed viewport receives every primary click. The
+                // resolver decides which drawn icon, if any, owns the event;
+                // no animated cell frame participates in mouse targeting.
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                    dockTapGesture(
+                        dockSizing: dockSizing,
+                        viewportHeight: geometry.size.height
+                    )
+                )
+                .overlay {
+                    if sidebarPresentation == .collapsed,
+                       dockSizing.magnificationEnabled,
+                       DockHitAreaDebugConfiguration.isEnabled {
+                        dockPointerDebugOverlay(
+                            dockSizing: dockSizing,
+                            viewportHeight: geometry.size.height
+                        )
+                    }
+                }
+                .contextMenu {
+                    if sidebarPresentation == .collapsed,
+                       dockSizing.magnificationEnabled,
+                       let contextLink = dockPointerTarget(dockSizing: dockSizing) {
+                        serviceContextMenu(for: contextLink)
+                    } else {
+                        // An empty point in the Dock belongs to no service, so
+                        // it keeps the menu of the rail itself.
+                        railCreationMenu
+                    }
+                }
                 .scrollPosition($railScrollPosition)
                 .onScrollGeometryChange(for: RailScrollGeometry.self) { scroll in
                     RailScrollGeometry(
@@ -468,15 +510,14 @@ struct UnifiedRailView: View {
                 )
             }
         } else if showsAllWorkspaces && sidebarPresentation == .collapsed {
+            let separatorAfterIndices = dockSeparatorAfterIndices
             ForEach(Array(dockWorkspaceGroups.enumerated()), id: \.element.id) { index, group in
-                if index > 0 {
-                    Divider()
-                        .padding(
-                            .horizontal,
-                            BlattaMetric.Sidebar.workspaceDividerHorizontalInset
-                        )
-                        .frame(height: BlattaMetric.Sidebar.workspaceDividerHeight)
-                        .accessibilityHidden(true)
+                if index > 0, separatorAfterIndices.indices.contains(index - 1) {
+                    DockWorkspaceDividerView(
+                        afterIndex: separatorAfterIndices[index - 1],
+                        dockSizing: dockSizing,
+                        dockMagnification: dockMagnification
+                    )
                 }
                 ForEach(group.links) { link in
                     serviceRow(
@@ -684,10 +725,126 @@ struct UnifiedRailView: View {
                 ? verticalRailSpacing
                 : ServiceRowView.tabSpacing,
             focusedLinkID: $focusedLinkID,
-            showsKeyboardFocusRing: $showsKeyboardFocusRing
+            showsKeyboardFocusRing: $showsKeyboardFocusRing,
+            onDockOverflowPointerAction: {
+                activateDockPointerTarget(dockSizing: dockSizing)
+            }
         ) {
-            serviceContextMenu(for: link)
+            if let contextLink = dockContextLink(
+                fallback: link,
+                dockSizing: dockSizing
+            ) {
+                serviceContextMenu(for: contextLink)
+            }
         }
+    }
+
+    /// The index under the pointer in the stack that is currently drawn.
+    private func dockPointerTargetIndex(dockSizing: DockSizing) -> Int? {
+        guard let targetIndex = dockMagnification.targetIndex(
+            sizing: dockSizing,
+            separatorAfterIndices: dockSeparatorAfterIndices,
+            separatorHeight: Double(BlattaMetric.Sidebar.workspaceDividerHeight)
+        ), dockLinks.indices.contains(targetIndex) else {
+            return nil
+        }
+        return targetIndex
+    }
+
+    /// The item under the pointer in the stack that is currently drawn.
+    private func dockPointerTarget(dockSizing: DockSizing) -> LiveSpaceServiceLink? {
+        guard let targetIndex = dockPointerTargetIndex(dockSizing: dockSizing) else {
+            return nil
+        }
+        return dockLinks[targetIndex]
+    }
+
+    private func activateDockPointerTarget(dockSizing: DockSizing) {
+        guard let target = dockPointerTarget(dockSizing: dockSizing) else { return }
+        selectedSpaceID = target.space.id
+        selectedServiceID = target.service.id
+        focusedLinkID = target.id
+    }
+
+    /// A context menu opened outside the Dock keeps the semantic cell. A menu
+    /// opened in an active Dock follows the item that is drawn at the pointer.
+    private func dockContextLink(
+        fallback: LiveSpaceServiceLink,
+        dockSizing: DockSizing
+    ) -> LiveSpaceServiceLink? {
+        guard dockSizing.isCollapsed,
+              dockSizing.magnificationEnabled,
+              dockMagnification.hasRailPointer
+        else {
+            return fallback
+        }
+        return dockPointerTarget(dockSizing: dockSizing)
+    }
+
+    private func dockTapGesture(
+        dockSizing: DockSizing,
+        viewportHeight: CGFloat
+    ) -> some Gesture {
+        SpatialTapGesture(coordinateSpace: .local)
+            .onEnded { value in
+                guard sidebarPresentation == .collapsed,
+                      dockSizing.magnificationEnabled,
+                      !railReorder.isDragging
+                else { return }
+
+                moveDockPointer(
+                    to: value.location,
+                    viewportHeight: viewportHeight,
+                    dockSizing: dockSizing
+                )
+                activateDockPointerTarget(dockSizing: dockSizing)
+            }
+    }
+
+    private func dockPointerDebugOverlay(
+        dockSizing: DockSizing,
+        viewportHeight: CGFloat
+    ) -> some View {
+        let spill = CGFloat(DockIconSizing.maximumTargetSpill(
+            baseSize: dockSizing.baseSize,
+            magnifiedSize: dockSizing.magnifiedSize,
+            magnificationEnabled: dockSizing.magnificationEnabled
+        ))
+        let restingTop = dockRailTopPadding(viewportHeight: viewportHeight)
+            - railScroll.offset
+        let restingHeight = CGFloat(dockSizing.itemCount)
+            * BlattaMetric.Sidebar.dockRowHeight(
+                displayedIconSize: dockSizing.baseSize
+            )
+            + CGFloat(dockDividerCount)
+                * BlattaMetric.Sidebar.workspaceDividerHeight
+
+        // The resolved outline reads the pointer, so this overlay re-renders on
+        // every pointer move. Only the DEBUG launch argument reaches it, and it
+        // takes no hit test, so the product pays nothing for it.
+        var resolvedTop: CGFloat?
+        var resolvedHeight: CGFloat = 0
+        if let index = dockPointerTargetIndex(dockSizing: dockSizing) {
+            let row = dockDrawnRow(
+                atIndex: index,
+                sizing: dockSizing,
+                transform: dockMagnification.iconTransform(
+                    atIndex: index,
+                    sizing: dockSizing
+                ),
+                separatorAfterIndices: dockSeparatorAfterIndices,
+                separatorHeight: BlattaMetric.Sidebar.workspaceDividerHeight
+            )
+            resolvedTop = restingTop + row.top
+            resolvedHeight = row.height
+        }
+
+        return DockPointerDebugOverlay(
+            targetTop: restingTop - spill,
+            targetHeight: restingHeight + (spill * 2),
+            resolvedTop: resolvedTop,
+            resolvedHeight: resolvedHeight
+        )
     }
 
     // MARK: - Automatic scroll
@@ -745,17 +902,40 @@ struct UnifiedRailView: View {
 
         switch phase {
         case .active(let location):
-            dockMagnification.movePointer(
-                toRows: DockIconSizing.pointerRows(
-                    pointerPosition: Double(location.y + railScroll.offset),
-                    topPadding: Double(dockRailTopPadding(viewportHeight: viewportHeight)),
-                    baseSize: appState.iconRailBaseSize
-                ),
-                reduceMotion: reduceMotion
+            moveDockPointer(
+                to: location,
+                viewportHeight: viewportHeight,
+                dockSizing: dockSizing
             )
         case .ended:
             dockMagnification.endRailPointer(reduceMotion: reduceMotion)
         }
+    }
+
+    private func moveDockPointer(
+        to location: CGPoint,
+        viewportHeight: CGFloat,
+        dockSizing: DockSizing
+    ) {
+        let topPadding = dockRailTopPadding(viewportHeight: viewportHeight)
+        let pointerPosition = DockIconSizing.stackPointerPosition(
+            viewportPosition: Double(location.y),
+            scrollOffset: Double(railScroll.offset),
+            topPadding: Double(topPadding)
+        )
+        dockMagnification.movePointer(
+            toRows: DockIconSizing.pointerRows(
+                pointerPosition: pointerPosition,
+                topPadding: 0,
+                baseSize: appState.iconRailBaseSize
+            ),
+            position: pointerPosition,
+            reduceMotion: reduceMotion
+        )
+        dockMagnification.routeHover(
+            to: dockPointerTarget(dockSizing: dockSizing)?.id,
+            reduceMotion: reduceMotion
+        )
     }
 
     /// How far the icon stack can rise before it leaves the rail: the padding

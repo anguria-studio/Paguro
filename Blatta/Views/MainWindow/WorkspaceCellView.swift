@@ -79,15 +79,13 @@ struct WorkspaceCellView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // The row keeps its exact resting height: the pointer is converted to
-        // a position in the stack through that height, so a row of any other
-        // height puts every icon somewhere the pointer does not agree with.
+        // See `ServiceRowView`: this is stable semantic geometry. The rail's
+        // fixed surface owns Dock mouse events.
         .frame(height: isDockItem ? dockRowHeight : nil)
-        // The Dock tile stays square while its target fills the rail, so the
-        // sides of the rail belong to the icon in them rather than to nothing.
         .frame(maxWidth: isDockItem ? .infinity : nil)
         .contentShape(Rectangle())
-        // See `ServiceRowView`: the move is drawn, not laid out.
+        // The move is drawn, not laid out. The rail resolves the drawing only
+        // when a pointer event arrives.
         .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
             content.offset(y: offset)
         }

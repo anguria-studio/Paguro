@@ -81,6 +81,17 @@ final class DockIconSizingTests: XCTestCase {
         }
     }
 
+    func testPointerPositionUsesContentRatherThanViewportCoordinates() {
+        XCTAssertEqual(
+            DockIconSizing.stackPointerPosition(
+                viewportPosition: 40,
+                scrollOffset: 30,
+                topPadding: 10
+            ),
+            60
+        )
+    }
+
     /// The curve is level where it meets the base size. A curve with slope left
     /// at that edge snaps the outermost icon in and out as the pointer passes.
     func testMagnificationCurveIsLevelAtBothEnds() {
@@ -401,5 +412,459 @@ final class DockIconSizingTests: XCTestCase {
             ),
             26
         )
+    }
+
+    // MARK: - Pointer targets
+
+    func testTargetResolverUsesRestingRowsWithoutMagnification() {
+        let baseSize = 24.0
+        let rowHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+
+        for index in 0..<4 {
+            XCTAssertEqual(
+                DockIconSizing.targetIndex(
+                    pointerPosition: (Double(index) + 0.5) * rowHeight,
+                    baseSize: baseSize,
+                    magnifiedSize: 64,
+                    magnificationEnabled: false,
+                    itemCount: 4,
+                    pointerRows: nil,
+                    spaceAbove: 0
+                ),
+                index
+            )
+        }
+
+        XCTAssertNil(DockIconSizing.targetIndex(
+            pointerPosition: -1,
+            baseSize: baseSize,
+            magnifiedSize: 64,
+            magnificationEnabled: false,
+            itemCount: 4,
+            pointerRows: nil,
+            spaceAbove: 0
+        ))
+        XCTAssertNil(DockIconSizing.targetIndex(
+            pointerPosition: (4 * rowHeight) + 1,
+            baseSize: baseSize,
+            magnifiedSize: 64,
+            magnificationEnabled: false,
+            itemCount: 4,
+            pointerRows: nil,
+            spaceAbove: 0
+        ))
+    }
+
+    /// The resolver uses the same extents that the drawing functions produce.
+    /// This is the contract that a resting-row target alone could not keep.
+    func testTargetResolverFindsEveryDrawnIcon() {
+        let baseSize = 24.0
+        let magnifiedSize = 64.0
+        let itemCount = 6
+        let baseHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+
+        for spaceAbove in [0.0, 1_000.0] {
+            for progress in [0.25, 0.5, 1.0] {
+                var pointerRows = -0.5
+                while pointerRows <= Double(itemCount) - 0.5 {
+                    for index in 0..<itemCount {
+                        let offset = DockIconSizing.iconVerticalOffset(
+                            baseSize: baseSize,
+                            magnifiedSize: magnifiedSize,
+                            magnificationEnabled: true,
+                            itemIndex: index,
+                            itemCount: itemCount,
+                            pointerRows: pointerRows,
+                            magnificationProgress: progress,
+                            spaceAbove: spaceAbove
+                        )
+                        let displayedHeight = DockIconSizing.rowHeight(
+                            displayedIconSize: DockIconSizing.displayedSize(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: index,
+                                pointerRows: pointerRows,
+                                magnificationProgress: progress
+                            )
+                        )
+                        let drawnCenter = (Double(index) + 0.5) * baseHeight + offset
+                        let drawnTop = drawnCenter - (displayedHeight / 2)
+
+                        for fraction in stride(from: 0.05, through: 0.95, by: 0.1) {
+                            let position = drawnTop + (displayedHeight * fraction)
+                            XCTAssertEqual(
+                                DockIconSizing.targetIndex(
+                                    pointerPosition: position,
+                                    baseSize: baseSize,
+                                    magnifiedSize: magnifiedSize,
+                                    magnificationEnabled: true,
+                                    itemCount: itemCount,
+                                    pointerRows: pointerRows,
+                                    magnificationProgress: progress,
+                                    spaceAbove: spaceAbove
+                                ),
+                                index,
+                                "pointer \(pointerRows), item \(index), position \(position), space \(spaceAbove), progress \(progress)"
+                            )
+                        }
+                    }
+                    pointerRows += 0.1
+                }
+            }
+        }
+    }
+
+    /// A top-aligned stack grows below its resting end. Its final icon must
+    /// still answer at the bottom of the icon that is visible there.
+    func testTargetResolverIncludesThePushedDownTail() {
+        let baseSize = 24.0
+        let magnifiedSize = 64.0
+        let itemCount = 5
+        let lastIndex = itemCount - 1
+        let baseHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+        let pointerPosition = (Double(itemCount) * baseHeight) + 5
+        let pointerRows = DockIconSizing.pointerRows(
+            pointerPosition: pointerPosition,
+            topPadding: 0,
+            baseSize: baseSize
+        )
+        let displayed = DockIconSizing.displayedSize(
+            baseSize: baseSize,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: true,
+            itemIndex: lastIndex,
+            pointerRows: pointerRows
+        )
+        let offset = DockIconSizing.iconVerticalOffset(
+            baseSize: baseSize,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: true,
+            itemIndex: lastIndex,
+            itemCount: itemCount,
+            pointerRows: pointerRows,
+            spaceAbove: 0
+        )
+        let iconBottom = (Double(lastIndex) + 0.5) * baseHeight
+            + offset
+            + (displayed / 2)
+
+        XCTAssertEqual(
+            DockIconSizing.targetIndex(
+                pointerPosition: pointerPosition,
+                baseSize: baseSize,
+                magnifiedSize: magnifiedSize,
+                magnificationEnabled: true,
+                itemCount: itemCount,
+                pointerRows: pointerRows,
+                spaceAbove: 0
+            ),
+            lastIndex
+        )
+        XCTAssertGreaterThan(iconBottom, Double(itemCount) * baseHeight)
+        XCTAssertLessThan(pointerPosition, iconBottom)
+    }
+
+    func testTargetResolverLeavesABareWorkspaceDividerEmpty() {
+        let baseSize = 24.0
+        let rowHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+        let dividerHeight = 13.0
+
+        XCTAssertNil(DockIconSizing.targetIndex(
+            pointerPosition: rowHeight + (dividerHeight / 2),
+            baseSize: baseSize,
+            magnifiedSize: 64,
+            magnificationEnabled: false,
+            itemCount: 3,
+            pointerRows: nil,
+            spaceAbove: 0,
+            separatorAfterIndices: [0],
+            separatorHeight: dividerHeight
+        ))
+        XCTAssertEqual(
+            DockIconSizing.targetIndex(
+                pointerPosition: rowHeight + dividerHeight + (rowHeight / 2),
+                baseSize: baseSize,
+                magnifiedSize: 64,
+                magnificationEnabled: false,
+                itemCount: 3,
+                pointerRows: nil,
+                spaceAbove: 0,
+                separatorAfterIndices: [0],
+                separatorHeight: dividerHeight
+            ),
+            1
+        )
+    }
+
+    func testTargetResolverGivesAVisibleIconPriorityOverADivider() {
+        let baseSize = 24.0
+        let rowHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+
+        XCTAssertEqual(
+            DockIconSizing.targetIndex(
+                pointerPosition: rowHeight + 2,
+                baseSize: baseSize,
+                magnifiedSize: 64,
+                magnificationEnabled: true,
+                itemCount: 3,
+                pointerRows: 0,
+                spaceAbove: 0,
+                separatorAfterIndices: [0],
+                separatorHeight: 13
+            ),
+            0
+        )
+    }
+
+    func testMaximumTargetSpillIsFixedByTheSizeSettings() {
+        XCTAssertEqual(
+            DockIconSizing.maximumTargetSpill(
+                baseSize: 24,
+                magnifiedSize: 64,
+                magnificationEnabled: true
+            ),
+            100
+        )
+        XCTAssertEqual(
+            DockIconSizing.maximumTargetSpill(
+                baseSize: 24,
+                magnifiedSize: 64,
+                magnificationEnabled: false
+            ),
+            0
+        )
+    }
+
+    func testMaximumTargetSpillContainsBothEndsOfEveryDrawnStack() {
+        let itemCount = 7
+
+        for baseSize in [14.0, 24.0, 44.0] {
+            for magnifiedSize in [32.0, 52.0, 72.0] {
+                let baseHeight = DockIconSizing.rowHeight(
+                    displayedIconSize: baseSize
+                )
+                let restingBottom = Double(itemCount) * baseHeight
+                let spill = DockIconSizing.maximumTargetSpill(
+                    baseSize: baseSize,
+                    magnifiedSize: magnifiedSize,
+                    magnificationEnabled: true
+                )
+
+                for spaceAbove in [0.0, 1_000.0] {
+                    for pointerRows in stride(
+                        from: -0.5,
+                        through: Double(itemCount) - 0.5,
+                        by: 0.1
+                    ) {
+                        let firstHeight = DockIconSizing.rowHeight(
+                            displayedIconSize: DockIconSizing.displayedSize(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: 0,
+                                pointerRows: pointerRows
+                            )
+                        )
+                        let firstCenter = (baseHeight / 2)
+                            + DockIconSizing.iconVerticalOffset(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: 0,
+                                itemCount: itemCount,
+                                pointerRows: pointerRows,
+                                spaceAbove: spaceAbove
+                            )
+                        let lastIndex = itemCount - 1
+                        let lastHeight = DockIconSizing.rowHeight(
+                            displayedIconSize: DockIconSizing.displayedSize(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: lastIndex,
+                                pointerRows: pointerRows
+                            )
+                        )
+                        let lastCenter = (Double(lastIndex) + 0.5) * baseHeight
+                            + DockIconSizing.iconVerticalOffset(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: lastIndex,
+                                itemCount: itemCount,
+                                pointerRows: pointerRows,
+                                spaceAbove: spaceAbove
+                            )
+
+                        XCTAssertGreaterThanOrEqual(
+                            spill + 0.000_001,
+                            -(firstCenter - (firstHeight / 2))
+                        )
+                        XCTAssertGreaterThanOrEqual(
+                            spill + 0.000_001,
+                            (lastCenter + (lastHeight / 2)) - restingBottom
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Workspace divider
+
+    /// The divider must stay in the middle of the gap that its two neighbors
+    /// leave, at every step of the animation and at every pointer position.
+    func testWorkspaceDividerStaysCenteredBetweenItsDrawnNeighbors() {
+        let baseSize = 24.0
+        let magnifiedSize = 64.0
+        let itemCount = 6
+        let separatorAfterIndex = 2
+        let dividerHeight = 13.0
+        let baseHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+
+        func restingTop(_ index: Int) -> Double {
+            (Double(index) * baseHeight)
+                + (index > separatorAfterIndex ? dividerHeight : 0)
+        }
+
+        for spaceAbove in [0.0, 1_000.0] {
+            for progress in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                for pointerRows in stride(
+                    from: -0.5,
+                    through: Double(itemCount) - 0.5,
+                    by: 0.1
+                ) {
+                    func drawnCenter(_ index: Int) -> Double {
+                        restingTop(index)
+                            + (baseHeight / 2)
+                            + DockIconSizing.iconVerticalOffset(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: index,
+                                itemCount: itemCount,
+                                pointerRows: pointerRows,
+                                magnificationProgress: progress,
+                                spaceAbove: spaceAbove
+                            )
+                    }
+                    func drawnHeight(_ index: Int) -> Double {
+                        DockIconSizing.rowHeight(
+                            displayedIconSize: DockIconSizing.displayedSize(
+                                baseSize: baseSize,
+                                magnifiedSize: magnifiedSize,
+                                magnificationEnabled: true,
+                                itemIndex: index,
+                                pointerRows: pointerRows,
+                                magnificationProgress: progress
+                            )
+                        )
+                    }
+
+                    let above = drawnCenter(separatorAfterIndex)
+                        + (drawnHeight(separatorAfterIndex) / 2)
+                    let below = drawnCenter(separatorAfterIndex + 1)
+                        - (drawnHeight(separatorAfterIndex + 1) / 2)
+                    let restingCenter = restingTop(separatorAfterIndex)
+                        + baseHeight
+                        + (dividerHeight / 2)
+                    let drawnDividerCenter = restingCenter
+                        + DockIconSizing.separatorVerticalOffset(
+                            afterIndex: separatorAfterIndex,
+                            baseSize: baseSize,
+                            magnifiedSize: magnifiedSize,
+                            magnificationEnabled: true,
+                            itemCount: itemCount,
+                            pointerRows: pointerRows,
+                            magnificationProgress: progress,
+                            spaceAbove: spaceAbove
+                        )
+
+                    XCTAssertEqual(
+                        drawnDividerCenter,
+                        (above + below) / 2,
+                        accuracy: 0.000_000_001,
+                        "pointer \(pointerRows), progress \(progress), space \(spaceAbove)"
+                    )
+                }
+            }
+        }
+    }
+
+    func testWorkspaceDividerHoldsStillWhileTheRailRests() {
+        XCTAssertEqual(
+            DockIconSizing.separatorVerticalOffset(
+                afterIndex: 1,
+                baseSize: 24,
+                magnifiedSize: 64,
+                magnificationEnabled: true,
+                itemCount: 4,
+                pointerRows: nil,
+                spaceAbove: 0
+            ),
+            0
+        )
+        XCTAssertEqual(
+            DockIconSizing.separatorVerticalOffset(
+                afterIndex: 1,
+                baseSize: 24,
+                magnifiedSize: 64,
+                magnificationEnabled: false,
+                itemCount: 4,
+                pointerRows: 1,
+                spaceAbove: 0
+            ),
+            0
+        )
+    }
+
+    /// The empty band belongs to the drawn divider. A point that the drawn
+    /// stack has moved into must answer with the icon that a person sees
+    /// there, not with the divider that has left.
+    func testTargetResolverMovesTheEmptyBandWithTheDivider() {
+        let baseSize = 24.0
+        let magnifiedSize = 64.0
+        let itemCount = 4
+        let separatorAfterIndex = 1
+        let dividerHeight = 13.0
+        let baseHeight = DockIconSizing.rowHeight(displayedIconSize: baseSize)
+        // The pointer sits on the first icon, which pushes the divider down.
+        let pointerRows = 0.0
+        let restingBandCenter = (Double(separatorAfterIndex + 1) * baseHeight)
+            + (dividerHeight / 2)
+        let separatorOffset = DockIconSizing.separatorVerticalOffset(
+            afterIndex: separatorAfterIndex,
+            baseSize: baseSize,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: true,
+            itemCount: itemCount,
+            pointerRows: pointerRows,
+            spaceAbove: 0
+        )
+
+        XCTAssertGreaterThan(separatorOffset, dividerHeight)
+        XCTAssertNotNil(DockIconSizing.targetIndex(
+            pointerPosition: restingBandCenter,
+            baseSize: baseSize,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: true,
+            itemCount: itemCount,
+            pointerRows: pointerRows,
+            spaceAbove: 0,
+            separatorAfterIndices: [separatorAfterIndex],
+            separatorHeight: dividerHeight
+        ))
+        XCTAssertNil(DockIconSizing.targetIndex(
+            pointerPosition: restingBandCenter + separatorOffset,
+            baseSize: baseSize,
+            magnifiedSize: magnifiedSize,
+            magnificationEnabled: true,
+            itemCount: itemCount,
+            pointerRows: pointerRows,
+            spaceAbove: 0,
+            separatorAfterIndices: [separatorAfterIndex],
+            separatorHeight: dividerHeight
+        ))
     }
 }

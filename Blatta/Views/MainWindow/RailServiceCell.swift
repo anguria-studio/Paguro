@@ -25,7 +25,9 @@ struct RailServiceCell<ContextMenu: View>: View {
     let railSpacing: CGFloat
     let focusedLinkID: FocusState<UUID?>.Binding
     @Binding var showsKeyboardFocusRing: Bool
-
+    /// Handles a click on the part of a magnified icon that extends outside
+    /// the rail viewport. Inside the viewport, the rail spatial tap owns it.
+    let onDockOverflowPointerAction: () -> Void
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Measured for the drop midpoint of a drag that starts outside the rail.
@@ -50,6 +52,7 @@ struct RailServiceCell<ContextMenu: View>: View {
         railSpacing: CGFloat,
         focusedLinkID: FocusState<UUID?>.Binding,
         showsKeyboardFocusRing: Binding<Bool>,
+        onDockOverflowPointerAction: @escaping () -> Void = {},
         @ViewBuilder contextMenu: @escaping () -> ContextMenu
     ) {
         self.link = link
@@ -68,6 +71,7 @@ struct RailServiceCell<ContextMenu: View>: View {
         self.railSpacing = railSpacing
         self.focusedLinkID = focusedLinkID
         self._showsKeyboardFocusRing = showsKeyboardFocusRing
+        self.onDockOverflowPointerAction = onDockOverflowPointerAction
         self.contextMenuContent = contextMenu
     }
 
@@ -107,6 +111,7 @@ struct RailServiceCell<ContextMenu: View>: View {
             )
             .accessibilityAction(named: "Move up") { moveUp() }
             .accessibilityAction(named: "Move down") { moveDown() }
+            .accessibilityAction(.default) { select() }
             .contextMenu(menuItems: contextMenuContent)
             .focusable()
             .focused(focusedLinkID, equals: link.id)
@@ -177,11 +182,11 @@ struct RailServiceCell<ContextMenu: View>: View {
             hidesLabel: hidesLabel,
             isDockHovered: dockMagnification.hoveredLinkID == link.id,
             onDockHoverChange: { hovering in
-                if hovering {
-                    dockMagnification.beginHover(for: link.id)
-                } else {
-                    dockMagnification.endHover(for: link.id, reduceMotion: reduceMotion)
-                }
+                dockMagnification.setCellPointer(
+                    hovering,
+                    for: link.id,
+                    reduceMotion: reduceMotion
+                )
             },
             isFocused: showsKeyboardFocusRing && focusedLinkID.wrappedValue == link.id,
             action: openAfterClick
@@ -224,6 +229,16 @@ struct RailServiceCell<ContextMenu: View>: View {
     /// release that ends a drag must not open the service.
     private func openAfterClick() {
         guard !railReorder.consumesClick(for: link.id) else { return }
+        if dockSizing.isCollapsed, dockSizing.magnificationEnabled {
+            // The rail spatial tap handles its complete viewport. A magnified
+            // icon can extend horizontally beyond that viewport; only this
+            // semantic cell exists there, so it forwards that overflow click
+            // through the same resolver and keeps no identity of its own.
+            if !dockMagnification.hasRailPointer {
+                onDockOverflowPointerAction()
+            }
+            return
+        }
         select()
     }
 
