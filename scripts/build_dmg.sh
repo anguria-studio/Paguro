@@ -14,15 +14,28 @@
 # It signs with a Developer ID Application identity when the keychain holds one,
 # and ad hoc otherwise. The difference decides what a recipient has to do:
 #
-#   Developer ID + notarized   double-click, and macOS opens it.
+#   Developer ID + notarized   double-click, and macOS opens it, with or
+#                              without a network.
 #   Developer ID, not notarized  right-click Open, once, and confirm.
 #   ad hoc                     nothing works until the quarantine flag is
 #                              cleared by hand. The failure reads as "the
 #                              application cannot be opened", which looks like
 #                              a crash rather than a policy.
 #
-# Notarization runs only when a stored notarytool profile exists. Create one
-# once with an app-specific password from appleid.apple.com:
+# Notarization runs only when a stored notarytool profile exists, and it runs in
+# two rounds. The first round submits the app and staples the ticket into the
+# bundle, before the disk image is created. The second round submits the signed
+# disk image and staples that ticket too. Each round waits on Apple, so the two
+# rounds together add a few minutes to the build.
+#
+# The app round is necessary because a stapled ticket travels inside the bundle.
+# Gatekeeper asks Apple for the ticket when the bundle does not carry one. A Mac
+# that cannot reach that service, such as a managed Mac or a Mac with no network,
+# then reports "Apple could not verify ... is free of malware", although Apple
+# accepted the app. An app with its own ticket passes the check offline.
+#
+# Create the notarytool profile once with an app-specific password from
+# appleid.apple.com:
 #
 #   xcrun notarytool store-credentials blatta \
 #       --apple-id <your-apple-id> --team-id L2P2KC4C69 --password <app-specific>
@@ -72,6 +85,18 @@ NOTARY_PROFILE="${BLATTA_NOTARY_PROFILE:-blatta}"
 DEVELOPER_ID=$(security find-identity -v -p codesigning \
     | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)
 
+# The profile decides both notarization rounds. Test it before the build, so
+# that a missing profile is reported at once and not after a long compile.
+NOTARIZE=0
+if [ -n "$DEVELOPER_ID" ]; then
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+        NOTARIZE=1
+    else
+        echo "==> Skipping notarization: no '$NOTARY_PROFILE' notarytool profile"
+        echo "    Recipients will have to right-click Open the first time."
+    fi
+fi
+
 if [ -n "$DEVELOPER_ID" ]; then
     TEAM_ID=$(printf '%s' "$DEVELOPER_ID" | sed -n 's/.*(\([A-Z0-9]*\))$/\1/p')
     echo "==> Building Release, signed as $DEVELOPER_ID"
@@ -110,6 +135,42 @@ if codesign -d --entitlements - --xml "$APP_PATH" 2>/dev/null | grep -q get-task
     exit 1
 fi
 
+if [ "$NOTARIZE" -eq 1 ]; then
+    echo "==> Notarizing the app (this waits on Apple, usually a few minutes)"
+    ZIP_PATH="$BUILD_DIR/Blatta.zip"
+    ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
+    NOTARY_RESULT=$(xcrun notarytool submit "$ZIP_PATH" \
+        --keychain-profile "$NOTARY_PROFILE" --wait --output-format json) || {
+        echo "ERROR: the app notarization request failed" >&2
+        exit 1
+    }
+    rm -f "$ZIP_PATH"
+
+    # notarytool ends with status 0 even when Apple rejects the app, so read the
+    # result. plutil reads the JSON report, and no other tool is needed.
+    SUBMISSION_ID=$(printf '%s' "$NOTARY_RESULT" | plutil -extract id raw -o - - 2>/dev/null || true)
+    NOTARY_STATUS=$(printf '%s' "$NOTARY_RESULT" | plutil -extract status raw -o - - 2>/dev/null || true)
+    echo "    submission ${SUBMISSION_ID:-unknown}: ${NOTARY_STATUS:-unknown}"
+    if [ "$NOTARY_STATUS" != "Accepted" ]; then
+        echo "ERROR: Apple did not accept the app, so no disk image was written" >&2
+        if [ -n "$SUBMISSION_ID" ]; then
+            xcrun notarytool log "$SUBMISSION_ID" \
+                --keychain-profile "$NOTARY_PROFILE" >&2 || true
+        fi
+        exit 1
+    fi
+
+    echo "==> Stapling the app ticket"
+    xcrun stapler staple "$APP_PATH" || {
+        echo "ERROR: the app ticket could not be stapled" >&2
+        exit 1
+    }
+    xcrun stapler validate "$APP_PATH" >/dev/null || {
+        echo "ERROR: the app carries no valid ticket after the staple" >&2
+        exit 1
+    }
+fi
+
 echo "==> Staging"
 STAGE_DIR="$BUILD_DIR/stage"
 mkdir -p "$STAGE_DIR"
@@ -128,14 +189,11 @@ if [ -n "$DEVELOPER_ID" ]; then
     echo "==> Signing the disk image"
     codesign --force --sign "$DEVELOPER_ID" --timestamp "$DMG_PATH"
 
-    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
-        echo "==> Notarizing (this waits on Apple, usually a few minutes)"
+    if [ "$NOTARIZE" -eq 1 ]; then
+        echo "==> Notarizing the disk image (this waits on Apple, usually a few minutes)"
         xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
-        echo "==> Stapling the ticket"
+        echo "==> Stapling the disk image ticket"
         xcrun stapler staple "$DMG_PATH"
-    else
-        echo "==> Skipping notarization: no '$NOTARY_PROFILE' notarytool profile"
-        echo "    Recipients will have to right-click Open the first time."
     fi
 fi
 
@@ -144,8 +202,10 @@ echo "    $DMG_PATH"
 echo "    $(du -h "$DMG_PATH" | cut -f1), minimum macOS $(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP_PATH/Contents/Info.plist")"
 echo "    sha256 $(shasum -a 256 "$DMG_PATH" | cut -d' ' -f1)"
 echo
-if xcrun stapler validate "$DMG_PATH" >/dev/null 2>&1; then
-    echo "    Notarized and stapled. Recipients can just open it."
+if xcrun stapler validate "$APP_PATH" >/dev/null 2>&1 \
+    && xcrun stapler validate "$DMG_PATH" >/dev/null 2>&1; then
+    echo "    App and disk image notarized and stapled. Recipients can just open"
+    echo "    it, online or offline."
 elif [ -n "$DEVELOPER_ID" ]; then
     echo "    Signed but not notarized. Recipients: right-click the app, choose"
     echo "    Open, and confirm once."
