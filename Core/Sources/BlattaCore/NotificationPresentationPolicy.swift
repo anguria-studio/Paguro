@@ -6,6 +6,7 @@ public enum NotificationPresentationRoute: String, Equatable, Sendable {
 
 /// Why a notification event has no visible presentation route.
 public enum NotificationSuppressionReason: String, Equatable, Sendable {
+    case locked
     case muted
     case doNotDisturb
     case noRouteEnabled
@@ -13,6 +14,7 @@ public enum NotificationSuppressionReason: String, Equatable, Sendable {
 
 /// The current settings and policy state for one notification event.
 public struct NotificationPresentationOptions: Equatable, Sendable {
+    public let isLocked: Bool
     public let isMuted: Bool
     public let isDoNotDisturbActive: Bool
     public let isSystemNotificationEnabled: Bool
@@ -20,12 +22,14 @@ public struct NotificationPresentationOptions: Equatable, Sendable {
     public let isIslandAvailable: Bool
 
     public init(
+        isLocked: Bool = false,
         isMuted: Bool = false,
         isDoNotDisturbActive: Bool = false,
         isSystemNotificationEnabled: Bool = true,
         isIslandEnabled: Bool = false,
         isIslandAvailable: Bool = true
     ) {
+        self.isLocked = isLocked
         self.isMuted = isMuted
         self.isDoNotDisturbActive = isDoNotDisturbActive
         self.isSystemNotificationEnabled = isSystemNotificationEnabled
@@ -53,6 +57,9 @@ public enum NotificationPresentationPolicy {
     public static func plan(
         for options: NotificationPresentationOptions
     ) -> NotificationPresentationPlan {
+        if options.isLocked {
+            return NotificationPresentationPlan(routes: [], suppressionReason: .locked)
+        }
         if options.isMuted {
             return NotificationPresentationPlan(routes: [], suppressionReason: .muted)
         }

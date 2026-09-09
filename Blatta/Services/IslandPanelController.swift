@@ -275,7 +275,7 @@ final class IslandPanelController {
     }
 
     func present(_ content: NotificationIslandPanelContent) {
-        guard !hasStopped else { return }
+        guard !hasStopped, !isLocked else { return }
         cancelHoverExitAction()
         cancelDismissalAction()
         startGeometryTracking()
@@ -286,13 +286,14 @@ final class IslandPanelController {
     }
 
     func showCollapsed() {
-        guard !hasStopped else { return }
+        guard !hasStopped, !isLocked else { return }
         startGeometryTracking()
         apply(.showCollapsed)
         refreshScreenGeometry()
     }
 
     func expand() {
+        guard !isLocked else { return }
         cancelHoverExitAction()
         apply(.expand)
         if state.phase == .expanded {
@@ -328,6 +329,7 @@ final class IslandPanelController {
     }
 
     func dismissEvent(_ eventID: UUID) {
+        guard !isLocked else { return }
         cancelAlertAction()
         apply(.dismissEvent(eventID))
         scheduleDismissalCompletionIfNeeded()
@@ -339,7 +341,7 @@ final class IslandPanelController {
     /// new. The island lowers its unreviewed count by the number of events that
     /// it removes.
     func dismissEvents(forService serviceID: UUID) {
-        guard !hasStopped else { return }
+        guard !hasStopped, !isLocked else { return }
         let holdsCurrentEvent = state.currentEvent?.serviceID == serviceID
         let holdsRecentEvent = state.recentEvents.contains {
             $0.serviceID == serviceID
@@ -354,6 +356,7 @@ final class IslandPanelController {
     }
 
     func dismissAll() {
+        guard !isLocked else { return }
         cancelScheduledActions()
         apply(.dismissAll)
     }
@@ -383,6 +386,22 @@ final class IslandPanelController {
         cancelScheduledActions()
         stopGeometryTracking()
         apply(.hide)
+    }
+
+    private var isLocked = false
+
+    func setLocked(_ locked: Bool) {
+        guard !hasStopped, locked != isLocked else { return }
+        isLocked = locked
+        if locked {
+            cancelScheduledActions()
+            stopGeometryTracking()
+            reduce(.suspendPresentation)
+            renderer.hide()
+        } else if state.phase != .hidden {
+            startGeometryTracking()
+            refreshScreenGeometry()
+        }
     }
 
     func stop() {
@@ -611,7 +630,7 @@ final class IslandPanelController {
     }
 
     private func render() {
-        guard state.phase != .hidden else {
+        guard !isLocked, state.phase != .hidden else {
             renderer.hide()
             return
         }
@@ -1227,6 +1246,11 @@ struct NotchShape: Shape {
     }
 }
 
+enum IslandKeyboardInput {
+    // macOS backward Delete can arrive as DEL rather than SwiftUI's BS value.
+    static let dismissalKeys: Set<KeyEquivalent> = [.delete, .deleteForward, KeyEquivalent("\u{7f}")]
+}
+
 private struct NotificationIslandPanelView: View {
     private enum FocusTarget: Hashable {
         case dismissAll
@@ -1237,9 +1261,10 @@ private struct NotificationIslandPanelView: View {
     let model: NotificationIslandPanelModel
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @FocusState private var focusedControl: FocusTarget?
+    @AccessibilityFocusState(for: .voiceOver) private var voiceOverControl: FocusTarget?
     @State private var scrollContainerHeight: CGFloat = 0
     @State private var isKeyboardFocusChange = false
 
@@ -1274,11 +1299,6 @@ private struct NotificationIslandPanelView: View {
         styledContent
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(shape)
-            .overlay {
-                if colorSchemeContrast == .increased, !isCollapsedShape {
-                    shape.stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-                }
-            }
             .onTapGesture {
                 model.actions.pin?()
             }
@@ -1297,9 +1317,13 @@ private struct NotificationIslandPanelView: View {
             islandContent.background(shape.fill(Color.black))
         } else if reduceTransparency {
             islandContent.background {
-                ZStack {
-                    shape.fill(Color(nsColor: .windowBackgroundColor))
-                    materialTint
+                if colorScheme == .light {
+                    shape.fill(Color(white: 0.86))
+                } else {
+                    ZStack {
+                        shape.fill(Color(nsColor: .windowBackgroundColor))
+                        materialTint
+                    }
                 }
             }
         } else if #available(macOS 26, *), model.appearance.glassStyle != .off {
@@ -1360,16 +1384,24 @@ private struct NotificationIslandPanelView: View {
 
     private var materialTint: some View {
         shape.fill(
-            BlattaColor.Fill.shellMaterialTint(
-                intensity: model.appearance.transparency
-            )
+            colorScheme == .light
+                ? Color(white: 0.82).opacity(
+                    GlassIntensityScale.materialTintOpacity(model.appearance.transparency)
+                )
+                : BlattaColor.Fill.shellMaterialTint(
+                    intensity: model.appearance.transparency
+                )
         )
     }
 
     private var glassTint: Color {
-        BlattaColor.Fill.glassTint(
-            intensity: model.appearance.transparency
-        )
+        colorScheme == .light
+            ? Color(white: 0.82).opacity(
+                GlassIntensityScale.controlTintAlpha(model.appearance.transparency)
+            )
+            : BlattaColor.Fill.glassTint(
+                intensity: model.appearance.transparency
+            )
     }
 
     /// The black surface that continues the physical camera housing.
@@ -1526,7 +1558,7 @@ private struct NotificationIslandPanelView: View {
         .onKeyPress(.downArrow) {
             moveFocusedEvent(by: 1) ? .handled : .ignored
         }
-        .onKeyPress(.delete) {
+        .onKeyPress(keys: IslandKeyboardInput.dismissalKeys, phases: .down) { _ in
             dismissFocusedEvent() ? .handled : .ignored
         }
         .accessibilityElement(children: .contain)
@@ -1556,22 +1588,26 @@ private struct NotificationIslandPanelView: View {
                 Button {
                     model.actions.dismissAll?()
                 } label: {
-                    Image(systemName: "checkmark")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 28, height: 28)
-                        .contentShape(.circle)
+                    Text("Clear All")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .contentShape(.capsule)
                 }
                 .buttonStyle(.plain)
                 .focusable(model.state.phase == .expanded)
                 .focused($focusedControl, equals: .dismissAll)
+                .accessibilityFocused($voiceOverControl, equals: .dismissAll)
                 .background(
                     focusedControl == .dismissAll
-                        ? Color.white.opacity(0.22)
-                        : Color.white.opacity(0.10),
-                    in: .circle
+                        ? controlAccent.opacity(0.22)
+                        : Color.clear,
+                    in: .capsule
                 )
-                .help("Dismiss all notifications")
-                .accessibilityLabel("Dismiss all notifications")
+                .help("Clear all notifications")
+                .accessibilityLabel("Clear all notifications")
             }
             // No inset here, so the last button right edge and the card
             // right edge share one position.
@@ -1767,7 +1803,7 @@ private struct NotificationIslandPanelView: View {
                                 .foregroundStyle(.secondary)
                             Text(recentContent.event.receivedAt, style: .time)
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
                         }
                         Text(recentContent.event.title)
                             .font(.subheadline.weight(.medium))
@@ -1792,9 +1828,10 @@ private struct NotificationIslandPanelView: View {
             )
             .help("Open \(recentContent.serviceLabel)")
             .accessibilityLabel(recentAccessibilityLabel(for: recentContent))
+            .accessibilityFocused($voiceOverControl, equals: .event(recentContent.event.id))
 
             Button {
-                model.actions.dismissEvent?(recentContent.event.id)
+                dismissCard(recentContent.event.id)
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.semibold))
@@ -1807,11 +1844,12 @@ private struct NotificationIslandPanelView: View {
                 $focusedControl,
                 equals: .dismiss(recentContent.event.id)
             )
-            .background(Color.white.opacity(0.08), in: .circle)
+            .background(controlAccent.opacity(0.10), in: .circle)
             .help("Dismiss \(recentContent.serviceLabel) notification")
             .accessibilityLabel(
                 "Dismiss \(recentContent.serviceLabel) notification"
             )
+            .accessibilityFocused($voiceOverControl, equals: .dismiss(recentContent.event.id))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1821,11 +1859,26 @@ private struct NotificationIslandPanelView: View {
         for recentContent: NotificationIslandPanelContent
     ) -> some View {
         islandCardShape
-            .fill(
-                isFocused(recentContent.event.id)
-                    ? Color.white.opacity(0.22)
-                    : Color.white.opacity(0.10)
-            )
+            .fill(cardFill(isFocused: isFocused(recentContent.event.id)))
+    }
+
+    private var controlAccent: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private func cardFill(isFocused: Bool) -> Color {
+        if reduceTransparency {
+            // Keep cards brighter than the opaque surface behind them.
+            let white = colorScheme == .dark
+                ? (isFocused ? 0.34 : 0.24)
+                : (isFocused ? 1.0 : 0.97)
+            return Color(white: white)
+        }
+        return Color.white.opacity(
+            colorScheme == .light
+                ? (isFocused ? 0.85 : 0.55)
+                : (isFocused ? 0.22 : 0.10)
+        )
     }
 
     @ViewBuilder
@@ -1849,7 +1902,7 @@ private struct NotificationIslandPanelView: View {
     private func notificationCountBadge(_ label: String) -> some View {
         Text(label)
             .font(.caption.weight(.semibold).monospacedDigit())
-            .foregroundStyle(.white)
+            .foregroundStyle(isCollapsedShape ? Color.white : Color.primary)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(counterBadgeFill, in: .capsule)
@@ -1858,7 +1911,7 @@ private struct NotificationIslandPanelView: View {
 
     /// Keeps the counter readable on the black collapsed island.
     private var counterBadgeFill: Color {
-        Color.white.opacity(0.18)
+        (isCollapsedShape ? Color.white : controlAccent).opacity(0.18)
     }
 
     private var unreviewedCountLabel: String? {
@@ -1933,9 +1986,22 @@ private struct NotificationIslandPanelView: View {
     }
 
     private func dismissFocusedEvent() -> Bool {
-        guard let eventID = focusedEventID,
-              let dismissEvent = model.actions.dismissEvent else {
-            return false
+        guard let eventID = focusedEventID else { return false }
+        return dismissCard(eventID)
+    }
+
+    @discardableResult
+    private func dismissCard(_ eventID: UUID) -> Bool {
+        guard let dismissEvent = model.actions.dismissEvent else { return false }
+        if model.state.phase == .expanded,
+           Self.eventID(of: voiceOverControl) == eventID,
+           let replacement = NotificationIslandFocusRule.replacement(
+               for: eventID, in: recentEventIDs
+           ) {
+            // Move both cursors while the destination still exists in the tree.
+            isKeyboardFocusChange = true
+            focusedControl = .event(replacement)
+            voiceOverControl = .event(replacement)
         }
         dismissEvent(eventID)
         return true
@@ -1965,11 +2031,7 @@ private struct NotificationIslandPanelView: View {
             openEvent(eventID)
             return true
         case let .dismiss(eventID):
-            guard let dismissEvent = model.actions.dismissEvent else {
-                return false
-            }
-            dismissEvent(eventID)
-            return true
+            return dismissCard(eventID)
         case nil:
             return false
         }
@@ -2008,6 +2070,7 @@ private struct NotificationIslandStackRow<
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.colorScheme) private var colorScheme
 
     /// Horizontal movement of the current drag.
     @State private var dragX: CGFloat = 0
@@ -2249,8 +2312,8 @@ private struct NotificationIslandStackRow<
     /// Gives the color of the card edge.
     private var cardBorderColor: Color {
         colorSchemeContrast == .increased
-            ? Color(nsColor: .separatorColor)
-            : Color.white.opacity(0.14)
+            ? (colorScheme == .dark ? Color.white.opacity(0.60) : Color.black.opacity(0.30))
+            : (colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.10))
     }
 
     /// Keeps the card out of the drawing work while it stays behind the pile.

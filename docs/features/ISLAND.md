@@ -29,7 +29,7 @@ It then returns to the collapsed state.
 
 The recent list keeps all events that Blatta receives in the current session.
 It is in memory only. The count shows `99+` when it is greater than 99.
-Opening or dismissing one event decreases the count by one. Dismiss All clears
+Opening or dismissing one event decreases the count by one. Clear All clears
 the count and the recent list.
 
 The island also drops the events of one service account when the user reads
@@ -158,9 +158,11 @@ top inset. Cards scroll under the toolbar and disappear at the island's top
 edge. The scroll view does not clip its content. The island shape is the only
 clip.
 
-The count badge and the Dismiss All button sit on frosted capsules. These
+The count badge and the Clear All button sit on frosted capsules. These
 capsules use the regular material. Reduce Transparency replaces that material
 with an opaque window background. The camera bridge paints above the toolbar.
+Both capsules use the same resting background. Clear All adds a tint only
+when it has keyboard focus.
 A card therefore never covers the camera area.
 
 The stop line sits 28 points below the bottom edge of the third card. A card
@@ -183,11 +185,18 @@ Three events or fewer end the last card 8 points above that edge.
 The recent view never shows a scroll indicator. A mouse does not show one
 either.
 
-Each card keeps its translucent fill. A card first erases the cards behind it
+Light appearance uses near-white cards above a soft gray island surface.
+Dark appearance uses light translucent cards above the dark surface.
+Reduce Transparency keeps this hierarchy with opaque fills: light cards use
+97 percent white over an 86 percent white background. Focus brightens the
+card. Card edges and dismiss controls
+use dark accents in light appearance and light accents in dark appearance.
+Expanded counters use the primary text color; collapsed counters stay white.
+A card first erases the cards behind it
 with a destination-out blend of its own shape. It then draws its fill, a
 1-point hairline border, and its content. The list puts these steps in one
-compositing group. Overlapping cards therefore never add up. The screen behind
-the island stays visible through the front card. The front card hides the
+compositing group. Overlapping cards therefore never add up. When transparency
+is enabled, the screen stays visible through the front card. The front card hides the
 covered card, and the border marks the edge between the two. Blatta never clips
 or fades the card content.
 
@@ -205,7 +214,7 @@ moves to the right. The remaining cards spring into their new positions. The
 panel height shrinks in the same 280-millisecond frame transition.
 A new event slides in from the top.
 Reduce Motion replaces these animations with a fade.
-Each card keeps its dismiss button and Dismiss All stays available.
+Each card keeps its dismiss button and Clear All stays available.
 
 The user can click a card and drag it to the right to dismiss it.
 `NotificationIslandSwipeRule` in `BlattaCore` holds the pure rules for this
@@ -232,18 +241,23 @@ Hover opens a transient, nonactivating recent view. Clicking that view pins it
 open. The pinned panel takes keyboard focus after this explicit action.
 Escape returns it to the collapsed state.
 The newest recent event receives initial focus when one exists.
-Tab moves between event actions and Dismiss All.
+Tab moves between event actions and Clear All.
 Up and Down move focus between cards and scroll the focused card into view.
-Delete dismisses the focused card.
+Backward Delete and Forward Delete dismiss the focused card.
+When VoiceOver dismisses a card, keyboard and VoiceOver focus move to the next
+card body. Dismissing the last card in the list uses the previous card. An
+empty list collapses the island. Focus moves before the dismissed control
+leaves the accessibility tree.
 Return activates the focused control.
 
 The recent view shows all session events. Each event has a service
 name, event title, time, optional body, and dismiss button.
 The complete card acts as the open action. The card shows no arrow glyph.
 Opening an event selects the exact service account through the shared
-notification route and removes that event from the recent list. Dismiss All
+notification route and removes that event from the recent list. Clear All
 clears all session events. The count is on the left side of the camera housing.
-Dismiss All is on the right side. The island has no close button.
+The text button "Clear All" is on the right side. Its VoiceOver label is
+"Clear all notifications". The island has no close button.
 
 The first controls can include these actions:
 
@@ -274,6 +288,10 @@ The notification router supplies normalized events through a service presenter.
 Island routing is off by default. The user can enable or disable it in
 Notification settings. Disabling the route hides the panel immediately.
 Application shutdown closes the panel and rejects later events.
+App lock hides the panel and retains existing recent events in memory. It
+rejects new alerts, including previews, and ignores read-state dismissal while
+locked. Unlocking restores the collapsed counter and history without replaying
+a compact alert. Disabling the island or quitting still clears history.
 
 The panel must not take keyboard focus in the collapsed state.
 The expanded state can take focus after an explicit user action.
@@ -451,8 +469,10 @@ housing itself, only wider.
 The peek, alert, and expanded states use the shared glass and transparency
 settings. Their surface follows the Window glass style and the shell
 transparency setting. Reduce Transparency replaces this material with an
-opaque system background. Increase Contrast adds a system separator edge to
-these states only. The collapsed island stays plain black.
+opaque system background. The island has no added outer border. Increase
+Contrast strengthens the card edges only. In light appearance, card edges use
+10 percent black normally and 30 percent with Increase Contrast.
+The collapsed island stays plain black.
 Apply one glass effect to the complete island content view. Do not make a
 separate glass-effect shape for the background. The glass must stay behind
 notification text and controls.

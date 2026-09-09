@@ -184,6 +184,11 @@ The backlog tracks the split of that handler into detection and presentation
 parts, and a shared event type in `BlattaCore` for the island.
 
 The island does not detect notifications.
+`AppState` synchronously forwards lock changes to the notification manager and
+the island through a callback installed by `AppModel`. The manager owns a
+thread-safe lock snapshot shared by page routers, native presenters, and the
+notification delegate. Core presentation policy suppresses both routes when
+locked. The island also rejects direct previews while locked.
 It only presents events from the notification pipeline.
 `NotificationIslandTiming` keeps its deterministic alert times in `BlattaCore`.
 The panel controller owns the cancellable transition schedule.

@@ -87,6 +87,15 @@ service, toggle global notification mute, open the main window, open Settings,
 or change a presence preference. This window is the complete application route
 while Blatta runs in Menu bar only mode.
 
+## App lock
+
+Locking suppresses island alerts and macOS notification banners and sounds.
+The island hides immediately and retains its recent history in memory. Blatta removes
+its pending and delivered macOS notifications. Unlocking permits new alerts
+and restores the existing island history in the collapsed state, without
+replaying compact alerts or events suppressed during lock.
+The lock transition applies to manual lock, launch lock, and sleep lock.
+
 ## Quit behavior
 
 `Command-Q` and the application menu Quit action both request AppKit termination.

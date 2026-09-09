@@ -213,8 +213,15 @@ final class NativeShellTests: XCTestCase {
 
         state.movePointer(toRows: 1, position: 70, reduceMotion: true)
         state.routeHover(to: linkID, reduceMotion: true)
+        let hoverEnded = expectation(description: "The scheduled hover exit changes identity")
+        withObservationTracking {
+            _ = state.hoveredLinkID
+        } onChange: {
+            hoverEnded.fulfill()
+        }
         state.endHover(for: linkID, after: .zero, reduceMotion: true)
-        try? await Task.sleep(for: .milliseconds(10))
+        let result = await XCTWaiter.fulfillment(of: [hoverEnded], timeout: 2)
+        XCTAssertEqual(result, .completed)
 
         XCTAssertNil(state.hoveredLinkID)
         XCTAssertNotNil(state.pointerRows)
@@ -228,9 +235,17 @@ final class NativeShellTests: XCTestCase {
 
         state.movePointer(toRows: 1, position: 70, reduceMotion: true)
         state.routeHover(to: linkID, reduceMotion: true)
+        let hoverEnded = expectation(description: "Cell hover permits the rail's pending exit")
+        withObservationTracking {
+            _ = state.hoveredLinkID
+        } onChange: {
+            hoverEnded.fulfill()
+        }
         state.endHover(for: linkID, after: .zero, reduceMotion: true)
         state.setCellPointer(true, for: linkID, reduceMotion: true)
-        try? await Task.sleep(for: .milliseconds(10))
+        // Await the observable exit, not an assumed main-actor scheduling delay.
+        let result = await XCTWaiter.fulfillment(of: [hoverEnded], timeout: 2)
+        XCTAssertEqual(result, .completed)
 
         XCTAssertNil(state.hoveredLinkID)
         XCTAssertNotNil(state.pointerRows)

@@ -9,6 +9,16 @@ import BlattaCore
 final class NotificationManager {
     private var pollTasks: [UUID: Task<Void, Never>] = [:]
     private let badgeManager: BadgeManager
+    @ObservationIgnored let lockSnapshot = AtomicBool(false)
+    @ObservationIgnored private var hasConfiguredDelegate = false
+
+    func setAppLocked(_ isLocked: Bool) {
+        lockSnapshot.value = isLocked
+        guard isLocked, hasConfiguredDelegate else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+    }
     /// Notification taps that arrived before `onServiceRequested` was wired
     /// (a tap can launch the app). Buffered in order and drained once the
     /// handler is set, so a burst of cold-launch taps isn't reduced to just the
@@ -573,18 +583,21 @@ final class NotificationManager {
         // willPresent/didReceive aren't contractually delivered on the main
         // thread, and an off-main assumeIsolated would hard-crash.
         let dndSnapshot = badgeManager.doNotDisturbSnapshot
+        let lockSnapshot = lockSnapshot
         let delegate = NotificationCenterDelegate(
             onServiceRequested: { [weak self] serviceID in
                 Task { @MainActor in
                     self?.routeServiceRequest(serviceID)
                 }
             },
-            isDoNotDisturb: {
-                dndSnapshot.value
+            isPresentationSuppressed: {
+                dndSnapshot.value || lockSnapshot.value
             }
         )
         UNUserNotificationCenter.current().delegate = delegate
         NotificationCenterDelegate.retained = delegate
+        hasConfiguredDelegate = true
+        setAppLocked(lockSnapshot.value)
     }
 }
 
@@ -645,7 +658,7 @@ struct ActivePollSchedule {
 
 private final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     let onServiceRequested: @Sendable (UUID) -> Void
-    let isDoNotDisturb: @Sendable () -> Bool
+    let isPresentationSuppressed: @Sendable () -> Bool
     // Keeps the delegate alive (UNUserNotificationCenter holds it weakly).
     // Written once from the main-actor `configureNotificationDelegate()`, so
     // it's main-actor state rather than free-floating mutable global state.
@@ -653,10 +666,10 @@ private final class NotificationCenterDelegate: NSObject, UNUserNotificationCent
 
     init(
         onServiceRequested: @escaping @Sendable (UUID) -> Void,
-        isDoNotDisturb: @escaping @Sendable () -> Bool
+        isPresentationSuppressed: @escaping @Sendable () -> Bool
     ) {
         self.onServiceRequested = onServiceRequested
-        self.isDoNotDisturb = isDoNotDisturb
+        self.isPresentationSuppressed = isPresentationSuppressed
         super.init()
     }
 
@@ -678,10 +691,10 @@ private final class NotificationCenterDelegate: NSObject, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let traceID = String(notification.request.identifier.prefix(8)).lowercased()
-        // Suppress all banners and sounds while Do Not Disturb is active.
-        if isDoNotDisturb() {
+        // Recheck lock and Do Not Disturb when macOS is ready to present.
+        if isPresentationSuppressed() {
             AppLogger.notifications.info(
-                "Notification trace \(traceID, privacy: .public): foreground presentation suppressed by DND"
+                "Notification trace \(traceID, privacy: .public): foreground presentation suppressed by lock or DND"
             )
             completionHandler([])
         } else {

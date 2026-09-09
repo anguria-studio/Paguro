@@ -3,6 +3,24 @@ import Testing
 
 struct NotificationPresentationPolicyTests {
     @Test
+    func lockSuppressesAllRoutesIncludingFallback() {
+        for system in [false, true] {
+            for island in [false, true] {
+                for available in [false, true] {
+                    let plan = NotificationPresentationPolicy.plan(for: .init(
+                        isLocked: true,
+                        isSystemNotificationEnabled: system,
+                        isIslandEnabled: island,
+                        isIslandAvailable: available
+                    ))
+                    #expect(plan.routes.isEmpty)
+                    #expect(plan.suppressionReason == .locked)
+                }
+            }
+        }
+    }
+
+    @Test
     func defaultsToOneSystemNotificationRoute() {
         let plan = NotificationPresentationPolicy.plan(
             for: NotificationPresentationOptions()

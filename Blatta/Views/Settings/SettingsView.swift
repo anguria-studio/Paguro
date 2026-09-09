@@ -345,7 +345,7 @@ struct NotificationSettingsView: View {
                         appModel.showIslandPreview(for: activeService)
                     }
                     .disabled(
-                        !appModel.notificationRouteSettings.isIslandRouteEnabled
+                        appState.isLocked || !appModel.notificationRouteSettings.isIslandRouteEnabled
                     )
                     #endif
                 }

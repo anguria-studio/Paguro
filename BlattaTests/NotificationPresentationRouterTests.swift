@@ -5,6 +5,31 @@ import XCTest
 
 @MainActor
 final class NotificationPresentationRouterTests: XCTestCase {
+    func testLockChangesApplyToExistingRoutersAndDoNotReplayEvents() throws {
+        for islandEnabled in [false, true] {
+            let snapshot = AtomicBool(false)
+            let system = RecordingNotificationPresenter()
+            let island = RecordingNotificationPresenter()
+            let router = NotificationPresentationRouter(
+                systemPresenter: system,
+                isLockedCheck: { snapshot.value },
+                islandPresenter: island,
+                isMutedCheck: { _ in false },
+                isSystemEnabledCheck: { _ in true },
+                isIslandEnabledCheck: { _ in islandEnabled },
+                isDoNotDisturbCheck: { false }
+            )
+            snapshot.value = true
+            router.present(event: try makeEvent(), requestID: "locked", traceID: "locked")
+            XCTAssertTrue(system.eventIDs.isEmpty)
+            XCTAssertTrue(island.eventIDs.isEmpty)
+            snapshot.value = false
+            let next = try makeEvent()
+            router.present(event: next, requestID: "unlocked", traceID: "unlocked")
+            XCTAssertEqual(system.eventIDs + island.eventIDs, [next.id])
+        }
+    }
+
     func testDefaultRoutePresentsOnlyTheSystemNotification() throws {
         let systemPresenter = RecordingNotificationPresenter()
         let islandPresenter = RecordingNotificationPresenter()

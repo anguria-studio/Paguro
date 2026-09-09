@@ -13,6 +13,7 @@ public enum NotificationIslandPhase: Equatable, Sendable {
 /// One action that can change the notification island.
 public enum NotificationIslandAction: Equatable, Sendable {
     case showCollapsed
+    case suspendPresentation
     case hide
     case receive(NotificationEvent)
     case beginPeek
@@ -78,6 +79,13 @@ public struct NotificationIslandReducer: Sendable {
         switch action {
         case .showCollapsed:
             return showCollapsed(from: state)
+        case .suspendPresentation:
+            guard state.phase != .hidden else { return state }
+            return makeState(
+                phase: .collapsed,
+                recentEvents: state.recentEvents,
+                unreviewedCount: state.unreviewedCount
+            )
         case .hide, .stop:
             return .hidden
         case let .receive(event):

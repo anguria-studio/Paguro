@@ -168,6 +168,15 @@ known service icon. Extra page fields cannot replace these values.
 
 ## Policy pipeline
 
+App lock suppresses both presentation routes before mute and route selection.
+Locking hides and retains island history and removes pending and delivered macOS
+notifications. A locked app rejects test island previews too. The native
+delegate checks lock again before foreground presentation, and a delivery
+completion removes a request that reached macOS during the lock transition.
+Unlocking restores existing island history quietly and allows new events; it
+does not replay suppressed events or repost macOS notifications.
+Web sessions and unread detection can continue while presentation is locked.
+
 The pipeline applies rules in this order:
 
 1. Validate the event.

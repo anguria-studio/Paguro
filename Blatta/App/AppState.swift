@@ -122,7 +122,13 @@ final class AppState {
     var appLockEnabled = false
     var lockOnLaunch = true
     var lockOnSleep = true
-    var isLocked = false
+    @ObservationIgnored var onLockChanged: (@MainActor (Bool) -> Void)?
+    var isLocked = false {
+        didSet {
+            notificationManager.setAppLocked(isLocked)
+            onLockChanged?(isLocked)
+        }
+    }
 
     /// Global content-blocking toggle, loaded from `PreferencesStore` and changed
     /// through `setContentBlockingEnabled(_:)`.
@@ -232,6 +238,7 @@ final class AppState {
 
         self.dataStoreManager = dataStoreManager
         self.userScriptManager = userScriptManager
+        self.userScriptManager.notificationLockSnapshot = notificationManager.lockSnapshot
         self.badgeManager = badgeManager
 
         self.userScriptManager.isServiceMuted = { serviceID in

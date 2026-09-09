@@ -1,10 +1,59 @@
 import BlattaCore
 import Foundation
+import AppKit
+import SwiftUI
 import XCTest
 @testable import Blatta
 
 @MainActor
 final class IslandPanelControllerTests: XCTestCase {
+    func testLockPreservesHistoryAndRejectsPreviewsUntilUnlock() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+        let original = try makeEvent(number: 1)
+        controller.present(panelContent(for: original))
+        await waitForShow(in: renderer)
+        controller.setLocked(true)
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertNil(controller.state.currentEvent)
+        XCTAssertEqual(controller.state.recentEvents, [original])
+        XCTAssertGreaterThan(renderer.hideCount, 0)
+        controller.present(panelContent(for: try makeEvent(number: 2)))
+        controller.showCollapsed()
+        controller.dismissEvents(forService: original.serviceID)
+        controller.dismissAll()
+        XCTAssertEqual(controller.state.recentEvents, [original])
+        controller.setLocked(false)
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertNil(controller.state.currentEvent)
+        XCTAssertEqual(controller.state.recentEvents, [original])
+        controller.present(panelContent(for: try makeEvent(number: 3)))
+        XCTAssertEqual(controller.state.unreviewedCount, 2)
+    }
+
+    func testDisablingIslandWhileLockedDiscardsRetainedHistory() throws {
+        let controller = makeController(renderer: RecordingIslandPanelRenderer())
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        controller.setLocked(true)
+        controller.hide()
+        controller.setLocked(false)
+        XCTAssertEqual(controller.state, .hidden)
+    }
+
+    func testDismissalRecognizesMacDeleteEvents() throws {
+        for (keyCode, characters) in [(UInt16(51), "\u{7f}"), (UInt16(117), "\u{f728}")] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: 0, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
+            ))
+            let character = try XCTUnwrap(event.charactersIgnoringModifiers?.first)
+            XCTAssertTrue(IslandKeyboardInput.dismissalKeys.contains(KeyEquivalent(character)))
+        }
+        XCTAssertTrue(IslandKeyboardInput.dismissalKeys.contains(.delete))
+        XCTAssertFalse(IslandKeyboardInput.dismissalKeys.contains(.return))
+    }
+
     func testControllerStartsHiddenWithoutCreatingVisibleContent() {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)

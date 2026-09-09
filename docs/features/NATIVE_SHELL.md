@@ -473,6 +473,11 @@ Blatta or Settings. These routes remain available in Menu bar only mode. The
 complete window follows the Window glass and Shell transparency settings. The
 content also follows the selected Blatta appearance.
 
+The selected service uses a light fill and an accent-colored checkmark. In
+light appearance, the fill is 55 percent white, or opaque white with Reduce
+Transparency. Dark appearance uses a quieter light fill. Hover uses the
+neutral row highlight; it does not replace the persistent selection mark.
+
 See [Web appearance](WEB-APPEARANCE.md) for the service appearance control.
 
 ## Accessibility

@@ -348,6 +348,8 @@ private struct MenuBarWindowSurface: View {
 
 private struct MenuBarServiceButtonStyle: ButtonStyle {
     let isSelected: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
@@ -356,11 +358,18 @@ private struct MenuBarServiceButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: BlattaRadius.control, style: .continuous)
                     .fill(
                         isSelected
-                            ? BlattaColor.Fill.sidebarSelection
+                            ? selectedFill
                             : (isHovering ? BlattaColor.Fill.sidebarRowHover : Color.clear)
                     )
             }
             .opacity(configuration.isPressed ? 0.72 : 1)
             .onHover { isHovering = $0 }
+    }
+
+    private var selectedFill: Color {
+        if reduceTransparency {
+            return colorScheme == .light ? .white : Color(white: 0.28)
+        }
+        return Color.white.opacity(colorScheme == .light ? 0.55 : 0.14)
     }
 }

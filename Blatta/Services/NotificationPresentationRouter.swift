@@ -15,6 +15,7 @@ protocol NotificationEventPresenting: AnyObject {
 @MainActor
 final class NotificationPresentationRouter {
     private let systemPresenter: any NotificationEventPresenting
+    private let isLockedCheck: @MainActor () -> Bool
     private let islandPresenter: (any NotificationEventPresenting)?
     private let isMutedCheck: @MainActor (UUID) -> Bool
     private let isSystemEnabledCheck: @MainActor (UUID) -> Bool
@@ -24,6 +25,7 @@ final class NotificationPresentationRouter {
 
     init(
         systemPresenter: any NotificationEventPresenting,
+        isLockedCheck: @escaping @MainActor () -> Bool = { false },
         islandPresenter: (any NotificationEventPresenting)? = nil,
         isMutedCheck: @escaping @MainActor (UUID) -> Bool,
         isSystemEnabledCheck: @escaping @MainActor (UUID) -> Bool,
@@ -32,6 +34,7 @@ final class NotificationPresentationRouter {
         isDoNotDisturbCheck: @escaping @MainActor () -> Bool
     ) {
         self.systemPresenter = systemPresenter
+        self.isLockedCheck = isLockedCheck
         self.islandPresenter = islandPresenter
         self.isMutedCheck = isMutedCheck
         self.isSystemEnabledCheck = isSystemEnabledCheck
@@ -56,6 +59,7 @@ final class NotificationPresentationRouter {
 
         let plan = NotificationPresentationPolicy.plan(
             for: NotificationPresentationOptions(
+                isLocked: isLockedCheck(),
                 isMuted: isMutedCheck(event.serviceID),
                 isDoNotDisturbActive: isDoNotDisturbCheck(),
                 isSystemNotificationEnabled: isSystemEnabledCheck(event.serviceID),

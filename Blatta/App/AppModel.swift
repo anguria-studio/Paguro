@@ -82,6 +82,10 @@ final class AppModel {
             notificationRouteSettings: resolvedNotificationRouteSettings
         )
         self.presenceController = presenceController
+        self.appState.onLockChanged = { [weak islandPanelController] isLocked in
+            islandPanelController?.setLocked(isLocked)
+        }
+        islandPanelController.setLocked(self.appState.isLocked)
         observeIslandAppearance()
         observeActiveService()
         observeUnreadCounts()
@@ -270,6 +274,7 @@ final class AppModel {
     // of the debug surface. scripts/build_dmg.sh --test-controls sets it.
     #if DEBUG || TEST_CONTROLS
     func showIslandPreview(for service: ServiceInstance?) {
+        guard !appState.isLocked else { return }
         guard notificationRouteSettings.isIslandRouteEnabled else { return }
         guard let event = try? NotificationEvent.normalize(
             id: UUID(),

@@ -7,6 +7,7 @@ final class UserScriptManager {
     private let islandPanelController: IslandPanelController?
 
     var isServiceMuted: (@MainActor (UUID) -> Bool)?
+    var notificationLockSnapshot = AtomicBool(false)
     /// Per-service "forward notifications to macOS" flag. Defaults to true when
     /// unset, preserving behavior for services that predate the toggle.
     var isServiceNotifyingOS: (@MainActor (UUID) -> Bool)?
@@ -41,6 +42,7 @@ final class UserScriptManager {
     /// place and re-adding would throw.
     func installHandlers(for instance: ServiceInstance, on controller: WKUserContentController) {
         let mutedCheck = isServiceMuted
+        let lockSnapshot = notificationLockSnapshot
         let notifyOSCheck = isServiceNotifyingOS
         let systemCheck = isSystemNotificationsEnabled
         let islandCheck = isIslandNotificationsEnabled
@@ -48,7 +50,8 @@ final class UserScriptManager {
         let serviceIconURL = NotificationAttachmentStore.prepareServiceIcon(for: instance)
         let presenter = NotificationPresenter(
             serviceLabel: instance.label,
-            serviceIconURL: serviceIconURL
+            serviceIconURL: serviceIconURL,
+            lockSnapshot: lockSnapshot
         )
         let islandPresenter = islandPanelController.map { controller in
             IslandNotificationPresenter(
@@ -59,6 +62,7 @@ final class UserScriptManager {
         }
         let presentationRouter = NotificationPresentationRouter(
             systemPresenter: presenter,
+            isLockedCheck: { lockSnapshot.value },
             islandPresenter: islandPresenter,
             isMutedCheck: { id in
                 mutedCheck?(id) ?? false
