@@ -6,24 +6,16 @@
 #   - Blatta/Resources/hagezi-light.json   (HaGezi "Light" ad/tracker domains)
 #   - Blatta/Resources/fanboy-annoyance.json (Fanboy annoyances, from EasyList)
 #
-# IMPORTANT: SafariConverterLib is GPLv3. It is used here ONLY as an offline
-# build tool — its JSON *output* is bundled, the library is never linked into
-# the app. Do NOT add it as a Swift Package dependency in project.yml, or Blatta
-# (MIT) becomes a GPL derivative. See the content-blocker design notes.
-#
-# Run this to bump the bundled lists, then commit the regenerated JSON.
-# Pin the refs below for reproducible builds; bump them deliberately.
+# SafariConverterLib is a GPL-3.0 offline build tool, not an app dependency.
+# This script converts the source snapshots in vendor/blocklists. See that
+# directory's README and manifest for provenance and refresh instructions.
+# The generated data keeps the license of its source list.
 
 set -euo pipefail
 
-HAGEZI_REF="${HAGEZI_REF:-37522026.242.31972}"   # HaGezi release tag (GPL-3.0 data)
 CONVERTER_REF="${CONVERTER_REF:-v4.3.0}"          # SafariConverterLib tag
 SAFARI_VERSION="${SAFARI_VERSION:-14}"            # rule-syntax level for the converter, not the macOS target
 CAP=150000                                        # WKContentRuleList per-list rule cap
-# EasyList publishes Fanboy's Annoyance List only as a moving file with no
-# versioned download. Record the fetch date in the commit message when you
-# regenerate it; the HaGezi list is pinned by tag above.
-
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -34,16 +26,14 @@ git clone --quiet --depth 1 --branch "$CONVERTER_REF" \
 ( cd "$WORK/scl" && swift build -c release --product ConverterTool )
 TOOL="$WORK/scl/.build/release/ConverterTool"
 
-# convert <url> <output-path> <label>
+# convert <source-path> <output-path> <label>
 convert() {
-  local url="$1" out="$2" label="$3"
-  echo "==> Downloading ${label}"
-  curl -fsSL "$url" -o "$WORK/src.txt"
+  local source_path="$1" out="$2" label="$3"
   echo "==> Converting ${label} to WKContentRuleList JSON"
   "$TOOL" convert \
     --safari-version "$SAFARI_VERSION" \
     --advanced-blocking false \
-    --input-path "$WORK/src.txt" \
+    --input-path "$source_path" \
     --safari-rules-json-path "$WORK/rules.json"
   jq -e 'type == "array" and length > 0' "$WORK/rules.json" > /dev/null \
     || { echo "ERROR: ${label} produced no rules — refusing to write an empty list" >&2; exit 1; }
@@ -57,12 +47,12 @@ convert() {
 }
 
 convert \
-  "https://raw.githubusercontent.com/hagezi/dns-blocklists/${HAGEZI_REF}/adblock/light.txt" \
+  "$REPO_ROOT/vendor/blocklists/hagezi-light.txt" \
   "$REPO_ROOT/Blatta/Resources/hagezi-light.json" \
-  "HaGezi Light @ ${HAGEZI_REF}"
+  "HaGezi Light snapshot"
 
 convert \
-  "https://easylist-downloads.adblockplus.org/fanboy-annoyance.txt" \
+  "$REPO_ROOT/vendor/blocklists/fanboy-annoyance.txt" \
   "$REPO_ROOT/Blatta/Resources/fanboy-annoyance.json" \
   "Fanboy Annoyance List (EasyList)"
 

@@ -5,6 +5,9 @@ Status: active
 ## Scope
 
 Blatta uses Apple system frameworks, BlattaCore, build tools, and GitHub Actions.
+The direct build also uses Sparkle 2.9.6. Apple provides no direct-download
+updater with signed feeds and sandboxed installation. Sparkle provides this
+reviewed implementation instead of a custom installer.
 Add a third-party runtime package only when a system framework or a small local
 implementation cannot meet the requirement safely.
 

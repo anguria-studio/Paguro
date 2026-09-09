@@ -1,0 +1,19 @@
+# Generate only for Developer ID distribution. The default project has no Sparkle.
+include:
+  - project.yml
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.6
+targets:
+  Blatta:
+    dependencies:
+      - package: Sparkle
+        product: Sparkle
+    settings:
+      configs:
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DIRECT_DISTRIBUTION"
+          CODE_SIGN_ENTITLEMENTS: Configuration/Direct.entitlements
+          INFOPLIST_FILE: Configuration/DirectInfo.plist
+          BLATTA_UPDATE_FEED_URL: https://github.com/anguria-studio/Blatta/releases/latest/download/appcast.xml

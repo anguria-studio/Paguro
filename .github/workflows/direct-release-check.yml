@@ -1,0 +1,34 @@
+name: Direct release build check
+
+on:
+  pull_request:
+    paths:
+      - 'Blatta/**'
+      - 'Core/**'
+      - 'Configuration/Direct*'
+      - 'project*.yml'
+      - 'scripts/*release*'
+      - '.github/workflows/direct-release-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+      - run: brew install xcodegen
+      - run: python3 scripts/test_release.py
+      - run: xcodegen generate --spec project-direct.yml
+      - name: Compile the direct build without signing credentials
+        run: |
+          xcodebuild -project Blatta.xcodeproj -scheme Blatta \
+            -configuration Release -destination 'generic/platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO build

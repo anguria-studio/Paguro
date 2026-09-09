@@ -36,6 +36,8 @@ Blatta/
 `BlattaCore` must not import SwiftUI, AppKit, WebKit, or SwiftData.
 The application target can import `BlattaCore`.
 The application target owns all platform adapters.
+The direct-release project adds Sparkle 2.9.6 to this target for signed updates.
+The default project and BlattaCore do not depend on Sparkle.
 
 ```text
 SwiftUI views
@@ -110,7 +112,9 @@ tracks these changes.
 ## App lifecycle
 
 Blatta has one process in version 1.
-It has no helper process and no push server.
+It has no push server.
+The direct build uses Sparkle installer helpers during an app update.
+These helpers do not run service sessions or notification polling.
 
 Closing the main window keeps the menu-bar item active.
 Configured services can continue to produce notifications.

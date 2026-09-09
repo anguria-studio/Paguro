@@ -2,12 +2,12 @@ import SwiftUI
 import SwiftData
 import BlattaCore
 import AppKit
-#if canImport(Sparkle)
+#if DIRECT_DISTRIBUTION
 import Sparkle
 #endif
 
 struct SettingsView: View {
-    #if canImport(Sparkle)
+    #if DIRECT_DISTRIBUTION
     let updater: SPUUpdater
 
     init(updater: SPUUpdater) {
@@ -44,7 +44,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var aboutTab: some View {
-        #if canImport(Sparkle)
+        #if DIRECT_DISTRIBUTION
         AboutSettingsView(updater: updater)
         #else
         AboutSettingsView()
@@ -674,7 +674,7 @@ struct PrivacySettingsView: View {
 }
 
 struct AboutSettingsView: View {
-    #if canImport(Sparkle)
+    #if DIRECT_DISTRIBUTION
     let updater: SPUUpdater
     #endif
 
@@ -698,8 +698,8 @@ struct AboutSettingsView: View {
                     }
                     Spacer()
                 }
-                #if canImport(Sparkle)
-                CheckForUpdatesView(updater: updater)
+                #if DIRECT_DISTRIBUTION
+                UpdateSettingsView(updater: updater)
                 #endif
             }
 

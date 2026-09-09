@@ -114,7 +114,9 @@ Shutdown is idempotent. It performs these actions:
 7. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
    record the store content.
 
-The process has no helper that continues after termination.
+Service work stops after termination. Sparkle can use a temporary installer
+helper to finish an update in the direct build. This helper does not run
+services or notification polling.
 
 ## Verification
 

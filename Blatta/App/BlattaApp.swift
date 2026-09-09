@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 import BlattaCore
-#if canImport(Sparkle)
+#if DIRECT_DISTRIBUTION
 import Sparkle
 #endif
 
@@ -12,7 +12,7 @@ struct BlattaApp: App {
 
     private var appState: AppState { appModel.appState }
 
-    #if canImport(Sparkle)
+    #if DIRECT_DISTRIBUTION
     /// Owns the Sparkle updater for the app's lifetime: drives the
     /// "Check for Updates…" command and runs scheduled background checks.
     private let updaterController: SPUStandardUpdaterController
@@ -21,7 +21,7 @@ struct BlattaApp: App {
     init() {
         let appModel = AppModel()
         _appModel = State(initialValue: appModel)
-        #if canImport(Sparkle)
+        #if DIRECT_DISTRIBUTION
         updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
@@ -55,7 +55,7 @@ struct BlattaApp: App {
                 }
             }
 
-            #if canImport(Sparkle)
+            #if DIRECT_DISTRIBUTION
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updaterController.updater)
             }
@@ -202,7 +202,7 @@ struct BlattaApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            #if canImport(Sparkle)
+            #if DIRECT_DISTRIBUTION
             SettingsView(updater: updaterController.updater)
                 .environment(appState)
                 .environment(appModel)
@@ -293,21 +293,22 @@ private struct MainWindowOpener: ViewModifier {
 
 // MARK: - Sparkle auto-update ("Check for Updates…" menu command)
 //
-// Defined here (a file that is part of the Blatta target) rather than a
-// standalone file, so it compiles when Sparkle is resolved. Gated on
-// canImport(Sparkle) so the project still builds before the package is present.
+// The direct distribution project enables updates. Development builds omit them.
 
-#if canImport(Sparkle)
+#if DIRECT_DISTRIBUTION
 
 /// Publishes whether the updater can currently check for updates, so the menu
 /// item can enable/disable itself reactively.
 @MainActor
 final class CheckForUpdatesViewModel: ObservableObject {
     @Published var canCheckForUpdates = false
+    @Published var automaticallyChecksForUpdates = false
 
     init(updater: SPUUpdater) {
         updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
+        updater.publisher(for: \.automaticallyChecksForUpdates)
+            .assign(to: &$automaticallyChecksForUpdates)
     }
 }
 
@@ -325,6 +326,23 @@ struct CheckForUpdatesView: View {
     var body: some View {
         Button("Check for Updates…", action: updater.checkForUpdates)
             .disabled(!viewModel.canCheckForUpdates)
+    }
+}
+struct UpdateSettingsView: View {
+    @StateObject private var model: CheckForUpdatesViewModel
+    private let updater: SPUUpdater
+
+    init(updater: SPUUpdater) {
+        self.updater = updater
+        _model = StateObject(wrappedValue: CheckForUpdatesViewModel(updater: updater))
+    }
+
+    var body: some View {
+        Toggle("Automatically check for updates", isOn: Binding(
+            get: { model.automaticallyChecksForUpdates },
+            set: { updater.automaticallyChecksForUpdates = $0 }
+        ))
+        CheckForUpdatesView(updater: updater)
     }
 }
 #endif
