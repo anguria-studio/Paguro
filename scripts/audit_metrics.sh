@@ -210,7 +210,7 @@ fi
 # --- Stored data ------------------------------------------------------------
 
 heading "Stored data"
-for BUNDLE_ID in com.tommasolaterza.Paguro com.tommasolaterza.Paguro.debug; do
+for BUNDLE_ID in studio.anguria.paguro studio.anguria.paguro.debug; do
     CONTAINER="$HOME/Library/Containers/$BUNDLE_ID"
     [ -d "$CONTAINER" ] || continue
     printf '  %s\n' "$BUNDLE_ID"

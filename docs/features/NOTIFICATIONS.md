@@ -354,7 +354,7 @@ warning text, and it imports no AppKit or UserNotifications type.
 Use this command to read the current permission from the log:
 
 ```sh
-log stream --predicate 'subsystem == "com.tommasolaterza.Paguro"' --info
+log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
 ```
 
 ## Dock badge
@@ -384,7 +384,7 @@ so the Dock can show no badge in that mode.
 Use this command to read the current state:
 
 ```sh
-log stream --predicate 'subsystem == "com.tommasolaterza.Paguro"' --info
+log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
 ```
 
 ## Global mute

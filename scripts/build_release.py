@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+BUNDLE_ID = 'studio.anguria.paguro'
+# Preserve the existing signing key; its Keychain label is not an app identity.
 ACCOUNT = 'com.tommasolaterza.Paguro'
 REPOSITORY = 'anguria-studio/Paguro'
 FEED = f'https://github.com/{REPOSITORY}/releases/latest/download/appcast.xml'
@@ -113,7 +115,7 @@ def main():
             test_info = work / 'TestInfo.plist'
             test_info.write_bytes(plistlib.dumps(info))
             settings += [f'INFOPLIST_FILE={test_info}',
-                         'PRODUCT_BUNDLE_IDENTIFIER=com.tommasolaterza.Paguro.updatetest']
+                         f'PRODUCT_BUNDLE_IDENTIFIER={BUNDLE_ID}.updatetest']
         run('xcodebuild', '-project', project / 'Paguro.xcodeproj', '-scheme', 'Paguro',
             '-configuration', 'Release', '-destination', 'generic/platform=macOS',
             '-archivePath', archive, *settings, 'archive')
@@ -129,7 +131,7 @@ def main():
             raise RuntimeError('Exported update key differs from the signing key')
         validate_app_info(exported_info,
                           args.version, args.build, args.test_feed or FEED,
-                          ACCOUNT + '.updatetest' if args.test_feed else ACCOUNT)
+                          BUNDLE_ID + '.updatetest' if args.test_feed else BUNDLE_ID)
         entitlements = plistlib.loads(run('codesign', '-d', '--entitlements', '-',
                                          '--xml', app, capture=True).encode())
         if entitlements.get('com.apple.security.get-task-allow', False):

@@ -27,7 +27,7 @@ The run script removes the certificate and key when it stops.
 It does not add a certificate to the system trust store.
 
 The `Paguro Compatibility` scheme uses the `Compatibility` build configuration.
-This configuration uses the `com.tommasolaterza.Paguro.compatibility` bundle ID
+This configuration uses the `studio.anguria.paguro.compatibility` bundle ID
 and adds the `--paguro-compatibility-fixture` argument.
 It is a debug build, so it can use the fixture argument.
 Paguro then accepts the temporary certificate on ports 8443 and 8444 only.

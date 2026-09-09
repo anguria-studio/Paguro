@@ -11,7 +11,7 @@ import os
 @MainActor
 @Observable
 final class AppPresenceController {
-    private static let logger = Logger(subsystem: "com.tommasolaterza.Paguro", category: "AppPresence")
+    private static let logger = Logger(subsystem: "studio.anguria.paguro", category: "AppPresence")
     @ObservationIgnored private weak var appDelegate: AppDelegate?
     private(set) var mode = AppPreferenceDefaults.appPresenceMode
 

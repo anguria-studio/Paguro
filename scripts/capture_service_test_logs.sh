@@ -14,5 +14,5 @@ echo "The log file is $OUTPUT_FILE"
 /usr/bin/log stream \
     --style compact \
     --level info \
-    --predicate 'subsystem == "com.tommasolaterza.Paguro" AND category == "WebView"' \
+    --predicate 'subsystem == "studio.anguria.paguro" AND category == "WebView"' \
     2>&1 | tee "$OUTPUT_FILE"

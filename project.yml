@@ -3,7 +3,7 @@ name: Paguro
 # XcodeGen creates the Xcode project from this file.
 # Run `xcodegen generate` after each change to this file.
 options:
-  bundleIdPrefix: com.tommasolaterza
+  bundleIdPrefix: studio.anguria
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -45,10 +45,10 @@ targets:
         product: PaguroCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Paguro
+        PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro
         PRODUCT_NAME: Paguro
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "3"
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         MACOSX_DEPLOYMENT_TARGET: "15.0"
@@ -65,9 +65,9 @@ targets:
         INFOPLIST_KEY_LSUIElement: NO
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Paguro.debug
+          PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro.debug
         Compatibility:
-          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Paguro.compatibility
+          PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro.compatibility
     scheme:
       testTargets:
         - PaguroTests
@@ -86,7 +86,7 @@ targets:
         product: PaguroCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.PaguroTests
+        PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.pagurotests
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         MACOSX_DEPLOYMENT_TARGET: "15.0"

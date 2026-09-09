@@ -15,7 +15,7 @@ final class NetworkMonitor {
     private(set) var isOnline: Bool = true
 
     private let monitor: NWPathMonitor
-    private let queue = DispatchQueue(label: "com.tommasolaterza.Paguro.NetworkMonitor")
+    private let queue = DispatchQueue(label: "studio.anguria.paguro.NetworkMonitor")
     private var isStopped = false
 
     /// Callback fired whenever connectivity toggles. Lets `NotificationRuntime`

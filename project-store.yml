@@ -1,0 +1,21 @@
+# Generate for App Store distribution. Supply DEVELOPMENT_TEAM locally.
+include:
+  - project.yml
+targets:
+  Paguro:
+    settings:
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: Apple Development
+          ONLY_ACTIVE_ARCH: NO
+          ARCHS: "arm64 x86_64"
+schemes:
+  Paguro App Store:
+    build:
+      targets:
+        Paguro: all
+    run:
+      config: Debug
+    archive:
+      config: Release

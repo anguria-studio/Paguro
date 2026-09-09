@@ -1,7 +1,7 @@
 import os
 
 enum AppLogger {
-    private static let subsystem = "com.tommasolaterza.Paguro"
+    private static let subsystem = "studio.anguria.paguro"
 
     static let general = Logger(subsystem: subsystem, category: "General")
     static let dataStore = Logger(subsystem: subsystem, category: "DataStore")

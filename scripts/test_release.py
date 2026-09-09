@@ -4,17 +4,23 @@ import plistlib
 import unittest
 import tempfile
 from pathlib import Path
-from build_release import validate_app_info, ROOT, FEED, ACCOUNT, notary_profile
+from build_release import validate_app_info, ROOT, FEED, BUNDLE_ID, ACCOUNT, notary_profile
 
 
 class ReleaseMetadataTests(unittest.TestCase):
     def setUp(self):
         self.info = plistlib.loads((ROOT / 'Configuration/DirectInfo.plist').read_bytes())
         self.info.update(CFBundleShortVersionString='0.1.0', CFBundleVersion='2',
-                         CFBundleIdentifier=ACCOUNT, SUFeedURL=FEED)
+                         CFBundleIdentifier=BUNDLE_ID, SUFeedURL=FEED)
 
     def check(self):
-        validate_app_info(self.info, '0.1.0', 2, FEED, ACCOUNT)
+        validate_app_info(self.info, '0.1.0', 2, FEED, BUNDLE_ID)
+
+    def test_keychain_label_is_not_a_bundle_identity(self):
+        self.assertNotEqual(BUNDLE_ID, ACCOUNT)
+        self.info['CFBundleIdentifier'] = ACCOUNT
+        with self.assertRaises(ValueError):
+            self.check()
 
     def test_notary_profile_precedence(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -40,7 +46,7 @@ class ReleaseMetadataTests(unittest.TestCase):
                 self.info[key] = original
 
     def test_rejects_test_identity_and_feed(self):
-        for key, value in [('CFBundleIdentifier', ACCOUNT + '.updatetest'),
+        for key, value in [('CFBundleIdentifier', BUNDLE_ID + '.updatetest'),
                            ('SUFeedURL', 'http://127.0.0.1:8765/appcast.xml'),
                            ('CFBundleVersion', '1')]:
             with self.subTest(key=key):

@@ -88,7 +88,7 @@ Paguro builds, because those builds have no active updater.
 Build an older and a newer build with
 `--test-feed http://127.0.0.1:8765/appcast.xml` and separate output directories.
 This option uses the isolated bundle identifier
-`com.tommasolaterza.Paguro.updatetest` and permits local networking.
+`studio.anguria.paguro.updatetest` and permits local networking.
 Serve the newer build's `assets` directory on loopback. Install and launch the
 older test app from a writable directory. Use Check for Updates, install the
 newer version, and confirm its build number after relaunch. Repeat with a
@@ -108,8 +108,26 @@ Test the public download and feed without GitHub credentials after publication.
 
 ## App Store build
 
-The App Store build uses a separate configuration or target.
-It must omit Sparkle and all self-update controls.
+`project-store.yml` adds the `Paguro App Store` scheme to the default project.
+Its Release archive supports Apple silicon and Intel. It contains no Sparkle
+dependency or self-update controls. Supply the signing team locally; do not
+commit a personal team identifier.
+
+```sh
+xcodegen generate --spec project-store.yml
+xcodebuild -project Paguro.xcodeproj -scheme 'Paguro App Store' \
+  -configuration Release -destination 'generic/platform=macOS' \
+  -archivePath .project/store/Paguro.xcarchive \
+  DEVELOPMENT_TEAM=YOUR_TEAM_ID archive
+```
+
+Automatic signing uses Apple Development for the archive. Xcode signs again
+for App Store distribution during export. Configure the Apple account in Xcode
+and resolve signing requirements before export. This command does not upload
+or submit the app. Use Organizer to validate and distribute the signed archive
+after the privacy audit and release checks are complete.
+
+Run `xcodegen generate` to restore the default development project.
 
 Both builds must use public Apple APIs.
 Both builds must use bundled and reviewed service recipes.
@@ -182,7 +200,10 @@ configuration or workflow changes. Tag public releases as `vMAJOR.MINOR.PATCH`.
 
 ## Local release credentials
 
-The Paguro bundle and Sparkle signing account use `com.tommasolaterza.Paguro`.
+The release bundle identifier is `studio.anguria.paguro`. Debug, compatibility,
+and update-test builds use `.debug`, `.compatibility`, and `.updatetest` suffixes.
+The existing Sparkle key stays under the Keychain account
+`com.tommasolaterza.Paguro`. This label is independent of the bundle identifier.
 The public key in `Configuration/DirectInfo.plist` must match that Keychain
 account. Private keys stay in Keychain.
 
@@ -196,3 +217,8 @@ An existing Apple account profile can sign releases for the new app identity.
 The local JSON file stores only the profile name, never credentials.
 The repository remains private until publication. A public update feed requires
 a public repository and an uploaded release appcast.
+
+Changing from the previous development bundle identifier gives the app a new
+sandbox container and permission identity. Existing test data stays under the
+old identifier. Export and import configuration if needed, then sign in again.
+Do not change the release bundle identifier after public distribution.
