@@ -26,9 +26,12 @@ The app icon uses the layered Paguro shell. Default appearance has a light
 purple gradient. Dark appearance has a lavender shell over the standard black
 gradient. Keep the editable layers in `Paguro/AppIcon.icon`.
 
-The menu-bar shell uses a 22 point vector template with thin transparent spiral
+The menu-bar shell uses a 20 point vector template with thin transparent spiral
 seams. macOS supplies its light or dark tint. The menu-bar window uses the same
-asset in its header.
+asset in its header. The status item uses 45 percent opacity during global
+mute, quiet hours, or when every configured service is muted. An empty service
+list does not imply mute. The Dock shows a muted-bell overlay in its top-right
+corner for the same state. The notification counter is hidden while this overlay appears.
 
 ## Notifications and the island
 

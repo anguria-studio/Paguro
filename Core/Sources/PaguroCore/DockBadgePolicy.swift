@@ -10,8 +10,8 @@ public enum DockBadgePolicy {
     /// The preference removes the badge. A total of zero has nothing to show.
     /// A negative total cannot occur, because the badge manager clamps each
     /// count, but it must never make a label.
-    public static func badgeLabel(unreadTotal: Int, showsBadgeCount: Bool) -> String? {
-        guard showsBadgeCount, unreadTotal > 0 else { return nil }
+    public static func badgeLabel(unreadTotal: Int, showsBadgeCount: Bool, allServicesMuted: Bool = false) -> String? {
+        guard !allServicesMuted, showsBadgeCount, unreadTotal > 0 else { return nil }
         return String(unreadTotal)
     }
 }

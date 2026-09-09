@@ -22,11 +22,18 @@ final class BadgeManager {
         // main-actor isolation (that callback isn't contractually main-thread;
         // an off-main read via MainActor.assumeIsolated would hard-crash). DND
         // suppresses delivery; it does not hide the unread state.
-        didSet { doNotDisturbSnapshot.value = doNotDisturb }
+        didSet {
+            doNotDisturbSnapshot.value = doNotDisturb
+            updateDockBadge()
+        }
     }
 
     /// Off-main-safe mirror of `doNotDisturb`. See the property's didSet.
     nonisolated let doNotDisturbSnapshot = AtomicBool(false)
+
+    var allServicesMuted = false {
+        didSet { updateDockBadge() }
+    }
 
     var showBadgeCountInDock: Bool = true {
         didSet { updateDockBadge() }
@@ -114,7 +121,8 @@ final class BadgeManager {
     var dockBadgeLabel: String? {
         DockBadgePolicy.badgeLabel(
             unreadTotal: totalCount,
-            showsBadgeCount: showBadgeCountInDock
+            showsBadgeCount: showBadgeCountInDock,
+            allServicesMuted: allServicesMuted || doNotDisturb
         )
     }
 

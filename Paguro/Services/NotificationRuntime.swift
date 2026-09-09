@@ -22,6 +22,10 @@ final class NotificationRuntime {
     private let minuteOfDay: @MainActor () -> Int
     private let quietHoursInterval: Duration
 
+    @ObservationIgnored var writeDockMuteIndicator: @MainActor (Bool) -> Void = {
+        DockMuteIndicator.shared.setMuted($0)
+    }
+
     private var currentSpaceID: @MainActor () -> UUID? = { nil }
     private var selectService: @MainActor (UUID?, UUID) -> Void = { _, _ in }
     private var bringWindowForward: @MainActor () -> Void = { }
@@ -121,6 +125,7 @@ final class NotificationRuntime {
     func shutdown() {
         guard !hasShutDown else { return }
         hasShutDown = true
+        writeDockMuteIndicator(false)
         activationTask?.cancel()
         activationTask = nil
         quietHoursTask?.cancel()
@@ -289,8 +294,19 @@ final class NotificationRuntime {
 
     var isQuietHoursScheduled: Bool { quietHoursTask != nil }
 
+    func refreshDockMuteState() {
+        guard let services = try? context.fetch(FetchDescriptor<ServiceInstance>()) else { return }
+        let muted = NotificationMutePresentation.allServicesMuted(
+            serviceMuteStates: services.map(\.isEffectivelyMuted),
+            globalMute: isDoNotDisturbActive()
+        )
+        badgeManager.allServicesMuted = muted
+        writeDockMuteIndicator(muted)
+    }
+
     private func refreshEffectiveDoNotDisturb() {
         badgeManager.doNotDisturb = doNotDisturb || scheduledDNDActive
+        refreshDockMuteState()
         badgeManager.updateDockBadge()
     }
 

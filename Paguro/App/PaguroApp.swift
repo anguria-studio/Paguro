@@ -192,12 +192,8 @@ struct PaguroApp: App {
                 .preferredColorScheme(appState.appearanceColorScheme)
                 .modifier(MainWindowOpener(appDelegate: appDelegate))
         } label: {
-            // The status item glyph is a template asset, so macOS tints it for
-            // the light and dark menu bar. The status item uses the intrinsic
-            // asset size and ignores a SwiftUI frame, so the asset itself is
-            // a 22 point canvas with an inset shell silhouette.
-            Image("MenuBarIcon")
-                .accessibilityLabel("Paguro")
+            MenuBarIconLabel(appState: appState)
+                .modelContainer(appState.modelContainer)
         }
         .menuBarExtraStyle(.window)
 

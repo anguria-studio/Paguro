@@ -8,6 +8,43 @@ import XCTest
 
 final class NotificationRuntimeTests: XCTestCase {
     @MainActor
+    func testDockMuteIndicatorTracksServicesGlobalMuteAndShutdown() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        var written: [Bool] = []
+        fixture.runtime.writeDockMuteIndicator = { written.append($0) }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        XCTAssertEqual(written.last, false)
+
+        let context = fixture.container.mainContext
+        let space = Space(name: "Muted", emoji: "", isMuted: true)
+        let service = ServiceInstance(label: "Chat", url: "https://chat.example")
+        context.insert(space)
+        context.insert(service)
+        context.insert(SpaceServiceLink(space: space, service: service))
+        try context.save()
+        fixture.runtime.refreshDockMuteState()
+        XCTAssertEqual(written.last, true)
+
+        let unmuted = ServiceInstance(label: "Mail", url: "https://mail.example")
+        context.insert(unmuted)
+        try context.save()
+        fixture.runtime.refreshDockMuteState()
+        XCTAssertEqual(written.last, false)
+
+        fixture.badgeManager.updateBadge(for: unmuted.id, count: 3, isMuted: false)
+        fixture.runtime.doNotDisturb = true
+        XCTAssertEqual(written.last, true)
+        XCTAssertNil(fixture.badgeManager.dockBadgeLabel)
+        XCTAssertEqual(fixture.badgeManager.rawCount(for: unmuted.id), 3)
+        fixture.runtime.doNotDisturb = false
+        XCTAssertEqual(written.last, false)
+        fixture.runtime.shutdown()
+        XCTAssertEqual(written.last, false)
+    }
+
+    @MainActor
     func testQuietHoursAndManualDNDStayInSyncAndPersist() async throws {
         let fixture = try makeFixture(
             preferences: AppPreferences(
@@ -76,8 +113,10 @@ final class NotificationRuntimeTests: XCTestCase {
         XCTAssertTrue(fixture.preferencesStore.showBadgeCountInDock)
         XCTAssertEqual(written.last ?? nil, "4")
 
-        // Do Not Disturb suppresses banners. It keeps the Dock badge.
+        // The mute indicator replaces the Dock badge without clearing unread state.
         fixture.runtime.doNotDisturb = true
+        XCTAssertNil(written.last ?? nil)
+        fixture.runtime.doNotDisturb = false
         XCTAssertEqual(written.last ?? nil, "4")
     }
 
@@ -471,6 +510,7 @@ final class NotificationRuntimeTests: XCTestCase {
             minuteOfDay: minuteOfDay,
             quietHoursInterval: .seconds(60)
         )
+        runtime.writeDockMuteIndicator = { _ in }
         return Fixture(
             container: container,
             preferencesStore: preferencesStore,

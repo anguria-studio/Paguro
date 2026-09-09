@@ -3,6 +3,10 @@
 /// Manual global mute is presentation-only. It marks every workspace and
 /// service without changing their stored mute values or unread counts.
 public enum NotificationMutePresentation {
+    public static func allServicesMuted(serviceMuteStates: [Bool], globalMute: Bool) -> Bool {
+        globalMute || (!serviceMuteStates.isEmpty && serviceMuteStates.allSatisfy { $0 })
+    }
+
     public static func showsMutedState(
         scopeMuted: Bool,
         manualGlobalMute: Bool

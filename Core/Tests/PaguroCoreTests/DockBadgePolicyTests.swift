@@ -2,6 +2,12 @@ import XCTest
 @testable import PaguroCore
 
 final class DockBadgePolicyTests: XCTestCase {
+    func testAllMutedSuppressesNonzeroBadge() {
+        XCTAssertNil(DockBadgePolicy.badgeLabel(
+            unreadTotal: 9, showsBadgeCount: true, allServicesMuted: true
+        ))
+    }
+
     func testVisibleTotalMakesTheLabel() {
         XCTAssertEqual(
             DockBadgePolicy.badgeLabel(unreadTotal: 7, showsBadgeCount: true),

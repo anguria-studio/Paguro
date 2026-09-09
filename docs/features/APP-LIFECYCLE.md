@@ -84,7 +84,9 @@ When the user drags the item off the menu bar, Paguro changes the mode to
 
 The menu-bar item uses the Paguro shell template. macOS supplies its tint for
 light and dark menu bars. The vector has thin transparent spiral seams on a
-22 point canvas.
+20 point canvas. The status item uses 45 percent opacity when global mute or
+quiet hours are active, or all configured services are effectively muted.
+An empty service list alone does not dim the icon.
 
 The menu-bar item opens a native status window. The window can select a
 service, toggle global notification mute, open the main window, open Settings,

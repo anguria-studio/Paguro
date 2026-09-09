@@ -19,6 +19,15 @@ authorization. `NotificationPresenter` builds and delivers native notification
 requests after the page bridge validates their payloads. Detection and
 presentation remain separate from this lifecycle controller.
 
+## Dock mute state
+
+The Dock icon shows a muted bell when manual mute or quiet hours are active,
+or every configured service is effectively muted. Workspace mute counts as
+service mute. An empty list alone does not show the overlay. The overlay uses
+an AppKit Dock tile view and clears when a service becomes unmuted. It works
+with the main window closed and in Dock-only mode. The notification counter is hidden while muted. Stored unread counts remain
+available and the badge returns after unmuting if its preference is enabled.
+
 ## Signal sources
 
 ### Page notifications
@@ -363,7 +372,8 @@ A service account with its own badge switch off also adds nothing.
 Settings switch.
 The Dock shows the label at a total of one or more.
 The Dock shows no badge at a total of zero.
-Do Not Disturb keeps the badge, because Do Not Disturb stops banners only.
+Global mute, quiet hours, or all-service mute hide the counter and show the
+muted bell in its place. Unmuting restores the counter from the retained counts.
 
 The Dock icon must be present for the badge.
 The Settings picker "Show Paguro in" controls the Dock icon.
@@ -384,7 +394,8 @@ It applies to all spaces and services.
 The same state is available in Settings and through `Shift-Command-D`.
 
 Global mute suppresses new macOS notification banners. Unread counts remain
-visible in service badges, workspace totals, and the Dock badge. Each visible
+visible in service badges and workspace totals. The Dock shows the muted bell
+instead of a counter. Each visible
 workspace header and service adds a barred bell while manual global mute is
 active.
 

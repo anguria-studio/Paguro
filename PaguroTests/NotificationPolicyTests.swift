@@ -159,7 +159,7 @@ final class NotificationPolicyTests: XCTestCase {
     }
 
     @MainActor
-    func testDockBadgeKeepsTheCountDuringDoNotDisturb() {
+    func testDockBadgeHidesDuringMuteAndRestoresStoredCount() {
         let manager = BadgeManager()
         var written: [String?] = []
         manager.writeDockBadge = { written.append($0) }
@@ -168,7 +168,15 @@ final class NotificationPolicyTests: XCTestCase {
 
         manager.doNotDisturb = true
         manager.updateDockBadge()
-        XCTAssertEqual(written.last ?? nil, "2", "Do Not Disturb stops banners, not the unread count")
+        XCTAssertNil(written.last ?? nil)
+        manager.updateBadge(for: id, count: 3, isMuted: false)
+        XCTAssertNil(written.last ?? nil)
+        manager.doNotDisturb = false
+        XCTAssertEqual(written.last ?? nil, "3")
+        manager.allServicesMuted = true
+        XCTAssertNil(written.last ?? nil)
+        manager.allServicesMuted = false
+        XCTAssertEqual(written.last ?? nil, "3")
     }
 
     @MainActor
