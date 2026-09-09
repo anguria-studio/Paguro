@@ -37,7 +37,12 @@ For a website address, Paguro checks these sources:
 - common `apple-touch-icon` and favicon paths;
 - HTML `link` elements with `icon` or `apple-touch-icon` relations;
 - the `icons` array in a linked web-app manifest;
-- the optional Google favicon fallback when the user enables it.
+- the optional Google favicon fallback in non-Store builds when enabled.
+
+The App Store build excludes the Google request path and its Settings control.
+Saved and imported opt-in values cannot enable it. The portable configuration
+field remains compatible with other builds. Direct website discovery and the
+initial-letter fallback remain available.
 
 Paguro prefers larger declared images.
 It does not use a monochrome-only manifest image as a full-color service icon.

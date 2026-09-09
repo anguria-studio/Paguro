@@ -6,6 +6,7 @@ targets:
     settings:
       configs:
         Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: Apple Development
           ONLY_ACTIVE_ARCH: NO

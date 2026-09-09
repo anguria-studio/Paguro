@@ -23,7 +23,7 @@ struct PaguroApp: App {
         _appModel = State(initialValue: appModel)
         #if DIRECT_DISTRIBUTION
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: AppCapabilities.selfUpdatesSupported,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )

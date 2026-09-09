@@ -36,6 +36,26 @@ It never publishes files or exports a private key.
 Do not put a personal signing team in `project.yml`.
 The release environment supplies signing values.
 
+## Build feature selection
+
+The same repository contains every edition. Select the XcodeGen specification
+when building; a Git push does not select an edition.
+
+| Specification | Release flag | Self-updates | Google icon fallback |
+| --- | --- | --- | --- |
+| `project.yml` | Neither | No | Available, off by default |
+| `project-direct.yml` | `DIRECT_DISTRIBUTION` | Sparkle | Available, off by default |
+| `project-store.yml` | `APP_STORE` | No | Excluded |
+
+`AppDistribution` in PaguroCore owns this feature matrix. `AppCapabilities`
+selects the compiled edition and exposes feature availability to the app.
+Selecting both flags is a compile error. Preferences can enable an available
+feature, but cannot override the distribution boundary.
+
+Compile-time guards still exclude unavailable request paths and Sparkle types;
+the direct specification alone adds the Sparkle dependency. Add new edition
+rules to the central matrix and cover them with tests.
+
 ## Updates
 
 `project-direct.yml` pins Sparkle 2.9.6 and enables `DIRECT_DISTRIBUTION` in
@@ -110,7 +130,9 @@ Test the public download and feed without GitHub credentials after publication.
 
 `project-store.yml` adds the `Paguro App Store` scheme to the default project.
 Its Release archive supports Apple silicon and Intel. It contains no Sparkle
-dependency or self-update controls. Supply the signing team locally; do not
+dependency or self-update controls. `APP_STORE` also excludes Google's favicon
+fallback request and Settings control, even after configuration import.
+Supply the signing team locally; do not
 commit a personal team identifier.
 
 ```sh
@@ -150,6 +172,21 @@ Remove an entitlement when no current feature needs it.
 Add an entitlement only with a feature test and a reason.
 
 ## Privacy
+
+`Paguro/PrivacyInfo.xcprivacy` declares app-local preferences (`CA92.1`) and
+metadata of files in the app container (`C617.1`). These support shell settings,
+workspace selection, cleanup and recovery state, cached-icon freshness, and
+local store recovery. Both distribution variants include the manifest.
+
+The manifest currently declares accessed APIs only. The App Store data
+collection questionnaire remains a separate review, including website traffic.
+The optional Google favicon lookup is excluded from the Store edition. Do not infer a completed privacy label
+from this file. A public policy URL and an in-app policy link are still needed.
+
+Apple's required-reason enforcement guidance lists iOS, iPadOS, tvOS, visionOS,
+and watchOS; it does not explicitly list macOS. These declarations document
+our actual use rather than assert a confirmed macOS upload requirement.
+See [Apple's required-reason guidance](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api).
 
 The privacy statement must explain these facts:
 

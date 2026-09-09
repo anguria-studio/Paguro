@@ -588,18 +588,22 @@ struct PrivacySettingsView: View {
 
     var body: some View {
         Form {
-            Section("Service Icons") {
-                Toggle("Ask Google for icons Paguro can't find", isOn: Binding(
-                    get: { appState.preferencesStore.googleFaviconFallbackEnabled },
-                    set: { value in
-                        appState.setGoogleFaviconFallbackEnabled(value)
-                    }
-                ))
+            #if !APP_STORE
+            if AppCapabilities.googleIconFallbackSupported {
+                Section("Service Icons") {
+                    Toggle("Ask Google for icons Paguro can't find", isOn: Binding(
+                        get: { appState.preferencesStore.googleFaviconFallbackEnabled },
+                        set: { value in
+                            appState.setGoogleFaviconFallbackEnabled(value)
+                        }
+                    ))
 
-                Text("Paguro fetches each service's icon from that service's own site. When a site serves none, this asks Google for one, which tells Google the hostname — including a private or self-hosted one. Off by default; services without an icon show their initial instead.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Paguro fetches each service's icon from that service's own site. When a site serves none, this asks Google for one, which tells Google the hostname — including a private or self-hosted one. Off by default; services without an icon show their initial instead.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            #endif
 
             Section("App Lock") {
                 Toggle("Require Touch ID or password", isOn: Binding(

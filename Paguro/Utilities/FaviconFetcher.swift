@@ -10,10 +10,11 @@ actor FaviconFetcher {
     /// server) typed into "Add service". Every other source in this file is
     /// fetched from the service's own host, so this is the one third party in
     /// the path. `AppState` pushes the preference in on load and on change.
-    private var googleFallbackEnabled = false
+    private(set) var googleFallbackEnabled = false
 
     func setGoogleFallbackEnabled(_ enabled: Bool) {
-        googleFallbackEnabled = enabled
+        // Imported or previously saved preferences cannot enable Store traffic.
+        googleFallbackEnabled = enabled && AppCapabilities.googleIconFallbackSupported
     }
 
     func fetchFavicon(for urlString: String) async -> Data? {
@@ -53,6 +54,7 @@ actor FaviconFetcher {
             return data
         }
 
+        #if !APP_STORE
         // Google favicon API fallback — opt-in only; see googleFallbackEnabled.
         // Never send a likely-private host (self-hosted, intranet, literal
         // private IP) to Google even when the toggle is on: those hostnames are
@@ -64,6 +66,7 @@ actor FaviconFetcher {
                 return data
             }
         }
+        #endif
 
         AppLogger.favicon.debug("No favicon found for \(host, privacy: .private)")
         return nil

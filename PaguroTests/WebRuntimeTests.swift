@@ -6,6 +6,20 @@ import PaguroCore
 @testable import Paguro
 
 final class WebRuntimeTests: XCTestCase {
+    func testGoogleFallbackRespectsDistributionBoundary() async {
+        let fetcher = FaviconFetcher()
+        await fetcher.setGoogleFallbackEnabled(true)
+        let enabled = await fetcher.googleFallbackEnabled
+        #if APP_STORE
+        XCTAssertFalse(enabled, "Saved or imported opt-in must not enable Store requests")
+        #else
+        XCTAssertTrue(enabled)
+        #endif
+        await fetcher.setGoogleFallbackEnabled(false)
+        let disabled = await fetcher.googleFallbackEnabled
+        XCTAssertFalse(disabled)
+    }
+
     @MainActor
     func testCoordinatorExposesWebUIDelegateMethods() {
         let coordinator = WebViewCoordinator()

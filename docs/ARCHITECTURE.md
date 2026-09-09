@@ -38,6 +38,9 @@ The application target can import `PaguroCore`.
 The application target owns all platform adapters.
 The direct-release project adds Sparkle 2.9.6 to this target for signed updates.
 The default project and PaguroCore do not depend on Sparkle.
+PaguroCore owns the `AppDistribution` feature matrix. The app selects its
+compiled distribution in `AppCapabilities`; build specifications and compiler
+guards keep excluded dependencies and request code out of each edition.
 
 ```text
 SwiftUI views
