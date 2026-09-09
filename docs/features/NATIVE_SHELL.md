@@ -482,6 +482,11 @@ See [Web appearance](WEB-APPEARANCE.md) for the service appearance control.
 
 ## Accessibility
 
+File > Open Notifications (Command-Shift-O) opens island history with focus on
+the newest card. Blatta must be active, unlocked, and have island alerts
+enabled, a notched display, and nonempty history. Escape returns focus to the
+previous Blatta window. Pointer exit does not close a keyboard-opened island.
+
 Each icon-only service has a tooltip and a complete VoiceOver label.
 The label includes unread, mute, hibernation, media, and health states when they
 apply.

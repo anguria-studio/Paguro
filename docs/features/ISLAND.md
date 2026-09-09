@@ -115,7 +115,7 @@ Clicking it pins the expanded state open.
 Moving the pointer over it opens the complete recent view without activating
 Blatta when history is not empty.
 
-The island collapses completely when the pointer leaves it. This rule applies
+The island collapses completely when the pointer leaves it. This pointer rule applies
 to the hover view and to the pinned expanded view. The collapse starts 180
 milliseconds after the pointer leaves. Pointer reentry inside this delay
 cancels the collapse.
@@ -214,7 +214,12 @@ moves to the right. The remaining cards spring into their new positions. The
 panel height shrinks in the same 280-millisecond frame transition.
 A new event slides in from the top.
 Reduce Motion replaces these animations with a fade.
-Each card keeps its dismiss button and Clear All stays available.
+Each card shows its dismiss button centered six points inside the top-right corner on pointer
+hover, keyboard focus, or VoiceOver focus. Moving onto the button keeps it
+visible, including the part outside the card. The circle is 20 points wide
+and keeps a 28-point pointer target. The button stays in keyboard and accessibility navigation when
+visually hidden. Its space stays reserved so the text does not move.
+Clear All stays visible.
 
 The user can click a card and drag it to the right to dismiss it.
 `NotificationIslandSwipeRule` in `BlattaCore` holds the pure rules for this
@@ -239,9 +244,22 @@ drag when the pointer is still outside.
 
 Hover opens a transient, nonactivating recent view. Clicking that view pins it
 open. The pinned panel takes keyboard focus after this explicit action.
+File > Open Notifications (Command-Shift-O) opens the recent view without a
+pointer click while Blatta is active. It focuses the newest card for keyboard
+and VoiceOver use. The command is disabled while locked, without a notched
+display, with island alerts off, or when history is empty.
+A keyboard-opened island ignores pointer exit. Escape collapses it quietly,
+keeps its history, and returns focus to the previous visible Blatta window.
+Clearing the list, disabling the island, and locking also close the view.
 Escape returns it to the collapsed state.
 The newest recent event receives initial focus when one exists.
 Tab moves between event actions and Clear All.
+Tab, Shift-Tab, arrow-key navigation, and VoiceOver reveal the focused card
+above the bottom fold. Moving between a card and its dismiss button keeps the
+scroll position. Card titles and message bodies use the system body text size.
+Keyboard focus uses a brighter card with a quiet neutral edge for its open
+action, or an inverted dismiss button. Controls use these custom highlights
+instead of the default blue focus outlines.
 Up and Down move focus between cards and scroll the focused card into view.
 Backward Delete and Forward Delete dismiss the focused card.
 When VoiceOver dismisses a card, keyboard and VoiceOver focus move to the next

@@ -194,6 +194,8 @@ final class IslandPanelController {
     private(set) var state: NotificationIslandState = .hidden
     private(set) var appearance: NotificationIslandAppearance
     var onServiceRequested: (@MainActor (UUID) -> Void)?
+    var onHistoryAvailabilityChanged: (@MainActor (Bool) -> Void)?
+    private var openedFromKeyboard = false
     var canPresentIsland: Bool {
         selectedScreen?.hasCameraHousing == true
     }
@@ -301,7 +303,24 @@ final class IslandPanelController {
         }
     }
 
+    func openFromKeyboard() {
+        guard !hasStopped, !isLocked, canPresentIsland,
+              !state.recentEvents.isEmpty else { return }
+        cancelScheduledActions()
+        if state.phase == .dismissed {
+            reduce(.suspendPresentation)
+        }
+        openedFromKeyboard = true
+        apply(.expand)
+    }
+
     func collapse() {
+        if openedFromKeyboard {
+            cancelScheduledActions()
+            apply(.suspendPresentation)
+            return
+        }
+        openedFromKeyboard = false
         cancelHoverExitAction()
         if state.phase == .peek {
             apply(.endPeek)
@@ -410,6 +429,7 @@ final class IslandPanelController {
         cancelScheduledActions()
         stopGeometryTracking()
         state = reducer.reduce(state, action: .stop)
+        onHistoryAvailabilityChanged?(false)
         contentByEventID.removeAll()
         renderer.stop()
     }
@@ -470,6 +490,7 @@ final class IslandPanelController {
     }
 
     private func scheduleHoverExitIfNeeded() {
+        guard !openedFromKeyboard else { return }
         guard state.phase == .peek || state.phase == .expanded else { return }
         cancelHoverExitAction()
         scheduleHoverExitCheck(after: .milliseconds(180), from: state.phase)
@@ -485,7 +506,7 @@ final class IslandPanelController {
         from exitPhase: NotificationIslandPhase
     ) {
         hoverExitAction = scheduler.schedule(after: delay) { [weak self] in
-            guard let self, self.state.phase == exitPhase else {
+            guard let self, !self.openedFromKeyboard, self.state.phase == exitPhase else {
                 self?.hoverExitAction = nil
                 return
             }
@@ -614,7 +635,12 @@ final class IslandPanelController {
     /// panel frame therefore goes straight to the size of that phase.
     private func reduce(_ action: NotificationIslandAction) {
         guard !hasStopped else { return }
+        let hadHistory = !state.recentEvents.isEmpty
         state = reducer.reduce(state, action: action)
+        if state.phase != .expanded { openedFromKeyboard = false }
+        if hadHistory != !state.recentEvents.isEmpty {
+            onHistoryAvailabilityChanged?(!state.recentEvents.isEmpty)
+        }
         removeUnusedContent()
     }
 
@@ -928,6 +954,7 @@ private final class AppKitNotificationIslandPanelRenderer:
 {
     private var panel: NotificationIslandPanel?
     private var model: NotificationIslandPanelModel?
+    private weak var previousKeyWindow: NSWindow?
 
     func show(
         state: NotificationIslandState,
@@ -939,6 +966,9 @@ private final class AppKitNotificationIslandPanelRenderer:
         actions: NotificationIslandPanelActions
     ) {
         let (panel, model) = panelAndModel()
+        if state.phase == .expanded, !panel.isKeyWindow {
+            previousKeyWindow = NSApp.keyWindow
+        }
         let frame = placement.frame.appKitRect
         let shouldAnimate = shouldAnimateFrameChange(
             panel: panel,
@@ -964,6 +994,7 @@ private final class AppKitNotificationIslandPanelRenderer:
         panel.ignoresMouseEvents = !actions.acceptsPointerEvents
         if state.phase != .expanded, panel.isKeyWindow {
             panel.resignKey()
+            restoreKeyboardFocus()
         }
         panel.acceptsKeyWindow = state.phase == .expanded
         panel.becomesKeyOnlyIfNeeded = state.phase != .expanded
@@ -983,7 +1014,16 @@ private final class AppKitNotificationIslandPanelRenderer:
     }
 
     func hide() {
+        let wasKey = panel?.isKeyWindow == true
         panel?.orderOut(nil)
+        if wasKey { restoreKeyboardFocus() }
+    }
+
+    private func restoreKeyboardFocus() {
+        if NSApp.isActive, let window = previousKeyWindow, window.isVisible {
+            window.makeKey()
+        }
+        previousKeyWindow = nil
     }
 
     func stop() {
@@ -1185,6 +1225,20 @@ private final class NotificationIslandPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// Includes the dismiss target outside the padded card content.
+private struct NotificationIslandCardInteractionShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        path.addRect(CGRect(
+            x: rect.maxX - 10,
+            y: rect.minY - 15,
+            width: 28,
+            height: 28
+        ))
+        return path
+    }
+}
+
 /// The silhouette of the MacBook camera housing.
 ///
 /// The shape hangs from the top screen edge. Each top corner is a concave
@@ -1266,7 +1320,7 @@ private struct NotificationIslandPanelView: View {
     @FocusState private var focusedControl: FocusTarget?
     @AccessibilityFocusState(for: .voiceOver) private var voiceOverControl: FocusTarget?
     @State private var scrollContainerHeight: CGFloat = 0
-    @State private var isKeyboardFocusChange = false
+    @State private var hoveredEventID: UUID?
 
     /// The island silhouette. Each state uses the notch form.
     /// True when the island has nothing to show and must be invisible.
@@ -1598,6 +1652,7 @@ private struct NotificationIslandPanelView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(model.state.phase == .expanded)
+                .focusEffectDisabled()
                 .focused($focusedControl, equals: .dismissAll)
                 .accessibilityFocused($voiceOverControl, equals: .dismissAll)
                 .background(
@@ -1632,7 +1687,12 @@ private struct NotificationIslandPanelView: View {
     private var notificationStack: some View {
         ScrollViewReader { proxy in
             notificationScrollView
-                .onChange(of: focusedControl) { _, control in
+                .onChange(of: focusedControl) { previous, control in
+                    guard Self.eventID(of: previous) != Self.eventID(of: control) else { return }
+                    scrollToFocusedEvent(control, using: proxy)
+                }
+                .onChange(of: voiceOverControl) { previous, control in
+                    guard Self.eventID(of: previous) != Self.eventID(of: control) else { return }
                     scrollToFocusedEvent(control, using: proxy)
                 }
         }
@@ -1678,17 +1738,12 @@ private struct NotificationIslandPanelView: View {
         .scrollIndicators(.never)
     }
 
-    /// Moves a card of the pile into view after a keyboard focus change.
-    ///
-    /// A card behind the front card of the pile shows one narrow strip. The
-    /// keyboard user must see the complete card. A pointer click must not
-    /// move the list, so only a key press starts this movement.
+    /// Reveals the complete focused card, including cards hidden by the bottom fold.
+    /// Focus changes include Tab traversal and VoiceOver, not only arrow keys.
     private func scrollToFocusedEvent(
         _ control: FocusTarget?,
         using proxy: ScrollViewProxy
     ) {
-        guard isKeyboardFocusChange else { return }
-        isKeyboardFocusChange = false
         guard let eventID = Self.eventID(of: control) else { return }
         if reduceMotion {
             proxy.scrollTo(eventID, anchor: .center)
@@ -1789,7 +1844,7 @@ private struct NotificationIslandPanelView: View {
     private func cardContent(
         for recentContent: NotificationIslandPanelContent
     ) -> some View {
-        HStack(spacing: 4) {
+        ZStack(alignment: .topTrailing) {
             Button {
                 model.actions.openEvent?(recentContent.event.id)
             } label: {
@@ -1806,11 +1861,11 @@ private struct NotificationIslandPanelView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Text(recentContent.event.title)
-                            .font(.subheadline.weight(.medium))
+                            .font(.body.weight(.medium))
                             .lineLimit(1)
                         if let body = recentContent.event.body {
                             Text(body)
-                                .font(.caption)
+                                .font(.body)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -1820,8 +1875,11 @@ private struct NotificationIslandPanelView: View {
                 }
                 .contentShape(.rect)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.trailing, 8)
             .buttonStyle(.plain)
             .focusable(model.state.phase == .expanded)
+            .focusEffectDisabled()
             .focused(
                 $focusedControl,
                 equals: .event(recentContent.event.id)
@@ -1834,24 +1892,60 @@ private struct NotificationIslandPanelView: View {
                 dismissCard(recentContent.event.id)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .frame(width: 28, height: 28)
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 20, height: 20)
                     .contentShape(.circle)
             }
             .buttonStyle(.plain)
             .focusable(model.state.phase == .expanded)
+            .focusEffectDisabled()
             .focused(
                 $focusedControl,
                 equals: .dismiss(recentContent.event.id)
             )
-            .background(controlAccent.opacity(0.10), in: .circle)
+            .foregroundStyle(
+                focusedControl == .dismiss(recentContent.event.id)
+                    ? (colorScheme == .dark ? Color.black : Color.white)
+                    : Color.primary
+            )
+            .background(
+                controlAccent.opacity(focusedControl == .dismiss(recentContent.event.id) ? 0.75 : 0.10),
+                in: .circle
+            )
+            .background(Color(nsColor: .windowBackgroundColor), in: .circle)
+            .overlay {
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.45), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+            }
+            .frame(width: 28, height: 28)
+            .contentShape(.circle)
+            // Keep the center six points inside the card corner.
+            .offset(x: 18, y: -15)
             .help("Dismiss \(recentContent.serviceLabel) notification")
             .accessibilityLabel(
                 "Dismiss \(recentContent.serviceLabel) notification"
             )
             .accessibilityFocused($voiceOverControl, equals: .dismiss(recentContent.event.id))
+            // Keep the control in keyboard and VoiceOver navigation when quiet.
+            .opacity(showsDismissButton(for: recentContent.event.id) ? 1 : 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // One continuous region covers the card and the protruding button.
+        .contentShape(NotificationIslandCardInteractionShape())
+        .onHover { isHovering in
+            if isHovering {
+                hoveredEventID = recentContent.event.id
+            } else if hoveredEventID == recentContent.event.id {
+                hoveredEventID = nil
+            }
+        }
+    }
+
+    private func showsDismissButton(for eventID: UUID) -> Bool {
+        hoveredEventID == eventID
+            || isFocused(eventID)
+            || Self.eventID(of: voiceOverControl) == eventID
     }
 
     /// Gives the surface of one recent event card.
@@ -1860,6 +1954,11 @@ private struct NotificationIslandPanelView: View {
     ) -> some View {
         islandCardShape
             .fill(cardFill(isFocused: isFocused(recentContent.event.id)))
+            .overlay {
+                if focusedControl == .event(recentContent.event.id) {
+                    islandCardShape.strokeBorder(controlAccent.opacity(0.35), lineWidth: 1)
+                }
+            }
     }
 
     private var controlAccent: Color {
@@ -1961,7 +2060,11 @@ private struct NotificationIslandPanelView: View {
         } ?? .dismissAll
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(40))
+            guard !Task.isCancelled, model.state.phase == .expanded else { return }
             focusedControl = target
+            if NSWorkspace.shared.isVoiceOverEnabled {
+                voiceOverControl = target
+            }
         }
     }
 
@@ -1971,7 +2074,6 @@ private struct NotificationIslandPanelView: View {
         guard !eventIDs.isEmpty else { return false }
         guard let currentIndex = focusedEventID
             .flatMap(eventIDs.firstIndex) else {
-            isKeyboardFocusChange = true
             focusedControl = .event(eventIDs[0])
             return true
         }
@@ -1980,7 +2082,6 @@ private struct NotificationIslandPanelView: View {
             max(0, currentIndex + offset)
         )
         guard nextIndex != currentIndex else { return false }
-        isKeyboardFocusChange = true
         focusedControl = .event(eventIDs[nextIndex])
         return true
     }
@@ -1999,7 +2100,6 @@ private struct NotificationIslandPanelView: View {
                for: eventID, in: recentEventIDs
            ) {
             // Move both cursors while the destination still exists in the tree.
-            isKeyboardFocusChange = true
             focusedControl = .event(replacement)
             voiceOverControl = .event(replacement)
         }

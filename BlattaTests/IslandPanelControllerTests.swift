@@ -7,6 +7,52 @@ import XCTest
 
 @MainActor
 final class IslandPanelControllerTests: XCTestCase {
+    func testKeyboardOpeningStaysOpenAwayFromPointerAndCollapsesQuietly() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let scheduler = RecordingIslandPanelScheduler()
+        let controller = makeController(renderer: renderer, scheduler: scheduler)
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        controller.openFromKeyboard()
+        XCTAssertEqual(controller.state.phase, .expanded)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+        controller.setHovering(false)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+        controller.present(panelContent(for: try makeEvent(number: 2)))
+        XCTAssertEqual(controller.state.phase, .expanded)
+        controller.collapse()
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        XCTAssertNil(controller.state.currentEvent)
+        XCTAssertEqual(controller.state.unreviewedCount, 2)
+        XCTAssertTrue(scheduler.pendingDelays.isEmpty)
+    }
+
+    func testKeyboardOpeningRejectsEmptyLockedAndStoppedIsland() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+        controller.openFromKeyboard()
+        XCTAssertEqual(controller.state.phase, .hidden)
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        await waitForShow(in: renderer)
+        controller.setLocked(true)
+        controller.openFromKeyboard()
+        XCTAssertEqual(controller.state.phase, .collapsed)
+        controller.setLocked(false)
+        controller.stop()
+        controller.openFromKeyboard()
+        XCTAssertEqual(controller.state.phase, .hidden)
+    }
+
+    func testHistoryAvailabilityUpdatesForMenuCommand() throws {
+        let controller = makeController(renderer: RecordingIslandPanelRenderer())
+        var availability: [Bool] = []
+        controller.onHistoryAvailabilityChanged = { availability.append($0) }
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+        controller.present(panelContent(for: try makeEvent(number: 2)))
+        controller.dismissAll()
+        XCTAssertEqual(availability, [true, false])
+    }
+
     func testLockPreservesHistoryAndRejectsPreviewsUntilUnlock() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)

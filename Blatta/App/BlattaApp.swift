@@ -82,6 +82,12 @@ struct BlattaApp: App {
                 }
                 .keyboardShortcut("k", modifiers: .command)
 
+                Button("Open Notifications") {
+                    appModel.openNotifications()
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(!appModel.canOpenNotifications)
+
                 Divider()
 
                 Button(appState.doNotDisturb ? "Turn Off Do Not Disturb" : "Do Not Disturb") {

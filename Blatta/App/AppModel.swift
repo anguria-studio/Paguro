@@ -25,6 +25,17 @@ final class AppModel {
     /// display the island cannot appear, so its switch and its test action
     /// would promise a result that no display can show.
     private(set) var hasNotchedDisplay = false
+    private(set) var hasRecentNotifications = false
+
+    var canOpenNotifications: Bool {
+        !appState.isLocked && hasNotchedDisplay && hasRecentNotifications
+            && notificationRouteSettings.isIslandRouteEnabled
+    }
+
+    func openNotifications() {
+        guard canOpenNotifications else { return }
+        islandPanelController.openFromKeyboard()
+    }
 
     /// The AppKit adapter that shows the main window. AppKit owns the delegate,
     /// so this reference stays weak.
@@ -82,6 +93,9 @@ final class AppModel {
             notificationRouteSettings: resolvedNotificationRouteSettings
         )
         self.presenceController = presenceController
+        islandPanelController.onHistoryAvailabilityChanged = { [weak self] hasHistory in
+            self?.hasRecentNotifications = hasHistory
+        }
         self.appState.onLockChanged = { [weak islandPanelController] isLocked in
             islandPanelController?.setLocked(isLocked)
         }
