@@ -4,16 +4,16 @@ Status: active
 
 ## Purpose
 
-Blatta can keep web services active after the main window closes. Quitting the
+Paguro can keep web services active after the main window closes. Quitting the
 application is different: it must stop every service before the process exits.
 
 ## Ownership
 
-`BlattaApp` creates one `AppModel`. `AppModel` is the composition root and owns
+`PaguroApp` creates one `AppModel`. `AppModel` is the composition root and owns
 the process-lifetime application state and presence controller.
 
 `AppDelegate` adapts AppKit lifecycle events. Deterministic activation and
-shutdown rules live in BlattaCore.
+shutdown rules live in PaguroCore.
 
 `AppState` uses two startup phases. Its initializer opens the store, creates
 the service graph, and loads saved values. `AppDelegate` calls `AppState.start()`
@@ -23,7 +23,7 @@ Repeated start calls and start calls after shutdown do nothing.
 
 The notification manager installs its macOS notification delegate while the
 composition root initializes the application state. This timing allows a
-notification action that launches Blatta to wait until navigation is ready.
+notification action that launches Paguro to wait until navigation is ready.
 
 `StoreLoader` opens or repairs the SwiftData store.
 `StoreRecoveryCoordinator` then prepares any recovery notice and backup picker.
@@ -38,10 +38,10 @@ removes these callbacks and observers before the web-view pool shuts down.
 
 A normal launch uses regular activation. A login-item launch starts in
 accessory mode unless the user explicitly keeps the Dock icon visible.
-After a normal launch, Blatta activates the application and orders its initial
+After a normal launch, Paguro activates the application and orders its initial
 main window forward when the SwiftUI scene makes that window available.
 
-Before Blatta opens a main or Settings window, it changes to regular activation
+Before Paguro opens a main or Settings window, it changes to regular activation
 and activates the application. After the final main-capable window closes, it
 returns to accessory mode unless the Dock preference keeps the icon visible.
 Command-Tab orders an existing visible main window forward. When no visible
@@ -50,8 +50,8 @@ sends no reopen request, so the activation is the only signal for this route. A
 visible Settings window counts as a visible window, and it keeps the main window
 closed.
 
-An activation that Blatta requests for itself restores no window. Such a request
-always precedes a window that Blatta is about to show, such as the Settings
+An activation that Paguro requests for itself restores no window. Such a request
+always precedes a window that Paguro is about to show, such as the Settings
 window of the menu-bar button. A restored main window would cover that window.
 The request marks itself for the activation that follows, and the mark expires
 after two seconds. A request that reaches no activation therefore cannot hide a
@@ -63,34 +63,38 @@ Both repeat safely, because the main window scene is unique and a second order
 request for the same window changes nothing.
 
 Four routes reach the main window from outside it. A Dock reopen request is one
-of them. The other three are the "Open Blatta" button of the menu-bar window, a
+of them. The other three are the "Open Paguro" button of the menu-bar window, a
 click on an island alert, and a click on a macOS notification. These three share
 one route. That route promotes the activation policy. It then orders an existing
 main window forward, or asks SwiftUI to build the window again. Only SwiftUI can
 build the window of its own scene, so the view layer gives `AppDelegate` that
 action.
 Closing a window does not stop badge polling or notification detection.
-On a fresh install, Blatta appears in both the Dock and menu bar and shows the
+On a fresh install, Paguro appears in both the Dock and menu bar and shows the
 unread badge on its Dock icon. Existing saved choices remain unchanged.
 
-The "Show Blatta in" setting has three modes:
+The "Show Paguro in" setting has three modes:
 
-- Dock only: Blatta removes the menu-bar item and keeps the Dock icon.
-- Menu bar only: Blatta hides the Dock icon after the last window closes.
-- Both: Blatta shows the Dock icon and the menu-bar item.
+- Dock only: Paguro removes the menu-bar item and keeps the Dock icon.
+- Menu bar only: Paguro hides the Dock icon after the last window closes.
+- Both: Paguro shows the Dock icon and the menu-bar item.
 
-When the user drags the item off the menu bar, Blatta changes the mode to
+When the user drags the item off the menu bar, Paguro changes the mode to
 "Dock only" so the app stays reachable.
+
+The menu-bar item uses the Paguro shell template. macOS supplies its tint for
+light and dark menu bars. The vector has thin transparent spiral seams on a
+22 point canvas.
 
 The menu-bar item opens a native status window. The window can select a
 service, toggle global notification mute, open the main window, open Settings,
 or change a presence preference. This window is the complete application route
-while Blatta runs in Menu bar only mode.
+while Paguro runs in Menu bar only mode.
 
 ## App lock
 
 Locking suppresses island alerts and macOS notification banners and sounds.
-The island hides immediately and retains its recent history in memory. Blatta removes
+The island hides immediately and retains its recent history in memory. Paguro removes
 its pending and delivered macOS notifications. Unlocking permits new alerts
 and restores the existing island history in the collapsed state, without
 replaying compact alerts or events suppressed during lock.
@@ -120,7 +124,7 @@ services or notification polling.
 
 ## Verification
 
-BlattaCore tests cover launch activation, window-close activation, the window
+PaguroCore tests cover launch activation, window-close activation, the window
 restore on activation, Dock preference behavior, and repeated shutdown requests. The application test
 suite builds the AppKit adapter and the two-phase startup path with Swift 6
 strict concurrency.

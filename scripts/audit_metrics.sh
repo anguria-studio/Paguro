@@ -1,5 +1,5 @@
 #!/bin/sh
-# Measure what Blatta costs and say whether each number is acceptable.
+# Measure what Paguro costs and say whether each number is acceptable.
 #
 # Usage:
 #   scripts/audit_metrics.sh              measure the running app and the container
@@ -93,13 +93,13 @@ size_mb() {
 # --- Source -----------------------------------------------------------------
 
 heading "Source"
-SWIFT_LINES=$(find "$REPOSITORY_DIR/Blatta" "$REPOSITORY_DIR/Core/Sources" -name '*.swift' -exec cat {} + | wc -l | tr -d ' ')
-TEST_LINES=$(find "$REPOSITORY_DIR/BlattaTests" "$REPOSITORY_DIR/Core/Tests" -name '*.swift' -exec cat {} + | wc -l | tr -d ' ')
+SWIFT_LINES=$(find "$REPOSITORY_DIR/Paguro" "$REPOSITORY_DIR/Core/Sources" -name '*.swift' -exec cat {} + | wc -l | tr -d ' ')
+TEST_LINES=$(find "$REPOSITORY_DIR/PaguroTests" "$REPOSITORY_DIR/Core/Tests" -name '*.swift' -exec cat {} + | wc -l | tr -d ' ')
 printf '  %-22s %8s lines\n' "shipping Swift" "$SWIFT_LINES"
 printf '  %-22s %8s lines (%s%% of shipping)\n' "tests" "$TEST_LINES" \
     "$(awk -v t="$TEST_LINES" -v s="$SWIFT_LINES" 'BEGIN {printf "%.0f", 100*t/s}')"
 printf '  largest files\n'
-find "$REPOSITORY_DIR/Blatta" "$REPOSITORY_DIR/Core/Sources" -name '*.swift' -exec wc -l {} + \
+find "$REPOSITORY_DIR/Paguro" "$REPOSITORY_DIR/Core/Sources" -name '*.swift' -exec wc -l {} + \
     | sort -rn | sed -n '2,4p' | sed "s|$REPOSITORY_DIR/|    |"
 
 # --- Bundle -----------------------------------------------------------------
@@ -108,35 +108,35 @@ if [ "$BUILD_RELEASE" -eq 1 ]; then
     heading "Release build"
     DERIVED_DIR="$REPOSITORY_DIR/.build/audit"
     BUILD_START=$(date +%s)
-    xcodebuild -project "$REPOSITORY_DIR/Blatta.xcodeproj" \
-        -scheme Blatta -configuration Release \
+    xcodebuild -project "$REPOSITORY_DIR/Paguro.xcodeproj" \
+        -scheme Paguro -configuration Release \
         -derivedDataPath "$DERIVED_DIR" \
         CODE_SIGNING_ALLOWED=NO build >/dev/null
     printf '  %-22s %8s s\n' "incremental build" "$(( $(date +%s) - BUILD_START ))"
-    APP_PATH="$DERIVED_DIR/Build/Products/Release/Blatta.app"
+    APP_PATH="$DERIVED_DIR/Build/Products/Release/Paguro.app"
 else
     # Prefer Release, then the most recently built bundle that has a real
     # executable. Preview-only bundles carry just a __preview.dylib.
-    APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 5 -name Blatta.app -print 2>/dev/null \
+    APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 5 -name Paguro.app -print 2>/dev/null \
         | while read -r CANDIDATE; do
-              [ -f "$CANDIDATE/Contents/MacOS/Blatta" ] || continue
+              [ -f "$CANDIDATE/Contents/MacOS/Paguro" ] || continue
               RANK=1
               [ "${CANDIDATE#*/Release/}" = "$CANDIDATE" ] || RANK=0
-              printf '%s %s %s\n' "$RANK" "$(stat -f %m "$CANDIDATE/Contents/MacOS/Blatta")" "$CANDIDATE"
+              printf '%s %s %s\n' "$RANK" "$(stat -f %m "$CANDIDATE/Contents/MacOS/Paguro")" "$CANDIDATE"
           done | sort -k1,1n -k2,2rn | head -1 | cut -d' ' -f3-)
 fi
 
 if [ -n "${APP_PATH:-}" ] && [ -d "$APP_PATH" ]; then
     BUILD_KIND=$(basename "$(dirname "$APP_PATH")")
     heading "Bundle ($BUILD_KIND)"
-    # Debug builds split the code into Blatta.debug.dylib, so measure the
+    # Debug builds split the code into Paguro.debug.dylib, so measure the
     # largest Mach-O in the bundle rather than assuming the launcher holds it.
     MAIN_BINARY=$(find "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Frameworks" -type f -perm -u+x 2>/dev/null \
         | while read -r BINARY; do printf '%s %s\n' "$(stat -f %z "$BINARY")" "$BINARY"; done \
         | sort -rn | head -1 | cut -d' ' -f2-)
-    ditto -c -k --keepParent "$APP_PATH" /tmp/blatta-audit.zip 2>/dev/null
-    DOWNLOAD_MB=$(size_mb /tmp/blatta-audit.zip)
-    rm -f /tmp/blatta-audit.zip
+    ditto -c -k --keepParent "$APP_PATH" /tmp/paguro-audit.zip 2>/dev/null
+    DOWNLOAD_MB=$(size_mb /tmp/paguro-audit.zip)
+    rm -f /tmp/paguro-audit.zip
     ARCHS=$(lipo -archs "$MAIN_BINARY" 2>/dev/null || echo "?")
 
     judge "download (zipped)" "$DOWNLOAD_MB" MB "$BUDGET_DOWNLOAD_MB"
@@ -147,16 +147,16 @@ if [ -n "${APP_PATH:-}" ] && [ -d "$APP_PATH" ]; then
         | awk -F'\t' '{n=$2; sub(/.*\//,"",n); printf "    %-24s %s\n", n, $1}'
 else
     heading "Bundle"
-    echo "  no built Blatta.app found; pass --build"
+    echo "  no built Paguro.app found; pass --build"
 fi
 
 # --- Runtime ----------------------------------------------------------------
 
-APP_PID=$(pgrep -f 'Blatta.app/Contents/MacOS/Blatta' | head -1 || true)
+APP_PID=$(pgrep -f 'Paguro.app/Contents/MacOS/Paguro' | head -1 || true)
 
 heading "Memory"
 if [ -z "$APP_PID" ]; then
-    echo "  Blatta is not running; launch it and rerun for the runtime sections"
+    echo "  Paguro is not running; launch it and rerun for the runtime sections"
 else
     SHELL_MB=$(/usr/bin/footprint -p "$APP_PID" 2>/dev/null \
         | awk '/phys_footprint:/ {print $2; exit}')
@@ -210,7 +210,7 @@ fi
 # --- Stored data ------------------------------------------------------------
 
 heading "Stored data"
-for BUNDLE_ID in com.tommasolaterza.Blatta com.tommasolaterza.Blatta.debug; do
+for BUNDLE_ID in com.tommasolaterza.Paguro com.tommasolaterza.Paguro.debug; do
     CONTAINER="$HOME/Library/Containers/$BUNDLE_ID"
     [ -d "$CONTAINER" ] || continue
     printf '  %s\n' "$BUNDLE_ID"
@@ -225,24 +225,24 @@ for BUNDLE_ID in com.tommasolaterza.Blatta com.tommasolaterza.Blatta.debug; do
     SWIFT_DATA_STORE=$(find "$CONTAINER/Data/Library/Application Support" \
         -maxdepth 2 -name 'default.store' -print 2>/dev/null | head -1)
     find "$STORE_DIR" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; \
-        | tr 'A-Z' 'a-z' | sort > /tmp/blatta-ondisk.txt
+        | tr 'A-Z' 'a-z' | sort > /tmp/paguro-ondisk.txt
     if [ -n "$SWIFT_DATA_STORE" ] && command -v sqlite3 >/dev/null; then
         sqlite3 "$SWIFT_DATA_STORE" \
             'select lower(hex(ZDATASTOREIDENTIFIER)) from ZSERVICEINSTANCE;' 2>/dev/null \
             | sed -E 's/(.{8})(.{4})(.{4})(.{4})(.{12})/\1-\2-\3-\4-\5/' \
-            | sort > /tmp/blatta-live.txt
+            | sort > /tmp/paguro-live.txt
     else
-        : > /tmp/blatta-live.txt
+        : > /tmp/paguro-live.txt
     fi
 
     sum_mb() {
         while read -r STORE_UUID; do du -sk "$STORE_DIR/$STORE_UUID" 2>/dev/null | cut -f1; done \
             | awk '{s+=$1} END {printf "%.0f", s/1024}'
     }
-    LIVE_COUNT=$(wc -l < /tmp/blatta-live.txt | tr -d ' ')
-    ORPHAN_COUNT=$(comm -13 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt | wc -l | tr -d ' ')
-    ORPHAN_MB=$(comm -13 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt | sum_mb)
-    LIVE_MB=$(comm -12 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt | sum_mb)
+    LIVE_COUNT=$(wc -l < /tmp/paguro-live.txt | tr -d ' ')
+    ORPHAN_COUNT=$(comm -13 /tmp/paguro-live.txt /tmp/paguro-ondisk.txt | wc -l | tr -d ' ')
+    ORPHAN_MB=$(comm -13 /tmp/paguro-live.txt /tmp/paguro-ondisk.txt | sum_mb)
+    LIVE_MB=$(comm -12 /tmp/paguro-live.txt /tmp/paguro-ondisk.txt | sum_mb)
 
     if [ "$LIVE_COUNT" -eq 0 ]; then
         printf '    %-20s %8s      could not read ServiceInstance rows\n' "orphans" "?"
@@ -250,12 +250,12 @@ for BUNDLE_ID in com.tommasolaterza.Blatta com.tommasolaterza.Blatta.debug; do
         printf '    %-20s %8s MB   %s services\n' "live services" "${LIVE_MB:-0}" "$LIVE_COUNT"
         judge "orphaned stores" "${ORPHAN_MB:-0}" MB "$BUDGET_ORPHAN_MB" \
             "$ORPHAN_COUNT dirs with no service row"
-        STORE_MAX=$(comm -12 /tmp/blatta-live.txt /tmp/blatta-ondisk.txt \
+        STORE_MAX=$(comm -12 /tmp/paguro-live.txt /tmp/paguro-ondisk.txt \
             | while read -r STORE_UUID; do du -sm "$STORE_DIR/$STORE_UUID" 2>/dev/null | cut -f1; done \
             | sort -rn | head -1)
         judge "heaviest live store" "${STORE_MAX:-0}" MB "$BUDGET_STORE_MAX_MB"
     fi
-    rm -f /tmp/blatta-ondisk.txt /tmp/blatta-live.txt
+    rm -f /tmp/paguro-ondisk.txt /tmp/paguro-live.txt
 
     for SUBDIR in "Data/Library/WebKit/ContentRuleLists" "Data/Library/Caches"; do
         [ -d "$CONTAINER/$SUBDIR" ] || continue
@@ -276,7 +276,7 @@ fi
 
 printf '\n  deeper passes\n'
 printf '    leaks %s\n' "${APP_PID:-<pid>}"
-printf '    xcrun xctrace record --template "Time Profiler" --attach %s --output /tmp/blatta.trace\n' "${APP_PID:-<pid>}"
-printf '    sudo powermetrics --samplers tasks --show-process-coalition -n 1 | grep -A12 Blatta\n'
+printf '    xcrun xctrace record --template "Time Profiler" --attach %s --output /tmp/paguro.trace\n' "${APP_PID:-<pid>}"
+printf '    sudo powermetrics --samplers tasks --show-process-coalition -n 1 | grep -A12 Paguro\n'
 
 [ "$FAIL_COUNT" -eq 0 ]

@@ -4,11 +4,11 @@ Status: in progress
 
 ## Purpose
 
-Blatta must show useful events from web services.
+Paguro must show useful events from web services.
 It must work without an official API for each service.
 
 No single web signal works for all services.
-Blatta therefore uses a small set of signal sources.
+Paguro therefore uses a small set of signal sources.
 
 ## Current runtime ownership
 
@@ -23,18 +23,18 @@ presentation remain separate from this lifecycle controller.
 
 ### Page notifications
 
-Blatta can wrap the page `Notification` constructor.
+Paguro can wrap the page `Notification` constructor.
 It can also wrap page calls to `showNotification`.
 
 The current source provides a title, body, and tag.
 It is the best generic source for an individual event.
 
 A service worker can create a notification outside the page context.
-Blatta cannot always see that event.
+Paguro cannot always see that event.
 
 ### Document title and badge
 
-Blatta can observe the document title.
+Paguro can observe the document title.
 It can also run a small badge query for an audited service.
 
 This source usually provides an unread count.
@@ -45,10 +45,10 @@ It does not always identify a new message.
 The service catalog entry can carry a `badgeJS` field. The field holds one
 JavaScript expression that reads the unread count of that service from its own
 page. `ServiceCatalog` loads the field from
-`Blatta/Resources/ServiceCatalog.json`.
+`Paguro/Resources/ServiceCatalog.json`.
 
 An entry with a `badgeJS` field makes that expression the only badge source for
-the service. Blatta never reads the title of such a service. A title count
+the service. Paguro never reads the title of such a service. A title count
 belongs to another view of the page, such as a different Gmail label or the
 global LinkedIn count. A fallback to the title would therefore report the
 wrong number. An entry without the field uses the title.
@@ -86,7 +86,7 @@ A change of the page title kicks the loop. The next tick reads the count at
 once, and the interval returns to 5 seconds. A title change means the page
 state moved, so the back-off starts again whether or not the count changed. The
 1 second tick also debounces the signal, so a burst of title changes costs one
-poll. Blatta watches the title of an active service only. The title of a hidden
+poll. Paguro watches the title of an active service only. The title of a hidden
 view changes while the view preloads or rehydrates.
 
 A preloaded or soft-hibernated service polls every 30 seconds. It gets no title
@@ -103,7 +103,7 @@ raise-only, because a hidden view may not have built the element yet.
 
 ### Service recipe
 
-Blatta bundles each recipe as a small rule for one service.
+Paguro bundles each recipe as a small rule for one service.
 Use a recipe only when generic signals are not sufficient.
 
 Each recipe needs these items:
@@ -114,7 +114,7 @@ Each recipe needs these items:
 - a clear removal path;
 - a documented data scope.
 
-Blatta must not download executable recipes at run time.
+Paguro must not download executable recipes at run time.
 
 ## Event model
 
@@ -132,7 +132,7 @@ The event contains these values:
 - optional target URL;
 - receipt time.
 
-`BlattaCore` owns this value type.
+`PaguroCore` owns this value type.
 
 The current page bridge creates this event before it applies presentation
 policy. Normalization trims display text, changes empty body and tag values to
@@ -143,15 +143,15 @@ does not create an event.
 
 The bridge must check each message before use.
 
-1. Confirm that Blatta has an active service account.
-2. Confirm that Blatta permits the frame origin.
+1. Confirm that Paguro has an active service account.
+2. Confirm that Paguro permits the frame origin.
 3. Reject an unknown message type.
 4. Limit the byte count for each string.
 5. Remove control characters that have no display use.
 6. Parse the URL without loading it.
 7. Apply the service route policy to the URL.
 
-Blatta accepts a main-frame signal. It also accepts a subframe signal when its
+Paguro accepts a main-frame signal. It also accepts a subframe signal when its
 origin is the same as the main-frame origin. It rejects a cross-origin signal.
 
 The bridge must not expose file access, shell access, or a general native command.
@@ -190,22 +190,22 @@ The pipeline applies rules in this order:
 9. Save a short-lived routing record.
 10. Present the event.
 
-Policy code belongs in `BlattaCore` when it does not need a platform API.
+Policy code belongs in `PaguroCore` when it does not need a platform API.
 
 The current duplicate key contains the service account ID, tag, title, and
 body. It does not contain the event ID, receipt time, detector source, or target
 URL. This lets two detectors identify the same event. A changed title or body
 remains a new event even when the service reuses a tag.
 
-Blatta rejects an equal key for five seconds. The in-memory set keeps at most
-256 keys and removes the oldest key first. Blatta does not persist this set or a
+Paguro rejects an equal key for five seconds. The in-memory set keeps at most
+256 keys and removes the oldest key first. Paguro does not persist this set or a
 notification body.
 
 ## Presentation
 
-Blatta supports two presentation routes:
+Paguro supports two presentation routes:
 
-- the Blatta island;
+- the Paguro island;
 - `UNUserNotificationCenter`.
 
 These routes use the same event.
@@ -215,7 +215,7 @@ The default must avoid two visible alerts for one event.
 The user can enable both routes when desired.
 
 `NotificationPresentationRouter` now applies mute, Do Not Disturb, and route
-settings once for both destinations. `BlattaCore` returns a deterministic route
+settings once for both destinations. `PaguroCore` returns a deterministic route
 plan. The default plan selects only the system notification route. The page
 message handler no longer calls a platform presenter directly.
 
@@ -235,7 +235,7 @@ one macOS notification. The fallback does not create a duplicate when the
 system route is also on.
 
 The island destination is optional in the router. It stays unavailable until
-Blatta installs an island presenter and selects a notched display.
+Paguro installs an island presenter and selects a notched display.
 
 Clicking an island alert uses the same service-account navigation path as a
 macOS notification. The island does not create a second service-selection path.
@@ -244,11 +244,11 @@ The island removes the events of one service account when the user reads that
 conversation. The selection of that service account and an unread count of zero
 start this rule. The island document gives the rule in full.
 
-macOS always uses the Blatta app icon as the sender identity for a native
-notification. Public notification APIs do not let Blatta replace that icon for
+macOS always uses the Paguro app icon as the sender identity for a native
+notification. Public notification APIs do not let Paguro replace that icon for
 each service.
 
-Blatta adds the service icon as an image attachment when an icon is available.
+Paguro adds the service icon as an image attachment when an icon is available.
 Each notification receives its own copy of the icon file, because macOS moves
 an attachment file into the notification store.
 It also adds the service name as the notification subtitle. macOS controls the
@@ -261,7 +261,7 @@ falls back to a macOS notification on a display without a notch, so a missing
 permission hides that route too. macOS also gates the Dock badge through this
 permission, so a missing permission empties the Dock badge as well.
 
-### When Blatta asks
+### When Paguro asks
 
 `NotificationRuntime.start()` owns the request. It runs from
 `applicationDidFinishLaunching`, one turn later, for every launch.
@@ -275,9 +275,9 @@ The first touch of `UNUserNotificationCenter` binds the process to the
 notification service. A touch during `App.init` happens before AppKit finishes
 the launch, so `NotificationManager.init` must not make it.
 
-Blatta reads the permission first and then applies
+Paguro reads the permission first and then applies
 `NotificationAuthorizationPolicy.shouldRequest`. A fresh install reads
-`notDetermined`, so Blatta asks and macOS shows its prompt.
+`notDetermined`, so Paguro asks and macOS shows its prompt.
 
 ### A refusal and a failure are different
 
@@ -285,9 +285,9 @@ Two states look the same from outside. In both, no banner appears and
 `notificationSettings()` reports `denied`:
 
 - the user refused the permission;
-- macOS never registered Blatta and refused the request.
+- macOS never registered Paguro and refused the request.
 
-The permission alone cannot separate them, so Blatta uses the request outcome:
+The permission alone cannot separate them, so Paguro uses the request outcome:
 
 - macOS **returns** whenever it could run the request, with `granted` true or
   false. The reported permission then holds the answer of the user.
@@ -299,7 +299,7 @@ reported permission, which can be `authorized`, `denied`, or `provisional`.
 
 ### The retry rule
 
-macOS remembers a refusal. It remembers no failure. Blatta therefore asks once
+macOS remembers a refusal. It remembers no failure. Paguro therefore asks once
 at each launch unless macOS already permits the notification, and a launch that
 reads `denied` still asks.
 
@@ -307,10 +307,10 @@ That request costs the user nothing: macOS answers a request under a stored
 refusal from that stored decision and shows no prompt. It is also the only way
 to separate the two states, because both report `denied` at launch.
 
-Blatta asks one time for each launch, never again after an activation. A failed
+Paguro asks one time for each launch, never again after an activation. A failed
 request fails for a reason that no activation changes.
 
-Blatta reads the permission again at each activation, because the user changes
+Paguro reads the permission again at each activation, because the user changes
 it in System Settings. `NotificationAuthorizationPolicy.merge` keeps
 `unavailable` while macOS keeps reporting `denied`, and it accepts `authorized`
 or `provisional` at once. Without that rule the first activation would show the
@@ -318,7 +318,7 @@ user a refusal that they never made.
 
 ### The Settings warning
 
-A permission that delivers nothing is silent without help. Blatta still builds
+A permission that delivers nothing is silent without help. Paguro still builds
 each notification, and `UNUserNotificationCenter` still accepts each request.
 macOS then drops the banner and reports nothing to the app.
 
@@ -333,19 +333,19 @@ x-apple.systempreferences:com.apple.preference.notifications
 
 Each state has its own words. A `denied` state asks the user to turn the
 permission on. An `unavailable` state explains that macOS never asked, and it
-gives the remedy: move Blatta to the Applications folder and open it once from
+gives the remedy: move Paguro to the Applications folder and open it once from
 there. macOS registers the app at that point and asks for the permission. An
 app that macOS never registered does not appear in the notification pane at
 all, so the pane alone cannot fix it.
 
 The app maps `UNAuthorizationStatus` to `NotificationAuthorizationState` at the
-platform boundary. `BlattaCore` holds that enum, the state machine, and the
+platform boundary. `PaguroCore` holds that enum, the state machine, and the
 warning text, and it imports no AppKit or UserNotifications type.
 
 Use this command to read the current permission from the log:
 
 ```sh
-log stream --predicate 'subsystem == "com.tommasolaterza.Blatta"' --info
+log stream --predicate 'subsystem == "com.tommasolaterza.Paguro"' --info
 ```
 
 ## Dock badge
@@ -359,14 +359,14 @@ It adds the counts of the service accounts that show a badge.
 A muted service account adds nothing.
 A service account with its own badge switch off also adds nothing.
 
-`DockBadgePolicy` in `BlattaCore` makes the label from the total and the
+`DockBadgePolicy` in `PaguroCore` makes the label from the total and the
 Settings switch.
 The Dock shows the label at a total of one or more.
 The Dock shows no badge at a total of zero.
 Do Not Disturb keeps the badge, because Do Not Disturb stops banners only.
 
 The Dock icon must be present for the badge.
-The Settings picker "Show Blatta in" controls the Dock icon.
+The Settings picker "Show Paguro in" controls the Dock icon.
 In "Menu bar only" mode the Dock icon goes away after the last window closes,
 so the Dock can show no badge in that mode.
 
@@ -374,7 +374,7 @@ so the Dock can show no badge in that mode.
 Use this command to read the current state:
 
 ```sh
-log stream --predicate 'subsystem == "com.tommasolaterza.Blatta"' --info
+log stream --predicate 'subsystem == "com.tommasolaterza.Paguro"' --info
 ```
 
 ## Global mute
@@ -405,7 +405,7 @@ service.
 A click first selects the service account.
 It then loads the approved target URL when one exists.
 
-A click also shows the main window. Blatta activates the application and orders
+A click also shows the main window. Paguro activates the application and orders
 that window forward, or asks SwiftUI to build the window again when the user
 closed it. The selection happens first, so the window shows the right service
 account as it appears. A click on a service account that no longer exists
@@ -413,12 +413,12 @@ changes no selection and shows no window.
 
 The route policy must reject these values:
 
-- a non-HTTP scheme unless Blatta has a specific handler;
+- a non-HTTP scheme unless Paguro has a specific handler;
 - a host that the service does not own;
 - a URL with invalid syntax;
 - a URL that exceeds the size limit.
 
-When no safe URL exists, Blatta opens the service root.
+When no safe URL exists, Paguro opens the service root.
 
 ## Background behavior
 
@@ -429,15 +429,15 @@ A lightweight badge probe can update unread state for some services.
 It must use the same service data store.
 It must not create a second account session.
 
-When Blatta starts, it first records an unread baseline.
+When Paguro starts, it first records an unread baseline.
 It must not present old unread items as new alerts.
 
-When the user quits Blatta, all notification work stops.
+When the user quits Paguro, all notification work stops.
 Version 1 has no push server and no helper process.
 
 ## Privacy
 
-Blatta does not persist notification bodies by default.
+Paguro does not persist notification bodies by default.
 The island keeps only the events that it needs for its current state.
 
 Logs must not contain a message body, token, cookie, or full private URL.
@@ -445,7 +445,7 @@ Diagnostic output can contain a service ID and a redacted host.
 
 ## Known limits
 
-- A service-worker-only event can be invisible to Blatta.
+- A service-worker-only event can be invisible to Paguro.
 - A title badge can show unread state without a new-event boundary.
 - A service page change can break a recipe.
 - Exact conversation routing is not always available.

@@ -5,7 +5,7 @@ Status: ready for manual WebKit checks
 ## Purpose
 
 The compatibility fixture is a local HTTPS service.
-It exercises the public WebKit paths that Blatta depends on.
+It exercises the public WebKit paths that Paguro depends on.
 
 The fixture provides these controls:
 
@@ -26,11 +26,11 @@ It creates a temporary self-signed certificate each time it starts.
 The run script removes the certificate and key when it stops.
 It does not add a certificate to the system trust store.
 
-The `Blatta Compatibility` scheme uses the `Compatibility` build configuration.
-This configuration uses the `com.tommasolaterza.Blatta.compatibility` bundle ID
-and adds the `--blatta-compatibility-fixture` argument.
+The `Paguro Compatibility` scheme uses the `Compatibility` build configuration.
+This configuration uses the `com.tommasolaterza.Paguro.compatibility` bundle ID
+and adds the `--paguro-compatibility-fixture` argument.
 It is a debug build, so it can use the fixture argument.
-Blatta then accepts the temporary certificate on ports 8443 and 8444 only.
+Paguro then accepts the temporary certificate on ports 8443 and 8444 only.
 
 A Release build cannot enable this behavior.
 
@@ -66,42 +66,42 @@ The command saves the latest native trace in
 `.project/logs/compatibility-latest.log`.
 The `.project` directory is private and Git ignores it.
 
-## Open the fixture in Blatta
+## Open the fixture in Paguro
 
 1. Run `xcodegen generate`.
-2. Select the `Blatta Compatibility` scheme in Xcode.
-3. Run Blatta.
-4. Add a custom service named `Blatta Fixture`.
+2. Select the `Paguro Compatibility` scheme in Xcode.
+3. Run Paguro.
+4. Add a custom service named `Paguro Fixture`.
 5. Set its URL to `https://localhost:8443`.
 6. Open the service.
 
-Do not open the fixture in the normal Blatta scheme.
+Do not open the fixture in the normal Paguro scheme.
 The normal scheme does not accept its temporary certificate.
 
 ## Manual checklist
 
 | Check | Expected result |
 |---|---|
-| Page notification | Blatta receives one native notification request |
-| Service worker notification | Blatta receives the page call through the worker registration |
-| Delayed notification | Blatta receives the event after 10 seconds unless the app quits |
+| Page notification | Paguro receives one native notification request |
+| Service worker notification | Paguro receives the page call through the worker registration |
+| Delayed notification | Paguro receives the event after 10 seconds unless the app quits |
 | Title badge | The service unread count follows the document title |
-| Same-origin frame | Blatta accepts the frame notification |
-| Cross-origin frame | Blatta rejects the frame notification |
-| Pop-up | Blatta opens a separate window that shares the service session |
+| Same-origin frame | Paguro accepts the frame notification |
+| Cross-origin frame | Paguro rejects the frame notification |
+| Pop-up | Paguro opens a separate window that shares the service session |
 | Upload | A native file panel opens and the fixture reports the received bytes |
-| Download | Blatta saves `blatta-fixture.txt` in Downloads |
-| Camera | Blatta asks for permission and shows the local preview when allowed |
-| Microphone | Blatta asks for permission and starts an audio track when allowed |
-| Loopback call | WebRTC connects and Blatta marks the service as call-active |
-| Session marker | The marker remains after a Blatta relaunch |
-| Process failure | Blatta calls its recovery path and reloads the fixture |
+| Download | Paguro saves `paguro-fixture.txt` in Downloads |
+| Camera | Paguro asks for permission and shows the local preview when allowed |
+| Microphone | Paguro asks for permission and starts an audio track when allowed |
+| Loopback call | WebRTC connects and Paguro marks the service as call-active |
+| Session marker | The marker remains after a Paguro relaunch |
+| Process failure | Paguro calls its recovery path and reloads the fixture |
 
 Record each result in the service matrix or the related backlog item.
 
 ## Test two accounts on one origin
 
-Use two Blatta services for this test.
+Use two Paguro services for this test.
 The URL query labels each fixture page.
 It does not change the web origin.
 
@@ -111,8 +111,8 @@ It does not change the web origin.
 4. Set its URL to `https://localhost:8443/?account=B`.
 5. Store `account-a` in account A.
 6. Store `account-b` in account B.
-7. Use `Command-Q` to quit Blatta.
-8. Start Blatta with the `Blatta Compatibility` scheme again.
+7. Use `Command-Q` to quit Paguro.
+8. Start Paguro with the `Paguro Compatibility` scheme again.
 9. Open both fixture accounts.
 10. Confirm that each page shows only its own stored marker.
 11. Clear the marker in account A.
@@ -133,7 +133,7 @@ Do not use the number of visible banners as the event count.
 The fixture log records the control click and the page result.
 The native log records these later stages:
 
-- Blatta accepted or rejected the frame;
+- Paguro accepted or rejected the frame;
 - the service policy accepted or suppressed the event;
 - the notification center accepted or rejected the request;
 - the foreground delegate asked for a banner and sound;
@@ -154,7 +154,7 @@ The page selects a JSON report that you can copy with Command-C.
 The report contains page state and fixture events.
 It does not contain cookies, page content, or the session marker.
 
-The page reports `Notification.permission` as `granted` because Blatta supplies the
+The page reports `Notification.permission` as `granted` because Paguro supplies the
 page notification bridge.
 This value does not describe the macOS notification permission.
 Use the native `center settings authorization` value for the macOS state.
@@ -188,7 +188,7 @@ The service worker control calls `showNotification` from the page.
 It does not emulate a push event that runs only inside a worker.
 
 WebKit has no public API that terminates a content process for a test.
-The failure control calls Blatta's normal recovery handler in a Debug build.
+The failure control calls Paguro's normal recovery handler in a Debug build.
 It does not kill a real WebKit process.
 
 Apple silicon Mac laptops and Intel Mac laptops with a T2 chip disconnect the

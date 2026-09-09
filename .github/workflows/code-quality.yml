@@ -12,7 +12,7 @@ on:
   push:
     branches:
       - main
-      - blatta/main
+      - paguro/main
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -53,11 +53,11 @@ jobs:
             # protocol witness, so the coordinator does not expose it and the
             # selector test fails. Skip it only on this toolchain, so the
             # test still guards every other toolchain.
-            skipTesting: "-skip-testing:BlattaTests/WebRuntimeTests/testCoordinatorExposesWebUIDelegateMethods"
+            skipTesting: "-skip-testing:PaguroTests/WebRuntimeTests/testCoordinatorExposesWebUIDelegateMethods"
     steps:
       - uses: actions/checkout@v4
 
-      # Blatta calls Liquid Glass behind an availability check, so it needs the
+      # Paguro calls Liquid Glass behind an availability check, so it needs the
       # macOS 26 SDK to compile even when the deployment target is 15. The
       # macOS 15 image ships Xcode 26 but defaults to Xcode 16, whose SDK does
       # not declare those symbols at all.
@@ -77,7 +77,7 @@ jobs:
       - name: Generate the project
         run: xcodegen generate
 
-      - name: Test BlattaCore
+      - name: Test PaguroCore
         run: swift test --package-path Core
 
       - name: Test the compatibility fixture
@@ -85,6 +85,6 @@ jobs:
 
       - name: Test the application
         run: |
-          xcodebuild -project Blatta.xcodeproj -scheme Blatta \
+          xcodebuild -project Paguro.xcodeproj -scheme Paguro \
             -configuration Debug ${{ matrix.appIconSetting }} \
             ${{ matrix.skipTesting }} test

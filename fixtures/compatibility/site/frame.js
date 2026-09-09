@@ -3,7 +3,7 @@ const frameRole = document.body.dataset.frameRole || "Frame";
 function report(message) {
   window.parent.postMessage(
     {
-      source: "blatta-compatibility-fixture",
+      source: "paguro-compatibility-fixture",
       frame: frameRole,
       message,
     },

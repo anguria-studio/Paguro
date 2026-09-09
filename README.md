@@ -1,16 +1,16 @@
-# Blatta
+# Paguro
 
-**Blatta is a free, open-source fork of [Chorus](https://github.com/nicojan/Chorus).**
+**Paguro is a free, open-source fork of [Chorus](https://github.com/nicojan/Chorus).**
 
-[Nico Jan](https://github.com/nicojan) created Chorus. Blatta builds on its native
-macOS and WebKit foundation. Blatta is a separate project that preserves the
+[Nico Jan](https://github.com/nicojan) created Chorus. Paguro builds on its native
+macOS and WebKit foundation. Paguro is a separate project that preserves the
 upstream copyright notices and Git history.
 
-Blatta brings web services into one macOS app, with workspaces and separate
+Paguro brings web services into one macOS app, with workspaces and separate
 login sessions for each account. It adds native notifications and an optional
 notification island near the MacBook notch.
 
-All Blatta features are free. There is no Blatta subscription or paid tier.
+All Paguro features are free. There is no Paguro subscription or paid tier.
 The application source is available under the [MIT License](LICENSE).
 Third-party services can require their own accounts or subscriptions.
 Bundled data and dependencies have their own licenses; see
@@ -18,11 +18,11 @@ Bundled data and dependencies have their own licenses; see
 
 ## Release status
 
-The first public release, **1.0.0**, is being prepared. There is no public Blatta
+The first public release, **1.0.0**, is being prepared. There is no public Paguro
 download yet. The local signed builds and Sparkle update path have passed their
 initial checks; public download and final release checks are still pending.
 
-## What Blatta provides
+## What Paguro provides
 
 - Workspaces for organizing services and multiple accounts.
 - Separate WebKit session storage for each service account.
@@ -32,37 +32,37 @@ initial checks; public download and final release checks are still pending.
 - Signed updates in the direct-download build.
 
 Third-party websites control their own features and sign-in requirements.
-Blatta does not guarantee support for every website feature.
+Paguro does not guarantee support for every website feature.
 
 ## Install on a Mac
 
-Blatta requires **macOS 15 or later**, on Apple silicon or Intel.
+Paguro requires **macOS 15 or later**, on Apple silicon or Intel.
 Liquid Glass requires macOS 26; earlier systems use the fallback appearance.
 You do not need Xcode to use a downloaded release.
 
 Once the first release is published:
 
-1. Open the [Blatta releases page](https://github.com/tommasoltrz/Atoll/releases).
+1. Open the [Paguro releases page](https://github.com/tommasoltrz/Atoll/releases).
 2. Download the `.dmg` attached to the latest stable release.
-3. Open the disk image and drag **Blatta.app** into **Applications**.
-4. Open Blatta from Applications and follow the setup prompts.
+3. Open the disk image and drag **Paguro.app** into **Applications**.
+4. Open Paguro from Applications and follow the setup prompts.
 5. Add your services and sign in to each account.
 
 Direct releases use Developer ID signing and Apple notarization.
 Allow notifications if you want macOS banners. Services ask for camera or
-microphone access when needed. Blatta itself does not need an account.
+microphone access when needed. Paguro itself does not need an account.
 
-For updates, choose **Blatta → Check for Updates…**. You can enable automatic
+For updates, choose **Paguro → Check for Updates…**. You can enable automatic
 checks in **Settings → About**. Builds made before Sparkle integration need
 one manual installation of a newer DMG.
 
 ## Your data
 
-Service sessions stay in separate WebKit stores on your Mac. Blatta does not
+Service sessions stay in separate WebKit stores on your Mac. Paguro does not
 sync login sessions or send app telemetry. The websites you open connect to
 their providers and follow those providers' privacy policies.
-Closing the main window keeps Blatta running in the menu bar. Choose
-**Blatta → Quit Blatta** or press **⌘Q** to stop service activity.
+Closing the main window keeps Paguro running in the menu bar. Choose
+**Paguro → Quit Paguro** or press **⌘Q** to stop service activity.
 
 ## Build requirements
 
@@ -80,14 +80,14 @@ git clone https://github.com/tommasoltrz/Atoll.git
 cd Atoll
 xcodegen generate
 xcodebuild \
-  -project Blatta.xcodeproj \
-  -scheme Blatta \
+  -project Paguro.xcodeproj \
+  -scheme Paguro \
   -configuration Debug \
   build
 ```
 
-You can also open `Blatta.xcodeproj` in Xcode, choose the **Blatta** scheme,
-and press **⌘R**. Use **Blatta Island Preview** to test a simulated notch.
+You can also open `Paguro.xcodeproj` in Xcode, choose the **Paguro** scheme,
+and press **⌘R**. Use **Paguro Island Preview** to test a simulated notch.
 Development builds do not contain Sparkle. See [Distribution](docs/features/DISTRIBUTION.md)
 for the signed direct-release build process.
 
@@ -101,8 +101,8 @@ Run the app tests with this command:
 
 ```sh
 xcodebuild \
-  -project Blatta.xcodeproj \
-  -scheme Blatta \
+  -project Paguro.xcodeproj \
+  -scheme Paguro \
   -configuration Debug \
   test
 ```
@@ -129,7 +129,7 @@ xcodebuild \
 
 ## Project history
 
-Blatta is a fork of [Chorus](https://github.com/nicojan/Chorus).
+Paguro is a fork of [Chorus](https://github.com/nicojan/Chorus).
 Chorus is an MIT-licensed project by Nico Jan.
 The Git history keeps the upstream work and its authorship.
 
@@ -137,8 +137,8 @@ See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for other sources and licen
 
 ## License
 
-Blatta uses the MIT License.
+Paguro uses the MIT License.
 See [LICENSE](LICENSE).
 
 Service names and logos belong to their respective owners.
-Blatta uses them only to identify a service.
+Paguro uses them only to identify a service.

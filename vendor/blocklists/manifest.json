@@ -10,7 +10,7 @@
       "source_url": "https://raw.githubusercontent.com/hagezi/dns-blocklists/2555e95206786ec3afea8c851729e64e74b093f5/adblock/light.txt",
       "source_file": "vendor/blocklists/hagezi-light.txt",
       "source_sha256": "92c9bf6cce5c16e9442c37fa97145f52184f0b7f49e744bc8088bb1262aa6a93",
-      "output_file": "Blatta/Resources/hagezi-light.json",
+      "output_file": "Paguro/Resources/hagezi-light.json",
       "output_sha256": "962c81d3a900bad835d6d4e18e5813909cad58188749cea5e84e0c52e9720955",
       "rule_count": 35207,
       "license": "GPL-3.0"
@@ -20,7 +20,7 @@
       "source_url": "https://easylist-downloads.adblockplus.org/fanboy-annoyance.txt",
       "source_file": "vendor/blocklists/fanboy-annoyance.txt",
       "source_sha256": "ab08627676bfc706d5a6dfadcd36a5cf6b706de8667d3cb314c6fc28ec929156",
-      "output_file": "Blatta/Resources/fanboy-annoyance.json",
+      "output_file": "Paguro/Resources/fanboy-annoyance.json",
       "output_sha256": "02a3ab981d62ce063a20b28d8d7315dae2dfc59935ac3096ca9c6532ea927536",
       "rule_count": 17635,
       "license": "CC-BY-3.0"

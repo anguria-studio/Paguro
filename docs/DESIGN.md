@@ -1,6 +1,6 @@
 # Design choices
 
-Blatta uses native macOS controls and behavior. Prefer standard controls over
+Paguro uses native macOS controls and behavior. Prefer standard controls over
 custom controls when they meet the user's needs.
 
 ## Workspaces and services
@@ -19,6 +19,16 @@ when Reduce Transparency or Increase Contrast is enabled.
 
 Keep service website styling separate from the native application shell.
 Do not assume that a website follows the app's appearance preference.
+
+## App and menu-bar icons
+
+The app icon uses the layered Paguro shell. Default appearance has a light
+purple gradient. Dark appearance has a lavender shell over the standard black
+gradient. Keep the editable layers in `Paguro/AppIcon.icon`.
+
+The menu-bar shell uses a 22 point vector template with thin transparent spiral
+seams. macOS supplies its light or dark tint. The menu-bar window uses the same
+asset in its header.
 
 ## Notifications and the island
 

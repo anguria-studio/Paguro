@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "BlattaCore",
+    name: "PaguroCore",
     platforms: [.macOS("15.0")],
     products: [
-        .library(name: "BlattaCore", targets: ["BlattaCore"])
+        .library(name: "PaguroCore", targets: ["PaguroCore"])
     ],
     targets: [
         .target(
-            name: "BlattaCore",
+            name: "PaguroCore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
-            name: "BlattaCoreTests",
-            dependencies: ["BlattaCore"],
+            name: "PaguroCoreTests",
+            dependencies: ["PaguroCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]

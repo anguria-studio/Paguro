@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - blatta/main
+      - paguro/main
 
 # One run per branch. Pushing again cancels the run it replaced rather than
 # paying for both, which matters most while chasing a failure.

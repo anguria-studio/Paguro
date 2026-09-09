@@ -1,0 +1,123 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "extended-srgb:0.62745,0.42353,0.70196,1.00000",
+      "extended-srgb:0.34118,0.19216,0.42745,1.00000"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0
+      },
+      "stop": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "07-Inner-opening.svg",
+          "name": "07-Inner-opening",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.53333,0.38039,0.62353,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "06-Front-ribbon.svg",
+          "name": "06-Front-ribbon",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.82745,0.68627,0.91373,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "05-Body-dome.svg",
+          "name": "05-Body-dome",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.75294,0.60784,0.86667,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "04-Middle-whorl.svg",
+          "name": "04-Middle-whorl",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.85882,0.75294,0.92941,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "03-Upper-whorl.svg",
+          "name": "03-Upper-whorl",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.78039,0.65882,0.88627,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "02-Apex.svg",
+          "name": "02-Apex",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.89412,0.80392,0.94902,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "01-Rear-shell.svg",
+          "name": "01-Rear-shell",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "extended-srgb:0.61176,0.48235,0.74118,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

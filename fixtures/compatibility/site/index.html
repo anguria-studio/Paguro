@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Blatta compatibility fixture</title>
+  <title>Paguro compatibility fixture</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
   <header>
     <p class="eyebrow">Local test service</p>
-    <h1>Blatta compatibility fixture</h1>
+    <h1>Paguro compatibility fixture</h1>
     <p>
-      Use these controls inside Blatta. Each control exercises a public WebKit path.
+      Use these controls inside Paguro. Each control exercises a public WebKit path.
       The fixture does not use an external network service.
     </p>
   </header>
@@ -53,7 +53,7 @@
         </div>
       </div>
       <p class="note">
-        Blatta can accept the same-origin frame event. It must reject the cross-origin event.
+        Paguro can accept the same-origin frame event. It must reject the cross-origin event.
       </p>
     </section>
 
@@ -105,7 +105,7 @@
     <section>
       <h2>Session marker</h2>
       <p>
-        Store a different value in two Blatta service accounts. Restart Blatta and confirm
+        Store a different value in two Paguro service accounts. Restart Paguro and confirm
         that each account retains only its own value.
       </p>
       <p>Fixture account: <strong id="session-account-label">Unlabeled account</strong></p>
@@ -127,7 +127,7 @@
       <h2>Recovery</h2>
       <button id="simulate-process-failure" type="button">Simulate WebKit process failure</button>
       <p class="note">
-        This route calls Blatta's recovery handler in a Debug build. It does not terminate
+        This route calls Paguro's recovery handler in a Debug build. It does not terminate
         a real WebKit process or use a private API.
       </p>
     </section>

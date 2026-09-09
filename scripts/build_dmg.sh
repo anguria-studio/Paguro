@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds a Release Blatta.app and packages it as a disk image for testing.
+# Builds a Release Paguro.app and packages it as a disk image for testing.
 #
 #   scripts/build_dmg.sh                 writes to ~/Desktop
 #   scripts/build_dmg.sh /some/dir       writes there instead
@@ -37,10 +37,10 @@
 # Create the notarytool profile once with an app-specific password from
 # appleid.apple.com:
 #
-#   xcrun notarytool store-credentials blatta \
+#   xcrun notarytool store-credentials paguro \
 #       --apple-id <your-apple-id> --team-id L2P2KC4C69 --password <app-specific>
 #
-# Set BLATTA_NOTARY_PROFILE to use a different profile name.
+# Set PAGURO_NOTARY_PROFILE to use a different profile name.
 #
 # Two build settings are deliberate:
 #
@@ -71,17 +71,17 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 
 VERSION=$(awk -F'"' '/MARKETING_VERSION/ {print $2; exit}' "$REPOSITORY_DIR/project.yml")
 if [ "$TEST_CONTROLS" -eq 1 ]; then
-    DMG_PATH="$OUTPUT_DIR/Blatta-$VERSION-test.dmg"
+    DMG_PATH="$OUTPUT_DIR/Paguro-$VERSION-test.dmg"
     EXTRA_BUILD_ARGS=(SWIFT_ACTIVE_COMPILATION_CONDITIONS="TEST_CONTROLS")
 else
-    DMG_PATH="$OUTPUT_DIR/Blatta-$VERSION.dmg"
+    DMG_PATH="$OUTPUT_DIR/Paguro-$VERSION.dmg"
     EXTRA_BUILD_ARGS=()
 fi
 
 echo "==> Generating the project"
 ( cd "$REPOSITORY_DIR" && xcodegen generate >/dev/null )
 
-NOTARY_PROFILE="${BLATTA_NOTARY_PROFILE:-blatta}"
+NOTARY_PROFILE="${PAGURO_NOTARY_PROFILE:-paguro}"
 DEVELOPER_ID=$(security find-identity -v -p codesigning \
     | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)
 
@@ -116,8 +116,8 @@ else
 fi
 
 xcodebuild \
-    -project "$REPOSITORY_DIR/Blatta.xcodeproj" \
-    -scheme Blatta \
+    -project "$REPOSITORY_DIR/Paguro.xcodeproj" \
+    -scheme Paguro \
     -configuration Release \
     -destination 'platform=macOS' \
     -derivedDataPath "$BUILD_DIR/DerivedData" \
@@ -127,8 +127,8 @@ xcodebuild \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     build >/dev/null
 
-APP_PATH="$BUILD_DIR/DerivedData/Build/Products/Release/Blatta.app"
-[ -d "$APP_PATH" ] || { echo "ERROR: no Blatta.app was produced" >&2; exit 1; }
+APP_PATH="$BUILD_DIR/DerivedData/Build/Products/Release/Paguro.app"
+[ -d "$APP_PATH" ] || { echo "ERROR: no Paguro.app was produced" >&2; exit 1; }
 
 if codesign -d --entitlements - --xml "$APP_PATH" 2>/dev/null | grep -q get-task-allow; then
     echo "ERROR: the debug entitlement survived; the app will not launch elsewhere" >&2
@@ -137,7 +137,7 @@ fi
 
 if [ "$NOTARIZE" -eq 1 ]; then
     echo "==> Notarizing the app (this waits on Apple, usually a few minutes)"
-    ZIP_PATH="$BUILD_DIR/Blatta.zip"
+    ZIP_PATH="$BUILD_DIR/Paguro.zip"
     ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
     NOTARY_RESULT=$(xcrun notarytool submit "$ZIP_PATH" \
         --keychain-profile "$NOTARY_PROFILE" --wait --output-format json) || {
@@ -180,7 +180,7 @@ ln -s /Applications "$STAGE_DIR/Applications"
 echo "==> Writing $DMG_PATH"
 rm -f "$DMG_PATH"
 hdiutil create \
-    -volname "Blatta $VERSION$([ "$TEST_CONTROLS" -eq 1 ] && echo " test")" \
+    -volname "Paguro $VERSION$([ "$TEST_CONTROLS" -eq 1 ] && echo " test")" \
     -srcfolder "$STAGE_DIR" \
     -ov -format UDZO \
     "$DMG_PATH" >/dev/null
@@ -211,5 +211,5 @@ elif [ -n "$DEVELOPER_ID" ]; then
     echo "    Open, and confirm once."
 else
     echo "    Ad hoc. On the receiving Mac, after dragging it to /Applications:"
-    echo "      sudo xattr -dr com.apple.quarantine /Applications/Blatta.app"
+    echo "      sudo xattr -dr com.apple.quarantine /Applications/Paguro.app"
 fi

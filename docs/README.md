@@ -1,4 +1,4 @@
-# Blatta documentation
+# Paguro documentation
 
 Start with these documents:
 

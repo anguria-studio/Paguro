@@ -4,7 +4,7 @@ Status: active
 
 ## Scope
 
-Blatta uses Apple system frameworks, BlattaCore, build tools, and GitHub Actions.
+Paguro uses Apple system frameworks, PaguroCore, build tools, and GitHub Actions.
 The direct build also uses Sparkle 2.9.6. Apple provides no direct-download
 updater with signed feeds and sandboxed installation. Sparkle provides this
 reviewed implementation instead of a custom installer.
@@ -31,7 +31,7 @@ pass.
 
 ## Adding a dependency
 
-A pull request that adds a runtime dependency must state why Blatta needs it and
+A pull request that adds a runtime dependency must state why Paguro needs it and
 why a system API is not suitable. It must pin a reviewed version, add tests at
 the adapter boundary, and update `THIRD_PARTY_NOTICES.md` when the license or
 bundled material requires a notice.

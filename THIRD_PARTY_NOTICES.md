@@ -1,11 +1,11 @@
 # Third-party notices
 
-Blatta contains work from other open-source projects.
+Paguro contains work from other open-source projects.
 Keep this file current when you add, remove, or update third-party work.
 
 ## Chorus
 
-Blatta is a fork of [Chorus](https://github.com/nicojan/Chorus) by Nico Jan.
+Paguro is a fork of [Chorus](https://github.com/nicojan/Chorus) by Nico Jan.
 
 - Copyright: 2026 Nico Jan
 - License: MIT
@@ -16,11 +16,11 @@ Git keeps the upstream commit history.
 
 ## Bundled blocklist data
 
-Blatta bundles two converted rule files under `Blatta/Resources`.
+Paguro bundles two converted rule files under `Paguro/Resources`.
 Each file keeps the license of the list it came from.
-The Blatta MIT license does not cover either file.
+The Paguro MIT license does not cover either file.
 
-Blatta reads these files as data at runtime.
+Paguro reads these files as data at runtime.
 It does not link them into the application.
 [Source snapshots and manifest](vendor/blocklists/README.md) record the exact
 inputs, conversion settings, and checksums. `scripts/convert_blocklist.sh`
@@ -33,7 +33,7 @@ and omits unsupported filter features.
 - License: [GPL-3.0](licenses/GPL-3.0.txt)
 - Source: `adblock/light.txt` at commit `2555e95206786ec3afea8c851729e64e74b093f5`
 - Authors: HaGeZi and the list contributors
-- Bundled file: `Blatta/Resources/hagezi-light.json`
+- Bundled file: `Paguro/Resources/hagezi-light.json`
 - Use: source data for bundled WebKit content rules
 
 ### Fanboy's Annoyance List (EasyList)
@@ -42,7 +42,7 @@ and omits unsupported filter features.
 - License: [CC BY 3.0](licenses/CC-BY-3.0.txt), as declared in the list header
 - Authors: Fanboy and the EasyList contributors
 - Source: `https://easylist-downloads.adblockplus.org/fanboy-annoyance.txt`
-- Bundled file: `Blatta/Resources/fanboy-annoyance.json`
+- Bundled file: `Paguro/Resources/fanboy-annoyance.json`
 - Use: source data for bundled WebKit content rules
 
 EasyList publishes this list as a moving file with no versioned download.
@@ -55,7 +55,7 @@ identifies version `202609091502`. Record future refreshes in the manifest.
 - License: GPL-3.0
 - Use: offline build tool only
 
-Blatta does not link this tool into the application.
+Paguro does not link this tool into the application.
 
 ## The SVG project and service marks
 
@@ -79,9 +79,9 @@ does not grant rights to third-party trademarks.
 
 The framework includes its license in the distributed application.
 
-## Blatta application icon
+## Paguro application icon
 
-The app uses Blatta-specific Icon Composer artwork under `Blatta/AppIcon.icon`.
+The app uses Paguro-specific Icon Composer artwork under `Paguro/AppIcon.icon`.
 This artwork replaced the Chorus application icon. Its vector layers and edit
 history are in this repository.
 
@@ -90,6 +90,6 @@ history are in this repository.
 The app bundle includes `LICENSE`, this notice file, and the `licenses` folder
 in `Contents/Resources`. Sparkle also includes its own bundled notices.
 Source materials for the converted blocklists are in
-[the Blatta source repository](https://github.com/anguria-studio/Blatta/tree/main/vendor/blocklists).
+[the Paguro source repository](https://github.com/anguria-studio/Paguro/tree/main/vendor/blocklists).
 Use the source tag matching the binary release to retrieve its exact snapshots
 and conversion script. GitHub source archives include these materials.

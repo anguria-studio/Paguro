@@ -11,8 +11,8 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-ACCOUNT = 'com.tommasolaterza.Blatta'
-REPOSITORY = 'anguria-studio/Blatta'
+ACCOUNT = 'com.tommasolaterza.Paguro'
+REPOSITORY = 'anguria-studio/Paguro'
 FEED = f'https://github.com/{REPOSITORY}/releases/latest/download/appcast.xml'
 
 
@@ -73,19 +73,19 @@ def main():
     if not match:
         raise RuntimeError('A Developer ID Application identity is required')
     identity, team = match.groups()
-    profile = os.environ.get('BLATTA_NOTARY_PROFILE', 'blatta')
+    profile = os.environ.get('PAGURO_NOTARY_PROFILE', 'paguro')
     run('xcrun', 'notarytool', 'history', '--keychain-profile', profile, capture=True)
     output.mkdir(parents=True)
-    with tempfile.TemporaryDirectory(prefix='blatta-release-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='paguro-release-') as temporary:
         work = Path(temporary)
         project = work / 'project'
         project.mkdir()
         # XcodeGen source groups remain relative to the generated project.
-        for name in ("Blatta", "BlattaTests", "Core", "Configuration", "licenses",
+        for name in ("Paguro", "PaguroTests", "Core", "Configuration", "licenses",
                      "LICENSE", "THIRD_PARTY_NOTICES.md"):
             (project / name).symlink_to(ROOT / name, target_is_directory=(ROOT / name).is_dir())
         run('xcodegen', 'generate', '--spec', ROOT / 'project-direct.yml', '--project', project)
-        archive = output / 'Blatta.xcarchive'
+        archive = output / 'Paguro.xcarchive'
         settings = [f'SRCROOT={ROOT}', f'CODE_SIGN_IDENTITY={identity}', f'DEVELOPMENT_TEAM={team}',
                     'CODE_SIGN_STYLE=Manual', 'CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO',
                     'OTHER_CODE_SIGN_FLAGS=--timestamp', 'ARCHS=arm64 x86_64',
@@ -101,8 +101,8 @@ def main():
             test_info = work / 'TestInfo.plist'
             test_info.write_bytes(plistlib.dumps(info))
             settings += [f'INFOPLIST_FILE={test_info}',
-                         'PRODUCT_BUNDLE_IDENTIFIER=com.tommasolaterza.Blatta.updatetest']
-        run('xcodebuild', '-project', project / 'Blatta.xcodeproj', '-scheme', 'Blatta',
+                         'PRODUCT_BUNDLE_IDENTIFIER=com.tommasolaterza.Paguro.updatetest']
+        run('xcodebuild', '-project', project / 'Paguro.xcodeproj', '-scheme', 'Paguro',
             '-configuration', 'Release', '-destination', 'generic/platform=macOS',
             '-archivePath', archive, *settings, 'archive')
         export_options = work / 'ExportOptions.plist'
@@ -111,7 +111,7 @@ def main():
         exported = output / 'app'
         run('xcodebuild', '-exportArchive', '-archivePath', archive,
             '-exportPath', exported, '-exportOptionsPlist', export_options)
-        app = exported / 'Blatta.app'
+        app = exported / 'Paguro.app'
         exported_info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
         if exported_info.get('SUPublicEDKey') != public_key:
             raise RuntimeError('Exported update key differs from the signing key')
@@ -125,8 +125,8 @@ def main():
         if not entitlements.get('com.apple.security.app-sandbox', False):
             raise RuntimeError('Export lost its sandbox entitlement')
         run('codesign', '--verify', '--deep', '--strict', app)
-        run('lipo', app / 'Contents/MacOS/Blatta', '-verify_arch', 'arm64', 'x86_64')
-        app_zip = work / 'Blatta.zip'
+        run('lipo', app / 'Contents/MacOS/Paguro', '-verify_arch', 'arm64', 'x86_64')
+        app_zip = work / 'Paguro.zip'
         run('ditto', '-c', '-k', '--keepParent', app, app_zip)
         notarize(app_zip, profile)
         run('xcrun', 'stapler', 'staple', app)
@@ -134,13 +134,13 @@ def main():
         run('spctl', '--assess', '--type', 'execute', app)
         stage = work / 'stage'
         stage.mkdir()
-        run('ditto', app, stage / 'Blatta.app')
+        run('ditto', app, stage / 'Paguro.app')
         (stage / 'Applications').symlink_to('/Applications')
         assets = output / 'assets'
         assets.mkdir()
         suffix = '-updatetest' if args.test_feed else ''
-        dmg = assets / f'Blatta-{args.version}-{args.build}{suffix}.dmg'
-        run('hdiutil', 'create', '-volname', 'Blatta', '-srcfolder', stage,
+        dmg = assets / f'Paguro-{args.version}-{args.build}{suffix}.dmg'
+        run('hdiutil', 'create', '-volname', 'Paguro', '-srcfolder', stage,
             '-format', 'UDZO', dmg)
         run('codesign', '--sign', identity, '--timestamp', dmg)
         notarize(dmg, profile)

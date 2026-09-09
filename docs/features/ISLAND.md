@@ -4,7 +4,7 @@ Status: in progress
 
 ## Purpose
 
-The island gives the user a small view of current Blatta activity.
+The island gives the user a small view of current Paguro activity.
 It can show a new event and a few common controls.
 
 The island is not the notification engine.
@@ -12,7 +12,7 @@ It receives validated events from the notification pipeline.
 
 ## State and history rules
 
-`NotificationIslandReducer` owns the pure state rules in `BlattaCore`.
+`NotificationIslandReducer` owns the pure state rules in `PaguroCore`.
 It does not create a panel or start a timer.
 
 The model has these phases:
@@ -27,15 +27,15 @@ The model has these phases:
 The dismissed phase keeps the current event until the exit animation ends.
 It then returns to the collapsed state.
 
-The recent list keeps all events that Blatta receives in the current session.
+The recent list keeps all events that Paguro receives in the current session.
 It is in memory only. The count shows `99+` when it is greater than 99.
 Opening or dismissing one event decreases the count by one. Clear All clears
 the count and the recent list.
 
 The island also drops the events of one service account when the user reads
-that conversation in Blatta. Two conditions start this rule:
+that conversation in Paguro. Two conditions start this rule:
 
-- the user selects that service account in the main window, or Blatta becomes
+- the user selects that service account in the main window, or Paguro becomes
   the active application with that service account active;
 - the unread count of that service account becomes zero.
 
@@ -47,11 +47,11 @@ A burst does not create a sequence of compact alerts. Each new event replaces
 the compact preview and restarts one display time. The recent view keeps all
 session details in newest-first order.
 Hiding or stopping the island clears the recent list and count.
-The state clears all event content when Blatta stops.
+The state clears all event content when Paguro stops.
 
 ## Layout rules
 
-`NotificationIslandLayout` owns the pure layout rules in `BlattaCore`.
+`NotificationIslandLayout` owns the pure layout rules in `PaguroCore`.
 It holds constants only and it measures no view.
 
 The type uses these values:
@@ -113,7 +113,7 @@ It shows the unreviewed count when that count is not zero.
 The counter badge stays legible on the black surface.
 Clicking it pins the expanded state open.
 Moving the pointer over it opens the complete recent view without activating
-Blatta when history is not empty.
+Paguro when history is not empty.
 
 The island collapses completely when the pointer leaves it. This pointer rule applies
 to the hover view and to the pinned expanded view. The collapse starts 180
@@ -174,7 +174,7 @@ The card holds the stop line without motion from depth 0 to depth 1. The card
 above it slides over it in this range. From depth 1 to depth 2 it eases 8
 points down and becomes the second strip. It scales by 6 percent for each
 level, anchored at its bottom edge, and reaches 0.88 at level 2. It fades out
-between depth 2 and depth 3. Blatta hides it at depth 3 and builds no view for
+between depth 2 and depth 3. Paguro hides it at depth 3 and builds no view for
 it.
 
 At the end of the scroll the last card lands exactly on the stop line.
@@ -197,7 +197,7 @@ with a destination-out blend of its own shape. It then draws its fill, a
 1-point hairline border, and its content. The list puts these steps in one
 compositing group. Overlapping cards therefore never add up. When transparency
 is enabled, the screen stays visible through the front card. The front card hides the
-covered card, and the border marks the edge between the two. Blatta never clips
+covered card, and the border marks the edge between the two. Paguro never clips
 or fades the card content.
 
 The row computes its depth, offset, scale, and opacity in one `visualEffect`.
@@ -222,7 +222,7 @@ visually hidden. Its space stays reserved so the text does not move.
 Clear All stays visible.
 
 The user can click a card and drag it to the right to dismiss it.
-`NotificationIslandSwipeRule` in `BlattaCore` holds the pure rules for this
+`NotificationIslandSwipeRule` in `PaguroCore` holds the pure rules for this
 gesture. A drag starts after 8 points. The card follows the pointer only when
 the first movement is more horizontal than vertical. The card moves without
 resistance to the right. It resists a leftward drag at 35 percent.
@@ -245,11 +245,11 @@ drag when the pointer is still outside.
 Hover opens a transient, nonactivating recent view. Clicking that view pins it
 open. The pinned panel takes keyboard focus after this explicit action.
 File > Open Notifications (Command-Shift-O) opens the recent view without a
-pointer click while Blatta is active. It focuses the newest card for keyboard
+pointer click while Paguro is active. It focuses the newest card for keyboard
 and VoiceOver use. The command is disabled while locked, without a notched
 display, with island alerts off, or when history is empty.
 A keyboard-opened island ignores pointer exit. Escape collapses it quietly,
-keeps its history, and returns focus to the previous visible Blatta window.
+keeps its history, and returns focus to the previous visible Paguro window.
 Clearing the list, disabling the island, and locking also close the view.
 Escape returns it to the collapsed state.
 The newest recent event receives initial focus when one exists.
@@ -293,7 +293,7 @@ Use a borderless AppKit panel for exact screen placement.
 SwiftUI renders the panel content.
 
 `IslandPanelController` creates its panel only after an island event needs it.
-The panel starts hidden and does not activate Blatta.
+The panel starts hidden and does not activate Paguro.
 The panel keeps one SwiftUI hosting view for its complete lifetime.
 State changes update one observable presentation model.
 They must not replace the hosting view.
@@ -336,7 +336,7 @@ collapsed panel extends 6 points past each side of the housing. A nonzero
 counter gives the panel a wider wing on the left side. These side wings supply
 a public AppKit hover target. An AppKit tracking area on the panel content view
 supplies the hover events.
-Blatta does not try to receive events from the obscured camera area.
+Paguro does not try to receive events from the obscured camera area.
 
 The panel must not cover a system camera privacy indicator.
 The final hardware test must verify this condition.
@@ -352,14 +352,14 @@ housing and attaches it to the top screen edge.
 It returns no island placement for a display without a camera housing.
 
 `SystemScreenGeometryProvider` reads a fresh `NSScreen` snapshot on request.
-It uses the visible main Blatta window display when one exists.
+It uses the visible main Paguro window display when one exists.
 It otherwise uses the primary display whose frame starts at the global origin.
 It does not cache screen values.
 
 `IslandScreenChangeMonitor` observes public AppKit notifications while the
 island is visible. It requests a new geometry snapshot after these changes:
 
-- the main Blatta window moves to another display;
+- the main Paguro window moves to another display;
 - a display connects, disconnects, or changes resolution;
 - the backing scale changes;
 - the main window enters or leaves full screen;
@@ -367,7 +367,7 @@ island is visible. It requests a new geometry snapshot after these changes:
 - the Mac wakes from sleep.
 
 The monitor ignores the island panel's own movement.
-It removes all observers when the user disables the island or quits Blatta.
+It removes all observers when the user disables the island or quits Paguro.
 
 The system provider uses these values:
 
@@ -382,7 +382,7 @@ The simulated provider returns fixed test values.
 ## Debug simulation
 
 macOS has no general Mac notch simulator.
-Blatta therefore includes debug geometry presets.
+Paguro therefore includes debug geometry presets.
 
 Required presets:
 
@@ -400,12 +400,12 @@ The overlay and the real island panel must be separate objects.
 UI tests select a preset with a launch argument.
 Release builds must not include the fake housing control.
 
-Debug builds accept `--blatta-island-screen=<preset>`.
+Debug builds accept `--paguro-island-screen=<preset>`.
 The preset values are stable strings such as `notched-14-inch` and
 `two-display-arrangement`.
 Release builds ignore the simulation argument.
 
-The **Blatta Island Preview** scheme uses `--blatta-fake-notch`.
+The **Paguro Island Preview** scheme uses `--paguro-fake-notch`.
 This argument keeps the real display frame and adds a simulated camera housing
 to its top edge. It gives a non-notched development Mac a stable manual test
 path. Release builds ignore this argument.
@@ -437,8 +437,8 @@ result to show. The check reads a fresh snapshot from `ScreenGeometryProvider`,
 so it follows a docking change, a clamshell change, and a display change. It
 reads every connected screen, not the selected screen only.
 
-The check uses the same provider as the island, so `--blatta-fake-notch` and
-`--blatta-island-screen` also show these controls on a development Mac without
+The check uses the same provider as the island, so `--paguro-fake-notch` and
+`--paguro-island-screen` also show these controls on a development Mac without
 a notch.
 
 The router reads the camera housing of the selected display for each event, not
@@ -451,9 +451,9 @@ the permission rule and its Settings warning.
 
 ## Multiple displays
 
-The island follows the display that contains the active Blatta window when that
+The island follows the display that contains the active Paguro window when that
 display has a camera housing.
-When no Blatta window is active, it uses the configured primary display.
+When no Paguro window is active, it uses the configured primary display.
 
 The panel must move after these changes:
 

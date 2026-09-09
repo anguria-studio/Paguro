@@ -58,11 +58,11 @@ Replacement removes old records in the same transaction as the import. After
 commit, the app closes removed web views, clears their island history, repairs
 selection, and schedules their local browser storage for removal.
 Cancel and invalid files leave the setup unchanged. Export and import require
-Blatta to be unlocked. Neither action transfers browser storage.
+Paguro to be unlocked. Neither action transfers browser storage.
 
 ## Architecture
 
-`ConfigurationArchive` and `ConfigurationArchiveCodec` in BlattaCore define the
+`ConfigurationArchive` and `ConfigurationArchiveCodec` in PaguroCore define the
 versioned schema and validation. `WorkspaceStore` maps the model graph and owns
 the import transaction. `PreferencesStore` stages only explicit portable fields
 in that transaction. `ShellPreferences` maps the portable shell values.

@@ -4,7 +4,7 @@ Status: active
 
 ## Release order
 
-Blatta will use direct distribution first.
+Paguro will use direct distribution first.
 An App Store build is optional and comes later.
 
 The direct build still uses App Sandbox and Hardened Runtime.
@@ -15,13 +15,13 @@ This choice reduces risk and keeps the App Store path open.
 The release process will perform these steps:
 
 1. Create a Release archive.
-2. Sign the app with a Blatta Developer ID identity.
+2. Sign the app with a Paguro Developer ID identity.
 3. Export the signed app.
 4. Submit the app to Apple notarization.
 5. Staple the notarization ticket to the app.
 6. Create a DMG or ZIP file.
 7. Submit the DMG to Apple notarization and staple that ticket too.
-8. Sign the update item with the Blatta Sparkle key.
+8. Sign the update item with the Paguro Sparkle key.
 9. Publish checksums and release notes.
 10. Verify the download on a clean user account.
 
@@ -48,19 +48,19 @@ permission to check automatically. The app does not send a system profile.
 Sparkle owns this local preference; configuration export does not transfer it.
 
 The production feed is:
-`https://github.com/anguria-studio/Blatta/releases/latest/download/appcast.xml`.
+`https://github.com/anguria-studio/Paguro/releases/latest/download/appcast.xml`.
 This URL will work after the reviewed repository and first release are public.
 Before that, a manual check can report that the feed is unavailable.
 
 `Configuration/DirectInfo.plist` contains the public EdDSA key. The matching
-private key stays in the maintainer's login Keychain under account
-`com.tommasolaterza.Blatta`. Never reuse the upstream key or export this key
+private key must be available in the maintainer's login Keychain under account
+`com.tommasolaterza.Paguro` before signing a release. Never reuse the upstream key or export this key
 into the repository. Keep a separate secure backup before public distribution.
 Signed feeds and archive verification before extraction are required.
 
 The installer XPC service is enabled with the two bundle-specific Mach lookup
 exceptions from Sparkle's sandbox integration guide. The downloader service is
-not enabled because Blatta already has outgoing network access. Archive export
+not enabled because Paguro already has outgoing network access. Archive export
 signs the framework and nested helpers with the Developer ID identity.
 
 ### Build a release
@@ -81,14 +81,14 @@ The output directory must not exist. The script retains the archive, exported
 app, release manifest, DMG, signed appcast, and checksums. Only files under
 `assets` are release downloads. Increase the build number for each update.
 The first Sparkle-enabled version requires a manual installation over earlier
-Blatta builds, because those builds have no active updater.
+Paguro builds, because those builds have no active updater.
 
 ### Verify an update privately
 
 Build an older and a newer build with
 `--test-feed http://127.0.0.1:8765/appcast.xml` and separate output directories.
 This option uses the isolated bundle identifier
-`com.tommasolaterza.Blatta.updatetest` and permits local networking.
+`com.tommasolaterza.Paguro.updatetest` and permits local networking.
 Serve the newer build's `assets` directory on loopback. Install and launch the
 older test app from a writable directory. Use Check for Updates, install the
 newer version, and confirm its build number after relaunch. Repeat with a
@@ -99,7 +99,7 @@ bundle identifier.
 ### Publish after review
 
 Finish the repository review and migration first. Build from a clean release
-commit. Create a draft `v1.0.0` release in `anguria-studio/Blatta`, attach the DMG,
+commit. Create a draft `v1.0.0` release in `anguria-studio/Paguro`, attach the DMG,
 `appcast.xml`, and `SHA256SUMS` from the same build, and add release notes.
 Verify all enclosure URLs and signatures before publishing the draft as the
 latest stable release. The latest-release URL then exposes the signed feed.
@@ -137,10 +137,10 @@ The privacy statement must explain these facts:
 
 - Service content loads from third-party websites.
 - Session data stays in separate local WebKit stores.
-- Blatta does not store account passwords.
-- Blatta does not send telemetry by default.
-- Blatta can show notification text from a service.
-- Blatta stops all activity after the user quits it.
+- Paguro does not store account passwords.
+- Paguro does not send telemetry by default.
+- Paguro can show notification text from a service.
+- Paguro stops all activity after the user quits it.
 
 ## License and asset audit
 
@@ -179,3 +179,11 @@ again if that candidate changes. Keep build numbers increasing across all
 versions; Sparkle uses them to order updates. Use patch versions for fixes,
 minor versions for compatible features, and major versions for incompatible
 configuration or workflow changes. Tag public releases as `vMAJOR.MINOR.PATCH`.
+
+## Renamed release identity
+
+The Paguro bundle uses `com.tommasolaterza.Paguro`. A signed release requires
+a matching Sparkle signing account and the `paguro` notarization profile, or
+the profile selected by `PAGURO_NOTARY_PROFILE`. Renaming source files does not
+rename Keychain credentials or create the configured GitHub repository. Verify
+these external prerequisites before building a signed release.

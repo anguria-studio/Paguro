@@ -3,8 +3,8 @@
 # Regenerates the bundled content-blocking lists from pinned upstream sources,
 # using AdGuard's SafariConverterLib to convert filter lists into the
 # WKContentRuleList JSON the app compiles at launch:
-#   - Blatta/Resources/hagezi-light.json   (HaGezi "Light" ad/tracker domains)
-#   - Blatta/Resources/fanboy-annoyance.json (Fanboy annoyances, from EasyList)
+#   - Paguro/Resources/hagezi-light.json   (HaGezi "Light" ad/tracker domains)
+#   - Paguro/Resources/fanboy-annoyance.json (Fanboy annoyances, from EasyList)
 #
 # SafariConverterLib is a GPL-3.0 offline build tool, not an app dependency.
 # This script converts the source snapshots in vendor/blocklists. See that
@@ -48,12 +48,12 @@ convert() {
 
 convert \
   "$REPO_ROOT/vendor/blocklists/hagezi-light.txt" \
-  "$REPO_ROOT/Blatta/Resources/hagezi-light.json" \
+  "$REPO_ROOT/Paguro/Resources/hagezi-light.json" \
   "HaGezi Light snapshot"
 
 convert \
   "$REPO_ROOT/vendor/blocklists/fanboy-annoyance.txt" \
-  "$REPO_ROOT/Blatta/Resources/fanboy-annoyance.json" \
+  "$REPO_ROOT/Paguro/Resources/fanboy-annoyance.json" \
   "Fanboy Annoyance List (EasyList)"
 
 echo "==> Done. Remember to commit the regenerated JSON."

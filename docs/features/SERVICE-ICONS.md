@@ -7,8 +7,8 @@ Status: active
 Each service has one icon across the sidebar, collapsed rail, top bar, quick
 switcher, menu-bar list, and native notification attachment.
 
-The main icon in a macOS notification is always the Blatta app icon. macOS uses
-that icon to identify the sending application. Blatta supplies the service icon
+The main icon in a macOS notification is always the Paguro app icon. macOS uses
+that icon to identify the sending application. Paguro supplies the service icon
 as an additional image.
 
 The custom-service form and the service editor show an icon preview.
@@ -17,12 +17,12 @@ A blank icon address uses the service address.
 An address without a scheme uses HTTPS.
 
 Use Default removes the custom icon.
-It does not remove a bundled catalog icon or the icon that Blatta fetched from
+It does not remove a bundled catalog icon or the icon that Paguro fetched from
 the service address.
 
 ## Resolution order
 
-Blatta uses the first available source in this order:
+Paguro uses the first available source in this order:
 
 1. The custom image selected or fetched by the user.
 2. The bundled icon for a catalog service.
@@ -31,27 +31,27 @@ Blatta uses the first available source in this order:
 
 ## Website discovery
 
-Blatta accepts a direct HTTP or HTTPS image address.
-For a website address, Blatta checks these sources:
+Paguro accepts a direct HTTP or HTTPS image address.
+For a website address, Paguro checks these sources:
 
 - common `apple-touch-icon` and favicon paths;
 - HTML `link` elements with `icon` or `apple-touch-icon` relations;
 - the `icons` array in a linked web-app manifest;
 - the optional Google favicon fallback when the user enables it.
 
-Blatta prefers larger declared images.
+Paguro prefers larger declared images.
 It does not use a monochrome-only manifest image as a full-color service icon.
 
 ## Storage and limits
 
-Blatta stores the selected image with the service.
+Paguro stores the selected image with the service.
 It does not depend on the source address after the fetch succeeds.
-Blatta discards the source address after the fetch.
+Paguro discards the source address after the fetch.
 `WorkspaceStore` saves custom icons and automatic favicon attempts. A failed
 automatic fetch keeps the older icon and records the attempt time.
 
 Choose a local source image no larger than 20 MB.
-Blatta converts it to PNG and limits its longest edge to 256 pixels.
+Paguro converts it to PNG and limits its longest edge to 256 pixels.
 Each network response has a 5 MB limit.
 
 The fetcher accepts only image formats that it can validate and decode.

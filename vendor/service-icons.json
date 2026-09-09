@@ -4,379 +4,379 @@
   "icons": [
     {
       "service": "airtable",
-      "file": "Blatta/Resources/Assets.xcassets/brand-airtable.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-airtable.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/airtable/default.svg",
       "sha256": "752f03ea13cc75d90de50fc09abf60b6144d1382da4c8881f51abdbde599572a"
     },
     {
       "service": "apple-music",
-      "file": "Blatta/Resources/Assets.xcassets/brand-apple-music.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-apple-music.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/apple-music/default.svg",
       "sha256": "fbc73944b7a3afec9917cfb53f9a6d0ecf651f52ddc0e0117abf835d514f99ca"
     },
     {
       "service": "asana",
-      "file": "Blatta/Resources/Assets.xcassets/brand-asana.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-asana.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/asana/default.svg",
       "sha256": "f1a2bf6a5b20d6f369657f56a9abe3231e4201a4c7238b1b72be846c646368cc"
     },
     {
       "service": "bitbucket",
-      "file": "Blatta/Resources/Assets.xcassets/brand-bitbucket.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-bitbucket.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/bitbucket/default.svg",
       "sha256": "cbefef6f884299fdded5aedcde3c6fa3164702a24ecdfe11549374b03eaaddb0"
     },
     {
       "service": "calendly",
-      "file": "Blatta/Resources/Assets.xcassets/brand-calendly.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-calendly.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/calendly/default.svg",
       "sha256": "a00cc90b2986d31c828af2c93fa3099857f89a5788a0a68bb3a4584a74cc283f"
     },
     {
       "service": "canva",
-      "file": "Blatta/Resources/Assets.xcassets/brand-canva.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-canva.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/canva/default.svg",
       "sha256": "242bb82ed2be97ce4213a3197bbeee558c49d268552372a85b5b9b40bf73b049"
     },
     {
       "service": "chatgpt",
-      "file": "Blatta/Resources/Assets.xcassets/brand-chatgpt.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-chatgpt.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/openai/default.svg",
       "sha256": "db81a8225166f02f773304ba4d8f0141343da5f43870d8b41f10bf6bc59840c8"
     },
     {
       "service": "claude",
-      "file": "Blatta/Resources/Assets.xcassets/brand-claude.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-claude.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/claude/default.svg",
       "sha256": "5119ef950a0d648b3fd62865791e73f07f32e18ddab84e4f21160f8c641c0f5f"
     },
     {
       "service": "clickup",
-      "file": "Blatta/Resources/Assets.xcassets/brand-clickup.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-clickup.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/clickup/default.svg",
       "sha256": "35c7c2c13ece5c57f823929aeb6924da276500be0e5aa1897574952b7831b5f1"
     },
     {
       "service": "cloudflare",
-      "file": "Blatta/Resources/Assets.xcassets/brand-cloudflare.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-cloudflare.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/cloudflare/default.svg",
       "sha256": "b8dff311e8041942b6006c907fd44c5f3ae941bd88ec650e552fe3f727f5139c"
     },
     {
       "service": "confluence",
-      "file": "Blatta/Resources/Assets.xcassets/brand-confluence.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-confluence.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/confluence/default.svg",
       "sha256": "4b43c4b03b65af41ac890cb9afa7d0b46e4d9cc0cafed04fbded509a3afbb332"
     },
     {
       "service": "discord",
-      "file": "Blatta/Resources/Assets.xcassets/brand-discord.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-discord.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/discord/default.svg",
       "sha256": "6634cc2f915db66df7a5237cac0c1b98016289e86a2bb4b7bf6408ec2b95265c"
     },
     {
       "service": "dropbox",
-      "file": "Blatta/Resources/Assets.xcassets/brand-dropbox.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-dropbox.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/dropbox/default.svg",
       "sha256": "ef6eeed72f74fcd89674afd62dcf451eaf48c360da516679b08c1e99a8ea0819"
     },
     {
       "service": "evernote",
-      "file": "Blatta/Resources/Assets.xcassets/brand-evernote.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-evernote.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/evernote/default.svg",
       "sha256": "c1552bb8d091a4f0a6a36d3e03a472a1aa970095d2771f6bc19a0e33c98205c1"
     },
     {
       "service": "facebook",
-      "file": "Blatta/Resources/Assets.xcassets/brand-facebook.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-facebook.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/facebook/default.svg",
       "sha256": "003fc3e7814ddcd270e030014f120f4cb8bef38be40022ebca913cafb7617a76"
     },
     {
       "service": "feedly",
-      "file": "Blatta/Resources/Assets.xcassets/brand-feedly.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-feedly.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/feedly/default.svg",
       "sha256": "e72d066cfda93ddd75ba41a636d2aad3ec1d87a12d4523eca3b4969ea0a0f9d6"
     },
     {
       "service": "figma",
-      "file": "Blatta/Resources/Assets.xcassets/brand-figma.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-figma.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/figma/default.svg",
       "sha256": "5bcdea3417293412845b8298fe357fce3b192e8ff112d9b3fef315bc5cd127f6"
     },
     {
       "service": "gemini",
-      "file": "Blatta/Resources/Assets.xcassets/brand-gemini.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-gemini.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/google-gemini/default.svg",
       "sha256": "404eba6940a54e63d40edcce2d2e7cb2b3dbfec765e7a1d523662b6f4e0d6747"
     },
     {
       "service": "github",
-      "file": "Blatta/Resources/Assets.xcassets/brand-github.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-github.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/github/default.svg",
       "sha256": "5ca23571194899d8eb1d26a622bba6f59d7fe03abc08e2cd2970eb3795874ece"
     },
     {
       "service": "gitlab",
-      "file": "Blatta/Resources/Assets.xcassets/brand-gitlab.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-gitlab.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/gitlab/default.svg",
       "sha256": "f113a0879aae4d458ac1de8f6ff3c8c6f9793299069fa1e422350ca24128a1fa"
     },
     {
       "service": "gmail",
-      "file": "Blatta/Resources/Assets.xcassets/brand-gmail.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-gmail.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/gmail/default.svg",
       "sha256": "6e0a1db3ce3893a809c3293bf0780902cad270ed443bb118cfcbc40647e272ab"
     },
     {
       "service": "google-calendar",
-      "file": "Blatta/Resources/Assets.xcassets/brand-google-calendar.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-google-calendar.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/google-calendar/default.svg",
       "sha256": "643e0b6b34b278cf062bedcf798f894b7e8fa7b665793736664c5cf57f9f7873"
     },
     {
       "service": "google-chat",
-      "file": "Blatta/Resources/Assets.xcassets/brand-google-chat.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-google-chat.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/google-chat/default.svg",
       "sha256": "abbf61bb4286cad539c3aea0bed5be5bc8bb8be247aa42125976c38957016892"
     },
     {
       "service": "google-drive",
-      "file": "Blatta/Resources/Assets.xcassets/brand-google-drive.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-google-drive.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/google-drive/default.svg",
       "sha256": "2a0272583e3ea138ba5b809d9fa7d099b7b31e18221d5550c4e6f0d8866d4f84"
     },
     {
       "service": "google-photos",
-      "file": "Blatta/Resources/Assets.xcassets/brand-google-photos.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-google-photos.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/google-photos/default.svg",
       "sha256": "63c38986b828c481edd4a469e9f2fbdb2d0b8e175f3073d846876040bfb04cc6"
     },
     {
       "service": "hackernews",
-      "file": "Blatta/Resources/Assets.xcassets/brand-hackernews.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-hackernews.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/y-combinator/default.svg",
       "sha256": "fbb1b86af7cdaa70d383c6d26f9a3c6fdeb6e8a7b4fae59f0346929ade604b46"
     },
     {
       "service": "icloud-mail",
-      "file": "Blatta/Resources/Assets.xcassets/brand-icloud-mail.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-icloud-mail.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/icloud/default.svg",
       "sha256": "6c2413dc3495390de55858ac5d0a868468411a5370e61c21f338010fee283d97"
     },
     {
       "service": "instagram",
-      "file": "Blatta/Resources/Assets.xcassets/brand-instagram.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-instagram.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/instagram/default.svg",
       "sha256": "821d3a84a192e97a1744a140afd871e8a81d8f7b81fdc33cbf54e74f09ee6143"
     },
     {
       "service": "jira",
-      "file": "Blatta/Resources/Assets.xcassets/brand-jira.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-jira.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/jira/default.svg",
       "sha256": "f831a691d67e7a187a358ea91f98e5d51ef93345d905651258d0fbd1f4d5f363"
     },
     {
       "service": "linear",
-      "file": "Blatta/Resources/Assets.xcassets/brand-linear.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-linear.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/linear/default.svg",
       "sha256": "e669549bf9917d616f3ae10ace5ba9af6e84966ec12cadd13459489cded34ccf"
     },
     {
       "service": "linkedin",
-      "file": "Blatta/Resources/Assets.xcassets/brand-linkedin.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-linkedin.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/linkedin/default.svg",
       "sha256": "ac8c9e0426de08e1f0ae7ca0d4f7551c89a011071c6dfe2ff926fa6b7dfd0942"
     },
     {
       "service": "loom",
-      "file": "Blatta/Resources/Assets.xcassets/brand-loom.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-loom.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/loom/default.svg",
       "sha256": "6d06c7a6826072f5943306ad8162ea6c43c8b6cef4a559b4afcf8e5d7fabd2c5"
     },
     {
       "service": "mattermost",
-      "file": "Blatta/Resources/Assets.xcassets/brand-mattermost.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-mattermost.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/mattermost/default.svg",
       "sha256": "6fd8b34a10aa81be882be114788eac16563efad5ebf17fedfab421a8f2fd488d"
     },
     {
       "service": "medium",
-      "file": "Blatta/Resources/Assets.xcassets/brand-medium.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-medium.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/medium/default.svg",
       "sha256": "76a16fe5ac94ac700d290e7562553f24d5c16ec197873b07165c3781475ea42b"
     },
     {
       "service": "messenger",
-      "file": "Blatta/Resources/Assets.xcassets/brand-messenger.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-messenger.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/messenger/default.svg",
       "sha256": "30673d61e5c72c4f1911a29f743f846e5f09a6dc88f46681e3414afcda6c5a76"
     },
     {
       "service": "miro",
-      "file": "Blatta/Resources/Assets.xcassets/brand-miro.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-miro.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/miro/default.svg",
       "sha256": "bd0810bca2ba457c9642b9b1580c627820ee623f1989f80feba629994c44fda1"
     },
     {
       "service": "mistral",
-      "file": "Blatta/Resources/Assets.xcassets/brand-mistral.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-mistral.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/mistral/default.svg",
       "sha256": "a21838f4a3714b9f537bd849de4848dca712778517bfc4177621cc58b3050006"
     },
     {
       "service": "notion",
-      "file": "Blatta/Resources/Assets.xcassets/brand-notion.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-notion.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/notion/default.svg",
       "sha256": "0d94471649fb9badd434394846079c279876fdd224cf49ed46b6c09fbd3a041f"
     },
     {
       "service": "onedrive",
-      "file": "Blatta/Resources/Assets.xcassets/brand-onedrive.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-onedrive.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/microsoft-onedrive/default.svg",
       "sha256": "8362ba656c60d5301a8064f557bcd9108aedfddbb63c01a0b0c2b6c7b27bfa60"
     },
     {
       "service": "outlook",
-      "file": "Blatta/Resources/Assets.xcassets/brand-outlook.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-outlook.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/microsoft-outlook/default.svg",
       "sha256": "334bf1a0ef366570a80d62faa0dc9c34de094cbc18c4935f2ceb26a140875d5b"
     },
     {
       "service": "perplexity",
-      "file": "Blatta/Resources/Assets.xcassets/brand-perplexity.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-perplexity.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/perplexity/default.svg",
       "sha256": "407ad1254700503eb124ef5650cc267d83c79dc6dea9e9332fbdc92bb2bdf262"
     },
     {
       "service": "pinterest",
-      "file": "Blatta/Resources/Assets.xcassets/brand-pinterest.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-pinterest.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/pinterest/default.svg",
       "sha256": "0127681e08c89a5ea15ffced075255430384ffd6738ea5d1f842fe28592a2467"
     },
     {
       "service": "protonmail",
-      "file": "Blatta/Resources/Assets.xcassets/brand-protonmail.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-protonmail.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/proton-mail/default.svg",
       "sha256": "46471528275e8a1e2658649c67b2b5517cc9d8fb9bf4f1215fe4b4e5c61bad38"
     },
     {
       "service": "reddit",
-      "file": "Blatta/Resources/Assets.xcassets/brand-reddit.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-reddit.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/reddit/default.svg",
       "sha256": "7703616008edfdb085a01da78e0ad96cbafedd3d2f1a2907394b74ca00d82b14"
     },
     {
       "service": "replit",
-      "file": "Blatta/Resources/Assets.xcassets/brand-replit.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-replit.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/replit/default.svg",
       "sha256": "e5f9e579255ff505b3b327ef4d9ca6dfabec1b35c36f72848848fa10e6fc65a3"
     },
     {
       "service": "sentry",
-      "file": "Blatta/Resources/Assets.xcassets/brand-sentry.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-sentry.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/sentry/default.svg",
       "sha256": "1469719716614dcb8f95c3bba9d158b97724a3236e38630ffc9e85aebc7123d9"
     },
     {
       "service": "slack",
-      "file": "Blatta/Resources/Assets.xcassets/brand-slack.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-slack.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/slack/default.svg",
       "sha256": "29734796b3a85f9d0e03150d53142fab0b7f994ae80c7e3e1efd0bef52c12f5d"
     },
     {
       "service": "soundcloud",
-      "file": "Blatta/Resources/Assets.xcassets/brand-soundcloud.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-soundcloud.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/soundcloud/default.svg",
       "sha256": "e04011edd4b74238a7c29ef90ae321bf97e93ce339f193e80a5779e04ba498db"
     },
     {
       "service": "spotify",
-      "file": "Blatta/Resources/Assets.xcassets/brand-spotify.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-spotify.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/spotify/default.svg",
       "sha256": "d3f7f94d90089fd318a2649807d5d57cf353affcf9d4cd2c5d373062822cf507"
     },
     {
       "service": "stackoverflow",
-      "file": "Blatta/Resources/Assets.xcassets/brand-stackoverflow.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-stackoverflow.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/stack-overflow/default.svg",
       "sha256": "368ad01b46f737d6f3b1f0fe9bf69b0eb38c8cad48c63103dd1985167e88c959"
     },
     {
       "service": "substack",
-      "file": "Blatta/Resources/Assets.xcassets/brand-substack.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-substack.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/substack/default.svg",
       "sha256": "b758908a43fb2de75d8fdd940dc46389a3bfce38233c944ee2bd8b9af3f0908d"
     },
     {
       "service": "teams",
-      "file": "Blatta/Resources/Assets.xcassets/brand-teams.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-teams.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/microsoft-teams/default.svg",
       "sha256": "4062cb6a318a51966278983171dae4a207d42ea9454c1fc5df75ff3bfb6cb4db"
     },
     {
       "service": "telegram",
-      "file": "Blatta/Resources/Assets.xcassets/brand-telegram.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-telegram.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/telegram/default.svg",
       "sha256": "05f6898c0c087f84c8bcf65e93721bde65abe34093045d4e9ecddbb8dc9f6a18"
     },
     {
       "service": "tiktok",
-      "file": "Blatta/Resources/Assets.xcassets/brand-tiktok.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-tiktok.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/tiktok/default.svg",
       "sha256": "3e014b901b0de29d50e0b15c99fc563a21a8e538f2271fef8c9e404d3926d07b"
     },
     {
       "service": "todoist",
-      "file": "Blatta/Resources/Assets.xcassets/brand-todoist.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-todoist.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/todoist/default.svg",
       "sha256": "78240ee4a39bcf705a9033bb9b9c4ca4c17d11ca9e0804255b6a9b5debe98593"
     },
     {
       "service": "trello",
-      "file": "Blatta/Resources/Assets.xcassets/brand-trello.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-trello.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/trello/default.svg",
       "sha256": "d3708a515bdc47ce7d65c26e79f95b57545bb3bf16cbeae65bb471e6a326da0b"
     },
     {
       "service": "twitch",
-      "file": "Blatta/Resources/Assets.xcassets/brand-twitch.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-twitch.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/twitch/default.svg",
       "sha256": "eec8e2ac87a922022ef88825abf3da3e5395fc7be3c1a480da87fbaad574863c"
     },
     {
       "service": "vercel",
-      "file": "Blatta/Resources/Assets.xcassets/brand-vercel.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-vercel.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/vercel/default.svg",
       "sha256": "a9ae5ad4ea10c39122cc6b07927132f9c684dd2f1a7bef5337b0eb7364e139ae"
     },
     {
       "service": "whatsapp",
-      "file": "Blatta/Resources/Assets.xcassets/brand-whatsapp.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-whatsapp.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/whatsapp/default.svg",
       "sha256": "a4b676938ab2392d5755b2f9c99bf465587b72c984558e5e798d203645f9a0e7"
     },
     {
       "service": "x",
-      "file": "Blatta/Resources/Assets.xcassets/brand-x.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-x.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/x/default.svg",
       "sha256": "07099f0e2eea46fe8cef6a2422dee63e1aa98c3cab07f3edf9a0b333314f758b"
     },
     {
       "service": "youtube-music",
-      "file": "Blatta/Resources/Assets.xcassets/brand-youtube-music.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-youtube-music.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/youtube-music/default.svg",
       "sha256": "31258a6a93e4b1c404ffef6a8aebaf2b4ac057770878e84eb54aec55d63568d4"
     },
     {
       "service": "youtube",
-      "file": "Blatta/Resources/Assets.xcassets/brand-youtube.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-youtube.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/youtube/default.svg",
       "sha256": "419a6bc647bab83c249709bed0ae67c8f44ce42d8dda1be202ab5a3cdb187372"
     },
     {
       "service": "zoom",
-      "file": "Blatta/Resources/Assets.xcassets/brand-zoom.imageset/default.svg",
+      "file": "Paguro/Resources/Assets.xcassets/brand-zoom.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/zoom/default.svg",
       "sha256": "5d1bf4d38bc5fc437578292dafc3cb4a678682e3124f1e2910d817aee9658615"
     }

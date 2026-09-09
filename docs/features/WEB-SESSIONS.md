@@ -4,7 +4,7 @@ Status: account isolation verified; service audit active
 
 ## Purpose
 
-Blatta lets one user sign in to more than one account for a service.
+Paguro lets one user sign in to more than one account for a service.
 The accounts must not share cookies or local storage.
 
 ## Identity
@@ -12,7 +12,7 @@ The accounts must not share cookies or local storage.
 Each service account has a stable UUID.
 The UUID identifies its `WKWebsiteDataStore`.
 
-Blatta reuses one store object for each UUID during a process run.
+Paguro reuses one store object for each UUID during a process run.
 WebKit keeps the store data on disk after the app quits.
 
 ## Isolation rule
@@ -31,11 +31,11 @@ The compatibility fixture uses local storage for the manual process test.
 This test confirms that the values remain separate after `Command-Q` and a new launch.
 
 The manual test passed on 2026-08-24.
-Two services on the fixture origin kept different marker values after Blatta quit and started again.
+Two services on the fixture origin kept different marker values after Paguro quit and started again.
 
 ## Public WebKit policy
 
-Blatta uses public WebKit APIs only.
+Paguro uses public WebKit APIs only.
 It does not disable Intelligent Tracking Prevention.
 
 Some cross-site sign-in flows can fail with standard WebKit policy.
@@ -53,8 +53,8 @@ services provide the same web app that they provide to Safari.
 Authentication popups inherit the opener value. External in-app browser
 windows use the desktop default.
 
-A catalog entry can supply a service-specific override when Blatta creates the
-service. The Mobile view setting stores Blatta's Mobile Safari value as the
+A catalog entry can supply a service-specific override when Paguro creates the
+service. The Mobile view setting stores Paguro's Mobile Safari value as the
 override. Turning Mobile view off clears that value and restores the desktop
 Safari default. Changing this setting reloads a live view. A view created after
 hibernation reads the current stored value.
@@ -87,7 +87,7 @@ It must first check these conditions:
 
 A download does not block hibernation. Its download handler stays alive until
 the transfer ends, and `Command-Q` cancels it.
-Blatta does not track user interaction inside a page. The pool never hibernates
+Paguro does not track user interaction inside a page. The pool never hibernates
 the active service, and it restarts the idle timer when the user selects a
 service.
 
@@ -98,12 +98,12 @@ error page when it hibernated resumes at its home URL.
 
 ## Navigation
 
-`BlattaCore` classifies each navigation before it loads.
+`PaguroCore` classifies each navigation before it loads.
 The coordinator converts WebKit values to the Core request and performs the result.
-The result can stay in the service, open in another Blatta service, or open outside Blatta.
+The result can stay in the service, open in another Paguro service, or open outside Paguro.
 
 An unknown custom scheme opens only after an explicit rule accepts it.
-Blatta must not pass an untrusted scheme to the system without review.
+Paguro must not pass an untrusted scheme to the system without review.
 
 A web view loads only `http`, `https`, `about`, `blob`, and `data` URLs.
 The coordinator cancels every other scheme before WebKit tries it.
@@ -120,16 +120,16 @@ load that WebKit interrupted to start a download.
 ## Popups
 
 A service can request a new window.
-Blatta can use an in-app browser panel for a required sign-in or task.
+Paguro can use an in-app browser panel for a required sign-in or task.
 
 The popup must use the correct service data store.
 It must not create a shared default data store.
 
 An authentication popup can start after the service page redirects its opener
-to a provider marketing host. Blatta accepts completion only after two checks.
+to a provider marketing host. Paguro accepts completion only after two checks.
 The popup must start at a known authentication host. It must return to the live
 opener host or the configured service host. If the opener leaves the configured
-service, Blatta loads the service home instead of reloading the marketing page.
+service, Paguro loads the service home instead of reloading the marketing page.
 This rule keeps separate products on a shared provider domain isolated.
 
 ## Files
@@ -166,7 +166,7 @@ Records stay in memory. They reach no store, and the process drops them at
 quit. The island's recent list uses the same model.
 The tracker keeps the newest 25 records and drops the oldest ended one first.
 
-`DownloadIndicatorState` in `BlattaCore` owns the visibility rules.
+`DownloadIndicatorState` in `PaguroCore` owns the visibility rules.
 The app supplies the byte totals, the record count, the failed count, and the
 running time of its oldest active download.
 The state is therefore a pure function of its inputs. It reads no clock.
@@ -207,7 +207,7 @@ with a smaller cap, because the badge sits on a header control.
 holds no timing of its own.
 
 The state names its mark as a meaning instead of as artwork.
-`Glyph.downloadMark` asks for the Blatta download asset.
+`Glyph.downloadMark` asks for the Paguro download asset.
 `Glyph.systemSymbol` names one system symbol.
 The package therefore needs no asset catalog and no interface framework.
 The header view maps each value to a drawing.
@@ -230,7 +230,7 @@ Each header shows the downloads of its own service.
 A sign-in popup uses the coordinator of the service that opened it, so its
 downloads stay with that service.
 A download without a service appears in every header. This rule keeps a
-download visible when Blatta cannot name its source.
+download visible when Paguro cannot name its source.
 
 See [Native shell](NATIVE_SHELL.md) for the header control.
 
@@ -242,11 +242,11 @@ It serializes native prompts and denies a pending request when its web view
 closes or the application locks.
 
 The system permission prompt remains the final authority.
-Blatta must handle denial without a loop.
+Paguro must handle denial without a loop.
 
 The File menu can mute microphones that are actively capturing audio.
-Blatta disables the action when no microphone is active.
-After the action, Blatta confirms the number of muted microphones and shows a
+Paguro disables the action when no microphone is active.
+After the action, Paguro confirms the number of muted microphones and shows a
 muted microphone mark on each affected service.
 The service context menu can mute or unmute an engaged microphone.
 This action does not block a future microphone request.
@@ -263,7 +263,7 @@ WebKit can crash during that operation.
 ## Data removal
 
 The user can remove one service account.
-Blatta first releases each related web view.
+Paguro first releases each related web view.
 `WebsiteDataReclaimer` then records a durable tombstone, releases the cached
 data-store handle, and retries removal through the public WebKit API.
 

@@ -24,7 +24,7 @@ it ships as a setting.
 
 ## Decision
 
-Blatta requires macOS 15 or later.
+Paguro requires macOS 15 or later.
 
 The shell draws Liquid Glass where the system provides it. Below macOS 26 it
 draws the material surfaces the Off style already uses. Toolbar controls,

@@ -3,7 +3,7 @@ name: Direct release build check
 on:
   pull_request:
     paths:
-      - 'Blatta/**'
+      - 'Paguro/**'
       - 'Core/**'
       - 'Configuration/Direct*'
       - 'project*.yml'
@@ -29,6 +29,6 @@ jobs:
       - run: xcodegen generate --spec project-direct.yml
       - name: Compile the direct build without signing credentials
         run: |
-          xcodebuild -project Blatta.xcodeproj -scheme Blatta \
+          xcodebuild -project Paguro.xcodeproj -scheme Paguro \
             -configuration Release -destination 'generic/platform=macOS' \
             CODE_SIGNING_ALLOWED=NO ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO build

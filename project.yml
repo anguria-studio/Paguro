@@ -1,4 +1,4 @@
-name: Blatta
+name: Paguro
 
 # XcodeGen creates the Xcode project from this file.
 # Run `xcodegen generate` after each change to this file.
@@ -15,18 +15,18 @@ configs:
   Release: release
 
 packages:
-  BlattaCore:
+  PaguroCore:
     path: Core
 
 targets:
-  Blatta:
+  Paguro:
     type: application
     platform: macOS
     configFiles:
-      Debug: Configuration/BlattaDebug.xcconfig
-      Compatibility: Configuration/BlattaDebug.xcconfig
+      Debug: Configuration/PaguroDebug.xcconfig
+      Compatibility: Configuration/PaguroDebug.xcconfig
     sources:
-      - path: Blatta
+      - path: Paguro
         excludes:
           - "**/.DS_Store"
       - path: LICENSE
@@ -37,16 +37,16 @@ targets:
         type: folder
         buildPhase: resources
     resources:
-      - path: Blatta/Resources/ServiceCatalog.json
-      - path: Blatta/Resources/hagezi-light.json
-      - path: Blatta/Resources/fanboy-annoyance.json
+      - path: Paguro/Resources/ServiceCatalog.json
+      - path: Paguro/Resources/hagezi-light.json
+      - path: Paguro/Resources/fanboy-annoyance.json
     dependencies:
-      - package: BlattaCore
-        product: BlattaCore
+      - package: PaguroCore
+        product: PaguroCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Blatta
-        PRODUCT_NAME: Blatta
+        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Paguro
+        PRODUCT_NAME: Paguro
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "6.0"
@@ -55,62 +55,62 @@ targets:
 
         ENABLE_APP_SANDBOX: YES
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_ENTITLEMENTS: Blatta/Blatta.entitlements
+        CODE_SIGN_ENTITLEMENTS: Paguro/Paguro.entitlements
 
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_FILE: Blatta/Info.plist
+        INFOPLIST_FILE: Paguro/Info.plist
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_LSUIElement: NO
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Blatta.debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Paguro.debug
         Compatibility:
-          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Blatta.compatibility
+          PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.Paguro.compatibility
     scheme:
       testTargets:
-        - BlattaTests
+        - PaguroTests
 
-  BlattaTests:
+  PaguroTests:
     type: bundle.unit-test
     platform: macOS
     configFiles:
-      Debug: Configuration/BlattaDebug.xcconfig
-      Compatibility: Configuration/BlattaDebug.xcconfig
+      Debug: Configuration/PaguroDebug.xcconfig
+      Compatibility: Configuration/PaguroDebug.xcconfig
     sources:
-      - path: BlattaTests
+      - path: PaguroTests
     dependencies:
-      - target: Blatta
-      - package: BlattaCore
-        product: BlattaCore
+      - target: Paguro
+      - package: PaguroCore
+        product: PaguroCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.BlattaTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.tommasolaterza.PaguroTests
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  Blatta Island Preview:
+  Paguro Island Preview:
     build:
       targets:
-        Blatta: all
+        Paguro: all
     run:
       config: Debug
       commandLineArguments:
-        "--blatta-fake-notch": true
+        "--paguro-fake-notch": true
 
-  Blatta Compatibility:
+  Paguro Compatibility:
     build:
       targets:
-        Blatta: all
+        Paguro: all
     run:
       config: Compatibility
       commandLineArguments:
-        "--blatta-compatibility-fixture": true
+        "--paguro-compatibility-fixture": true
     test:
       config: Debug
       targets:
-        - BlattaTests
+        - PaguroTests

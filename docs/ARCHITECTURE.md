@@ -4,9 +4,9 @@ Status: active
 
 ## Purpose
 
-Blatta is a native macOS shell for web services.
+Paguro is a native macOS shell for web services.
 Each service runs in a separate `WKWebView` session.
-Blatta owns the native window, service navigation, notifications, and island.
+Paguro owns the native window, service navigation, notifications, and island.
 
 ## System rules
 
@@ -21,10 +21,10 @@ Blatta owns the native window, service navigation, notifications, and island.
 ## Repository map
 
 ```text
-Blatta/
-├── Blatta/                macOS application target
-├── BlattaTests/           application and WebKit tests
-├── Core/                  BlattaCore Swift package
+Paguro/
+├── Paguro/                macOS application target
+├── PaguroTests/           application and WebKit tests
+├── Core/                  PaguroCore Swift package
 ├── docs/                  public project documents
 ├── scripts/               repeatable maintenance tools
 ├── .project/              private work plan, ignored by Git
@@ -33,18 +33,18 @@ Blatta/
 
 ## Dependency direction
 
-`BlattaCore` must not import SwiftUI, AppKit, WebKit, or SwiftData.
-The application target can import `BlattaCore`.
+`PaguroCore` must not import SwiftUI, AppKit, WebKit, or SwiftData.
+The application target can import `PaguroCore`.
 The application target owns all platform adapters.
 The direct-release project adds Sparkle 2.9.6 to this target for signed updates.
-The default project and BlattaCore do not depend on Sparkle.
+The default project and PaguroCore do not depend on Sparkle.
 
 ```text
 SwiftUI views
       ↓
 App model and feature controllers
       ↓
-Platform adapters     BlattaCore rules
+Platform adapters     PaguroCore rules
       ↓                    ↑
 AppKit, WebKit, SwiftData  pure values and policies
 ```
@@ -54,7 +54,7 @@ Use the application model or a feature controller.
 
 ## Application composition
 
-`BlattaApp` creates the SwiftUI scenes.
+`PaguroApp` creates the SwiftUI scenes.
 `AppModel` is the application composition root.
 It creates each long-lived service one time.
 `AppState.init` constructs the graph and loads saved values.
@@ -111,7 +111,7 @@ tracks these changes.
 
 ## App lifecycle
 
-Blatta has one process in version 1.
+Paguro has one process in version 1.
 It has no push server.
 The direct build uses Sparkle installer helpers during an app update.
 These helpers do not run service sessions or notification polling.
@@ -158,7 +158,7 @@ requests, and web process failure. It forwards component-specific work:
 - `ErrorPage` builds local failure and crash recovery pages.
 
 It converts navigation actions to `NavigationRequestContext` values.
-`BlattaCore` owns the deterministic navigation decision and its routing order.
+`PaguroCore` owns the deterministic navigation decision and its routing order.
 
 See [Web sessions](features/WEB-SESSIONS.md).
 See [Web appearance](features/WEB-APPEARANCE.md).
@@ -179,13 +179,13 @@ safe click route to the service
 ```
 
 The WebKit bridge adapter sends normalized origins and the raw payload to
-`BlattaCore`. Core validates the frame origin and decodes a bounded
+`PaguroCore`. Core validates the frame origin and decodes a bounded
 `NotificationPayload`. The handler then applies the app policy and posts the
 macOS notification.
 `NotificationRuntime` coordinates live and transient badge polling, manual and
 scheduled Do Not Disturb, sleep and network suspension, and safe click routing.
 The backlog tracks the split of that handler into detection and presentation
-parts, and a shared event type in `BlattaCore` for the island.
+parts, and a shared event type in `PaguroCore` for the island.
 
 The island does not detect notifications.
 `AppState` synchronously forwards lock changes to the notification manager and
@@ -194,14 +194,14 @@ thread-safe lock snapshot shared by page routers, native presenters, and the
 notification delegate. Core presentation policy suppresses both routes when
 locked. The island also rejects direct previews while locked.
 It only presents events from the notification pipeline.
-`NotificationIslandTiming` keeps its deterministic alert times in `BlattaCore`.
+`NotificationIslandTiming` keeps its deterministic alert times in `PaguroCore`.
 The panel controller owns the cancellable transition schedule.
 
 See [Notification system](features/NOTIFICATIONS.md).
 
 ## Data ownership
 
-SwiftData stores Blatta settings, spaces, service records, and links.
+SwiftData stores Paguro settings, spaces, service records, and links.
 WebKit stores service cookies, caches, and local storage.
 
 `PreferencesStore` loads or creates one `AppPreferences` row. It is the only
@@ -209,13 +209,13 @@ type that writes that row.
 `WorkspaceStore` is the SwiftData facade for spaces, services, links, default
 seeding, passkey-notice state, favicons, page zoom, and window selection.
 
-Blatta must not store account passwords.
-Blatta must not copy full message history into its data store.
-Blatta must not persist notification bodies by default.
+Paguro must not store account passwords.
+Paguro must not copy full message history into its data store.
+Paguro must not persist notification bodies by default.
 
 ## Configuration transfer
 
-BlattaCore owns the versioned JSON schema and complete-file validation.
+PaguroCore owns the versioned JSON schema and complete-file validation.
 WorkspaceStore imports fresh accounts and workspace links in one transaction,
 with PreferencesStore staging portable preference fields. Replacement deletes
 old records in that transaction; session cleanup follows the successful save.
@@ -228,7 +228,7 @@ reads WebKit storage. See [Configuration transfer](features/CONFIGURATION.md).
 
 The project uses Swift 6 strict concurrency.
 UI state and WebKit objects stay on the main actor.
-Pure values in `BlattaCore` conform to `Sendable` where possible.
+Pure values in `PaguroCore` conform to `Sendable` where possible.
 
 Background work must return immutable results to the main actor.
 Do not send a WebKit object across actors.
@@ -243,12 +243,12 @@ It must not provide a general native command channel.
 Subframe messages must have an approved origin.
 Each string and URL must have a size and format limit.
 
-Blatta does not use private WebKit selectors.
-Blatta does not disable Intelligent Tracking Prevention.
+Paguro does not use private WebKit selectors.
+Paguro does not disable Intelligent Tracking Prevention.
 
 ## Project generation
 
-XcodeGen creates `Blatta.xcodeproj` from `project.yml`.
+XcodeGen creates `Paguro.xcodeproj` from `project.yml`.
 Do not edit the generated project by hand.
 
 The repository tracks the generated project only when the project policy requires it.
@@ -256,8 +256,8 @@ The current setup generates it during local work.
 
 ## Test layers
 
-`BlattaCoreTests` test pure values and policies.
-`BlattaTests` test application services and WebKit adapters.
+`PaguroCoreTests` test pure values and policies.
+`PaguroTests` test application services and WebKit adapters.
 UI tests will use launch arguments and simulated screen geometry.
 
 A local web fixture will test notifications, frames, downloads, and media requests.

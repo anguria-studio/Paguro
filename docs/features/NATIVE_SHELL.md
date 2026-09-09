@@ -49,7 +49,7 @@ appearance, because the material behind the bar is a lighter ground than the
 rail canvas. The selected fill is the same in both rails.
 
 The Icon Rail settings shape the collapsed rail on the left, whether it holds
-the services or the workspaces. Blatta hides that settings section while the
+the services or the workspaces. Paguro hides that settings section while the
 layout is the bar along the top, which has no rail for them to shape.
 
 In the icons-only top bar, a hovered tab shows its name under the bar. The bar
@@ -97,7 +97,7 @@ The retired `hybrid` layout value maps onto Workspaces left, services on top,
 which is the layout it named.
 
 The Workspace view setting controls the two one-rail layouts. A two-rail layout
-shows every workspace already, so Blatta hides the setting there.
+shows every workspace already, so Paguro hides the setting there.
 Current workspace keeps the workspace palette model.
 All workspaces is the default and shows an accordion section for each workspace
 in the expanded sidebar. Sections start expanded. Users can collapse them for
@@ -108,7 +108,7 @@ aligns with the service icon column.
 A workspace opens on the service it was last left on. A workspace with nothing
 recorded, or one whose recorded service has since left it, opens its first
 service. A service named together with a workspace wins over both. The quick
-switcher and the menu bar name the two together. Blatta keeps the record
+switcher and the menu bar name the two together. Paguro keeps the record
 outside the model store, as a window state. It drops the record of a workspace
 that is deleted.
 
@@ -121,15 +121,15 @@ When more than one workspace exists, the Add Service dialog shows a Workspace
 menu for catalog and custom services. It starts with the workspace that opened
 the dialog. The chosen workspace receives the new service and becomes active.
 The dialog hides this menu when only one workspace exists.
-The workspace editor can leave the emoji empty. Blatta then shows the workspace
+The workspace editor can leave the emoji empty. Paguro then shows the workspace
 name without a replacement symbol or leading space. The collapsed workspace
 rail is the one exception, because it has no name to show.
 
 Removing a service from a workspace keeps the service when it is also in
-another workspace. When that workspace was its last one, Blatta saves the
+another workspace. When that workspace was its last one, Paguro saves the
 change and then deletes the service and its sign-in data.
 Deleting a workspace asks for confirmation. The message states how many
-services exist only in that workspace. Blatta deletes those services and their
+services exist only in that workspace. Paguro deletes those services and their
 sign-in data with the workspace. Services that are also in other workspaces
 stay available. The rail and the workspace editor show the same message.
 Return or Space opens the service that has keyboard focus.
@@ -155,7 +155,7 @@ Affected rows grow to move neighboring icons apart.
 The hovered icon keeps its original vertical center. Icons above it move up,
 and icons below it move down.
 Icons grow toward the right and can extend over the web content edge.
-Blatta hides dock selection and hover tiles while magnification is active.
+Paguro hides dock selection and hover tiles while magnification is active.
 Hovering an icon shows its service name in a material label on the right.
 The label keeps a 12 point gap after the rail or the magnified icon.
 It uses the current Window glass style and shell transparency tint.
@@ -203,7 +203,7 @@ window edge stops there, so the shell cannot overlap its own content. The
 window has no minimum height: a short window compresses the rail and the web
 content instead.
 
-Blatta saves the main-window sidebar state and restores it after a new launch.
+Paguro saves the main-window sidebar state and restores it after a new launch.
 Use the sidebar button or `Command-Control-S` to change the state.
 
 When exactly one workspace exists, the rail does not show its name or switcher.
@@ -285,10 +285,10 @@ override the browser preference.
 ### Page history
 
 Back and forward move inside the page history of the active service.
-Blatta reads `canGoBack` and `canGoForward` from the web view.
+Paguro reads `canGoBack` and `canGoForward` from the web view.
 A control without a target stays in place and dims.
 The View menu repeats both actions as `Command-[` and `Command-]`.
-The service page keeps its own home action, and Blatta does not repeat it.
+The service page keeps its own home action, and Paguro does not repeat it.
 
 ### Download indicator
 
@@ -297,7 +297,7 @@ It stays in the header until the user removes the last record.
 No record disappears on its own, so the route to a finished file remains
 available after the transfer ends.
 
-The control draws the Blatta download mark from the `DownloadIcon` asset.
+The control draws the Paguro download mark from the `DownloadIcon` asset.
 The mark is a tray with an arrow above it.
 The asset is a template image, so the mark follows the control color.
 It is 15 points wide, which matches the system symbols beside it.
@@ -396,7 +396,7 @@ The AppKit content view contains four layers in this order:
 The protective color layer is not a child of the glass view.
 This separation prevents AppKit from treating an opaque color as vibrant
 content.
-The sidebar samples the desktop or the window below Blatta.
+The sidebar samples the desktop or the window below Paguro.
 The expanded surface has an 8 point inset rounded border.
 The collapsed surface keeps an 8 point gutter on its horizontal and bottom
 edges.
@@ -408,7 +408,7 @@ The header starts at the window top and uses the native 52 point centerline.
 The header does not compress when the window becomes short.
 The browser and sidebar scroll viewport use the remaining height.
 The browser top aligns with the top edge of the collapsed dock.
-The Blatta header is part of the shell and has no browser outline or corner mask.
+The Paguro header is part of the shell and has no browser outline or corner mask.
 The native web view is the browser surface.
 Its host clips all four corners with a 14 point continuous radius.
 
@@ -421,8 +421,8 @@ The native visual-effect view uses full strength for Regular and Off. It uses
 The shell controls update the main window live.
 They do not change the Settings window, system-owned surfaces, or web pages.
 The sidebar button uses a 32 point target.
-Blatta removes its permanent surface in the expanded state.
-Blatta gives it a circular material, border, and hover fill in the collapsed
+Paguro removes its permanent surface in the expanded state.
+Paguro gives it a circular material, border, and hover fill in the collapsed
 state.
 The service list does not use strong glass because it contains dense text.
 At 60 percent shell transparency, the sidebar selection starts to change from
@@ -436,15 +436,15 @@ The web page stays on an opaque or quiet semantic background.
 The opaque dark shell tint uses `#242125`.
 The transparency slider changes its opacity and does not change its RGB values.
 At 0 percent, the protective layer is opaque across the complete window.
-At 100 percent, Blatta adds no protective tint.
+At 100 percent, Paguro adds no protective tint.
 The Reset Glass Lab action restores Regular glass and 100 percent transparency.
 
 `ShellPreferences` owns shell-setting load, normalization, and persistence.
 Layout and appearance use the transactional app preferences row. Glass,
 icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so
-they remain available while Blatta repairs or restores the content store.
+they remain available while Paguro repairs or restores the content store.
 
-On a fresh install, Blatta follows the system appearance, uses the left rail,
+On a fresh install, Paguro follows the system appearance, uses the left rail,
 shows all workspaces, and appears in both the Dock and menu bar. The Dock badge
 is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
@@ -456,8 +456,8 @@ It places the button slightly above its center.
 
 ## Menu-bar window
 
-The Blatta status item uses the native window presentation.
-Its icon is the Blatta mark from the `MenuBarIcon` asset.
+The Paguro status item uses the native window presentation.
+Its icon is the Paguro mark from the `MenuBarIcon` asset.
 The asset is a template image, so macOS tints the icon for the current
 menu-bar appearance.
 The window shows the visible unread total and a global notification mute
@@ -469,9 +469,9 @@ Selecting a service opens the main window at that service. A bounded scrolling
 area keeps a large service list inside the available screen. The list reports
 the height of its rows, up to 380 points, because the window takes its own
 height from its content. A short list makes a short window. The footer opens
-Blatta or Settings. These routes remain available in Menu bar only mode. The
+Paguro or Settings. These routes remain available in Menu bar only mode. The
 complete window follows the Window glass and Shell transparency settings. The
-content also follows the selected Blatta appearance.
+content also follows the selected Paguro appearance.
 
 The selected service uses a light fill and an accent-colored checkmark. In
 light appearance, the fill is 55 percent white, or opaque white with Reduce
@@ -483,9 +483,9 @@ See [Web appearance](WEB-APPEARANCE.md) for the service appearance control.
 ## Accessibility
 
 File > Open Notifications (Command-Shift-O) opens island history with focus on
-the newest card. Blatta must be active, unlocked, and have island alerts
+the newest card. Paguro must be active, unlocked, and have island alerts
 enabled, a notched display, and nonempty history. Escape returns focus to the
-previous Blatta window. Pointer exit does not close a keyboard-opened island.
+previous Paguro window. Pointer exit does not close a keyboard-opened island.
 
 Each icon-only service has a tooltip and a complete VoiceOver label.
 The label includes unread, mute, hibernation, media, and health states when they

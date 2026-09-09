@@ -2,7 +2,7 @@
 
 Status: active
 
-Blatta uses ASD-STE100 Simplified Technical English where practical.
+Paguro uses ASD-STE100 Simplified Technical English where practical.
 This choice makes technical text easier to read and translate.
 
 Get the official standard from the [ASD-STE100 website](https://www.asd-ste100.org/).
@@ -28,7 +28,7 @@ Use 25 words or fewer for a descriptive sentence where practical.
 ## Vale
 
 [Vale](https://vale.sh/) checks the project documents.
-The repository contains a local Blatta style.
+The repository contains a local Paguro style.
 
 The style checks these mechanical rules:
 
@@ -53,7 +53,7 @@ Do not disable a project rule to avoid rewriting unclear text.
 
 ## New technical names
 
-Blatta uses these technical names:
+Paguro uses these technical names:
 
 - app;
 - service account;

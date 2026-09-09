@@ -38,7 +38,7 @@ class ReleaseMetadataTests(unittest.TestCase):
                 self.info[key] = original
 
     def test_normal_project_has_no_update_configuration(self):
-        normal = plistlib.loads((ROOT / 'Blatta/Info.plist').read_bytes())
+        normal = plistlib.loads((ROOT / 'Paguro/Info.plist').read_bytes())
         self.assertFalse(any(key.startswith('SU') for key in normal))
         self.assertNotIn('Sparkle', (ROOT / 'project.yml').read_text())
 
