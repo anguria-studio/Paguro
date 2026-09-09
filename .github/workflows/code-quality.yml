@@ -47,12 +47,11 @@ jobs:
             # macOS 15 cannot render the Icon Composer icon: actool ends with
             # "Distill failed for unknown reasons" while every test passes. This
             # job exists to run the suite on the support floor, so it skips the
-            # icon rather than the tests. See docs/ERRORS.md.
+            # icon rather than the tests.
             appIconSetting: "ASSETCATALOG_COMPILER_APPICON_NAME="
             # Xcode 26.3 does not accept the WKUIDelegate alert method as the
             # protocol witness, so the coordinator does not expose it and the
-            # selector test fails. The defect is real and recorded in
-            # docs/ERRORS.md; it is skipped here rather than weakened, so the
+            # selector test fails. Skip it only on this toolchain, so the
             # test still guards every other toolchain.
             skipTesting: "-skip-testing:BlattaTests/WebRuntimeTests/testCoordinatorExposesWebUIDelegateMethods"
     steps:

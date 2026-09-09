@@ -9,8 +9,8 @@ Read these files before you change a major feature:
 1. `docs/ARCHITECTURE.md`
 2. `docs/DESIGN.md`
 3. The related file in `docs/features/`
-4. `docs/ERRORS.md`
-5. `.project/PLAN.md` when that local file exists
+4. `.project/PLAN.md` and `.project/docs/README.md` when these local files exist
+5. `.project/docs/DESIGN.md` and `.project/docs/ERRORS.md` when these local files exist
 
 ## Protect the architecture
 
@@ -44,9 +44,11 @@ Old upstream comments can remain until a change touches that code.
 Update the architecture document when a dependency direction changes.
 Update the design document when a visual rule changes.
 Update the feature document when feature behavior changes.
-Update the backlog when work starts or ends.
+Update `.project/docs/BACKLOG.md` when work starts or ends, if the local file exists.
+Public contributors can track unfinished work in GitHub issues.
 
-Add a dated entry to `docs/ERRORS.md` after a failed approach teaches a reusable lesson.
+Add a dated entry to `.project/docs/ERRORS.md` when a failed approach teaches a reusable lesson, if the local file exists.
+Keep contributor-facing constraints in the related public feature document.
 Do not use the error log as a list of temporary build errors.
 
 The private file `.project/PLAN.md` contains the work sequence.

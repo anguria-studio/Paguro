@@ -53,7 +53,7 @@
 #   OTHER_CODE_SIGN_FLAGS=--timestamp
 #                        a secure timestamp, which notarization requires.
 #
-# The app icon needs macOS 26 to render. See docs/ERRORS.md.
+# The Icon Composer app icon needs macOS 26 to render.
 set -euo pipefail
 
 REPOSITORY_DIR="$(cd -- "$(dirname -- "$0")/.." && pwd)"

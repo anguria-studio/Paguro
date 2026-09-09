@@ -111,8 +111,6 @@ xcodebuild \
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Design choices](docs/DESIGN.md)
-- [Backlog](docs/BACKLOG.md)
-- [Error and gotcha log](docs/ERRORS.md)
 - [Dependency policy](docs/DEPENDENCIES.md)
 - [Native shell](docs/features/NATIVE_SHELL.md)
 - [Application lifecycle](docs/features/APP-LIFECYCLE.md)

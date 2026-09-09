@@ -4,11 +4,8 @@ Start with these documents:
 
 1. [Architecture](ARCHITECTURE.md)
 2. [Design choices](DESIGN.md)
-3. [Backlog](BACKLOG.md)
-4. [Service compatibility matrix](SERVICE-MATRIX.md)
-5. [Error and gotcha log](ERRORS.md)
-6. [Writing rules](WRITING.md)
-7. [Dependency policy](DEPENDENCIES.md)
+3. [Writing rules](WRITING.md)
+4. [Dependency policy](DEPENDENCIES.md)
 
 Major features have separate documents:
 

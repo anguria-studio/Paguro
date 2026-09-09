@@ -35,8 +35,8 @@ Do not commit a personal team value.
 1. Keep the change small and focused.
 2. Add a test for each new rule or fixed defect.
 3. Update the related feature document.
-4. Add a backlog item when work must continue later.
-5. Add an entry to `docs/ERRORS.md` when you find a durable gotcha.
+4. Open an issue when work must continue later.
+5. Document reusable constraints in the related feature document.
 6. Run the build and all related tests.
 
 Do not edit `Blatta.xcodeproj` by hand.
