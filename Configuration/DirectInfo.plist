@@ -13,7 +13,7 @@
 	<key>SUFeedURL</key>
 	<string>$(PAGURO_UPDATE_FEED_URL)</string>
 	<key>SUPublicEDKey</key>
-	<string>UUGesEW427X6tvtayYmmZR2Llhn/Klwm5EJvESDLMfg=</string>
+	<string>4FJ78q8GyW1zwET4H2farQkHx+OIzQ3AoVjm3CWQ9gc=</string>
 	<key>SURequireSignedFeed</key>
 	<true/>
 	<key>SUSendProfileInfo</key>

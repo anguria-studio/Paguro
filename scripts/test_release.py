@@ -2,7 +2,9 @@
 """Regression checks for release metadata and isolation."""
 import plistlib
 import unittest
-from build_release import validate_app_info, ROOT, FEED, ACCOUNT
+import tempfile
+from pathlib import Path
+from build_release import validate_app_info, ROOT, FEED, ACCOUNT, notary_profile
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -13,6 +15,17 @@ class ReleaseMetadataTests(unittest.TestCase):
 
     def check(self):
         validate_app_info(self.info, '0.1.0', 2, FEED, ACCOUNT)
+
+    def test_notary_profile_precedence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'release-config.json'
+            self.assertEqual(notary_profile({}, path), 'paguro')
+            path.write_text('{"notary_profile": "shared-apple-account"}')
+            self.assertEqual(notary_profile({}, path), 'shared-apple-account')
+            self.assertEqual(notary_profile({'PAGURO_NOTARY_PROFILE': 'override'}, path), 'override')
+            path.write_text('{"notary_profile": ""}')
+            with self.assertRaises(ValueError):
+                notary_profile({}, path)
 
     def test_valid_release(self):
         self.check()

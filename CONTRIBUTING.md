@@ -3,7 +3,7 @@
 Thank you for your interest in Paguro.
 
 Paguro is an early project.
-Open an [issue](https://github.com/tommasoltrz/Atoll/issues) before you make a large change.
+Open an [issue](https://github.com/anguria-studio/Paguro/issues) before you make a large change.
 This step helps contributors avoid duplicate work.
 
 ## Set up the project

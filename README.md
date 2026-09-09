@@ -42,7 +42,7 @@ You do not need Xcode to use a downloaded release.
 
 Once the first release is published:
 
-1. Open the [Paguro releases page](https://github.com/tommasoltrz/Atoll/releases).
+1. Open the [Paguro releases page](https://github.com/anguria-studio/Paguro/releases).
 2. Download the `.dmg` attached to the latest stable release.
 3. Open the disk image and drag **Paguro.app** into **Applications**.
 4. Open Paguro from Applications and follow the setup prompts.
@@ -76,8 +76,8 @@ checks; GitHub Actions checks documentation on pull requests.
 ## Build the app
 
 ```sh
-git clone https://github.com/tommasoltrz/Atoll.git
-cd Atoll
+git clone https://github.com/anguria-studio/Paguro.git
+cd Paguro
 xcodegen generate
 xcodebuild \
   -project Paguro.xcodeproj \
@@ -124,8 +124,8 @@ xcodebuild \
 
 ## Project links
 
-- [Source repository](https://github.com/tommasoltrz/Atoll)
-- [Issue tracker](https://github.com/tommasoltrz/Atoll/issues)
+- [Source repository](https://github.com/anguria-studio/Paguro)
+- [Issue tracker](https://github.com/anguria-studio/Paguro/issues)
 
 ## Project history
 

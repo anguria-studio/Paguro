@@ -180,10 +180,19 @@ versions; Sparkle uses them to order updates. Use patch versions for fixes,
 minor versions for compatible features, and major versions for incompatible
 configuration or workflow changes. Tag public releases as `vMAJOR.MINOR.PATCH`.
 
-## Renamed release identity
+## Local release credentials
 
-The Paguro bundle uses `com.tommasolaterza.Paguro`. A signed release requires
-a matching Sparkle signing account and the `paguro` notarization profile, or
-the profile selected by `PAGURO_NOTARY_PROFILE`. Renaming source files does not
-rename Keychain credentials or create the configured GitHub repository. Verify
-these external prerequisites before building a signed release.
+The Paguro bundle and Sparkle signing account use `com.tommasolaterza.Paguro`.
+The public key in `Configuration/DirectInfo.plist` must match that Keychain
+account. Private keys stay in Keychain.
+
+The release script selects the notarization profile in this order:
+
+1. `PAGURO_NOTARY_PROFILE` from the environment.
+2. `notary_profile` from the ignored `.project/release-config.json` file.
+3. The default profile `paguro`.
+
+An existing Apple account profile can sign releases for the new app identity.
+The local JSON file stores only the profile name, never credentials.
+The repository remains private until publication. A public update feed requires
+a public repository and an uploaded release appcast.

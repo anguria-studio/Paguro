@@ -39,6 +39,18 @@ def validate_app_info(info, version, build, feed, bundle_id):
         raise ValueError('Downloader service must remain disabled')
 
 
+def notary_profile(environ, config_path):
+    override = environ.get('PAGURO_NOTARY_PROFILE')
+    if override:
+        return override
+    if config_path.exists():
+        profile = json.loads(config_path.read_text()).get('notary_profile')
+        if not isinstance(profile, str) or not profile.strip():
+            raise ValueError('Local release configuration requires a notary_profile')
+        return profile
+    return 'paguro'
+
+
 def notarize(path, profile):
     result = json.loads(run('xcrun', 'notarytool', 'submit', path,
                            '--keychain-profile', profile, '--wait',
@@ -73,7 +85,7 @@ def main():
     if not match:
         raise RuntimeError('A Developer ID Application identity is required')
     identity, team = match.groups()
-    profile = os.environ.get('PAGURO_NOTARY_PROFILE', 'paguro')
+    profile = notary_profile(os.environ, ROOT / '.project/release-config.json')
     run('xcrun', 'notarytool', 'history', '--keychain-profile', profile, capture=True)
     output.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix='paguro-release-') as temporary:
