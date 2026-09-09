@@ -127,14 +127,6 @@ xcodebuild \
 - [Source repository](https://github.com/anguria-studio/Paguro)
 - [Issue tracker](https://github.com/anguria-studio/Paguro/issues)
 
-## Project history
-
-Paguro is a fork of [Chorus](https://github.com/nicojan/Chorus).
-Chorus is an MIT-licensed project by Nico Jan.
-The Git history keeps the upstream work and its authorship.
-
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for other sources and licenses.
-
 ## License
 
 Paguro uses the MIT License.
