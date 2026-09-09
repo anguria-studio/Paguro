@@ -181,6 +181,53 @@ final class PreferencesStore {
         )
     }
 
+    func configurationPreferences() -> ConfigurationPreferences {
+        var result = ConfigurationPreferences()
+        result.appPresenceMode = appPresenceMode.rawValue
+        result.showBadgeCountInDock = showBadgeCountInDock
+        result.autoDismissCookieBanners = autoDismissCookieBanners
+        result.defaultZoom = defaultZoom
+        result.scheduledDNDEnabled = scheduledDNDEnabled
+        result.dndStartMinutes = dndStartMinutes
+        result.dndEndMinutes = dndEndMinutes
+        result.appLockEnabled = appLockEnabled
+        result.lockOnLaunch = lockOnLaunch
+        result.lockOnSleep = lockOnSleep
+        result.railLayout = railLayout.rawValue
+        result.appearanceMode = appearanceMode.rawValue
+        result.contentBlockingEnabled = contentBlockingEnabled
+        result.annoyanceBlockingEnabled = annoyanceBlockingEnabled
+        result.defaultCameraPolicy = defaultCameraPolicy.rawValue
+        result.defaultMicrophonePolicy = defaultMicrophonePolicy.rawValue
+        result.googleFaviconFallbackEnabled = googleFaviconFallbackEnabled
+        result.autoHibernateIdleEnabled = autoHibernateIdleEnabled
+        result.autoHibernateIdleMinutes = autoHibernateIdleMinutes
+        return result
+    }
+
+    /// Stages preferences in the workspace import transaction; the caller saves once.
+    func stageConfiguration(_ value: ConfigurationPreferences) {
+        preferences.appPresenceMode = AppPresenceMode(rawValue: value.appPresenceMode) ?? .both
+        preferences.showBadgeCountInDock = value.showBadgeCountInDock
+        preferences.autoDismissCookieBanners = value.autoDismissCookieBanners
+        preferences.defaultZoom = value.defaultZoom
+        preferences.scheduledDNDEnabled = value.scheduledDNDEnabled
+        preferences.dndStartMinutes = value.dndStartMinutes
+        preferences.dndEndMinutes = value.dndEndMinutes
+        preferences.appLockEnabled = value.appLockEnabled
+        preferences.lockOnLaunch = value.lockOnLaunch
+        preferences.lockOnSleep = value.lockOnSleep
+        preferences.railLayoutRaw = value.railLayout
+        preferences.appearanceModeRaw = value.appearanceMode
+        preferences.contentBlockingEnabled = value.contentBlockingEnabled
+        preferences.annoyanceBlockingEnabled = value.annoyanceBlockingEnabled
+        preferences.defaultCameraPolicyRaw = value.defaultCameraPolicy
+        preferences.defaultMicrophonePolicyRaw = value.defaultMicrophonePolicy
+        preferences.googleFaviconFallbackEnabled = value.googleFaviconFallbackEnabled
+        preferences.autoHibernateIdleEnabled = value.autoHibernateIdleEnabled
+        preferences.autoHibernateIdleMinutes = value.autoHibernateIdleMinutes
+    }
+
     private func set<Value>(
         _ value: Value,
         at keyPath: ReferenceWritableKeyPath<AppPreferences, Value>,

@@ -75,6 +75,28 @@ struct ShellPreferences: Equatable {
         )
     }
 
+    func addToConfiguration(_ value: inout ConfigurationPreferences) {
+        value.liquidGlassStyle = liquidGlassStyle.rawValue
+        value.liquidGlassIntensity = liquidGlassIntensity
+        value.iconRailBaseSize = iconRailBaseSize
+        value.iconRailMagnification = iconRailMagnification
+        value.iconRailPosition = iconRailPosition.rawValue
+        value.workspaceViewMode = workspaceViewMode.rawValue
+        value.railBarIconsOnly = railBarIconsOnly
+        value.sidebarCollapsed = sidebarCollapsed
+    }
+
+    mutating func applyConfiguration(_ value: ConfigurationPreferences, defaults: UserDefaults = .standard) {
+        setLiquidGlassStyle(ShellGlassStyle.resolving(value.liquidGlassStyle), defaults: defaults)
+        setLiquidGlassIntensity(value.liquidGlassIntensity, defaults: defaults)
+        setIconRailBaseSize(value.iconRailBaseSize, defaults: defaults)
+        setIconRailMagnification(value.iconRailMagnification, defaults: defaults)
+        setIconRailPosition(DockRailPosition(rawValue: value.iconRailPosition) ?? .top, defaults: defaults)
+        setWorkspaceViewMode(WorkspaceViewMode.resolving(value.workspaceViewMode), defaults: defaults)
+        setRailBarIconsOnly(value.railBarIconsOnly, defaults: defaults)
+        setSidebarCollapsed(value.sidebarCollapsed, defaults: defaults)
+    }
+
     mutating func setLiquidGlassIntensity(
         _ value: Double,
         defaults: UserDefaults = .standard

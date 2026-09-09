@@ -198,6 +198,13 @@ final class NotificationRuntime {
         )
     }
 
+    func reloadConfigurationPreferences() {
+        scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
+        dndStartMinutes = preferencesStore.dndStartMinutes
+        dndEndMinutes = preferencesStore.dndEndMinutes
+        badgeManager.showBadgeCountInDock = preferencesStore.showBadgeCountInDock
+    }
+
     func setScheduledDNDEnabled(_ enabled: Bool) {
         guard preferencesStore.setQuietHours(
             enabled: enabled,

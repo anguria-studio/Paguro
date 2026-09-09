@@ -209,6 +209,17 @@ Blatta must not store account passwords.
 Blatta must not copy full message history into its data store.
 Blatta must not persist notification bodies by default.
 
+## Configuration transfer
+
+BlattaCore owns the versioned JSON schema and complete-file validation.
+WorkspaceStore imports fresh accounts and workspace links in one transaction,
+with PreferencesStore staging portable preference fields. Replacement deletes
+old records in that transaction; session cleanup follows the successful save.
+AppModel applies
+runtime changes only after the save. ShellPreferences maps its portable values.
+Native file panels and bounded file reads stay in the app target. Export never
+reads WebKit storage. See [Configuration transfer](features/CONFIGURATION.md).
+
 ## Concurrency
 
 The project uses Swift 6 strict concurrency.

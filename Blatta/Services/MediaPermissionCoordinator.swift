@@ -238,6 +238,11 @@ final class MediaPermissionCoordinator {
         pendingRequest = nil
     }
 
+    func reloadConfigurationPreferences() {
+        defaultCameraPolicy = preferencesStore.defaultCameraPolicy
+        defaultMicrophonePolicy = preferencesStore.defaultMicrophonePolicy
+    }
+
     func setDefaultCameraPolicy(_ policy: MediaPermissionPolicy) {
         guard preferencesStore.setDefaultMediaPolicies(
             camera: policy,

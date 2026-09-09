@@ -1215,3 +1215,56 @@ final class AppState {
         workspaceStore.markPasskeyNoticeSeen(for: serviceID)
     }
 }
+
+extension AppState {
+    /// Synchronizes runtime adapters after the configuration transaction commits.
+    func applyImportedPreferences(_ value: ConfigurationPreferences) {
+        shellPreferences = ShellPreferences.load(preferencesStore: preferencesStore)
+        shellPreferences.applyConfiguration(value)
+        userScriptManager.autoDismissCookieBanners = preferencesStore.autoDismissCookieBanners
+        defaultZoom = preferencesStore.defaultZoom
+        for service in workspaceStore.allServices() where service.pageZoom == nil {
+            webViewPool.liveWebView(for: service.id)?.pageZoom = CGFloat(defaultZoom)
+        }
+        appLockEnabled = preferencesStore.appLockEnabled
+        lockOnLaunch = preferencesStore.lockOnLaunch
+        lockOnSleep = preferencesStore.lockOnSleep
+        contentBlockingEnabled = preferencesStore.contentBlockingEnabled
+        annoyanceBlockingEnabled = preferencesStore.annoyanceBlockingEnabled
+        contentBlocker.isEnabled = contentBlockingEnabled
+        contentBlocker.annoyanceEnabled = annoyanceBlockingEnabled
+        webViewPool.reattachContentBlocker()
+        let googleFallback = preferencesStore.googleFaviconFallbackEnabled
+        Task { await FaviconFetcher.shared.setGoogleFallbackEnabled(googleFallback) }
+        autoHibernateIdleEnabled = preferencesStore.autoHibernateIdleEnabled
+        autoHibernateIdleMinutes = preferencesStore.autoHibernateIdleMinutes
+        hibernationScheduler.configure(globalEnabled: autoHibernateIdleEnabled,
+                                       globalIdleMinutes: autoHibernateIdleMinutes)
+        notificationRuntime.reloadConfigurationPreferences()
+        mediaPermissions.reloadConfigurationPreferences()
+    }
+}
+
+extension AppState {
+    /// Session removal starts only after the replacement transaction commits.
+    func finishConfigurationImport(
+        _ outcome: WorkspaceStore.ConfigurationImportOutcome,
+        mode: ConfigurationImportMode
+    ) {
+        if mode == .replace {
+            launchPreloadTask?.cancel()
+            workspacePreloadTask?.cancel()
+            selectedServiceID = nil
+            selectedSpaceID = outcome.firstWorkspaceID
+            for id in outcome.removedWorkspaceIDs { workspaceSelection.forget(workspaceID: id) }
+            for service in outcome.removedServices {
+                webViewPool.removeWebView(for: service.serviceID)
+                websiteDataReclaimer.markOrphaned(service.dataStoreIdentifier)
+            }
+            websiteDataReclaimer.cleanUpOrphanedDataStores()
+            saveWindowState()
+        } else if selectedSpaceID == nil {
+            selectedSpaceID = outcome.firstWorkspaceID
+        }
+    }
+}

@@ -69,6 +69,8 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
+            ConfigurationSettingsSection()
+
             Section("Dock & Menu Bar") {
                 Picker("Show Blatta in", selection: Binding(
                     get: { appModel.presenceController.mode },

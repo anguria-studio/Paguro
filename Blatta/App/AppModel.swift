@@ -326,3 +326,36 @@ final class AppModel {
         shutdownState.finish()
     }
 }
+
+extension AppModel {
+    func exportConfigurationData() throws -> Data {
+        guard !appState.isLocked else { throw ConfigurationArchiveError.invalid("Unlock Blatta first.") }
+        var archive = try appState.workspaceStore.exportConfiguration()
+        appState.shellPreferences.addToConfiguration(&archive.preferences)
+        archive.preferences.systemNotifications = notificationRouteSettings.isSystemRouteEnabled
+        archive.preferences.islandNotifications = notificationRouteSettings.isIslandRouteEnabled
+        return try ConfigurationArchiveCodec.encode(archive)
+    }
+
+    func importConfiguration(
+        _ archive: ConfigurationArchive,
+        applyPreferences: Bool,
+        mode: ConfigurationImportMode = .add
+    ) throws {
+        guard !appState.isLocked else { throw ConfigurationArchiveError.invalid("Unlock Blatta first.") }
+        let outcome = try appState.workspaceStore.importConfiguration(
+            archive, applyPreferences: applyPreferences, mode: mode
+        )
+        for service in outcome.removedServices {
+            dismissIslandEvents(forService: service.serviceID)
+        }
+        appState.finishConfigurationImport(outcome, mode: mode)
+        if applyPreferences {
+            appState.applyImportedPreferences(archive.preferences)
+            presenceController.setMode(appState.preferencesStore.appPresenceMode)
+            setSystemNotificationRouteEnabled(archive.preferences.systemNotifications)
+            setIslandNotificationRouteEnabled(archive.preferences.islandNotifications)
+        }
+        appState.storeRecovery.recordContent()
+    }
+}

@@ -551,3 +551,132 @@ final class WorkspaceStore {
         context.saveOrRollback(reason: "persist passkey notice dismissal")
     }
 }
+
+extension WorkspaceStore {
+    /// Uses configured URLs and custom icons only, never live pages or browser storage.
+    func exportConfiguration() throws -> ConfigurationArchive {
+        var archive = ConfigurationArchive()
+        let services = try context.fetch(FetchDescriptor<ServiceInstance>())
+        let spaces = try context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))
+        let links = try liveLinks()
+        archive.workspaces = spaces.map { space in
+            var item = ConfigurationWorkspace()
+            item.id = space.id
+            item.name = space.name
+            item.emoji = space.emoji
+            item.isMuted = space.isMutedEffective
+            item.serviceIDs = links.filter { $0.space.id == space.id }
+                .sorted { $0.sortOrder < $1.sortOrder }.map(\.service.id)
+            return item
+        }
+        archive.services = services.sorted { $0.id.uuidString < $1.id.uuidString }.map { service in
+            var item = ConfigurationService()
+            item.id = service.id
+            item.label = service.label
+            item.url = service.url
+            item.customIconData = service.customIconData
+            item.catalogEntryID = service.catalogEntryID
+            item.isMuted = service.isMuted
+            item.showBadge = service.showBadge
+            item.userAgent = service.userAgent
+            item.pageZoom = service.pageZoom
+            item.osNotificationsEnabled = service.notifiesOSEffective
+            item.customCSS = service.customCSS
+            item.appearance = service.webAppearance.rawValue
+            item.cameraPolicy = service.cameraPolicyRaw
+            item.microphonePolicy = service.microphonePolicyRaw
+            item.openExternalLinksInApp = service.opensExternalLinksInAppEffective
+            item.stayActiveInBackground = service.staysActiveInBackgroundEffective
+            item.hibernationPolicy = service.hibernationPolicyEffective.rawValue
+            item.hibernateAfterMinutes = service.hibernateAfterMinutesEffective
+            return item
+        }
+        archive.preferences = preferencesStore.configurationPreferences()
+        return archive
+    }
+
+    struct ConfigurationImportOutcome {
+        let firstWorkspaceID: UUID?
+        let removedWorkspaceIDs: [UUID]
+        let removedServices: [ServiceDeletionOutcome]
+    }
+
+    /// Adds fresh accounts. IDs in the file are only references within that file.
+    /// A single save commits the graph and optional preferences together.
+    func importConfiguration(
+        _ archive: ConfigurationArchive,
+        applyPreferences: Bool,
+        mode: ConfigurationImportMode = .add,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> ConfigurationImportOutcome {
+        try ConfigurationArchiveCodec.validate(archive)
+        var icons: [UUID: Data] = [:]
+        for item in archive.services {
+            if let data = item.customIconData {
+                icons[item.id] = try ServiceIconImageProcessor.normalizedPNG(from: data)
+            }
+        }
+        let existing = try context.fetch(FetchDescriptor<Space>())
+        let replacedServices = mode == .replace
+            ? try context.fetch(FetchDescriptor<ServiceInstance>()) : []
+        let replacedLinks = mode == .replace
+            ? try context.fetch(FetchDescriptor<SpaceServiceLink>()) : []
+        let removedWorkspaceIDs = mode == .replace ? existing.map(\.id) : []
+        let removedServices = replacedServices.map {
+            ServiceDeletionOutcome(serviceID: $0.id, dataStoreIdentifier: $0.dataStoreIdentifier)
+        }
+        let startOrder = mode == .replace ? 0 : (existing.map(\.sortOrder).max() ?? -1) + 1
+        // Establish a rollback baseline for a preferences row created at launch.
+        try context.save()
+        let previousPreferences = preferencesStore.configurationPreferences()
+        do {
+            if mode == .replace {
+                for link in replacedLinks { context.delete(link) }
+                for space in existing { context.delete(space) }
+                for service in replacedServices { context.delete(service) }
+            }
+            var services: [UUID: ServiceInstance] = [:]
+            for item in archive.services {
+                let service = ServiceInstance(
+                    label: item.label, url: item.url, customIconData: icons[item.id],
+                    catalogEntryID: item.catalogEntryID, isMuted: item.isMuted,
+                    showBadge: item.showBadge, userAgent: item.userAgent,
+                    pageZoom: item.pageZoom, osNotificationsEnabled: item.osNotificationsEnabled,
+                    customCSS: item.customCSS, darkModeRaw: item.appearance,
+                    cameraPolicyRaw: item.cameraPolicy, microphonePolicyRaw: item.microphonePolicy,
+                    openExternalLinksInApp: item.openExternalLinksInApp,
+                    stayActiveInBackground: item.stayActiveInBackground,
+                    hibernationPolicyRaw: item.hibernationPolicy,
+                    hibernateAfterMinutes: item.hibernateAfterMinutes
+                )
+                context.insert(service)
+                services[item.id] = service
+            }
+            var firstWorkspaceID: UUID?
+            for (index, item) in archive.workspaces.enumerated() {
+                let space = Space(name: item.name, emoji: item.emoji,
+                                  sortOrder: startOrder + index, isMuted: item.isMuted)
+                context.insert(space)
+                if firstWorkspaceID == nil { firstWorkspaceID = space.id }
+                for (order, id) in item.serviceIDs.enumerated() {
+                    guard let service = services[id] else { continue }
+                    context.insert(SpaceServiceLink(sortOrder: order, space: space, service: service))
+                }
+            }
+            if applyPreferences { preferencesStore.stageConfiguration(archive.preferences) }
+            context.processPendingChanges()
+            try save(context)
+            return ConfigurationImportOutcome(
+                firstWorkspaceID: firstWorkspaceID,
+                removedWorkspaceIDs: removedWorkspaceIDs,
+                removedServices: removedServices
+            )
+        } catch {
+            context.rollback()
+            // SwiftData can keep updated values in the retained preferences object.
+            // Restore the portable snapshot as well as rolling back the graph.
+            if applyPreferences { preferencesStore.stageConfiguration(previousPreferences) }
+            throw error
+        }
+    }
+}

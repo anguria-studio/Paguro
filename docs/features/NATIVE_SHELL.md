@@ -499,3 +499,10 @@ The collapse action has a keyboard route and a VoiceOver label.
 Reduce Motion removes the animated sidebar transition.
 Reduce Motion keeps the service reorder and removes its lift and its spring.
 Each cell then moves directly to its new position.
+
+## Configuration transfer
+
+Settings > General > Configuration transfers workspaces, services, and portable
+preferences in one JSON file. Import previews the file and adds fresh accounts
+alongside existing workspaces or replaces them after explicit selection.
+See [Configuration transfer](CONFIGURATION.md).
