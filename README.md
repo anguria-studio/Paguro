@@ -1,22 +1,48 @@
-# Paguro
+<p align="center">
+  <img src="docs/images/paguro-icon.png" width="160" alt="Paguro app icon">
+</p>
 
-**Paguro is a free, open-source fork of [Chorus](https://github.com/nicojan/Chorus).**
+<h1 align="center">Paguro</h1>
 
-[Nico Jan](https://github.com/nicojan) created Chorus. Paguro builds on its native
-macOS and WebKit foundation. Paguro is a separate project that preserves the
-upstream copyright notices and Git history.
+<p align="center">
+  Every web app you keep in a browser tab, in one native macOS window.<br>
+  Free, open source, and every login stays on your Mac.
+</p>
 
-Paguro brings web services into one macOS app, with workspaces and separate
-login sessions for each account. It adds native notifications and an optional
-notification island near the MacBook notch.
+<p align="center">
+  <a href="#install-on-a-mac">Install</a> &middot;
+  <a href="#what-paguro-provides">Features</a> &middot;
+  <a href="#your-data">Privacy</a> &middot;
+  <a href="#build-the-app">Build</a> &middot;
+  <a href="docs/ARCHITECTURE.md">Docs</a> &middot;
+  <a href="https://github.com/anguria-studio/Paguro/issues">Issues</a>
+</p>
 
-![Paguro on macOS, showing a service sidebar with WhatsApp open in the main window](docs/images/paguro-screenshot.jpg)
+<p align="center">
+  <!-- Add the Code quality badge once this repository is public; Actions badge
+       images return 404 to anonymous requests while a repository is private:
+       <a href="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml"><img src="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml/badge.svg?branch=main&amp;event=push" alt="Code quality status"></a> -->
+  <a href="#install-on-a-mac"><img src="https://img.shields.io/badge/macOS-15%2B%20Apple%20silicon%20or%20Intel-black" alt="macOS 15 and newer, Apple silicon or Intel"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a5fa8" alt="MIT License"></a>
+</p>
 
-All Paguro features are free. There is no Paguro subscription or paid tier.
-The application source is available under the [MIT License](LICENSE).
+<p align="center">
+  <img src="docs/images/paguro-demo.gif" width="860" alt="Paguro on macOS: the sidebar opens to show services grouped into Personal and Work workspaces, then closes again">
+</p>
+
+Chat, mail, calendars, the sites you leave open all day: one sidebar switches
+between them, and each account keeps its own login session. Workspaces group
+them, native notifications land in Notification Center, and an optional island
+near the notch shows what just arrived. No account, no telemetry, no
+subscription, and every feature is free.
+
 Third-party services can require their own accounts or subscriptions.
 Bundled data and dependencies have their own licenses; see
 [Third-party notices](THIRD_PARTY_NOTICES.md).
+
+Paguro is a free, open-source fork of [Chorus](https://github.com/nicojan/Chorus),
+created by [Nico Jan](https://github.com/nicojan). See [Credits](#credits) for
+the full attribution.
 
 ## Release status
 
@@ -123,6 +149,13 @@ xcodebuild \
 - [Service icons](docs/features/SERVICE-ICONS.md)
 - [Compatibility fixture](docs/features/COMPATIBILITY.md)
 - [Distribution](docs/features/DISTRIBUTION.md)
+
+## Credits
+
+Paguro is a fork of [Chorus](https://github.com/nicojan/Chorus), created by
+[Nico Jan](https://github.com/nicojan), and builds on its native macOS and
+WebKit foundation. Paguro is a separate project that preserves the upstream
+copyright notices and Git history.
 
 ## License
 
