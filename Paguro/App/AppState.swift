@@ -167,7 +167,9 @@ final class AppState {
         // release build now moves into one too, for the collision `StoreRelocation`
         // documents. The debug *bundle id* (project.yml) already separates
         // WebKit, Preferences and notifications.
-        #if DEBUG
+        // The benchmark flag changes only the store path, so an optimized build
+        // can use the configured development accounts without copying sessions.
+        #if DEBUG || PAGURO_BENCHMARK_USE_DEBUG_STORE
         let debugDir = URL.applicationSupportDirectory.appending(path: "Paguro-debug")
         try? FileManager.default.createDirectory(at: debugDir, withIntermediateDirectories: true)
         let config = ModelConfiguration(schema: schema, url: debugDir.appending(path: "default.store"))
