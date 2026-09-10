@@ -52,13 +52,36 @@ initial checks; public download and final release checks are still pending.
 
 ## What Paguro provides
 
-- Workspaces for organizing services and multiple accounts.
-- Separate WebKit session storage for each service account.
-- Native notifications and an optional notch island.
-- App locking and notification privacy while locked.
-- Configuration export and import without login sessions.
-- Signed updates in the direct-download build.
+- **A separate session for every service.** Each service gets its own
+  `WKWebsiteDataStore`. A personal and a work account for the same site stay
+  signed in side by side and share no cookies.
+- **Workspaces.** Group services into workspaces, and keep a service in more
+  than one. Sessions stay isolated per instance.
+- **Badges and notifications.** Unread counts reach the Dock and the menu bar.
+  Mute a single service, a whole workspace, or everything at once, and set
+  quiet hours for the times you do not want interrupting.
+- **The notch island.** An optional strip near the MacBook notch shows what
+  just arrived.
+- **Memory-aware hibernation.** Idle services release memory and wake where you
+  left them. Each service picks its own policy: follow the global setting, never
+  hibernate, hibernate on switching away, or hibernate after an idle wait.
+- **Ad and tracker blocking.** The HaGezi and Fanboy lists block known ad and
+  tracking domains across your services. This leaves the ads a site serves from
+  its own domain.
+- **Camera and microphone control.** Video calls work where you need them. Set a
+  policy per service or a default for all of them, and mute every microphone
+  with **⇧⌘M**.
+- **App lock.** Touch ID or your Mac password locks the app, and Paguro hides
+  notification contents while the lock holds.
+- **Keyboard control.** Switch services with **⌘K**, search a page with **⌘F**,
+  reload with **⌘R**, and move between services with **⌃Tab**.
+- **Per-service appearance.** Send a native light or dark signal to each
+  service, and apply your own CSS where a site needs it.
+- **Configuration export and import**, carrying your setup to another Mac
+  without carrying login sessions.
+- **Signed updates** in the direct-download build.
 
+Paguro ships 73 preset services and accepts any other site by its URL.
 Third-party websites control their own features and sign-in requirements.
 Paguro does not guarantee support for every website feature.
 
@@ -149,6 +172,11 @@ xcodebuild \
 - [Service icons](docs/features/SERVICE-ICONS.md)
 - [Compatibility fixture](docs/features/COMPATIBILITY.md)
 - [Distribution](docs/features/DISTRIBUTION.md)
+
+## Contributing
+
+Bug reports and pull requests are welcome. See [Contributing](CONTRIBUTING.md)
+to get set up.
 
 ## Credits
 
