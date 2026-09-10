@@ -13,6 +13,7 @@
   <a href="#install-on-a-mac">Install</a> &middot;
   <a href="#what-paguro-provides">Features</a> &middot;
   <a href="#your-data">Privacy</a> &middot;
+  <a href="CHANGELOG.md">Changelog</a> &middot;
   <a href="#build-the-app">Build</a> &middot;
   <a href="docs/ARCHITECTURE.md">Docs</a> &middot;
   <a href="https://github.com/anguria-studio/Paguro/issues">Issues</a>

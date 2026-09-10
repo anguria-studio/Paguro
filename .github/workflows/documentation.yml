@@ -24,6 +24,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: vale-cli/vale-action@v3
         with:
-          files: '["README.md","CONTRIBUTING.md","AGENTS.md","THIRD_PARTY_NOTICES.md","docs"]'
+          files: '["README.md","CHANGELOG.md","CONTRIBUTING.md","AGENTS.md","THIRD_PARTY_NOTICES.md","docs"]'
           fail_level: error
           filter_mode: nofilter

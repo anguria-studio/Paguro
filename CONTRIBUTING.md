@@ -62,6 +62,11 @@ Use short sentences and active voice.
 Use one term for one concept.
 Put one instruction in each numbered step.
 
+Add changes that affect users to the `Unreleased` section of
+[CHANGELOG.md](CHANGELOG.md). Group entries under Added, Changed, Fixed,
+Removed, or Security as needed. Describe the effect on users and any required
+action. Omit internal refactors and documentation-only changes.
+
 The Vale rules check a mechanical subset of ASD-STE100.
 The rules do not prove full or certified compliance.
 
@@ -73,6 +78,16 @@ scripts/lint_docs.sh
 ```
 
 ## Pull requests
+
+Make changes on a branch and open a pull request into `main`. Direct pushes,
+force pushes, and deletion of `main` are blocked. The `Code quality` and `Vale`
+checks must pass, and review conversations must be resolved before merging.
+Update the branch if `main` changes. Reviewer approval is optional while the
+project has one maintainer; maintainers use the same pull request process.
+
+The code-quality workflow always reports a result. It runs macOS 15 and macOS 26
+tests when changes affect code or build files. Documentation-only changes skip
+those builds. A failed check or an unexpected skipped test blocks merging.
 
 Describe the user problem first.
 Then describe the solution and its limits.

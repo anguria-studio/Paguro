@@ -2,22 +2,10 @@ name: Code quality
 
 on:
   pull_request:
-    # A commit that only touches prose cannot break a build, and every macOS
-    # minute bills at ten times the rate.
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".vale/**"
-      - ".vale.ini"
   push:
     branches:
       - main
       - paguro/main
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".vale/**"
-      - ".vale.ini"
 
 # One run per branch. Pushing again cancels the run it replaced rather than
 # paying for both, which matters most while chasing a failure.
@@ -29,8 +17,26 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.changes.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test CI policy
+        run: python3 -m unittest discover -s scripts -p 'test_ci_quality.py'
+      - name: Detect changes that need a macOS build
+        id: changes
+        run: python3 scripts/ci_quality.py changes
+
   test:
     name: Build and test on ${{ matrix.runner }}
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -88,3 +94,17 @@ jobs:
           xcodebuild -project Paguro.xcodeproj -scheme Paguro \
             -configuration Debug ${{ matrix.appIconSetting }} \
             ${{ matrix.skipTesting }} test
+
+  quality:
+    name: Code quality
+    needs: [changes, test]
+    # A required result must still run when a dependency fails or is skipped.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify required jobs
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci_quality.py verify
