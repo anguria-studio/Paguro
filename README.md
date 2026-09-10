@@ -10,6 +10,8 @@ Paguro brings web services into one macOS app, with workspaces and separate
 login sessions for each account. It adds native notifications and an optional
 notification island near the MacBook notch.
 
+![Paguro on macOS, showing a service sidebar with WhatsApp open in the main window](docs/images/paguro-screenshot.jpg)
+
 All Paguro features are free. There is no Paguro subscription or paid tier.
 The application source is available under the [MIT License](LICENSE).
 Third-party services can require their own accounts or subscriptions.
@@ -121,11 +123,6 @@ xcodebuild \
 - [Service icons](docs/features/SERVICE-ICONS.md)
 - [Compatibility fixture](docs/features/COMPATIBILITY.md)
 - [Distribution](docs/features/DISTRIBUTION.md)
-
-## Project links
-
-- [Source repository](https://github.com/anguria-studio/Paguro)
-- [Issue tracker](https://github.com/anguria-studio/Paguro/issues)
 
 ## License
 
