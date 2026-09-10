@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/paguro-demo.gif" width="860" alt="Paguro on macOS: the sidebar opens to show services grouped into Personal and Work workspaces, then closes again">
+  <img src="docs/images/paguro-demo.webp" width="860" alt="Paguro on macOS: the sidebar opens to show services grouped into Personal and Work workspaces, then closes again">
 </p>
 
 Chat, mail, calendars, the sites you leave open all day: one sidebar switches
