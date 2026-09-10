@@ -84,6 +84,12 @@ signs the framework and nested helpers with the Developer ID identity.
 
 ### Build a release
 
+Before the release commit, move the completed `Unreleased` entries in
+[CHANGELOG.md](../../CHANGELOG.md) into a section with the version and release
+date. Include compatibility changes and any required user action. Keep an
+`Unreleased` section for the next release and update its comparison link.
+Use the released section as the source for the GitHub release notes.
+
 Use the `bin` directory from the official pinned Sparkle distribution:
 
 ```sh
