@@ -687,6 +687,7 @@ struct AboutSettingsView: View {
     private let authorURL = URL(string: "https://nicojan.com/")!
     private let blocklistURL = URL(string: "https://github.com/hagezi/dns-blocklists")!
     private let annoyanceListURL = URL(string: "https://easylist.to/")!
+    private let privacyURL = URL(string: "https://anguria.studio/paguro/privacy/")!
 
     var body: some View {
         Form {
@@ -708,6 +709,7 @@ struct AboutSettingsView: View {
             }
 
             Section {
+                Link("Privacy policy", destination: privacyURL)
                 Link("Chorus upstream project", destination: upstreamURL)
                 Link("Upstream MIT license", destination: upstreamLicenseURL)
             }

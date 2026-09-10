@@ -19,9 +19,9 @@
 </p>
 
 <p align="center">
-  <!-- Add the Code quality badge once this repository is public; Actions badge
-       images return 404 to anonymous requests while a repository is private:
-       <a href="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml"><img src="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml/badge.svg?branch=main&amp;event=push" alt="Code quality status"></a> -->
+  <a href="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml"><img src="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml/badge.svg?branch=main&amp;event=push" alt="Code quality status"></a>
+  <a href="https://github.com/anguria-studio/Paguro/releases/latest"><img src="https://img.shields.io/github/v/release/anguria-studio/Paguro?label=release&amp;color=8a5fa8" alt="Latest release"></a>
+  <a href="https://github.com/anguria-studio/Paguro/releases/latest"><img src="https://img.shields.io/badge/download-DMG-black" alt="Download DMG"></a>
   <a href="#install-on-a-mac"><img src="https://img.shields.io/badge/macOS-15%2B%20Apple%20silicon%20or%20Intel-black" alt="macOS 15 and newer, Apple silicon or Intel"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a5fa8" alt="MIT License"></a>
 </p>
@@ -46,9 +46,8 @@ the full attribution.
 
 ## Release status
 
-The first public release, **1.0.0**, is being prepared. There is no public Paguro
-download yet. The local signed builds and Sparkle update path have passed their
-initial checks; public download and final release checks are still pending.
+**Paguro 1.0.0** is available as a signed, notarized download for Apple silicon
+and Intel Macs. Get the [latest release](https://github.com/anguria-studio/Paguro/releases/latest).
 
 ## What Paguro provides
 
@@ -91,8 +90,6 @@ Paguro requires **macOS 15 or later**, on Apple silicon or Intel.
 Liquid Glass requires macOS 26; earlier systems use the fallback appearance.
 You do not need Xcode to use a downloaded release.
 
-Once the first release is published:
-
 1. Open the [Paguro releases page](https://github.com/anguria-studio/Paguro/releases).
 2. Download the `.dmg` attached to the latest stable release.
 3. Open the disk image and drag **Paguro.app** into **Applications**.
@@ -114,6 +111,9 @@ sync login sessions or send app telemetry. The websites you open connect to
 their providers and follow those providers' privacy policies.
 Closing the main window keeps Paguro running in the menu bar. Choose
 **Paguro → Quit Paguro** or press **⌘Q** to stop service activity.
+
+Read the [full privacy policy](https://anguria.studio/paguro/privacy/) for details
+about local storage, website connections, permissions, and updates.
 
 ## Build requirements
 

@@ -69,8 +69,7 @@ Sparkle owns this local preference; configuration export does not transfer it.
 
 The production feed is:
 `https://github.com/anguria-studio/Paguro/releases/latest/download/appcast.xml`.
-This URL will work after the reviewed repository and first release are public.
-Before that, a manual check can report that the feed is unavailable.
+The latest stable release hosts this signed feed alongside its DMG and checksums.
 
 `Configuration/DirectInfo.plist` contains the public EdDSA key. The matching
 private key must be available in the maintainer's login Keychain under account
@@ -89,8 +88,8 @@ Use the `bin` directory from the official pinned Sparkle distribution:
 
 ```sh
 python3 scripts/build_release.py \
-  --version 1.0.0 --build 3 \
-  --output .project/releases/1.0.0-3 \
+  --version 1.0.0 --build 4 \
+  --output .project/releases/1.0.0-4 \
   --sparkle-tools .project/sparkle-tools/bin
 ```
 
@@ -181,7 +180,8 @@ local store recovery. Both distribution variants include the manifest.
 The manifest currently declares accessed APIs only. The App Store data
 collection questionnaire remains a separate review, including website traffic.
 The optional Google favicon lookup is excluded from the Store edition. Do not infer a completed privacy label
-from this file. A public policy URL and an in-app policy link are still needed.
+from this file. The [public privacy policy](https://anguria.studio/paguro/privacy/)
+is also available from Settings > About.
 
 Apple's required-reason enforcement guidance lists iOS, iPadOS, tvOS, visionOS,
 and watchOS; it does not explicitly list macOS. These declarations document
@@ -229,7 +229,7 @@ Test these cases before each public release:
 
 ## Version policy
 
-The first public release is planned as 1.0.0, build 3. Increase the build number
+The first public release is 1.0.0, build 4. Increase the build number
 again if that candidate changes. Keep build numbers increasing across all
 versions; Sparkle uses them to order updates. Use patch versions for fixes,
 minor versions for compatible features, and major versions for incompatible
@@ -252,8 +252,7 @@ The release script selects the notarization profile in this order:
 
 An existing Apple account profile can sign releases for the new app identity.
 The local JSON file stores only the profile name, never credentials.
-The repository remains private until publication. A public update feed requires
-a public repository and an uploaded release appcast.
+The public repository hosts downloads and the signed release appcast.
 
 Changing from the previous development bundle identifier gives the app a new
 sandbox container and permission identity. Existing test data stays under the
