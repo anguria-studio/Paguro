@@ -47,7 +47,7 @@ the full attribution.
 
 ## Release status
 
-**Paguro 1.0.0** is available as a signed, notarized download for Apple silicon
+**Paguro 1.0.1** is available as a signed, notarized download for Apple silicon
 and Intel Macs. Get the [latest release](https://github.com/anguria-studio/Paguro/releases/latest).
 
 ## What Paguro provides

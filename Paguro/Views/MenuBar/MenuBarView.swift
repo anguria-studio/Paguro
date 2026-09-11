@@ -23,10 +23,6 @@ struct MenuBarView: View {
             Divider()
 
             serviceList
-
-            Divider()
-
-            footer
         }
         .frame(width: 340)
         .containerBackground(for: .window) {
@@ -41,40 +37,95 @@ struct MenuBarView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image("MenuBarIcon")
-                .resizable()
-                .frame(width: 20, height: 20)
-                .foregroundStyle(PaguroColor.Text.primary)
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
+            openAppButton
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Paguro")
-                    .font(.headline)
-                Text(MenuBarPresentation.unreadSummary(appState.badgeManager.totalCount))
-                    .font(.caption)
-                    .foregroundStyle(PaguroColor.Text.secondary)
+            HStack(spacing: 8) {
+                muteButton
+                if appState.appLockEnabled && !appState.isLocked {
+                    lockButton
+                }
+                settingsButton
             }
-
-            Spacer(minLength: 12)
-
-            Button {
-                appState.doNotDisturb.toggle()
-            } label: {
-                Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
-            }
-            .buttonStyle(PaguroToolbarButtonStyle(isSelected: appState.doNotDisturb))
-            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
-            .accessibilityLabel(
-                appState.doNotDisturb
-                    ? "Unmute notifications for all services"
-                    : "Mute notifications for all services"
-            )
-            .accessibilityIdentifier("menuBar.notifications.globalMute")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+    }
+
+    private var openAppButton: some View {
+        Button(action: showMainWindow) {
+            HStack(spacing: 12) {
+                Image("MenuBarIcon")
+                    .resizable()
+                    .frame(width: 20, height: 20)
+                    .foregroundStyle(PaguroColor.Text.primary)
+                    .frame(width: 32, height: 32)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Paguro")
+                        .font(.headline)
+                    Text(MenuBarPresentation.unreadSummary(appState.badgeManager.totalCount))
+                        .font(.caption)
+                        .foregroundStyle(PaguroColor.Text.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open Paguro")
+        .accessibilityLabel("Open Paguro")
+        .accessibilityValue(MenuBarPresentation.unreadSummary(appState.badgeManager.totalCount))
+        .accessibilityIdentifier("menuBar.openApp")
+    }
+
+    private var muteButton: some View {
+        Button {
+            appState.doNotDisturb.toggle()
+        } label: {
+            Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
+        }
+        .buttonStyle(PaguroToolbarButtonStyle(isSelected: appState.doNotDisturb))
+        .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+        .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
+        .accessibilityLabel(
+            appState.doNotDisturb
+                ? "Unmute notifications for all services"
+                : "Mute notifications for all services"
+        )
+        .accessibilityIdentifier("menuBar.notifications.globalMute")
+    }
+
+    private var lockButton: some View {
+        Button {
+            appState.lock()
+            dismiss()
+        } label: {
+            Image(systemName: "lock")
+        }
+        .buttonStyle(PaguroToolbarButtonStyle())
+        .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+        .help("Lock Paguro (⇧⌘L)")
+        .accessibilityLabel("Lock Paguro")
+        .accessibilityHint("Lock Paguro (⇧⌘L)")
+        .accessibilityIdentifier("menuBar.lock")
+    }
+
+    private var settingsButton: some View {
+        Button {
+            dismiss()
+            AppDelegate.prepareToShowWindow()
+            openSettings()
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .buttonStyle(PaguroToolbarButtonStyle())
+        .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+        .help("Settings")
+        .accessibilityLabel("Open Paguro Settings")
+        .accessibilityIdentifier("menuBar.settings")
     }
 
     @ViewBuilder
@@ -208,30 +259,6 @@ struct MenuBarView: View {
         .help("Open \(service.label) in \(space.name)")
     }
 
-    private var footer: some View {
-        HStack(spacing: 8) {
-            Button {
-                showMainWindow()
-            } label: {
-                Label("Open Paguro", systemImage: "macwindow")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-                dismiss()
-                AppDelegate.prepareToShowWindow()
-                openSettings()
-            } label: {
-                Image(systemName: "gearshape")
-            }
-            .buttonStyle(PaguroToolbarButtonStyle())
-            .help("Settings")
-            .accessibilityLabel("Open Paguro Settings")
-        }
-        .padding(12)
-    }
-
     private var hasServices: Bool {
         spaces.contains { !servicesForSpace($0).isEmpty }
     }
@@ -271,7 +298,7 @@ enum MenuBarServiceListMetrics {
 /// parent offers, and it accepts zero. The menu-bar window takes its own
 /// height from this content, so it offers no height while it measures. A
 /// scroll view answers that question with zero. The window then keeps only its
-/// header and its footer, and the user sees no row. That result is stable,
+/// header, and the user sees no row. That result is stable,
 /// because the next measurement asks the same question and gets the same
 /// answer. `fixedSize` makes the scroll view report the height of its rows
 /// instead, and `frame(maxHeight:)` still limits a long list.

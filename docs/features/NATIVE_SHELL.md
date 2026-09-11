@@ -468,10 +468,14 @@ state as the main window.
 Selecting a service opens the main window at that service. A bounded scrolling
 area keeps a large service list inside the available screen. The list reports
 the height of its rows, up to 380 points, because the window takes its own
-height from its content. A short list makes a short window. The footer opens
-Paguro or Settings. These routes remain available in Menu bar only mode. The
-complete window follows the Window glass and Shell transparency settings. The
-content also follows the selected Paguro appearance.
+height from its content. A short list makes a short window. The header groups
+global mute, Lock, and Settings on the right, with matching circular surfaces.
+Lock closes the menu and uses the same app-lock route as File > Lock Now. It
+is hidden when App Lock is off or Paguro is already locked.
+The app name and shell mark open the main window, including
+when no services exist. The window has no footer. These routes remain available
+in Menu bar only mode. The complete window follows the Window glass and Shell
+transparency settings. The content also follows the selected Paguro appearance.
 
 The selected service uses a light fill and an accent-colored checkmark. In
 light appearance, the fill is 55 percent white, or opaque white with Reduce

@@ -63,7 +63,7 @@ Both repeat safely, because the main window scene is unique and a second order
 request for the same window changes nothing.
 
 Four routes reach the main window from outside it. A Dock reopen request is one
-of them. The other three are the "Open Paguro" button of the menu-bar window, a
+of them. The other three are the app-name button in the menu-bar header, a
 click on an island alert, and a click on a macOS notification. These three share
 one route. That route promotes the activation policy. It then orders an existing
 main window forward, or asks SwiftUI to build the window again. Only SwiftUI can
@@ -89,8 +89,8 @@ quiet hours are active, or all configured services are effectively muted.
 An empty service list alone does not dim the icon.
 
 The menu-bar item opens a native status window. The window can select a
-service, toggle global notification mute, open the main window, open Settings,
-or change a presence preference. This window is the complete application route
+service, toggle global notification mute, lock Paguro, open the main window,
+or open Settings. This window is the complete application route
 while Paguro runs in Menu bar only mode.
 
 ## App lock
@@ -101,6 +101,14 @@ its pending and delivered macOS notifications. Unlocking permits new alerts
 and restores the existing island history in the collapsed state, without
 replaying compact alerts or events suppressed during lock.
 The lock transition applies to manual lock, launch lock, and sleep lock.
+The menu-bar header Lock button uses this transition and closes the menu. It
+appears only when App Lock is enabled and Paguro is unlocked. File > Lock Now
+(Command-Shift-L) also requires App Lock to be enabled.
+
+The lock screen waits for the user to activate Unlock before it requests
+Touch ID or the Mac login password. Showing the screen after manual lock,
+launch, sleep, or reopening a window does not start authentication.
+Cancelling authentication keeps the app locked; Unlock starts another attempt.
 
 ## Quit behavior
 

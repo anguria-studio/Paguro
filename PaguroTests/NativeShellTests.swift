@@ -7,6 +7,25 @@ import PaguroCore
 @testable import Paguro
 
 final class NativeShellTests: XCTestCase {
+    @MainActor
+    func testLockScreenDoesNotAuthenticateOnAppearanceOrReappearance() async {
+        var authenticationRequests = 0
+
+        // Repeat presentation to cover reopening a locked window. The hosting
+        // views stay offscreen throughout the test.
+        for _ in 0..<2 {
+            let appeared = expectation(description: "Lock screen appeared")
+            let view = NSHostingView(rootView: LockView {
+                authenticationRequests += 1
+            }.onAppear { appeared.fulfill() })
+            view.frame = NSRect(x: 0, y: 0, width: 500, height: 400)
+            view.layoutSubtreeIfNeeded()
+            await fulfillment(of: [appeared], timeout: 2)
+
+            XCTAssertEqual(authenticationRequests, 0)
+        }
+    }
+
     private var dockSizing: DockSizing {
         DockSizing(
             baseSize: 22,

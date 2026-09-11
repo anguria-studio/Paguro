@@ -622,7 +622,7 @@ struct PrivacySettingsView: View {
                     ))
                 }
 
-                Text("Uses Touch ID, with your login password as a fallback. Lock immediately from the File menu (⇧⌘L).")
+                Text("Uses Touch ID, with your login password as a fallback. Lock from the menu-bar window or File > Lock Now (⇧⌘L).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
