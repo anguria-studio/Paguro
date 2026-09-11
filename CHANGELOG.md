@@ -4,6 +4,21 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-09-11
+
+Version 1.0.1, build 6.
+
+### Changed
+
+- Added Lock and moved Settings beside notification mute in the menu-bar
+  header. Removed the footer; the Paguro name and icon open the main window.
+  Lock appears only when App Lock is enabled and Paguro is unlocked.
+
+### Fixed
+
+- The lock screen now waits for Unlock before requesting Touch ID or the Mac
+  password. Locking the app no longer starts an authentication prompt.
+
 ## [1.0.0] — 2026-09-10
 
 First public Paguro release, based on [Chorus](https://github.com/nicojan/Chorus)
@@ -31,5 +46,6 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.0...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.1...main
+[1.0.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.1
 [1.0.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.0

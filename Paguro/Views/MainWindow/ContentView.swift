@@ -286,8 +286,7 @@ struct ContentView: View {
         }
         .overlay {
             if appState.isLocked {
-                LockView()
-                    .environment(appState)
+                LockView(authenticate: appState.authenticate)
                     .transition(.opacity)
             }
         }
@@ -489,10 +488,9 @@ enum UpstreamProjectLink {
     static let url = URL(string: "https://github.com/nicojan/Chorus")!
 }
 
-/// Opaque cover shown while the app is locked, hiding all content until the user
-/// authenticates. Prompts for Touch ID on appear; the button retries.
+/// Keeps content hidden until the user chooses Unlock and authenticates.
 struct LockView: View {
-    @Environment(AppState.self) private var appState
+    let authenticate: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
@@ -503,16 +501,11 @@ struct LockView: View {
             Text("Paguro is locked")
                 .font(.title2)
                 .bold()
-            Button("Unlock") {
-                appState.authenticate()
-            }
+            Button("Unlock", action: authenticate)
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear {
-            appState.authenticate()
-        }
     }
 }

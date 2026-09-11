@@ -33,6 +33,11 @@ mute, quiet hours, or when every configured service is muted. An empty service
 list does not imply mute. The Dock shows a muted-bell overlay in its top-right
 corner for the same state. The notification counter is hidden while this overlay appears.
 
+The menu-bar window header groups notification mute, Lock, and Settings on the
+right. All three use the same circular toolbar surface. The app name and shell
+mark open the main window. The window has no footer.
+Show Lock only when App Lock is enabled and Paguro is unlocked.
+
 ## Notifications and the island
 
 The notch island is optional. Use macOS notifications on displays without a
@@ -47,6 +52,12 @@ card or button has hover or keyboard focus. Respect Reduce Motion.
 Use descriptive accessibility labels and a logical focus order. Make each
 custom control keyboard accessible and show a clear focus state.
 Do not use color alone to communicate status or selection.
+
+## App lock
+
+Showing the lock screen does not request authentication. Start Touch ID or
+password authentication only when the user activates Unlock. Cancelling the
+prompt leaves the lock screen in place.
 
 ## Updates
 

@@ -94,8 +94,8 @@ Use the `bin` directory from the official pinned Sparkle distribution:
 
 ```sh
 python3 scripts/build_release.py \
-  --version 1.0.0 --build 4 \
-  --output .project/releases/1.0.0-4 \
+  --version 1.0.1 --build 6 \
+  --output .project/releases/1.0.1-6 \
   --sparkle-tools .project/sparkle-tools/bin
 ```
 
@@ -124,7 +124,7 @@ bundle identifier.
 ### Publish after review
 
 Finish the repository review and migration first. Build from a clean release
-commit. Create a draft `v1.0.0` release in `anguria-studio/Paguro`, attach the DMG,
+commit. Create a draft release for that version in `anguria-studio/Paguro`, attach the DMG,
 `appcast.xml`, and `SHA256SUMS` from the same build, and add release notes.
 Verify all enclosure URLs and signatures before publishing the draft as the
 latest stable release. The latest-release URL then exposes the signed feed.
