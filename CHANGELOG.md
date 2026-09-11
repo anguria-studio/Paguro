@@ -4,6 +4,16 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-09-11
+
+Version 1.0.2, build 7.
+
+### Changed
+
+- Settings now uses configuration export and import for saving and restoring
+  a setup, at the bottom of the General tab. Automatic backups remain available
+  through recovery prompts when Paguro detects a data problem.
+
 ## [1.0.1] — 2026-09-11
 
 Version 1.0.1, build 6.
@@ -46,6 +56,7 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.1...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.2...main
+[1.0.2]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.2
 [1.0.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.1
 [1.0.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.0

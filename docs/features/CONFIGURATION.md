@@ -5,7 +5,9 @@ Status: active
 ## Purpose
 
 Settings > General > Configuration exports and imports one JSON file.
-Use it to recreate a setup on another Mac without copying login sessions.
+The section appears at the bottom of the General tab, after Accessibility.
+Use it to save a setup for later or recreate it on another Mac without copying
+login sessions.
 
 ## Export
 
@@ -59,6 +61,17 @@ commit, the app closes removed web views, clears their island history, repairs
 selection, and schedules their local browser storage for removal.
 Cancel and invalid files leave the setup unchanged. Export and import require
 Paguro to be unlocked. Neither action transfers browser storage.
+
+## Automatic recovery
+
+Settings uses Export Configuration and Import Configuration for manual setup
+copies. It has no separate database backup or restore control.
+
+Paguro still creates a local database snapshot before a new app version opens
+existing data. These snapshots support automatic recovery from an unusable
+store. If Paguro detects possible data loss and finds a useful backup, the main
+window offers backup selection and restore. The snapshots do not copy website
+login storage. See [Application lifecycle](APP-LIFECYCLE.md).
 
 ## Architecture
 
