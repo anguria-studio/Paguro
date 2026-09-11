@@ -55,22 +55,9 @@ struct SettingsView: View {
 struct GeneralSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppModel.self) private var appModel
-    // Settings is its own scene (`Settings { … }` in PaguroApp), separate from
-    // `Window("Paguro", id: "main")`. The recovery sheet is only attached to
-    // the main window, so setting the recovery picker state from here alone
-    // would attach it behind Settings — or, if the user had closed the main
-    // window (the MenuBarExtra keeps the app alive), attach it to nothing at
-    // all, latching the flag `true` with no sheet visible. `openWindow(id:)`
-    // on a `Window` (a singleton scene, not a `WindowGroup`) brings that
-    // existing window to the front rather than creating a duplicate — or
-    // reopens it if it was closed — per SwiftUI's `OpenWindowAction` docs:
-    // "If the targeted scene is a Window, the system orders it to the front."
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Form {
-            ConfigurationSettingsSection()
-
             Section("Dock & Menu Bar") {
                 Picker("Show Paguro in", selection: Binding(
                     get: { appModel.presenceController.mode },
@@ -271,23 +258,6 @@ struct GeneralSettingsView: View {
                 ))
             }
 
-            Section("Data") {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Restore from a backup")
-                        Text("Paguro keeps a copy of your workspaces and services before each update.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Restore from a backup…") {
-                        AppDelegate.prepareToShowWindow()
-                        openWindow(id: "main")
-                        appState.storeRecovery.isShowingPicker = true
-                    }
-                }
-            }
-
             Section("Accessibility") {
                 Picker("Default zoom", selection: Binding(
                     get: { appState.defaultZoom },
@@ -301,6 +271,8 @@ struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            ConfigurationSettingsSection()
         }
         .formStyle(.grouped)
     }

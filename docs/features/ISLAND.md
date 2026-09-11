@@ -417,6 +417,25 @@ Release builds do not include this action.
 The action appears only with a connected notched display or one of the two
 launch arguments above.
 
+The **Paguro Island Preview** scheme also enables `--paguro-demo-notifications`.
+With this Debug-only argument, **Show Test Island Alert** selects a random
+configured Slack, WhatsApp, or Gmail account. It uses that account's name and
+icon with one of 12 fictional messages: four for each service. Custom accounts
+with a recognized service address are also eligible. The message cannot repeat
+on consecutive clicks. Each click adds one alert through the normal island
+presentation path, including its compact preview, hover expansion, and dismissal.
+
+The demo does not read messages, change unread badges, or send macOS alerts.
+App Lock and the island route switch still block the test action. With none of
+these services configured, it falls back to the generic active-service preview.
+Other schemes keep the generic preview. Release builds omit the demo catalog
+and ignore the argument.
+
+For screenshots, run `xcodegen generate`, select **Paguro Island Preview** in
+Xcode, and run the app. Open Settings > Notifications and click
+**Show Test Island Alert** once for each notification you need. Add the three
+services to the app to make all 12 messages available; you do not need to sign in.
+
 The island follows the display of the main window. On a notched laptop with an
 external display, the test action therefore shows nothing while the main window
 stays on the external display. Move the window to the laptop display for the

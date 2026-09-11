@@ -53,6 +53,13 @@ Use descriptive accessibility labels and a logical focus order. Make each
 custom control keyboard accessible and show a clear focus state.
 Do not use color alone to communicate status or selection.
 
+## Configuration and recovery
+
+Use Export Configuration and Import Configuration for routine setup copies.
+Place Configuration at the bottom of General settings, after Accessibility.
+Keep automatic snapshots in the background. Offer restore through recovery
+notices when Paguro detects a data problem, instead of a routine Settings control.
+
 ## App lock
 
 Showing the lock screen does not request authentication. Start Touch ID or

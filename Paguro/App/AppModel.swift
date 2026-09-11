@@ -18,6 +18,10 @@ final class AppModel {
     @ObservationIgnored private let notificationCenter: NotificationCenter
     @ObservationIgnored private var screenObserverTokens: [NSObjectProtocol] = []
     @ObservationIgnored private var notchedDisplayTask: Task<Void, Never>?
+    #if DEBUG
+    @ObservationIgnored private var previewNotifications = IslandPreviewNotifications()
+    @ObservationIgnored private let usesDemoNotifications: Bool
+    #endif
 
     /// Whether a connected display has a camera housing.
     ///
@@ -69,10 +73,14 @@ final class AppModel {
         screenGeometryProvider: (any ScreenGeometryProvider)? = nil,
         notificationRouteSettings: NotificationRouteSettings? = nil,
         defaults: UserDefaults = .standard,
-        notificationCenter: NotificationCenter = .default
+        notificationCenter: NotificationCenter = .default,
+        launchArguments: [String] = ProcessInfo.processInfo.arguments
     ) {
+        #if DEBUG
+        self.usesDemoNotifications = launchArguments.contains(IslandPreviewNotifications.launchArgument)
+        #endif
         let resolvedScreenGeometryProvider = screenGeometryProvider
-            ?? IslandScreenGeometryConfiguration.makeProvider()
+            ?? IslandScreenGeometryConfiguration.makeProvider(arguments: launchArguments)
         let islandPanelController = IslandPanelController(
             screenGeometryProvider: resolvedScreenGeometryProvider,
             // The island panel takes no activation of its own, so it must not
@@ -290,12 +298,30 @@ final class AppModel {
     func showIslandPreview(for service: ServiceInstance?) {
         guard !appState.isLocked else { return }
         guard notificationRouteSettings.isIslandRouteEnabled else { return }
+        var previewService = service
+        var title = "Island preview"
+        var body = "This is how a service notification will appear."
+        #if DEBUG
+        if usesDemoNotifications {
+            let services = appState.workspaceStore.allServices()
+            let accounts = services.map {
+                IslandPreviewNotifications.Account(serviceID: $0.id, catalogID: $0.catalogEntryID, url: $0.url)
+            }
+            var generator = SystemRandomNumberGenerator()
+            if let preview = previewNotifications.next(accounts: accounts, using: &generator),
+               let account = services.first(where: { $0.id == preview.serviceID }) {
+                previewService = account
+                title = preview.message.title
+                body = preview.message.body
+            }
+        }
+        #endif
         guard let event = try? NotificationEvent.normalize(
             id: UUID(),
-            serviceID: service?.id ?? UUID(),
+            serviceID: previewService?.id ?? UUID(),
             source: .pageNotification,
-            title: "Island preview",
-            body: "This is how a service notification will appear.",
+            title: title,
+            body: body,
             receivedAt: Date()
         ) else {
             return
@@ -304,8 +330,8 @@ final class AppModel {
         islandPanelController.present(
             NotificationIslandPanelContent(
                 event: event,
-                serviceLabel: service?.label ?? "Paguro",
-                serviceIconURL: service.flatMap {
+                serviceLabel: previewService?.label ?? "Paguro",
+                serviceIconURL: previewService.flatMap {
                     NotificationAttachmentStore.prepareServiceIcon(for: $0)
                 }
             )

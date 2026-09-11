@@ -19,7 +19,7 @@ struct ConfigurationSettingsSection: View {
                 Button("Import Configuration…", action: chooseImport)
             }
             .disabled(appState.isLocked)
-            Text("Transfer workspaces, services, and preferences to another Mac. Login sessions are not included.")
+            Text("Save your workspaces, services, and preferences to a file, or transfer them to another Mac. Login sessions are not included.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -73,8 +73,6 @@ struct StoreRecoveryView: View {
         .padding(20)
         .frame(width: 520)
         .onAppear {
-            // Settings can open this sheet long after launch. Refresh the live
-            // row and preselection before presenting them.
             appState.storeRecovery.refreshCandidates()
             selectionID = appState.storeRecovery.preselectedCandidate?.id
         }
