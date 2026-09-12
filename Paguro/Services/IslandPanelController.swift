@@ -207,6 +207,7 @@ final class IslandPanelController {
     private let screenChangeMonitor: any IslandScreenChangeMonitoring
     private let timing: NotificationIslandTiming
     private let isVoiceOverEnabled: @MainActor () -> Bool
+    private let soundPlayer: IslandNotificationSoundPlayer
     private var contentByEventID: [UUID: NotificationIslandPanelContent] = [:]
     private var selectedScreen: IslandScreenGeometry?
     private var currentPlacement: NotificationIslandPlacement?
@@ -243,7 +244,8 @@ final class IslandPanelController {
             NSWorkspace.shared.isVoiceOverEnabled
         },
         pointerIsInsideIsland: (@MainActor () -> Bool)? = nil,
-        waitsForLaunchActivation: Bool = false
+        waitsForLaunchActivation: Bool = false,
+        soundPlayer: IslandNotificationSoundPlayer? = nil
     ) {
         self.hasLaunchActivationSettled = !waitsForLaunchActivation
         self.pointerIsInsideIsland = pointerIsInsideIsland
@@ -256,6 +258,7 @@ final class IslandPanelController {
         self.timing = timing
         self.appearance = appearance
         self.isVoiceOverEnabled = isVoiceOverEnabled
+        self.soundPlayer = soundPlayer ?? IslandNotificationSoundPlayer()
     }
 
     /// Reports that the application launch activation has finished.
@@ -276,8 +279,9 @@ final class IslandPanelController {
         render()
     }
 
-    func present(_ content: NotificationIslandPanelContent) {
-        guard !hasStopped, !isLocked else { return }
+    @discardableResult
+    func present(_ content: NotificationIslandPanelContent) -> Bool {
+        guard !hasStopped, !isLocked else { return false }
         cancelHoverExitAction()
         cancelDismissalAction()
         startGeometryTracking()
@@ -285,10 +289,17 @@ final class IslandPanelController {
         apply(.receive(content.event))
         scheduleAlertDismissalIfNeeded()
         refreshScreenGeometry()
+        return true
     }
 
     func showCollapsed() {
-        guard !hasStopped, !isLocked else { return }
+        guard !hasStopped else { return }
+        if isLocked {
+            // Launch can apply the saved island setting before the user unlocks.
+            // Retain that request so unlock starts the island without a toggle.
+            reduce(.showCollapsed)
+            return
+        }
         startGeometryTracking()
         apply(.showCollapsed)
         refreshScreenGeometry()
@@ -409,10 +420,16 @@ final class IslandPanelController {
 
     private var isLocked = false
 
+    func playNotificationSound() {
+        guard !hasStopped, !isLocked else { return }
+        soundPlayer.play()
+    }
+
     func setLocked(_ locked: Bool) {
         guard !hasStopped, locked != isLocked else { return }
         isLocked = locked
         if locked {
+            soundPlayer.cancel()
             cancelScheduledActions()
             stopGeometryTracking()
             reduce(.suspendPresentation)
@@ -426,6 +443,7 @@ final class IslandPanelController {
     func stop() {
         guard !hasStopped else { return }
         hasStopped = true
+        soundPlayer.stop()
         cancelScheduledActions()
         stopGeometryTracking()
         state = reducer.reduce(state, action: .stop)
@@ -845,15 +863,20 @@ final class IslandNotificationPresenter: NotificationEventPresenting {
     private let controller: IslandPanelController
     private let serviceLabel: String
     private let serviceIconURLProvider: @MainActor () -> URL?
+    private let playSound: @MainActor () -> Void
 
     init(
         controller: IslandPanelController,
         serviceLabel: String,
-        serviceIconURLProvider: @escaping @MainActor () -> URL?
+        serviceIconURLProvider: @escaping @MainActor () -> URL?,
+        playSound: (@MainActor () -> Void)? = nil
     ) {
         self.controller = controller
         self.serviceLabel = serviceLabel
         self.serviceIconURLProvider = serviceIconURLProvider
+        self.playSound = playSound ?? { [weak controller] in
+            controller?.playNotificationSound()
+        }
     }
 
     func makeContent(event: NotificationEvent) -> NotificationIslandPanelContent {
@@ -869,7 +892,10 @@ final class IslandNotificationPresenter: NotificationEventPresenting {
         requestID: String,
         traceID: String
     ) {
-        controller.present(makeContent(event: event))
+        guard controller.present(makeContent(event: event)) else { return }
+        // The router has applied lock, mute, and quiet hours. Only a new event
+        // plays a sound; resizing, hovering, and restoring history stay silent.
+        playSound()
         AppLogger.notifications.info(
             "Notification trace \(traceID, privacy: .public): island accepted request \(requestID, privacy: .public)"
         )
@@ -879,13 +905,15 @@ final class IslandNotificationPresenter: NotificationEventPresenting {
 /// Keeps the presentation state for the persistent island view.
 @MainActor
 @Observable
-private final class NotificationIslandPanelModel {
+final class NotificationIslandPanelModel {
     var state = NotificationIslandState.hidden
     var content: NotificationIslandPanelContent?
     var recentContents: [NotificationIslandPanelContent] = []
     var appearance = NotificationIslandAppearance.defaultValue
     var cameraHousingSize: IslandScreenSize?
     var actions = NotificationIslandPanelActions.none
+    var isClearingAll = false
+    var isCollapsingAfterClear = false
 
     func update(
         state: NotificationIslandState,
@@ -951,12 +979,42 @@ private final class NotificationIslandPanelModel {
 
 /// Owns the lazy, nonactivating AppKit panel.
 @MainActor
-private final class AppKitNotificationIslandPanelRenderer:
+final class AppKitNotificationIslandPanelRenderer:
     NotificationIslandPanelRendering
 {
     private var panel: NotificationIslandPanel?
-    private var model: NotificationIslandPanelModel?
+    private(set) var model: NotificationIslandPanelModel?
     private weak var previousKeyWindow: NSWindow?
+    private let clearAllScheduler: any NotificationIslandScheduling
+    private let reduceMotionEnabled: @MainActor () -> Bool
+    private var clearAllAction: (any NotificationIslandScheduledAction)?
+    private var pendingClearPresentation: Presentation?
+    private var emptyCollapsePlacement: NotificationIslandPlacement?
+    private var presentationGeneration = 0
+
+    init(
+        clearAllScheduler: (any NotificationIslandScheduling)? = nil,
+        reduceMotionEnabled: @escaping @MainActor () -> Bool = {
+            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        }
+    ) {
+        self.clearAllScheduler = clearAllScheduler ?? TaskNotificationIslandScheduler()
+        self.reduceMotionEnabled = reduceMotionEnabled
+    }
+
+    private struct Presentation {
+        let state: NotificationIslandState
+        let content: NotificationIslandPanelContent?
+        let recentContents: [NotificationIslandPanelContent]
+        let appearance: NotificationIslandAppearance
+        let cameraHousingSize: IslandScreenSize?
+        let placement: NotificationIslandPlacement
+        let actions: NotificationIslandPanelActions
+
+        var isEmptyCollapsed: Bool {
+            state.phase == .collapsed && recentContents.isEmpty
+        }
+    }
 
     func show(
         state: NotificationIslandState,
@@ -967,6 +1025,66 @@ private final class AppKitNotificationIslandPanelRenderer:
         placement: NotificationIslandPlacement,
         actions: NotificationIslandPanelActions
     ) {
+        let presentation = Presentation(
+            state: state, content: content, recentContents: recentContents,
+            appearance: appearance, cameraHousingSize: cameraHousingSize,
+            placement: placement, actions: actions
+        )
+        if pendingClearPresentation != nil, presentation.isEmptyCollapsed {
+            // Geometry refreshes can arrive during the outgoing animation.
+            pendingClearPresentation = presentation
+            return
+        }
+        if presentation.isEmptyCollapsed, emptyCollapsePlacement == placement {
+            return
+        }
+        if pendingClearPresentation != nil || emptyCollapsePlacement != nil {
+            cancelClearAnimation()
+        }
+        if presentation.isEmptyCollapsed, panel?.isVisible == true,
+           let model, !model.recentContents.isEmpty,
+           model.state.phase == .peek || model.state.phase == .expanded {
+            beginClearAnimation(endingWith: presentation, model: model)
+            return
+        }
+        showImmediately(presentation)
+    }
+
+    private func beginClearAnimation(
+        endingWith presentation: Presentation, model: NotificationIslandPanelModel
+    ) {
+        // The controller has already cleared history. Retain only the outgoing
+        // presentation, so a later arrival cannot be removed by this completion.
+        pendingClearPresentation = presentation
+        model.isClearingAll = true
+        clearAllAction = clearAllScheduler.schedule(after: NotificationIslandClearAllTiming.completionDelay(
+            eventCount: model.recentContents.count, reduceMotion: reduceMotionEnabled()
+        )) { [weak self] in
+            guard let self, let destination = self.pendingClearPresentation else { return }
+            self.clearAllAction = nil
+            self.pendingClearPresentation = nil
+            self.showImmediately(destination, collapsingAfterClear: true)
+        }
+    }
+
+    private func cancelClearAnimation() {
+        presentationGeneration += 1
+        clearAllAction?.cancel()
+        clearAllAction = nil
+        pendingClearPresentation = nil
+        emptyCollapsePlacement = nil
+        model?.isClearingAll = false
+        model?.isCollapsingAfterClear = false
+    }
+
+    private func showImmediately(_ presentation: Presentation, collapsingAfterClear: Bool = false) {
+        let state = presentation.state
+        let content = presentation.content
+        let recentContents = presentation.recentContents
+        let appearance = presentation.appearance
+        let cameraHousingSize = presentation.cameraHousingSize
+        let placement = presentation.placement
+        let actions = presentation.actions
         let (panel, model) = panelAndModel()
         if state.phase == .expanded, !panel.isKeyWindow {
             previousKeyWindow = NSApp.keyWindow
@@ -976,13 +1094,13 @@ private final class AppKitNotificationIslandPanelRenderer:
             panel: panel,
             to: frame
         )
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-
-        updateFrame(
-            of: panel,
-            to: frame,
-            animated: shouldAnimate && !reduceMotion
-        )
+        let reduceMotion = reduceMotionEnabled()
+        let keepsSurface = collapsingAfterClear && shouldAnimate && !reduceMotion
+        presentationGeneration += 1
+        let generation = presentationGeneration
+        emptyCollapsePlacement = keepsSurface ? placement : nil
+        model.isClearingAll = false
+        model.isCollapsingAfterClear = keepsSurface
         update(
             model,
             state: state,
@@ -992,6 +1110,11 @@ private final class AppKitNotificationIslandPanelRenderer:
             cameraHousingSize: cameraHousingSize,
             actions: actions
         )
+        updateFrame(of: panel, to: frame, animated: shouldAnimate && !reduceMotion) { [weak self] in
+            guard let self, self.presentationGeneration == generation else { return }
+            self.model?.isCollapsingAfterClear = false
+            self.emptyCollapsePlacement = nil
+        }
         panel.hasShadow = false
         panel.ignoresMouseEvents = !actions.acceptsPointerEvents
         if state.phase != .expanded, panel.isKeyWindow {
@@ -1016,6 +1139,7 @@ private final class AppKitNotificationIslandPanelRenderer:
     }
 
     func hide() {
+        cancelClearAnimation()
         let wasKey = panel?.isKeyWindow == true
         panel?.orderOut(nil)
         if wasKey { restoreKeyboardFocus() }
@@ -1029,6 +1153,7 @@ private final class AppKitNotificationIslandPanelRenderer:
     }
 
     func stop() {
+        cancelClearAnimation()
         panel?.orderOut(nil)
         panel?.close()
         panel = nil
@@ -1106,10 +1231,12 @@ private final class AppKitNotificationIslandPanelRenderer:
     private func updateFrame(
         of panel: NSPanel,
         to frame: CGRect,
-        animated: Bool
+        animated: Bool,
+        completion: @escaping @MainActor () -> Void
     ) {
         guard animated else {
             panel.setFrame(frame, display: true)
+            completion()
             return
         }
 
@@ -1117,6 +1244,8 @@ private final class AppKitNotificationIslandPanelRenderer:
             context.duration = 0.28
             context.allowsImplicitAnimation = true
             panel.animator().setFrame(frame, display: true)
+        } completionHandler: {
+            Task { @MainActor in completion() }
         }
     }
 }
@@ -1146,6 +1275,8 @@ private final class NotificationIslandPanelContentView<Content: View>: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
         hostingView.sizingOptions = []
+        // AppKit owns placement and we reserve the camera area ourselves.
+        hostingView.safeAreaRegions = []
         hostingView.autoresizingMask = [.width, .height]
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
@@ -1307,7 +1438,7 @@ enum IslandKeyboardInput {
     static let dismissalKeys: Set<KeyEquivalent> = [.delete, .deleteForward, KeyEquivalent("\u{7f}")]
 }
 
-private struct NotificationIslandPanelView: View {
+struct NotificationIslandPanelView: View {
     private enum FocusTarget: Hashable {
         case dismissAll
         case event(UUID)
@@ -1322,6 +1453,7 @@ private struct NotificationIslandPanelView: View {
     @FocusState private var focusedControl: FocusTarget?
     @AccessibilityFocusState(for: .voiceOver) private var voiceOverControl: FocusTarget?
     @State private var scrollContainerHeight: CGFloat = 0
+    @State private var firstVisibleClearIndex = 0
     @State private var hoveredEventID: UUID?
 
     /// The island silhouette. Each state uses the notch form.
@@ -1333,7 +1465,7 @@ private struct NotificationIslandPanelView: View {
     /// it is the same test `desiredSize` uses to give an idle island exactly
     /// the housing size: an island that takes no width must paint nothing.
     private var isIdle: Bool {
-        isCollapsedShape && model.state.unreviewedCount == 0
+        isCollapsedShape && model.state.unreviewedCount == 0 && !model.isCollapsingAfterClear
     }
 
     private var shape: NotchShape {
@@ -1348,13 +1480,18 @@ private struct NotificationIslandPanelView: View {
         NotificationIslandLayout.notchEarWidth
     )
 
-    /// Bottom radius of the real camera housing.
-    private static let housingBottomCornerRadius: CGFloat = 10
+    /// Bottom radius of the collapsed counter strip.
+    private static let collapsedBottomCornerRadius: CGFloat = 10
 
     var body: some View {
         styledContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .clipShape(shape)
+            .opacity(reduceMotion && model.isClearingAll ? 0 : 1)
+            .animation(.easeOut(duration: 0.16), value: reduceMotion && model.isClearingAll)
+            .allowsHitTesting(!model.isClearingAll && !model.isCollapsingAfterClear)
+            .disabled(model.isClearingAll || model.isCollapsingAfterClear)
+            .accessibilityHidden(model.isClearingAll || model.isCollapsingAfterClear)
             .onTapGesture {
                 model.actions.pin?()
             }
@@ -1367,7 +1504,7 @@ private struct NotificationIslandPanelView: View {
     private var styledContent: some View {
         if isIdle {
             islandContent
-        } else if isCollapsedShape {
+        } else if isCollapsedShape && !model.isCollapsingAfterClear {
             // With a count to show the island is wider than the housing, so it
             // needs its own black surface for the part that extends past it.
             islandContent.background(shape.fill(Color.black))
@@ -1414,16 +1551,10 @@ private struct NotificationIslandPanelView: View {
 
     private var islandContent: some View {
         ZStack(alignment: .top) {
-            // The bridge is one ear wider than the housing on each side, and
-            // those ears are concave, so an idle island drew two small black
-            // wedges either side of the notch. Nothing to show means nothing
-            // to draw.
-            if !isIdle {
-                cameraBridge
-            }
-
             Group {
-                if model.state.phase == .peek
+                if model.isCollapsingAfterClear {
+                    Color.clear
+                } else if model.state.phase == .peek
                     || model.state.phase == .expanded {
                     expandedContent
                 } else {
@@ -1435,7 +1566,10 @@ private struct NotificationIslandPanelView: View {
             // distance from the visible body edge.
             .padding(.horizontal, Self.notchEarWidth)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(
+            maxWidth: .infinity, maxHeight: .infinity,
+            alignment: isCollapsedShape ? .center : .top
+        )
     }
 
     private var materialTint: some View {
@@ -1460,35 +1594,13 @@ private struct NotificationIslandPanelView: View {
             )
     }
 
-    /// The black surface that continues the physical camera housing.
-    ///
-    /// The bridge keeps the notch silhouette and adds one ear on each side,
-    /// so its visible body has the housing width and its top edge merges into
-    /// the island top edge.
-    private var cameraBridge: some View {
-        let size = model.cameraHousingSize
-            ?? IslandScreenSize(width: 164, height: 38)
-        return NotchShape(
-            topCornerRadius: Self.notchEarWidth,
-            bottomCornerRadius: Self.housingBottomCornerRadius
-        )
-        .fill(.black)
-        .frame(
-            width: CGFloat(
-                NotificationIslandLayout.panelWidth(bodyWidth: size.width)
-            ),
-            height: CGFloat(size.height)
-        )
-    }
-
     /// The convex bottom radius of the island.
     ///
-    /// The collapsed island keeps the housing radius, so it reads as the
-    /// camera housing itself, only wider. The open states use a larger round.
+    /// The collapsed strip uses tighter corners than the open states.
     private var bottomCornerRadius: CGFloat {
         switch model.state.phase {
         case .hidden, .collapsed:
-            Self.housingBottomCornerRadius
+            Self.collapsedBottomCornerRadius
         case .peek, .alert, .expanded, .dismissed:
             22
         }
@@ -1637,8 +1749,9 @@ private struct NotificationIslandPanelView: View {
             .background(toolbarControlBackground, in: .capsule)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // The camera area stays black above the cards that pass below it.
-            cameraBridge
+            Color.clear
+                .frame(width: cameraHousingWidth + 2 * Self.notchEarWidth)
+                .accessibilityHidden(true)
 
             HStack(spacing: 6) {
                 Button {
@@ -1732,6 +1845,15 @@ private struct NotificationIslandPanelView: View {
         // A card of the pile draws outside the scroll bounds. The island
         // shape stays the one clip of the panel.
         .scrollClipDisabled()
+        .scrollDisabled(model.isClearingAll)
+        .onScrollGeometryChange(for: Int.self) { geometry in
+            NotificationIslandClearAllTiming.firstVisibleIndex(
+                scrollOffset: Double(geometry.contentOffset.y), eventCount: model.recentContents.count
+            )
+        } action: { _, index in
+            if !model.isClearingAll { firstVisibleClearIndex = index }
+        }
+        .onDisappear { firstVisibleClearIndex = 0 }
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.height
         } action: { height in
@@ -1818,6 +1940,17 @@ private struct NotificationIslandPanelView: View {
             }
         )
         .id(recentContent.event.id)
+        .offset(x: model.isClearingAll && !reduceMotion ? 56 : 0)
+        .scaleEffect(model.isClearingAll && !reduceMotion ? 0.96 : 1)
+        .opacity(model.isClearingAll ? 0 : 1)
+        .animation(
+            .easeIn(duration: NotificationIslandClearAllTiming.cardDuration(reduceMotion: reduceMotion))
+                .delay(NotificationIslandClearAllTiming.delay(
+                    for: index - firstVisibleClearIndex,
+                    eventCount: model.recentContents.count, reduceMotion: reduceMotion
+                )),
+            value: model.isClearingAll
+        )
         .transition(cardTransition)
     }
 

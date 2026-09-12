@@ -106,9 +106,9 @@ rule in full.
 ### Collapsed
 
 The collapsed state is quiet.
-The collapsed island is always solid black. It keeps this black surface in
-every glass style and in every transparency setting. It therefore reads as an
-extension of the camera housing.
+The collapsed island's counter wings are always solid black. They keep this
+black surface in every glass style and transparency setting, as an extension
+of the camera housing. The collapsed background continues behind the camera.
 It shows the unreviewed count when that count is not zero.
 The counter badge stays legible on the black surface.
 Clicking it pins the expanded state open.
@@ -160,10 +160,11 @@ clip.
 
 The count badge and the Clear All button sit on frosted capsules. These
 capsules use the regular material. Reduce Transparency replaces that material
-with an opaque window background. The camera bridge paints above the toolbar.
+with an opaque window background. The island background continues across the
+camera area. The toolbar reserves this space without a black camera replica.
 Both capsules use the same resting background. Clear All adds a tint only
 when it has keyboard focus.
-A card therefore never covers the camera area.
+The physical camera can obscure a card while it scrolls behind the toolbar.
 
 The stop line sits 28 points below the bottom edge of the third card. A card
 stops at this line when
@@ -220,6 +221,21 @@ visible, including the part outside the card. The circle is 20 points wide
 and keeps a 28-point pointer target. The button stays in keyboard and accessibility navigation when
 visually hidden. Its space stays reserved so the text does not move.
 Clear All stays visible.
+
+Clear All clears the history immediately, but keeps the outgoing cards for a
+short exit animation. Cards fade and move right from top to bottom, with a
+45-millisecond stagger for the first five visible positions. Start at the
+current scroll position. Deeper cards share the last delay, so a long history
+never extends this step beyond 400 milliseconds.
+The empty surface then shrinks to the camera area in 280 milliseconds before
+it disappears. Keep its top edge and horizontal center fixed.
+`NotificationIslandClearAllTiming` owns the pure timing rules in `PaguroCore`.
+The renderer owns the temporary outgoing presentation and its cancellation.
+Reduce Motion fades the complete island in 160 milliseconds, without stagger,
+scaling, or movement. New arrivals replace the outgoing presentation and remain
+in history. Lock, hiding, and quitting cancel the animation immediately.
+Repeated layout updates must not restart it. The same exit sequence applies
+when dismissing the last card empties the recent view.
 
 The user can click a card and drag it to the right to dismiss it.
 `NotificationIslandSwipeRule` in `PaguroCore` holds the pure rules for this
@@ -306,10 +322,19 @@ The notification router supplies normalized events through a service presenter.
 Island routing is off by default. The user can enable or disable it in
 Notification settings. Disabling the route hides the panel immediately.
 Application shutdown closes the panel and rejects later events.
+New events use the default macOS notification sound through a sound-only
+UserNotifications request. Lock and shutdown cancel pending sound requests;
+restoring history is silent. See [Notification system](NOTIFICATIONS.md).
 App lock hides the panel and retains existing recent events in memory. It
 rejects new alerts, including previews, and ignores read-state dismissal while
 locked. Unlocking restores the collapsed counter and history without replaying
 a compact alert. Disabling the island or quitting still clears history.
+
+An enabled island remains enabled when Paguro starts locked, including before
+the controller has read any screen geometry. Unlocking starts screen tracking
+and restores the collapsed island without requiring a settings toggle. The
+panel still waits for launch activation to settle. Disabling the island while
+locked cancels that pending activation.
 
 The panel must not take keyboard focus in the collapsed state.
 The expanded state can take focus after an explicit user action.
@@ -488,20 +513,28 @@ The panel must move after these changes:
 Use native Liquid Glass on macOS 26.
 Keep text short and high contrast.
 
-Every island state uses the silhouette of the camera housing. `NotchShape`
-draws this silhouette. The shape has a flat top edge on the screen edge. Two
+Every island state uses a notch-like silhouette. `NotchShape` draws this
+silhouette. The shape has a flat top edge on the screen edge. Two
 concave 6-point fillets join the top corners to the menu bar. The bottom
 corners are convex.
 
 The bottom corner radius depends on the state:
 
-- 10 points for the camera bridge and the collapsed state;
+- 10 points for the collapsed state;
 - 22 points for the peek, alert, and expanded states.
 
-The camera bridge stays black so it joins the physical housing.
-The collapsed island is also always solid black. It ignores the glass style and
-the transparency settings. The collapsed island therefore looks like the
-housing itself, only wider.
+Paguro draws one continuous background across the panel. There is no camera
+cutout and no second black camera housing on the open surface. The toolbar
+reserves the camera space for layout. A screen recording shows the continuous
+surface; the physical camera obscures that area on the display itself.
+The collapsed counter strip stays solid black, independent of the glass style
+and transparency settings. An empty collapsed island paints nothing.
+
+On hardware, the reserved camera rectangle comes from the gap between
+`NSScreen.auxiliaryTopLeftArea` and `auxiliaryTopRightArea`, when the screen has
+a positive top safe-area inset. These are macOS layout bounds, not an exact
+outline of the camera's rounded corners. Simulator presets use a fixed
+164 by 38 point rectangle. The panel does not depend on tracing that outline.
 
 The peek, alert, and expanded states use the shared glass and transparency
 settings. Their surface follows the Window glass style and the shell
@@ -523,6 +556,9 @@ A card erases the cards behind it, so translucent fills never add up.
 Animate the AppKit panel frame when the system permits motion.
 Use a fade or direct change when Reduce Motion is on.
 Keep the panel top edge and horizontal center fixed while it changes size.
+AppKit supplies the panel frame. Its hosting view adds no safe-area inset;
+the island reserves the camera area itself. Open-state content aligns with
+the top of that frame instead of centering a shorter layout inside it.
 The standard size transition is 280 milliseconds.
 
 ## Accessibility

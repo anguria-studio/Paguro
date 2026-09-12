@@ -656,7 +656,7 @@ struct ActivePollSchedule {
 
 // MARK: - Notification Center Delegate
 
-private final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     let onServiceRequested: @Sendable (UUID) -> Void
     let isPresentationSuppressed: @Sendable () -> Bool
     // Keeps the delegate alive (UNUserNotificationCenter holds it weakly).
@@ -691,17 +691,17 @@ private final class NotificationCenterDelegate: NSObject, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let traceID = String(notification.request.identifier.prefix(8)).lowercased()
+        let options = presentationOptions(for: notification.request)
+        AppLogger.notifications.info(
+            "Notification trace \(traceID, privacy: .public): foreground presentation options=\(options.rawValue, privacy: .public)"
+        )
+        completionHandler(options)
+    }
+
+    func presentationOptions(for request: UNNotificationRequest) -> UNNotificationPresentationOptions {
         // Recheck lock and Do Not Disturb when macOS is ready to present.
-        if isPresentationSuppressed() {
-            AppLogger.notifications.info(
-                "Notification trace \(traceID, privacy: .public): foreground presentation suppressed by lock or DND"
-            )
-            completionHandler([])
-        } else {
-            AppLogger.notifications.info(
-                "Notification trace \(traceID, privacy: .public): foreground presentation requested banner+sound"
-            )
-            completionHandler([.banner, .sound])
-        }
+        guard !isPresentationSuppressed() else { return [] }
+        if IslandNotificationSoundPlayer.isSoundRequest(request) { return [.sound] }
+        return [.banner, .sound]
     }
 }

@@ -43,6 +43,9 @@ Paguro uses the first available source in this order:
 The Browse catalog also shows bundled icons before fetched website icons.
 Notification Test includes the Paguro icon, so it is available before a fetch.
 Its bundled light and dark variants follow the shell appearance.
+In service rows, the complete Paguro tile has a 10 percent optical size
+adjustment to balance the surrounding flat logos. The shell and square scale
+together. Custom icons keep their original sizing.
 
 ## Website discovery
 

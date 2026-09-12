@@ -17,6 +17,9 @@ service must not wait for icon discovery.
 
 Catalog tiles prefer bundled service icons, so they match the sidebar and do
 not need a website fetch before displaying the service mark.
+Service rows draw the bundled Paguro tile 10 percent larger for optical
+balance with flat logos. Scale the square and shell together, without changing
+the row spacing.
 
 ## Appearance
 
@@ -50,6 +53,15 @@ Show Lock only when App Lock is enabled and Paguro is unlocked.
 
 The notch island is optional. Use macOS notifications on displays without a
 notch. Keep notification detection separate from presentation.
+
+Use one continuous background across the island, including behind the physical
+camera. Do not draw a second black notch or cut a hole in the surface. Reserve
+the camera area for layout so controls remain visible. Keep the content at the
+top screen edge as the panel changes size.
+New island events use the default macOS notification sound. Restoring history and
+moving through the island do not play sounds.
+Clear All dismisses cards in a short stagger, then shrinks the empty surface.
+Keep the surface visible until the shrink finishes. Reduce Motion uses a fade.
 
 Global, workspace, and service mute also pause audio and video in the affected
 service views. Global mute controls in the header and menu bar share one state.

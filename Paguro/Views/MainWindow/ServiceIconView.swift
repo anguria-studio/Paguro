@@ -53,6 +53,14 @@ struct ServiceIconSquare: View {
         content
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .scaleEffect(opticalScale)
+    }
+
+    private var opticalScale: CGFloat {
+        // The shaded Paguro tile needs more visual weight beside flat logos.
+        // Scale the complete tile without changing row spacing or its artwork.
+        instance.catalogEntryID == "notification-test" && instance.customIconData == nil
+            ? 1.1 : 1
     }
 
     @ViewBuilder

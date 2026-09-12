@@ -7,6 +7,106 @@ import XCTest
 
 @MainActor
 final class IslandPanelControllerTests: XCTestCase {
+    func testDefaultIslandSoundCancelsOnLockAndStopWithoutReplayingOnUnlock() throws {
+        let center = RecordingIslandSoundCenter()
+        let controller = makeController(
+            renderer: RecordingIslandPanelRenderer(),
+            soundPlayer: IslandNotificationSoundPlayer(center: center)
+        )
+        let presenter = IslandNotificationPresenter(
+            controller: controller, serviceLabel: "Notification Test", serviceIconURLProvider: { nil }
+        )
+        presenter.present(event: try makeEvent(number: 1), requestID: "first", traceID: "first")
+        let first = try XCTUnwrap(center.requests.first).identifier
+        controller.setLocked(true)
+        XCTAssertTrue(center.removed.contains(first))
+        presenter.present(event: try makeEvent(number: 2), requestID: "locked", traceID: "locked")
+        controller.setLocked(false)
+        XCTAssertEqual(center.requests.count, 1)
+        presenter.present(event: try makeEvent(number: 3), requestID: "next", traceID: "next")
+        let next = try XCTUnwrap(center.requests.last).identifier
+        XCTAssertNotEqual(first, next)
+        controller.stop()
+        XCTAssertTrue(center.removed.contains(next))
+        presenter.present(event: try makeEvent(number: 4), requestID: "stopped", traceID: "stopped")
+        XCTAssertEqual(center.requests.count, 2)
+    }
+
+    func testOnlyAcceptedNewEventsPlayTheIslandSound() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer)
+        var soundCount = 0
+        let presenter = IslandNotificationPresenter(
+            controller: controller, serviceLabel: "Notification Test",
+            serviceIconURLProvider: { nil }, playSound: { soundCount += 1 }
+        )
+        presenter.present(event: try makeEvent(number: 1), requestID: "first", traceID: "first")
+        await waitForShow(in: renderer)
+        XCTAssertEqual(soundCount, 1)
+
+        controller.expand()
+        controller.collapse()
+        controller.updateAppearance(.defaultValue)
+        controller.setLocked(true)
+        presenter.present(event: try makeEvent(number: 2), requestID: "locked", traceID: "locked")
+        controller.setLocked(false)
+        XCTAssertEqual(soundCount, 1, "Unlock and other presentation changes stay silent")
+
+        presenter.present(event: try makeEvent(number: 3), requestID: "next", traceID: "next")
+        XCTAssertEqual(soundCount, 2)
+        controller.stop()
+        presenter.present(event: try makeEvent(number: 4), requestID: "stopped", traceID: "stopped")
+        XCTAssertEqual(soundCount, 2)
+    }
+
+    func testIslandSoundHonorsMuteQuietHoursLockAndSystemFallback() throws {
+        let controller = makeController(renderer: RecordingIslandPanelRenderer())
+        defer { controller.stop() }
+        var soundCount = 0
+        var muted = false
+        var quietHours = false
+        var locked = false
+        var islandAvailable = true
+        var islandEnabled = true
+        let system = RecordingIslandFallbackPresenter()
+        let island = IslandNotificationPresenter(
+            controller: controller, serviceLabel: "Notification Test",
+            serviceIconURLProvider: { nil }, playSound: { soundCount += 1 }
+        )
+        let router = NotificationPresentationRouter(
+            systemPresenter: system, isLockedCheck: { locked }, islandPresenter: island,
+            isMutedCheck: { _ in muted }, isSystemEnabledCheck: { _ in true },
+            isIslandEnabledCheck: { _ in islandEnabled },
+            isIslandAvailableCheck: { islandAvailable }, isDoNotDisturbCheck: { quietHours }
+        )
+        let event = try makeEvent(number: 1)
+        func send() { router.present(event: event, requestID: "sound-test", traceID: "sound-test") }
+
+        muted = true
+        send()
+        muted = false
+        quietHours = true
+        send()
+        quietHours = false
+        locked = true
+        send()
+        locked = false
+        XCTAssertEqual(soundCount, 0)
+        XCTAssertEqual(system.count, 0)
+
+        send()
+        XCTAssertEqual(soundCount, 1)
+        XCTAssertEqual(system.count, 0, "No second system notification for the island's sound")
+
+        islandAvailable = false
+        send()
+        islandAvailable = true
+        islandEnabled = false
+        send()
+        XCTAssertEqual(soundCount, 1, "The system fallback owns its own sound")
+        XCTAssertEqual(system.count, 2)
+    }
+
     func testIslandUsesTheFaviconFetchedAfterThePresenterWasCreated() throws {
         let service = ModelFixtures.service(label: "Notification Test", catalogID: nil)
         let presenter = IslandNotificationPresenter(
@@ -109,6 +209,83 @@ final class IslandPanelControllerTests: XCTestCase {
         controller.hide()
         controller.setLocked(false)
         XCTAssertEqual(controller.state, .hidden)
+    }
+
+    func testIslandEnabledDuringLockedLaunchBecomesAvailableAfterUnlock() async throws {
+        let renderer = RecordingIslandPanelRenderer()
+        let monitor = RecordingIslandScreenChangeMonitor()
+        let controller = makeController(
+            renderer: renderer,
+            screenChangeMonitor: monitor,
+            waitsForLaunchActivation: true
+        )
+        defer { controller.stop() }
+
+        // AppModel loads launch lock before it applies the saved island setting.
+        controller.setLocked(true)
+        controller.showCollapsed()
+        controller.launchActivationDidSettle()
+        controller.present(panelContent(for: try makeEvent(number: 1)))
+
+        XCTAssertTrue(renderer.shows.isEmpty)
+        XCTAssertTrue(controller.state.recentEvents.isEmpty)
+        XCTAssertEqual(monitor.startCount, 0)
+        XCTAssertFalse(controller.canPresentIsland)
+
+        controller.setLocked(false)
+        await waitForShow(in: renderer)
+
+        XCTAssertTrue(controller.canPresentIsland)
+        XCTAssertEqual(monitor.startCount, 1)
+        XCTAssertEqual(renderer.shows.last?.state.phase, .collapsed)
+        XCTAssertTrue(controller.state.recentEvents.isEmpty)
+
+        let newEvent = try makeEvent(number: 2)
+        controller.present(panelContent(for: newEvent))
+        XCTAssertEqual(renderer.shows.last?.content?.event, newEvent)
+        XCTAssertEqual(controller.state.recentEvents, [newEvent])
+    }
+
+    func testUnlockBeforeLaunchSettlesStillWaitsToShowTheEnabledIsland() async {
+        let renderer = RecordingIslandPanelRenderer()
+        let controller = makeController(renderer: renderer, waitsForLaunchActivation: true)
+        defer { controller.stop() }
+
+        controller.setLocked(true)
+        controller.showCollapsed()
+        controller.setLocked(false)
+        for _ in 0..<20 where !controller.canPresentIsland {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(controller.canPresentIsland)
+        XCTAssertTrue(renderer.shows.isEmpty)
+
+        controller.launchActivationDidSettle()
+        await waitForShow(in: renderer)
+        XCTAssertEqual(renderer.shows.last?.state.phase, .collapsed)
+    }
+
+    func testUnlockKeepsTheIslandHiddenWhenDisabledDuringLockedLaunch() async {
+        for enableThenDisable in [false, true] {
+            let renderer = RecordingIslandPanelRenderer()
+            let monitor = RecordingIslandScreenChangeMonitor()
+            let controller = makeController(renderer: renderer, screenChangeMonitor: monitor)
+            defer { controller.stop() }
+
+            controller.setLocked(true)
+            if enableThenDisable {
+                controller.showCollapsed()
+                controller.hide()
+            }
+            controller.setLocked(false)
+            for _ in 0..<20 { await Task.yield() }
+
+            XCTAssertEqual(controller.state, .hidden)
+            XCTAssertFalse(controller.canPresentIsland)
+            XCTAssertTrue(renderer.shows.isEmpty)
+            XCTAssertEqual(monitor.startCount, 0)
+        }
     }
 
     func testDismissalRecognizesMacDeleteEvents() throws {
@@ -1002,7 +1179,8 @@ final class IslandPanelControllerTests: XCTestCase {
         screenChangeMonitor: RecordingIslandScreenChangeMonitor? = nil,
         isVoiceOverEnabled: Bool = false,
         pointer: RecordingPointerLocation = RecordingPointerLocation(),
-        waitsForLaunchActivation: Bool = false
+        waitsForLaunchActivation: Bool = false,
+        soundPlayer: IslandNotificationSoundPlayer? = nil
     ) -> IslandPanelController {
         IslandPanelController(
             screenGeometryProvider: provider ?? SimulatedScreenGeometryProvider(
@@ -1013,7 +1191,8 @@ final class IslandPanelControllerTests: XCTestCase {
             screenChangeMonitor: screenChangeMonitor,
             isVoiceOverEnabled: { isVoiceOverEnabled },
             pointerIsInsideIsland: { pointer.isInside },
-            waitsForLaunchActivation: waitsForLaunchActivation
+            waitsForLaunchActivation: waitsForLaunchActivation,
+            soundPlayer: soundPlayer
         )
     }
 
@@ -1089,6 +1268,15 @@ final class RecordingPointerLocation {
 
     init(isInside: Bool = false) {
         self.isInside = isInside
+    }
+}
+
+@MainActor
+private final class RecordingIslandFallbackPresenter: NotificationEventPresenting {
+    private(set) var count = 0
+
+    func present(event: NotificationEvent, requestID: String, traceID: String) {
+        count += 1
     }
 }
 
