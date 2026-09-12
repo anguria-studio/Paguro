@@ -15,6 +15,9 @@ address. Place its compact preview beside the name and address, with a native
 Change Icon menu. Keep manual URL overrides in the service editor. Adding a
 service must not wait for icon discovery.
 
+Catalog tiles prefer bundled service icons, so they match the sidebar and do
+not need a website fetch before displaying the service mark.
+
 ## Appearance
 
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is

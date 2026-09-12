@@ -40,6 +40,10 @@ Paguro uses the first available source in this order:
 3. The icon fetched automatically from the service website.
 4. A colored tile with the first letter of the service name.
 
+The Browse catalog also shows bundled icons before fetched website icons.
+Notification Test includes the Paguro icon, so it is available before a fetch.
+Its bundled light and dark variants follow the shell appearance.
+
 ## Website discovery
 
 Paguro accepts a direct HTTP or HTTPS image address.

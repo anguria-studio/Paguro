@@ -4,6 +4,15 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.3] — 2026-09-12
+
+Version 1.0.3, build 9.
+
+### Added
+
+- Notification Test in the service catalog lets users try notifications,
+  unread badges, and the island without a messaging account.
+
 ### Changed
 
 - Custom services now preview their website icon while you enter the address.
@@ -72,7 +81,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.2...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.3...main
+[1.0.3]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.3
 [1.0.2]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.2
 [1.0.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.1
 [1.0.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.0

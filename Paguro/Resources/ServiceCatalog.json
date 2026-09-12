@@ -679,6 +679,15 @@
         "description": "Yahoo webmail"
     },
     {
+        "id": "notification-test",
+        "name": "Notification Test",
+        "url": "https://anguria.studio/paguro/test-notifications/",
+        "category": "Utilities",
+        "badgeJS": null,
+        "userAgent": null,
+        "description": "Try Paguro notifications, unread badges, and the island. No account needed."
+    },
+    {
         "id": "zoho-mail",
         "name": "Zoho Mail",
         "url": "https://mail.zoho.com/",

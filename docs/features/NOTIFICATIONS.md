@@ -517,6 +517,23 @@ The service matrix must state these limits for each service.
 
 ## Tests
 
+### Notification Test catalog service
+
+Choose Add Service > Browse and search for Notification Test, or find it under
+Utilities. It opens the public
+[notification test page](https://anguria.studio/paguro/test-notifications/).
+The entry is available in both release editions and includes the Paguro icon.
+It is not added automatically to a workspace.
+
+The page needs no account. Send one notification or a sequence of six to test
+macOS banners, island alerts, and app lock. Requests start only after a button
+click. Its page-title count supplies unread badges through the normal polling
+path; Mark all read resets the count. Keep the service awake and unmuted.
+The page tests normal website notification handling, not provider sign-in or
+message delivery. It has no special native permissions or review-only behavior.
+
+### Automated coverage
+
 The local fixture must cover these cases:
 
 - a page notification;
