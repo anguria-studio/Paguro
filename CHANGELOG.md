@@ -4,6 +4,23 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-09-12
+
+Version 1.0.4, build 11.
+
+### Fixed
+
+- Island notifications resume after unlocking when Paguro starts locked with
+  the island enabled, without needing to turn the setting off and on.
+- Island notifications use the same default sound as macOS banners. Lock, mute, and
+  quiet hours keep them silent.
+- The island uses one continuous background instead of drawing a second black
+  notch. Compact alerts stay aligned with the top screen edge.
+- The Paguro service tile has a larger visual size beside other rail icons,
+  with the same adjustment in light and dark appearance.
+- Clear All dismisses island cards in a short stagger, then smoothly shrinks
+  the empty island. Reduce Motion uses a simple fade.
+
 ## [1.0.3] — 2026-09-12
 
 Version 1.0.3, build 9.
@@ -81,7 +98,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.3...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.4...main
+[1.0.4]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.4
 [1.0.3]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.3
 [1.0.2]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.2
 [1.0.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.1

@@ -194,6 +194,23 @@ Unlocking restores existing island history quietly and allows new events; it
 does not replay suppressed events or repost macOS notifications.
 Web sessions and unread detection can continue while presentation is locked.
 
+Each accepted island event requests `UNNotificationSound.default`, the same
+sound used by normal macOS banners. The selected alert in Sound settings is a
+different sound and must not be used here. `IslandNotificationSoundPlayer`
+sends an immediate sound-only request through public UserNotifications APIs.
+The request has no title, body, badge, attachment, or service data. It does not
+create a banner or a Notification Center entry. The foreground delegate also
+limits this request to sound only. macOS controls notification sound permission
+and Focus suppression.
+
+The router applies lock, mute, and Paguro's Do Not Disturb rules before the
+sound request. A stopped or locked island rejects both the event and its sound.
+Lock and quit cancel pending sounds. Cancellation changes the request ID so a
+late completion cannot remove a newer sound after unlock. Sound requests share
+one ID between cancellations to avoid an unbounded pending queue during a burst.
+Hovering, resizing, and restoring history do not play a sound. The system
+fallback owns its sound and does not also invoke the island sound player.
+
 The pipeline applies rules in this order:
 
 1. Validate the event.
