@@ -10,6 +10,14 @@ workspaces and accounts, and the toolbar for navigation and service controls.
 Use "workspace" in user-facing text. Each service account keeps a separate
 session, even when two accounts use the same website.
 
+The custom-service form discovers the website icon while the user enters the
+address. Place its compact preview beside the name and address, with a native
+Change Icon menu. Keep manual URL overrides in the service editor. Adding a
+service must not wait for icon discovery.
+
+Catalog tiles prefer bundled service icons, so they match the sidebar and do
+not need a website fetch before displaying the service mark.
+
 ## Appearance
 
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is
@@ -43,6 +51,10 @@ Show Lock only when App Lock is enabled and Paguro is unlocked.
 The notch island is optional. Use macOS notifications on displays without a
 notch. Keep notification detection separate from presentation.
 
+Global, workspace, and service mute also pause audio and video in the affected
+service views. Global mute controls in the header and menu bar share one state.
+Their help and accessibility labels name both notifications and media.
+
 Make notification controls usable with a pointer, keyboard, and VoiceOver.
 Scroll focused cards into view. Keep dismiss controls available while their
 card or button has hover or keyboard focus. Respect Reduce Motion.
@@ -65,6 +77,11 @@ notices when Paguro detects a data problem, instead of a routine Settings contro
 Showing the lock screen does not request authentication. Start Touch ID or
 password authentication only when the user activates Unlock. Cancelling the
 prompt leaves the lock screen in place.
+
+The lock screen uses the same behind-window glass and protective tint as the
+empty-service view. It follows Window glass and Shell transparency settings.
+Hide the service content and sidebar while locked, including from hit testing
+and accessibility. The glass must not reveal service content.
 
 ## Updates
 

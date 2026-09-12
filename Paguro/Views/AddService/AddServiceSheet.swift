@@ -11,8 +11,7 @@ struct AddServiceSheet: View {
     @State private var selectedSpaceID: UUID
     @State private var customURL = ""
     @State private var customLabel = ""
-    @State private var customIconData: Data?
-    @State private var iconWebsiteURL = ""
+    @State private var iconDraft = ServiceIconDraft()
     @State private var urlError: String?
 
     enum AddServiceTab: String, CaseIterable {
@@ -132,13 +131,35 @@ struct AddServiceSheet: View {
     }
 
     private var customURLContent: some View {
-        Form {
-            TextField("Label", text: $customLabel, prompt: Text("My Service"))
-                .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 20) {
+                ServiceIconPicker(
+                    label: customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "Service" : customLabel,
+                    draft: iconDraft
+                )
 
-            TextField("URL", text: $customURL, prompt: Text("https://example.com"))
-                .textFieldStyle(.roundedBorder)
-                .onChange(of: customURL) { urlError = nil }
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Name")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("Service name", text: $customLabel, prompt: Text("My Service"))
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Address")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("Service address", text: $customURL, prompt: Text("https://example.com"))
+                            .textFieldStyle(.roundedBorder)
+                            .onChange(of: customURL) {
+                                urlError = nil
+                                iconDraft.updateURL(customURL)
+                            }
+                    }
+                }
+            }
 
             if let error = urlError {
                 Text(error)
@@ -146,26 +167,26 @@ struct AddServiceSheet: View {
                     .foregroundStyle(.red)
             }
 
-            Divider()
-
-            ServiceIconEditor(
-                label: customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? "Service"
-                    : customLabel,
-                serviceURL: customURL,
-                customIconData: $customIconData,
-                websiteURL: $iconWebsiteURL
-            )
-
-            Button("Add Service") {
-                addCustomService()
+            if let error = iconDraft.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
-            .disabled(customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || customURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .buttonStyle(.borderedProminent)
+
+            HStack {
+                Spacer()
+                Button("Add Service") {
+                    addCustomService()
+                }
+                .disabled(customLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || customURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .buttonStyle(.borderedProminent)
+            }
         }
         .padding(20)
         .frame(maxHeight: .infinity, alignment: .top)
+        .onAppear { iconDraft.updateURL(customURL) }
+        .onDisappear { iconDraft.cancel() }
     }
 
     private func addCustomService() {
@@ -182,7 +203,8 @@ struct AddServiceSheet: View {
         guard appState.addService(
             label: label,
             url: url,
-            customIconData: customIconData,
+            customIconData: iconDraft.customIconData,
+            fetchedIconData: iconDraft.fetchedIcon(for: url),
             to: selectedSpaceID
         ) != nil else {
             urlError = "Paguro could not save this service. Try again."

@@ -9,6 +9,34 @@ import XCTest
 /// first notification per web-view lifetime carries the icon.
 final class NotificationAttachmentTests: XCTestCase {
     @MainActor
+    func testNotificationsUseTheFaviconFetchedAfterThePresenterWasCreated() throws {
+        let service = ModelFixtures.service(label: "Notification Test", catalogID: nil)
+        let presenter = NotificationPresenter(
+            serviceLabel: service.label,
+            serviceIconURLProvider: { NotificationAttachmentStore.prepareServiceIcon(for: service) }
+        )
+        let event = try NotificationEvent.normalize(
+            id: UUID(), serviceID: service.id,
+            payload: NotificationPayload(title: "Hello", body: "Sample", tag: "test"),
+            receivedAt: Date()
+        )
+        XCTAssertTrue(presenter.makeRequest(event: event, identifier: "before-fetch").content.attachments.isEmpty)
+
+        service.fetchedIconData = try Data(contentsOf: makeIconURL())
+        let storedIcon = try XCTUnwrap(NotificationAttachmentStore.prepareServiceIcon(for: service))
+        addTeardownBlock { try? FileManager.default.removeItem(at: storedIcon) }
+        for index in 1...2 {
+            XCTAssertEqual(
+                presenter.makeRequest(event: event, identifier: "after-fetch-\(index)").content.attachments.count,
+                1, "New notifications use the fetched favicon without recreating the presenter"
+            )
+        }
+
+        service.fetchedIconData = nil
+        XCTAssertTrue(presenter.makeRequest(event: event, identifier: "after-removal").content.attachments.isEmpty)
+    }
+
+    @MainActor
     private func makeIconURL() throws -> URL {
         let image = NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in
             NSColor.systemTeal.setFill()

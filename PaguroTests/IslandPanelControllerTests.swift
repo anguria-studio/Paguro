@@ -7,6 +7,31 @@ import XCTest
 
 @MainActor
 final class IslandPanelControllerTests: XCTestCase {
+    func testIslandUsesTheFaviconFetchedAfterThePresenterWasCreated() throws {
+        let service = ModelFixtures.service(label: "Notification Test", catalogID: nil)
+        let presenter = IslandNotificationPresenter(
+            controller: makeController(renderer: RecordingIslandPanelRenderer()),
+            serviceLabel: service.label,
+            serviceIconURLProvider: { NotificationAttachmentStore.prepareServiceIcon(for: service) }
+        )
+        let event = try makeEvent(number: 1, serviceID: service.id)
+        XCTAssertNil(presenter.makeContent(event: event).serviceIcon)
+
+        let image = NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in
+            NSColor.systemTeal.setFill()
+            rect.fill()
+            return true
+        }
+        service.fetchedIconData = try ServiceIconImageProcessor.normalizedPNG(from: image)
+        let content = presenter.makeContent(event: event)
+        let iconURL = try XCTUnwrap(content.serviceIconURL)
+        addTeardownBlock { try? FileManager.default.removeItem(at: iconURL) }
+        XCTAssertNotNil(content.serviceIcon)
+
+        service.fetchedIconData = nil
+        XCTAssertNil(presenter.makeContent(event: event).serviceIcon)
+    }
+
     func testKeyboardOpeningStaysOpenAwayFromPointerAndCollapsesQuietly() async throws {
         let renderer = RecordingIslandPanelRenderer()
         let scheduler = RecordingIslandPanelScheduler()

@@ -66,6 +66,29 @@ final class ServiceAndIconTests: XCTestCase {
         XCTAssertEqual(entry.url, "https://calendar.google.com/calendar/u/0/r")
     }
 
+    @MainActor
+    func testNotificationTestCatalogHasAnIconBeforeWebsiteDiscovery() throws {
+        let entry = try XCTUnwrap(ServiceCatalog.shared.entry(for: "notification-test"))
+        XCTAssertEqual(entry.url, "https://anguria.studio/paguro/test-notifications/")
+        let service = ServiceInstance(label: entry.name, url: entry.url, catalogEntryID: entry.id)
+        XCTAssertNil(service.fetchedIconData)
+        let icon = try XCTUnwrap(NSImage(named: "brand-\(entry.id)"))
+        var appearanceImages: [Data] = []
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            let appearance = try XCTUnwrap(NSAppearance(named: name))
+            var png: Data?
+            appearance.performAsCurrentDrawingAppearance {
+                png = try? ServiceIconImageProcessor.normalizedPNG(from: icon)
+            }
+            appearanceImages.append(try XCTUnwrap(png))
+        }
+        XCTAssertNotEqual(appearanceImages[0], appearanceImages[1])
+
+        let iconURL = try XCTUnwrap(NotificationAttachmentStore.prepareServiceIcon(for: service))
+        defer { try? FileManager.default.removeItem(at: iconURL) }
+        XCTAssertNotNil(NSImage(contentsOf: iconURL))
+    }
+
     func testFaviconParserHandlesAttributeOrderAndRelativeURLs() {
         let html = """
         <html><head>

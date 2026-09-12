@@ -112,7 +112,12 @@ private struct CatalogEntryButton: View {
 
     @ViewBuilder
     private var iconView: some View {
-        if let icon {
+        if let brand = NSImage(named: "brand-\(entry.id)") {
+            Image(nsImage: brand)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(.primary)
+        } else if let icon {
             Image(nsImage: icon)
                 .resizable()
                 .aspectRatio(contentMode: .fit)

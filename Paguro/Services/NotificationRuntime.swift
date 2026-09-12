@@ -82,6 +82,10 @@ final class NotificationRuntime {
         self.scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
         self.dndStartMinutes = preferencesStore.dndStartMinutes
         self.dndEndMinutes = preferencesStore.dndEndMinutes
+        webViewPool.isMediaMuted = { [weak self] id in
+            guard let self else { return false }
+            return self.doNotDisturb || self.scheduledDNDActive || self.isServiceEffectivelyMuted(id)
+        }
     }
 
     /// Installs lifecycle adapters and applies saved notification preferences.
@@ -294,7 +298,8 @@ final class NotificationRuntime {
 
     var isQuietHoursScheduled: Bool { quietHoursTask != nil }
 
-    func refreshDockMuteState() {
+    func refreshMuteState() {
+        webViewPool.refreshMediaPlayback()
         guard let services = try? context.fetch(FetchDescriptor<ServiceInstance>()) else { return }
         let muted = NotificationMutePresentation.allServicesMuted(
             serviceMuteStates: services.map(\.isEffectivelyMuted),
@@ -306,7 +311,7 @@ final class NotificationRuntime {
 
     private func refreshEffectiveDoNotDisturb() {
         badgeManager.doNotDisturb = doNotDisturb || scheduledDNDActive
-        refreshDockMuteState()
+        refreshMuteState()
         badgeManager.updateDockBadge()
     }
 
@@ -393,7 +398,7 @@ final class NotificationRuntime {
             guard let self,
                   let webView = self.webViewPool.liveWebView(for: serviceID) else { return }
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, !self.hasShutDown else { return }
                 await self.notificationManager.pollNow(
                     for: serviceID,
                     webView: webView,
@@ -415,7 +420,7 @@ final class NotificationRuntime {
             // clearing semantics a few seconds later, so an immediate read adds
             // no new risk and removes only the blind window.
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, !self.hasShutDown else { return }
                 await self.notificationManager.pollNow(
                     for: serviceID,
                     webView: webView,

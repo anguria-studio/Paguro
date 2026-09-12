@@ -175,6 +175,14 @@ The page does not send a service ID or notification icon. The native message
 handler binds each signal to its service account. Native presentation uses the
 known service icon. Extra page fields cannot replace these values.
 
+Both presentation routes read the current saved service icon when a new
+notification arrives. A favicon fetched after the web view opens must appear
+in later notifications without a reload or restart. A custom icon takes
+precedence over the catalog icon, which takes precedence over the fetched
+favicon, as in the sidebar. Existing notifications keep their original image.
+macOS keeps Paguro's app icon as the sender identity and can show the service
+image as an attachment.
+
 ## Policy pipeline
 
 App lock suppresses both presentation routes before mute and route selection.
@@ -325,6 +333,27 @@ it in System Settings. `NotificationAuthorizationPolicy.merge` keeps
 or `provisional` at once. Without that rule the first activation would show the
 user a refusal that they never made.
 
+### Debug identifier case
+
+Keep a development bundle identifier stable, including its letter case.
+On a Mac that registered an earlier spelling, macOS can accept requests from
+the new spelling and show background banners. Yet it can fail to deliver the
+foreground `willPresent` callback. An `authorized` permission does not rule
+out this problem.
+
+Compare the running app's bundle identifier with the identifier in the
+macOS notification routing logs. Confirm the mismatch with a signed native
+notification test before changing the build. A page notification and a
+sidebar badge use separate paths, so neither proves that this callback works.
+
+To match a confirmed existing registration, set
+`PAGURO_DEBUG_BUNDLE_IDENTIFIER` in the ignored
+`Configuration/LocalSigning.xcconfig` file to that exact identifier. Generate
+the project again and rebuild. Only the Debug app uses this override.
+Release, Compatibility, and test identifiers keep their configured values.
+Do not change the public app identifier or delete service data to fix a local
+Debug registration.
+
 ### The Settings warning
 
 A permission that delivers nothing is silent without help. Paguro still builds
@@ -391,13 +420,35 @@ log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
 
 The content header has one global notification mute beside reload.
 It applies to all spaces and services.
-The same state is available in Settings and through `Shift-Command-D`.
+The same state is available in the menu bar, Settings, and through
+`Shift-Command-D`.
 
-Global mute suppresses new macOS notification banners. Unread counts remain
+Global mute suppresses new macOS notifications and island alerts. It also
+suspends audio and video playback in every service view, including the selected
+service. This blocks website notification sounds and voice-message playback. Unread counts remain
 visible in service badges and workspace totals. The Dock shows the muted bell
 instead of a counter. Each visible
 workspace header and service adds a barred bell while manual global mute is
 active.
+
+Service and workspace mute also suspend playback in the affected service
+views. Other unmuted services remain available for playback. Any active mute
+reason wins: clearing global mute preserves service and workspace mute. Quiet
+hours apply the same global rule. Selecting, reloading, preloading, or rebuilding
+a service view must not bypass mute.
+
+Paguro uses public WebKit media suspension, with no service-specific scripts.
+Audio and video elements pause. WebKit can let a new Web Audio context play
+while the page is suspended. A bundled generic script routes each context's
+speaker output through a gain that is zero while muted. These new contexts
+can advance silently. The script also handles nested frames and leaves offline
+audio rendering unchanged.
+
+Clearing mute permits playback again unless the view is still suspended in the
+background. The website and WebKit control whether paused media resumes.
+This control does not change microphone capture or request call termination.
+Use the separate microphone control to stop sending audio. Live call
+compatibility needs a service test.
 
 Global mute does not delete notifications that macOS has already delivered.
 It does not stop web views or sign services out.
@@ -465,6 +516,23 @@ Diagnostic output can contain a service ID and a redacted host.
 The service matrix must state these limits for each service.
 
 ## Tests
+
+### Notification Test catalog service
+
+Choose Add Service > Browse and search for Notification Test, or find it under
+Utilities. It opens the public
+[notification test page](https://anguria.studio/paguro/test-notifications/).
+The entry is available in both release editions and includes the Paguro icon.
+It is not added automatically to a workspace.
+
+The page needs no account. Send one notification or a sequence of six to test
+macOS banners, island alerts, and app lock. Requests start only after a button
+click. Its page-title count supplies unread badges through the normal polling
+path; Mark all read resets the count. Keep the service awake and unmuted.
+The page tests normal website notification handling, not provider sign-in or
+message delivery. It has no special native permissions or review-only behavior.
+
+### Automated coverage
 
 The local fixture must cover these cases:
 

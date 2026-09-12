@@ -96,6 +96,28 @@ Wake must not present old unread state as a new message.
 Wake resumes at the last `http` or `https` page. A service that showed the
 error page when it hibernated resumes at its home URL.
 
+## Media playback mute
+
+`NotificationRuntime` supplies current global, quiet-hours, workspace, and
+service mute to `WebViewPool`. The pool combines mute with its separate soft
+hibernation state through `MediaPlaybackPolicy` in `PaguroCore`.
+It applies public `setAllMediaPlaybackSuspended` before the first page load
+and whenever either suspension reason changes. Activating a muted service
+clears only soft hibernation. Clearing mute does not wake a background view.
+New and rebuilt views read the current mute state, including quiet hours
+before deferred notification startup completes.
+
+`WebAudioMuteScript` closes a public WebKit suspension gap: a newly created
+Web Audio context can start while suspension is active. The bundled script
+routes connections to each live context's destination through an output gain.
+Mute sets the gain to zero. It preserves the connection return value and
+disconnection overloads, and it does not change offline rendering. Weak gain
+references avoid retaining closed or unused contexts. Live updates propagate
+from parent to child frames. New documents receive the current state at
+document start. This is a generic compatibility guard, not a service recipe.
+
+Microphone capture remains under the separate capture controls.
+
 ## Navigation
 
 `PaguroCore` classifies each navigation before it loads.

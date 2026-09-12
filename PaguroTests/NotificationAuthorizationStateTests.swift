@@ -46,10 +46,10 @@ final class NotificationAuthorizationStateTests: XCTestCase {
 
     func testAGrantedPromptEndsInTheAuthorizedState() async {
         let manager = makeManager()
-        var reported = UNAuthorizationStatus.notDetermined
-        manager.readAuthorizationStatus = { reported }
+        let reported = MainActorTestValue(UNAuthorizationStatus.notDetermined)
+        manager.readAuthorizationStatus = { reported.value }
         manager.performAuthorizationRequest = {
-            reported = .authorized
+            reported.value = .authorized
             return true
         }
 
@@ -83,10 +83,10 @@ final class NotificationAuthorizationStateTests: XCTestCase {
     /// `granted: false`, so this is a real refusal that Paguro respects.
     func testAUserRefusalBecomesTheDeniedState() async {
         let manager = makeManager()
-        var reported = UNAuthorizationStatus.notDetermined
-        manager.readAuthorizationStatus = { reported }
+        let reported = MainActorTestValue(UNAuthorizationStatus.notDetermined)
+        manager.readAuthorizationStatus = { reported.value }
         manager.performAuthorizationRequest = {
-            reported = .denied
+            reported.value = .denied
             return false
         }
 
@@ -175,8 +175,8 @@ final class NotificationAuthorizationStateTests: XCTestCase {
     /// the manual fix that worked. Returning to Paguro must clear the warning.
     func testARefreshClearsUnavailableOnceThePermissionArrives() async {
         let manager = makeManager()
-        var reported = UNAuthorizationStatus.denied
-        manager.readAuthorizationStatus = { reported }
+        let reported = MainActorTestValue(UNAuthorizationStatus.denied)
+        manager.readAuthorizationStatus = { reported.value }
         manager.performAuthorizationRequest = {
             throw NSError(domain: UNErrorDomain, code: 1)
         }
@@ -184,7 +184,7 @@ final class NotificationAuthorizationStateTests: XCTestCase {
         manager.startAuthorization()
         await drain(manager, until: .unavailable)
 
-        reported = .authorized
+        reported.value = .authorized
         manager.refreshAuthorizationState()
         await drain(manager, until: .authorized)
 

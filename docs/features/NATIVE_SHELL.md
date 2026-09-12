@@ -439,6 +439,11 @@ At 0 percent, the protective layer is opaque across the complete window.
 At 100 percent, Paguro adds no protective tint.
 The Reset Glass Lab action restores Regular glass and 100 percent transparency.
 
+The lock screen uses this same window material and protective tint.
+It hides the underlying shell without unloading service views. Hidden shell
+content does not accept pointer input or appear in the accessibility tree.
+Lock transitions do not fade service content through the glass.
+
 `ShellPreferences` owns shell-setting load, normalization, and persistence.
 Layout and appearance use the transactional app preferences row. Glass,
 icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so

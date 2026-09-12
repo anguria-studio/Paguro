@@ -521,7 +521,7 @@ final class AppState {
         webAppearanceChanged: Bool = false,
         presenceChanged: Bool = false
     ) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         guard let service = workspaceStore.commitServiceEdits(serviceID: serviceID) else { return }
         if cssChanged || presenceChanged {
             // Custom CSS and the focus override are both injected when the web
@@ -725,9 +725,10 @@ final class AppState {
         catalogEntryID: String? = nil,
         userAgent: String? = nil,
         customIconData: Data? = nil,
+        fetchedIconData: Data? = nil,
         to spaceID: UUID
     ) -> UUID? {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         let serviceID: UUID?
         do {
             serviceID = try workspaceStore.addService(
@@ -736,6 +737,7 @@ final class AppState {
                 catalogEntryID: catalogEntryID,
                 userAgent: userAgent,
                 customIconData: customIconData,
+                fetchedIconData: fetchedIconData,
                 to: spaceID
             )
         } catch {
@@ -751,7 +753,7 @@ final class AppState {
             catalogEntryID: catalogEntryID
         )
 
-        if customIconData == nil {
+        if customIconData == nil && fetchedIconData == nil {
             Task { @MainActor [weak self] in
                 await self?.refreshFetchedIcon(for: serviceID)
             }
@@ -761,7 +763,7 @@ final class AppState {
     }
 
     func moveService(linkID: UUID, to targetSpaceID: UUID, followToSpace: Bool) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         let outcome: WorkspaceStore.ServiceMoveOutcome?
         do {
             outcome = try workspaceStore.moveService(
@@ -822,7 +824,7 @@ final class AppState {
     }
 
     func deleteService(_ serviceID: UUID) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         let outcome: WorkspaceStore.ServiceDeletionOutcome?
         do {
             outcome = try workspaceStore.deleteService(serviceID)
@@ -841,7 +843,7 @@ final class AppState {
     }
 
     func setServiceMuted(_ muted: Bool, for serviceID: UUID) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         do {
             guard try workspaceStore.setServiceMuted(muted, for: serviceID) else { return }
         } catch {
@@ -852,7 +854,7 @@ final class AppState {
     }
 
     func setWorkspaceMuted(_ muted: Bool, for spaceID: UUID) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         let serviceIDs: Set<UUID>?
         do {
             serviceIDs = try workspaceStore.setWorkspaceMuted(muted, for: spaceID)
@@ -908,7 +910,7 @@ final class AppState {
     /// space, it is deleted and its data store is reclaimed — but only after
     /// the save succeeds. A failed save rolls back and changes nothing.
     func removeLink(_ linkID: UUID) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         let outcome: WorkspaceStore.LinkRemovalOutcome?
         do {
             outcome = try workspaceStore.removeLink(linkID)
@@ -929,7 +931,7 @@ final class AppState {
     /// removal, so deleting a space never leaves invisible orphan records or
     /// leaks per-service storage. Selection is moved off the deleted space.
     func deleteSpace(_ spaceID: UUID) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         let outcome: WorkspaceStore.SpaceDeletionOutcome?
         do {
             outcome = try workspaceStore.deleteSpace(spaceID)
@@ -1261,7 +1263,7 @@ extension AppState {
         _ outcome: WorkspaceStore.ConfigurationImportOutcome,
         mode: ConfigurationImportMode
     ) {
-        defer { notificationRuntime.refreshDockMuteState() }
+        defer { notificationRuntime.refreshMuteState() }
         if mode == .replace {
             launchPreloadTask?.cancel()
             workspacePreloadTask?.cancel()

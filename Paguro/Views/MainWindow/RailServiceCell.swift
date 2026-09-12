@@ -282,7 +282,7 @@ struct RailServiceCell<ContextMenu: View>: View {
     private func moveUp() {
         guard let index = workspaceLinks.firstIndex(where: { $0.id == link.id }),
               index > 0 else { return }
-        appState.reorderService(
+        _ = appState.reorderService(
             droppedLinkID: link.id,
             relativeTo: workspaceLinks[index - 1].id,
             placement: .before
@@ -292,7 +292,7 @@ struct RailServiceCell<ContextMenu: View>: View {
     private func moveDown() {
         guard let index = workspaceLinks.firstIndex(where: { $0.id == link.id }),
               index < workspaceLinks.count - 1 else { return }
-        appState.reorderService(
+        _ = appState.reorderService(
             droppedLinkID: link.id,
             relativeTo: workspaceLinks[index + 1].id,
             placement: .after

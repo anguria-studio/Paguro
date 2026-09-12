@@ -30,6 +30,13 @@ Use an Apple Development identity for notification and permission tests.
 Git ignores `LocalSigning.xcconfig`.
 Do not commit a personal team value.
 
+Keep the Debug bundle identifier stable, including its letter case. If macOS
+still routes foreground notifications to an older Debug identifier, set
+`PAGURO_DEBUG_BUNDLE_IDENTIFIER` in `LocalSigning.xcconfig` to that exact value.
+This override affects only the Debug app, not Release, Compatibility, or tests.
+See [notification troubleshooting](docs/features/NOTIFICATIONS.md#debug-identifier-case)
+before changing it.
+
 ## Make a change
 
 1. Keep the change small and focused.

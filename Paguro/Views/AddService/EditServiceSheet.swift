@@ -224,8 +224,8 @@ struct EditServiceSheet: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Toggle("Allow notifications", isOn: $notify)
-                .help("The master switch for this service. Off silences its banners and badge.")
+            Toggle("Allow notifications and media", isOn: $notify)
+                .help("The master switch for this service. Off silences notifications, hides its badge, and pauses audio and video.")
 
             Toggle("macOS notification banners", isOn: $osNotify)
                 .disabled(!notify)
