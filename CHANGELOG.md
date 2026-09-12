@@ -15,6 +15,8 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 - Global, workspace, and service mute now silence website audio, including the
   selected service. Audio and video playback pause while muted.
+- New macOS and island notifications use favicons fetched after a service
+  opens, without restarting Paguro.
 
 ## [1.0.2] — 2026-09-11
 

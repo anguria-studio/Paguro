@@ -47,17 +47,21 @@ final class UserScriptManager {
         let systemCheck = isSystemNotificationsEnabled
         let islandCheck = isIslandNotificationsEnabled
         let dndCheck = isDoNotDisturbActive
-        let serviceIconURL = NotificationAttachmentStore.prepareServiceIcon(for: instance)
+        // The favicon can arrive after this web view opens. Read the saved icon
+        // for each new notification, as the sidebar does, rather than freezing nil.
+        let serviceIconURLProvider: @MainActor () -> URL? = {
+            NotificationAttachmentStore.prepareServiceIcon(for: instance)
+        }
         let presenter = NotificationPresenter(
             serviceLabel: instance.label,
-            serviceIconURL: serviceIconURL,
+            serviceIconURLProvider: serviceIconURLProvider,
             lockSnapshot: lockSnapshot
         )
         let islandPresenter = islandPanelController.map { controller in
             IslandNotificationPresenter(
                 controller: controller,
                 serviceLabel: instance.label,
-                serviceIconURL: serviceIconURL
+                serviceIconURLProvider: serviceIconURLProvider
             )
         }
         let presentationRouter = NotificationPresentationRouter(

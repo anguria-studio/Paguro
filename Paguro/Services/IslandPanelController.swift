@@ -844,16 +844,24 @@ final class IslandPanelController {
 final class IslandNotificationPresenter: NotificationEventPresenting {
     private let controller: IslandPanelController
     private let serviceLabel: String
-    private let serviceIconURL: URL?
+    private let serviceIconURLProvider: @MainActor () -> URL?
 
     init(
         controller: IslandPanelController,
         serviceLabel: String,
-        serviceIconURL: URL?
+        serviceIconURLProvider: @escaping @MainActor () -> URL?
     ) {
         self.controller = controller
         self.serviceLabel = serviceLabel
-        self.serviceIconURL = serviceIconURL
+        self.serviceIconURLProvider = serviceIconURLProvider
+    }
+
+    func makeContent(event: NotificationEvent) -> NotificationIslandPanelContent {
+        NotificationIslandPanelContent(
+            event: event,
+            serviceLabel: serviceLabel,
+            serviceIconURL: serviceIconURLProvider()
+        )
     }
 
     func present(
@@ -861,13 +869,7 @@ final class IslandNotificationPresenter: NotificationEventPresenting {
         requestID: String,
         traceID: String
     ) {
-        controller.present(
-            NotificationIslandPanelContent(
-                event: event,
-                serviceLabel: serviceLabel,
-                serviceIconURL: serviceIconURL
-            )
-        )
+        controller.present(makeContent(event: event))
         AppLogger.notifications.info(
             "Notification trace \(traceID, privacy: .public): island accepted request \(requestID, privacy: .public)"
         )

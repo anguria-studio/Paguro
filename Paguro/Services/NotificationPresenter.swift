@@ -6,18 +6,18 @@ import UserNotifications
 @MainActor
 final class NotificationPresenter: NotificationEventPresenting {
     private let serviceLabel: String
-    private let serviceIconURL: URL?
+    private let serviceIconURLProvider: @MainActor () -> URL?
     private let center: UNUserNotificationCenter
     private let lockSnapshot: AtomicBool
 
     init(
         serviceLabel: String,
-        serviceIconURL: URL?,
+        serviceIconURLProvider: @escaping @MainActor () -> URL?,
         center: UNUserNotificationCenter = .current(),
         lockSnapshot: AtomicBool = AtomicBool(false)
     ) {
         self.serviceLabel = serviceLabel
-        self.serviceIconURL = serviceIconURL
+        self.serviceIconURLProvider = serviceIconURLProvider
         self.center = center
         self.lockSnapshot = lockSnapshot
     }
@@ -29,7 +29,7 @@ final class NotificationPresenter: NotificationEventPresenting {
         let content = NativeNotificationContentBuilder.makeContent(
             event: event,
             serviceLabel: serviceLabel,
-            serviceIconURL: serviceIconURL
+            serviceIconURL: serviceIconURLProvider()
         )
         return UNNotificationRequest(
             identifier: identifier,
@@ -57,12 +57,13 @@ final class NotificationPresenter: NotificationEventPresenting {
         #endif
 
         let lockSnapshot = lockSnapshot
-        let center = center
-        center.add(request) { error in
+        center.add(request) { [self] error in
             // A request accepted during a lock transition must not remain visible.
             if lockSnapshot.value {
-                center.removePendingNotificationRequests(withIdentifiers: [requestID])
-                center.removeDeliveredNotifications(withIdentifiers: [requestID])
+                Task { @MainActor in
+                    self.center.removePendingNotificationRequests(withIdentifiers: [requestID])
+                    self.center.removeDeliveredNotifications(withIdentifiers: [requestID])
+                }
             }
             if let error {
                 AppLogger.notifications.error(

@@ -170,7 +170,7 @@ final class NotificationBridgeTests: XCTestCase {
         let serviceID = UUID()
         let presenter = NotificationPresenter(
             serviceLabel: "Slack",
-            serviceIconURL: nil
+            serviceIconURLProvider: { nil }
         )
         let event = try NotificationEvent.normalize(
             id: UUID(),

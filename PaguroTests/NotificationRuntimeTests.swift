@@ -75,12 +75,12 @@ final class NotificationRuntimeTests: XCTestCase {
 
     @MainActor
     func testQuietHoursTimerPreservesManualMuteWhenTheScheduleEnds() async throws {
-        var minute = 23 * 60
+        let minute = MainActorTestValue(23 * 60)
         let fixture = try makeFixture(
             preferences: AppPreferences(
                 scheduledDNDEnabled: true, dndStartMinutes: 22 * 60, dndEndMinutes: 7 * 60
             ),
-            minuteOfDay: { minute },
+            minuteOfDay: { minute.value },
             quietHoursInterval: .milliseconds(20)
         )
         defer { fixture.shutdown() }
@@ -94,17 +94,17 @@ final class NotificationRuntimeTests: XCTestCase {
         _ = fixture.pool.webView(for: service)
         XCTAssertEqual(writes, [true])
         fixture.runtime.doNotDisturb = true
-        minute = 12 * 60
+        minute.value = 12 * 60
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(writes, [true])
         fixture.runtime.doNotDisturb = false
         XCTAssertEqual(writes, [true, false])
-        minute = 23 * 60
+        minute.value = 23 * 60
         for _ in 0..<100 where writes.last != true {
             try await Task.sleep(for: .milliseconds(20))
         }
         XCTAssertEqual(writes, [true, false, true])
-        minute = 12 * 60
+        minute.value = 12 * 60
         for _ in 0..<100 where writes.last != false {
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -735,8 +735,8 @@ final class NotificationRuntimeTests: XCTestCase {
         let fixture = try makeFixture()
         defer { fixture.shutdown() }
 
-        var reported = UNAuthorizationStatus.denied
-        fixture.notificationManager.readAuthorizationStatus = { reported }
+        let reported = MainActorTestValue(UNAuthorizationStatus.denied)
+        fixture.notificationManager.readAuthorizationStatus = { reported.value }
         fixture.notificationManager.performAuthorizationRequest = { false }
 
         fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
@@ -745,7 +745,7 @@ final class NotificationRuntimeTests: XCTestCase {
 
         XCTAssertEqual(fixture.notificationManager.authorizationState, .denied)
 
-        reported = .authorized
+        reported.value = .authorized
         fixture.notificationCenter.post(
             name: NSApplication.didBecomeActiveNotification,
             object: nil

@@ -175,6 +175,14 @@ The page does not send a service ID or notification icon. The native message
 handler binds each signal to its service account. Native presentation uses the
 known service icon. Extra page fields cannot replace these values.
 
+Both presentation routes read the current saved service icon when a new
+notification arrives. A favicon fetched after the web view opens must appear
+in later notifications without a reload or restart. A custom icon takes
+precedence over the catalog icon, which takes precedence over the fetched
+favicon, as in the sidebar. Existing notifications keep their original image.
+macOS keeps Paguro's app icon as the sender identity and can show the service
+image as an attachment.
+
 ## Policy pipeline
 
 App lock suppresses both presentation routes before mute and route selection.
