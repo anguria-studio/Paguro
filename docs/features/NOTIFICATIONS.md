@@ -391,13 +391,35 @@ log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
 
 The content header has one global notification mute beside reload.
 It applies to all spaces and services.
-The same state is available in Settings and through `Shift-Command-D`.
+The same state is available in the menu bar, Settings, and through
+`Shift-Command-D`.
 
-Global mute suppresses new macOS notification banners. Unread counts remain
+Global mute suppresses new macOS notifications and island alerts. It also
+suspends audio and video playback in every service view, including the selected
+service. This blocks website notification sounds and voice-message playback. Unread counts remain
 visible in service badges and workspace totals. The Dock shows the muted bell
 instead of a counter. Each visible
 workspace header and service adds a barred bell while manual global mute is
 active.
+
+Service and workspace mute also suspend playback in the affected service
+views. Other unmuted services remain available for playback. Any active mute
+reason wins: clearing global mute preserves service and workspace mute. Quiet
+hours apply the same global rule. Selecting, reloading, preloading, or rebuilding
+a service view must not bypass mute.
+
+Paguro uses public WebKit media suspension, with no service-specific scripts.
+Audio and video elements pause. WebKit can let a new Web Audio context play
+while the page is suspended. A bundled generic script routes each context's
+speaker output through a gain that is zero while muted. These new contexts
+can advance silently. The script also handles nested frames and leaves offline
+audio rendering unchanged.
+
+Clearing mute permits playback again unless the view is still suspended in the
+background. The website and WebKit control whether paused media resumes.
+This control does not change microphone capture or request call termination.
+Use the separate microphone control to stop sending audio. Live call
+compatibility needs a service test.
 
 Global mute does not delete notifications that macOS has already delivered.
 It does not stop web views or sign services out.

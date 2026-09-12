@@ -43,6 +43,10 @@ Show Lock only when App Lock is enabled and Paguro is unlocked.
 The notch island is optional. Use macOS notifications on displays without a
 notch. Keep notification detection separate from presentation.
 
+Global, workspace, and service mute also pause audio and video in the affected
+service views. Global mute controls in the header and menu bar share one state.
+Their help and accessibility labels name both notifications and media.
+
 Make notification controls usable with a pointer, keyboard, and VoiceOver.
 Scroll focused cards into view. Keep dismiss controls available while their
 card or button has hover or keyboard focus. Respect Reduce Motion.

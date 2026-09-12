@@ -330,7 +330,7 @@ struct NotificationSettingsView: View {
                     get: { appState.doNotDisturb },
                     set: { appState.doNotDisturb = $0 }
                 ))
-                Text("Silences notification alerts. Unread badges remain visible.")
+                Text("Silences notifications and pauses audio and video in all services. Unread badges remain visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -343,7 +343,7 @@ struct NotificationSettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     serviceTable
-                    Text("Turning a service off silences its alerts and badge — mute is the master switch.")
+                    Text("Turning a service off silences its alerts, hides its badge, and pauses its audio and video.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -474,14 +474,12 @@ struct NotificationSettingsView: View {
         }
     }
 
-    /// Master switch: on means not muted. Muting silences banners and badge.
+    /// The master switch applies service mute to notifications and media.
     private func enabledBinding(_ service: ServiceInstance) -> Binding<Bool> {
         Binding(
             get: { !service.isMuted },
             set: { enabled in
-                service.isMuted = !enabled
-                save("toggle mute for \(service.label)")
-                appState.refreshBadgeState(for: service.id)
+                appState.setServiceMuted(!enabled, for: service.id)
             }
         )
     }
@@ -527,7 +525,7 @@ struct NotificationSettingsView: View {
                 ), displayedComponents: .hourAndMinute)
             }
 
-            Text("Silences notification banners during these hours. Unread badges remain visible.")
+            Text("Silences notifications and pauses audio and video during these hours. Unread badges remain visible.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

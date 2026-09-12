@@ -13,6 +13,33 @@ final class WebViewPool {
     private var snapshots: [UUID: NSImage] = [:]
     private let maxLoaded: Int = 15
     private var hasShutDown = false
+    private var softHibernatedIDs: Set<UUID> = []
+    private var appliedMediaSuspension: [UUID: Bool] = [:]
+
+    /// Reads current global, workspace, and service mute, including before launch finishes.
+    var isMediaMuted: ((UUID) -> Bool)?
+
+    @ObservationIgnored var writeMediaSuspension: (WKWebView, Bool) -> Void = {
+        WebAudioMuteScript.apply(muted: $1, to: $0)
+        $0.setAllMediaPlaybackSuspended($1)
+    }
+
+    func refreshMediaPlayback() {
+        for id in webViews.keys {
+            applyMediaPlaybackPolicy(for: id)
+        }
+    }
+
+    private func applyMediaPlaybackPolicy(for id: UUID) {
+        guard let webView = webViews[id] else { return }
+        let suspended = MediaPlaybackPolicy.shouldSuspend(
+            isMuted: isMediaMuted?(id) ?? false,
+            isSoftHibernated: softHibernatedIDs.contains(id)
+        )
+        guard appliedMediaSuspension[id] != suspended else { return }
+        appliedMediaSuspension[id] = suspended
+        writeMediaSuspension(webView, suspended)
+    }
 
     /// Guard set: IDs currently being evaluated for eviction.
     private var evictionInFlight: Set<UUID> = []
@@ -218,6 +245,7 @@ final class WebViewPool {
         coordinators[instance.id] = coordinator
 
         webViews[instance.id] = webView
+        applyMediaPlaybackPolicy(for: instance.id)
         lastAccessTimes[instance.id] = Date()
         observeCaptureState(webView, id: instance.id)
 
@@ -272,6 +300,7 @@ final class WebViewPool {
         coordinators[instance.id] = coordinator
 
         webViews[instance.id] = webView
+        applyMediaPlaybackPolicy(for: instance.id)
         lastAccessTimes[instance.id] = Date()
         observeCaptureState(webView, id: instance.id)
 
@@ -527,7 +556,8 @@ final class WebViewPool {
     private func softHibernateService(_ id: UUID) {
         guard let webView = webViews[id] else { return }
         guard !neverHibernateIDs.contains(id) else { return }
-        webView.setAllMediaPlaybackSuspended(true)
+        softHibernatedIDs.insert(id)
+        applyMediaPlaybackPolicy(for: id)
         webView.takeSnapshot(with: nil) { [weak self] image, _ in
             guard let image else { return }
             Task { @MainActor [weak self] in
@@ -543,10 +573,11 @@ final class WebViewPool {
         onServiceSoftHibernated?(id)
     }
 
-    /// Resumes media playback when a service becomes active again.
+    /// Clears background suspension without overriding mute.
     private func wakeService(_ id: UUID) {
-        guard let webView = webViews[id] else { return }
-        webView.setAllMediaPlaybackSuspended(false)
+        guard webViews[id] != nil else { return }
+        softHibernatedIDs.remove(id)
+        applyMediaPlaybackPolicy(for: id)
         AppLogger.webView.debug("Woke service \(id)")
         onServiceSoftWoke?(id)
     }
@@ -648,6 +679,8 @@ final class WebViewPool {
     }
 
     private func teardownWebView(_ instanceID: UUID) {
+        softHibernatedIDs.remove(instanceID)
+        appliedMediaSuspension.removeValue(forKey: instanceID)
         if let webView = webViews[instanceID] {
             webView.configuration.userContentController.removeAllScriptMessageHandlers()
             webView.stopLoading()

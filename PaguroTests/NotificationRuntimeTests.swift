@@ -8,6 +8,356 @@ import XCTest
 
 final class NotificationRuntimeTests: XCTestCase {
     @MainActor
+    func testMediaMuteCombinesGlobalServiceAndSharedWorkspaceMute() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let chat = ServiceInstance(label: "Chat", url: "about:blank", neverHibernate: true)
+        let music = ServiceInstance(label: "Music", url: "about:blank", neverHibernate: true)
+        let quiet = Space(name: "Quiet", emoji: "", isMuted: true)
+        let work = Space(name: "Work", emoji: "")
+        for service in [chat, music] { context.insert(service) }
+        for space in [quiet, work] { context.insert(space) }
+        context.insert(SpaceServiceLink(space: quiet, service: chat))
+        context.insert(SpaceServiceLink(space: work, service: chat))
+        try context.save()
+        var suspended: [ObjectIdentifier: Bool] = [:]
+        fixture.pool.writeMediaSuspension = { suspended[ObjectIdentifier($0)] = $1 }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        let chatView = fixture.pool.webView(for: chat)
+        let musicView = fixture.pool.webView(for: music)
+        XCTAssertEqual(suspended[ObjectIdentifier(chatView)], true)
+        XCTAssertEqual(suspended[ObjectIdentifier(musicView)], false)
+
+        fixture.runtime.doNotDisturb = true
+        XCTAssertEqual(suspended[ObjectIdentifier(musicView)], true)
+        // Selecting a service must not override global mute.
+        _ = fixture.pool.webView(for: music)
+        XCTAssertEqual(suspended[ObjectIdentifier(musicView)], true)
+        fixture.runtime.doNotDisturb = false
+        XCTAssertEqual(suspended[ObjectIdentifier(chatView)], true)
+        XCTAssertEqual(suspended[ObjectIdentifier(musicView)], false)
+
+        chat.isMuted = true
+        quiet.isMuted = false
+        try context.save()
+        fixture.runtime.refreshMuteState()
+        XCTAssertEqual(suspended[ObjectIdentifier(chatView)], true)
+        chat.isMuted = false
+        try context.save()
+        fixture.runtime.refreshMuteState()
+        XCTAssertEqual(suspended[ObjectIdentifier(chatView)], false)
+    }
+
+    @MainActor
+    func testMediaMuteAppliesBeforePreloadAndAfterRebuildDuringQuietHours() throws {
+        let fixture = try makeFixture(
+            preferences: AppPreferences(
+                scheduledDNDEnabled: true, dndStartMinutes: 22 * 60, dndEndMinutes: 7 * 60
+            ),
+            minuteOfDay: { 23 * 60 }
+        )
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Chat", url: "about:blank", neverHibernate: true)
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        var writes: [Bool] = []
+        fixture.pool.writeMediaSuspension = { _, value in writes.append(value) }
+        fixture.pool.preload(service)
+        XCTAssertEqual(writes, [true])
+        _ = fixture.pool.webView(for: service)
+        XCTAssertEqual(writes, [true])
+        fixture.pool.recreateWebView(for: service.id)
+        _ = fixture.pool.webView(for: service)
+        XCTAssertEqual(writes, [true, true])
+    }
+
+    @MainActor
+    func testQuietHoursTimerPreservesManualMuteWhenTheScheduleEnds() async throws {
+        var minute = 23 * 60
+        let fixture = try makeFixture(
+            preferences: AppPreferences(
+                scheduledDNDEnabled: true, dndStartMinutes: 22 * 60, dndEndMinutes: 7 * 60
+            ),
+            minuteOfDay: { minute },
+            quietHoursInterval: .milliseconds(20)
+        )
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Media", url: "about:blank", neverHibernate: true)
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        var writes: [Bool] = []
+        fixture.pool.writeMediaSuspension = { _, value in writes.append(value) }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        _ = fixture.pool.webView(for: service)
+        XCTAssertEqual(writes, [true])
+        fixture.runtime.doNotDisturb = true
+        minute = 12 * 60
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(writes, [true])
+        fixture.runtime.doNotDisturb = false
+        XCTAssertEqual(writes, [true, false])
+        minute = 23 * 60
+        for _ in 0..<100 where writes.last != true {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(writes, [true, false, true])
+        minute = 12 * 60
+        for _ in 0..<100 where writes.last != false {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(writes, [true, false, true, false])
+    }
+
+    @MainActor
+    func testUnmutingDoesNotResumeSoftHibernatedMedia() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Media", url: "about:blank")
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        var writes: [Bool] = []
+        fixture.pool.writeMediaSuspension = { _, value in writes.append(value) }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        _ = fixture.pool.webView(for: service)
+        fixture.runtime.doNotDisturb = true
+        fixture.pool.deactivateCurrentService()
+        fixture.runtime.doNotDisturb = false
+        XCTAssertEqual(writes, [false, true])
+        _ = fixture.pool.webView(for: service)
+        XCTAssertEqual(writes, [false, true, false])
+    }
+
+    @MainActor
+    func testPublicMediaSuspensionBlocksPlaybackAndPagePlayAttempts() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Media", url: "about:blank", neverHibernate: true)
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        let view = fixture.pool.webView(for: service)
+        let mediaHTML = """
+            <title>Media mute fixture</title><audio id="audio" muted loop></audio>
+            <script>
+            const bytes = new Uint8Array(8044);
+            const header = new DataView(bytes.buffer);
+            function text(offset, value) {
+                for (let i = 0; i < value.length; i++) bytes[offset + i] = value.charCodeAt(i);
+            }
+            text(0, 'RIFF'); header.setUint32(4, 8036, true); text(8, 'WAVE');
+            text(12, 'fmt '); header.setUint32(16, 16, true);
+            header.setUint16(20, 1, true); header.setUint16(22, 1, true);
+            header.setUint32(24, 8000, true); header.setUint32(28, 8000, true);
+            header.setUint16(32, 1, true); header.setUint16(34, 8, true);
+            text(36, 'data'); header.setUint32(40, 8000, true); bytes.fill(128, 44);
+            audio.src = URL.createObjectURL(new Blob([bytes], {type: 'audio/wav'}));
+            </script>
+            """
+        view.loadHTMLString(mediaHTML, baseURL: nil)
+        try await waitForJavaScript("document.title === 'Media mute fixture'", on: view)
+        _ = try await view.evaluateJavaScript("void audio.play().catch(() => {})")
+        try await waitForPlayback(.playing, on: view)
+        fixture.runtime.doNotDisturb = true
+        try await waitForPlayback(.suspended, on: view)
+        _ = try await view.evaluateJavaScript("void audio.play().catch(() => {})")
+        try await waitForPlayback(.suspended, on: view)
+        view.loadHTMLString(
+            mediaHTML.replacingOccurrences(of: "Media mute fixture", with: "Reloaded media fixture"),
+            baseURL: nil
+        )
+        try await waitForJavaScript("document.title === 'Reloaded media fixture'", on: view)
+        _ = try await view.evaluateJavaScript("void audio.play().catch(() => {})")
+        try await waitForPlayback(.suspended, on: view)
+        fixture.runtime.doNotDisturb = false
+        _ = try await view.evaluateJavaScript("void audio.play().catch(() => {})")
+        try await waitForPlayback(.playing, on: view)
+    }
+
+    @MainActor
+    func testServiceMuteBlocksVideoWithoutChangingMicrophoneCapture() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Video", url: "about:blank", neverHibernate: true)
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        let view = fixture.pool.webView(for: service)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: .borderless, backing: .buffered, defer: false
+        )
+        window.contentView = view
+        defer { window.contentView = nil }
+        view.loadHTMLString("""
+            <title>Video mute fixture</title><video id="video" muted playsinline></video>
+            <script>
+                const canvas = document.createElement('canvas');
+                canvas.width = 32; canvas.height = 32;
+                const drawing = canvas.getContext('2d');
+                setInterval(() => drawing.fillRect(0, 0, 32, 32), 50);
+                video.srcObject = canvas.captureStream(20);
+                video.play().catch(() => {});
+            </script>
+            """, baseURL: nil)
+        try await waitForJavaScript(
+            "document.title === 'Video mute fixture' && video.readyState >= 2 && !video.paused",
+            on: view
+        )
+        let captureBefore = view.microphoneCaptureState
+        service.isMuted = true
+        try fixture.container.mainContext.save()
+        fixture.runtime.refreshMuteState()
+        try await waitForJavaScript("video.paused", on: view)
+        _ = try await view.evaluateJavaScript("void video.play().catch(() => {})")
+        try await waitForPlayback(.suspended, on: view)
+        XCTAssertEqual(view.microphoneCaptureState, captureBefore)
+        service.isMuted = false
+        try fixture.container.mainContext.save()
+        fixture.runtime.refreshMuteState()
+        _ = try await view.evaluateJavaScript("void video.play().catch(() => {})")
+        try await waitForJavaScript("!video.paused", on: view)
+    }
+
+    @MainActor
+    func testMediaMuteSilencesExistingAndNewWebAudioContexts() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Web Audio", url: "about:blank", neverHibernate: true)
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        let view = fixture.pool.webView(for: service)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: .borderless, backing: .buffered, defer: false
+        )
+        window.contentView = view
+        defer { window.contentView = nil }
+        let controller = view.configuration.userContentController
+        let scripts = controller.userScripts.map { $0 }
+        controller.removeAllUserScripts()
+        controller.addUserScript(WKUserScript(source: """
+            window.outputGains = [];
+            const originalCreateGain = AudioContext.prototype.createGain;
+            AudioContext.prototype.createGain = function() {
+                const gain = originalCreateGain.call(this);
+                outputGains.push(gain); return gain;
+            };
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        for script in scripts { controller.addUserScript(script) }
+        view.loadHTMLString("<title>Web Audio fixture</title>", baseURL: nil)
+        try await waitForJavaScript("document.title === 'Web Audio fixture'", on: view)
+        // Silent buffers exercise playback without sending sound to the speakers.
+        _ = try await view.evaluateJavaScript("""
+            window.makeContext = function() {
+                const context = new AudioContext();
+                const source = context.createBufferSource();
+                source.buffer = context.createBuffer(1, 48000, 48000);
+                source.loop = true;
+                window.connectionResult = source.connect(context.destination);
+                source.start(); context.resume();
+                return context;
+            };
+            window.firstContext = makeContext();
+            void 0;
+            """)
+        try await waitForJavaScript("firstContext.state === 'running'", on: view)
+        try await waitForJavaScript("connectionResult === firstContext.destination", on: view)
+        fixture.runtime.doNotDisturb = true
+        try await waitForJavaScript("firstContext.state !== 'running'", on: view)
+        try await waitForJavaScript("outputGains.length === 1 && outputGains[0].gain.value === 0", on: view)
+        _ = try await view.evaluateJavaScript("window.secondContext = makeContext(); void 0")
+        try await waitForJavaScript("outputGains.length === 2 && outputGains[1].gain.value === 0", on: view)
+        fixture.runtime.doNotDisturb = false
+        try await waitForJavaScript("outputGains.every(gain => gain.gain.value === 1)", on: view)
+        _ = try await view.evaluateJavaScript("firstContext.resume(); secondContext.resume(); void 0")
+        try await waitForJavaScript(
+            "firstContext.state === 'running' && secondContext.state === 'running'", on: view
+        )
+        _ = try await view.evaluateJavaScript("firstContext.close(); secondContext.close(); void 0")
+    }
+
+    @MainActor
+    func testWebAudioMuteReachesNewCrossOriginFramesAndSurvivesUnmute() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let service = ServiceInstance(label: "Frames", url: "about:blank", neverHibernate: true)
+        fixture.container.mainContext.insert(service)
+        try fixture.container.mainContext.save()
+        let view = fixture.pool.webView(for: service)
+        let controller = view.configuration.userContentController
+        let scripts = controller.userScripts.map { $0 }
+        controller.removeAllUserScripts()
+        controller.addUserScript(WKUserScript(source: """
+            window.outputGains = [];
+            const originalCreateGain = AudioContext.prototype.createGain;
+            AudioContext.prototype.createGain = function() {
+                const gain = originalCreateGain.call(this);
+                outputGains.push(gain); return gain;
+            };
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        for script in scripts { controller.addUserScript(script) }
+        view.loadHTMLString("<title>Frame fixture</title>", baseURL: nil)
+        try await waitForJavaScript("document.title === 'Frame fixture'", on: view)
+        service.isMuted = true
+        try fixture.container.mainContext.save()
+        fixture.runtime.refreshMuteState()
+        _ = try await view.evaluateJavaScript("""
+            window.frameGain = null;
+            window.child = document.createElement('iframe');
+            child.sandbox = 'allow-scripts';
+            window.addEventListener('message', event => {
+                if (event.source === child.contentWindow && event.data?.type === 'fixture-gain') {
+                    window.frameGain = event.data.value;
+                    window.frameOrigin = event.origin;
+                }
+            });
+            child.srcdoc = `<script>
+                const context = new AudioContext();
+                context.createBufferSource().connect(context.destination);
+                setInterval(() => parent.postMessage({
+                    type: 'fixture-gain', value: outputGains[0].gain.value
+                }, '*'), 20);
+                </script>`;
+            document.body.appendChild(child);
+            void 0;
+            """)
+        try await waitForJavaScript("frameOrigin === 'null' && frameGain === 0", on: view)
+        service.isMuted = false
+        try fixture.container.mainContext.save()
+        fixture.runtime.refreshMuteState()
+        try await waitForJavaScript("frameGain === 1", on: view)
+        service.isMuted = true
+        try fixture.container.mainContext.save()
+        fixture.runtime.refreshMuteState()
+        try await waitForJavaScript("frameGain === 0", on: view)
+    }
+
+    @MainActor
+    private func waitForJavaScript(_ expression: String, on view: WKWebView) async throws {
+        for _ in 0..<100 {
+            if (try? await view.evaluateJavaScript(expression) as? Bool) == true { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTFail("Timed out waiting for: \(expression)")
+    }
+
+    @MainActor
+    private func waitForPlayback(_ expected: WKMediaPlaybackState, on view: WKWebView) async throws {
+        for _ in 0..<100 {
+            if await view.requestMediaPlaybackState() == expected { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let actual = await view.requestMediaPlaybackState()
+        XCTAssertEqual(actual, expected)
+    }
+
+    @MainActor
     func testDockMuteIndicatorTracksServicesGlobalMuteAndShutdown() async throws {
         let fixture = try makeFixture()
         defer { fixture.shutdown() }
@@ -24,13 +374,13 @@ final class NotificationRuntimeTests: XCTestCase {
         context.insert(service)
         context.insert(SpaceServiceLink(space: space, service: service))
         try context.save()
-        fixture.runtime.refreshDockMuteState()
+        fixture.runtime.refreshMuteState()
         XCTAssertEqual(written.last, true)
 
         let unmuted = ServiceInstance(label: "Mail", url: "https://mail.example")
         context.insert(unmuted)
         try context.save()
-        fixture.runtime.refreshDockMuteState()
+        fixture.runtime.refreshMuteState()
         XCTAssertEqual(written.last, false)
 
         fixture.badgeManager.updateBadge(for: unmuted.id, count: 3, isMuted: false)
@@ -467,7 +817,8 @@ final class NotificationRuntimeTests: XCTestCase {
     @MainActor
     private func makeFixture(
         preferences: AppPreferences = AppPreferences(),
-        minuteOfDay: @escaping @MainActor () -> Int = { 12 * 60 }
+        minuteOfDay: @escaping @MainActor () -> Int = { 12 * 60 },
+        quietHoursInterval: Duration = .seconds(60)
     ) throws -> Fixture {
         let container = try ModelContainer(
             for: ServiceInstance.self,
@@ -508,7 +859,7 @@ final class NotificationRuntimeTests: XCTestCase {
             notificationCenter: notificationCenter,
             workspaceNotificationCenter: NotificationCenter(),
             minuteOfDay: minuteOfDay,
-            quietHoursInterval: .seconds(60)
+            quietHoursInterval: quietHoursInterval
         )
         runtime.writeDockMuteIndicator = { _ in }
         return Fixture(

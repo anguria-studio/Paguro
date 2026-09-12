@@ -146,11 +146,11 @@ struct WebContentActions: View {
             }
             .buttonStyle(PaguroToolbarButtonStyle(isSelected: appState.doNotDisturb))
             .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .help(appState.doNotDisturb ? "Unmute notifications" : "Mute notifications")
+            .help(appState.doNotDisturb ? "Unmute notifications and media" : "Mute notifications and media")
             .accessibilityLabel(
                 appState.doNotDisturb
-                    ? "Unmute notifications for all services"
-                    : "Mute notifications for all services"
+                    ? "Unmute notifications and media for all services"
+                    : "Mute notifications and media for all services"
             )
             .accessibilityIdentifier("notifications.globalMute")
         }

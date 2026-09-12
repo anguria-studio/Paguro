@@ -4,6 +4,11 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+### Fixed
+
+- Global, workspace, and service mute now silence website audio, including the
+  selected service. Audio and video playback pause while muted.
+
 ## [1.0.2] — 2026-09-11
 
 Version 1.0.2, build 7.

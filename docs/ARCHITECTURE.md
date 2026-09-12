@@ -187,6 +187,11 @@ The WebKit bridge adapter sends normalized origins and the raw payload to
 macOS notification.
 `NotificationRuntime` coordinates live and transient badge polling, manual and
 scheduled Do Not Disturb, sleep and network suspension, and safe click routing.
+It also supplies effective service mute to `WebViewPool`. The pool uses the
+Core `MediaPlaybackPolicy` to combine mute with background suspension and
+applies the result through public WebKit media playback controls.
+The bundled `WebAudioMuteScript` also silences Web Audio contexts created
+after suspension, including those in child frames.
 The backlog tracks the split of that handler into detection and presentation
 parts, and a shared event type in `PaguroCore` for the island.
 
