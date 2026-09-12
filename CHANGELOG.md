@@ -4,6 +4,13 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+### Changed
+
+- Custom services now preview their website icon while you enter the address.
+  A compact Change Icon menu replaces the manual fetch controls in Add Service.
+- Website icon discovery prefers page-declared icons and manifests before
+  conventional root filenames, preserving page-specific branding.
+
 ### Fixed
 
 - Global, workspace, and service mute now silence website audio, including the

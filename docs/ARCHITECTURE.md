@@ -70,6 +70,7 @@ The main services and startup adapters are:
 - `StoreRecoveryCoordinator` for recovery notices, backup selection, and restart handoff.
 - `PreferencesStore` for the single loaded preferences row and typed commits.
 - `WorkspaceStore` for workspace and service queries, mutations, seeding, and selection persistence.
+- `ServiceIconDraft` for cancellable icon previews in the add-service form.
 - `ShellPreferences` for normalized window appearance and rail settings.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.

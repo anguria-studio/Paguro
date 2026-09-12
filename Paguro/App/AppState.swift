@@ -725,6 +725,7 @@ final class AppState {
         catalogEntryID: String? = nil,
         userAgent: String? = nil,
         customIconData: Data? = nil,
+        fetchedIconData: Data? = nil,
         to spaceID: UUID
     ) -> UUID? {
         defer { notificationRuntime.refreshMuteState() }
@@ -736,6 +737,7 @@ final class AppState {
                 catalogEntryID: catalogEntryID,
                 userAgent: userAgent,
                 customIconData: customIconData,
+                fetchedIconData: fetchedIconData,
                 to: spaceID
             )
         } catch {
@@ -751,7 +753,7 @@ final class AppState {
             catalogEntryID: catalogEntryID
         )
 
-        if customIconData == nil {
+        if customIconData == nil && fetchedIconData == nil {
             Task { @MainActor [weak self] in
                 await self?.refreshFetchedIcon(for: serviceID)
             }

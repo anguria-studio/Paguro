@@ -10,6 +10,11 @@ workspaces and accounts, and the toolbar for navigation and service controls.
 Use "workspace" in user-facing text. Each service account keeps a separate
 session, even when two accounts use the same website.
 
+The custom-service form discovers the website icon while the user enters the
+address. Place its compact preview beside the name and address, with a native
+Change Icon menu. Keep manual URL overrides in the service editor. Adding a
+service must not wait for icon discovery.
+
 ## Appearance
 
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is

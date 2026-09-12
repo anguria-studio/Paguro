@@ -11,10 +11,21 @@ The main icon in a macOS notification is always the Paguro app icon. macOS uses
 that icon to identify the sending application. Paguro supplies the service icon
 as an additional image.
 
-The custom-service form and the service editor show an icon preview.
-The user can choose a local image or enter a website or direct image address.
-A blank icon address uses the service address.
-An address without a scheme uses HTTPS.
+The custom-service form shows an icon preview beside the name and address.
+It discovers the website icon after a 600 ms pause in address input.
+Changing the address cancels the older request and clears its preview.
+Closing the form cancels discovery. A late response cannot replace a newer
+preview or a manually selected image.
+
+Change Icon offers Choose Image and Use Website Icon. A missing website icon
+keeps the initial-letter tile. Discovery never disables Add Service.
+A completed preview is saved as an automatic website icon, with its fetch time.
+If the user adds the service before discovery finishes, normal background
+discovery starts for the saved service.
+
+The service editor keeps the detailed website and direct-image address controls.
+A blank icon address uses the service address. An address without a scheme uses
+HTTPS.
 
 Use Default removes the custom icon.
 It does not remove a bundled catalog icon or the icon that Paguro fetched from
@@ -34,9 +45,10 @@ Paguro uses the first available source in this order:
 Paguro accepts a direct HTTP or HTTPS image address.
 For a website address, Paguro checks these sources:
 
-- common `apple-touch-icon` and favicon paths;
-- HTML `link` elements with `icon` or `apple-touch-icon` relations;
+- HTML `link` elements with `icon`, `apple-touch-icon`, or
+  `apple-touch-icon-precomposed` relations;
 - the `icons` array in a linked web-app manifest;
+- common `apple-touch-icon` and favicon paths, when page discovery fails;
 - the optional Google favicon fallback in non-Store builds when enabled.
 
 The App Store build excludes the Google request path and its Settings control.
@@ -45,6 +57,8 @@ field remains compatible with other builds. Direct website discovery and the
 initial-letter fallback remain available.
 
 Paguro prefers larger declared images.
+Page-declared images take precedence over conventional root filenames.
+This preserves page-specific branding on websites that host several products.
 It does not use a monochrome-only manifest image as a full-color service icon.
 
 ## Storage and limits

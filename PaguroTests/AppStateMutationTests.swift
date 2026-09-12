@@ -5,6 +5,26 @@ import PaguroCore
 
 final class WorkspaceStoreMutationTests: XCTestCase {
     @MainActor
+    func testAddServicePersistsAnAutomaticPreviewWithoutMakingItACustomOverride() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let space = Space(name: "Personal", emoji: "")
+        context.insert(space)
+        try context.save()
+        let store = makeStore(context: context)
+        let preview = Data([1, 2, 3])
+        let id = try XCTUnwrap(store.addService(
+            label: "Test", url: "https://example.com",
+            fetchedIconData: preview, to: space.id
+        ))
+        let saved = try XCTUnwrap(store.service(id: id))
+        XCTAssertEqual(saved.fetchedIconData, preview)
+        XCTAssertNotNil(saved.faviconFetchedAt)
+        XCTAssertNil(saved.customIconData)
+        XCTAssertFalse(store.serviceIDsNeedingFaviconRefresh(force: false).contains(id))
+    }
+
+    @MainActor
     private func makeStore(context: ModelContext) -> WorkspaceStore {
         WorkspaceStore(
             context: context,

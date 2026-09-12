@@ -4,6 +4,12 @@ import Darwin
 actor FaviconFetcher {
     static let shared = FaviconFetcher()
 
+    private let load: @Sendable (URL) async -> Data?
+
+    init(load: @escaping @Sendable (URL) async -> Data? = FaviconFetcher.loadURL) {
+        self.load = load
+    }
+
     /// Whether the Google favicon fallback may run. Off unless the user opts in,
     /// because that request tells Google which services the user runs — and the
     /// host can be a private one (a self-hosted Mattermost, an internal mail
@@ -18,7 +24,8 @@ actor FaviconFetcher {
     }
 
     func fetchFavicon(for urlString: String) async -> Data? {
-        guard let baseURL = URL(string: urlString),
+        guard !Task.isCancelled,
+              let baseURL = URL(string: urlString),
               let host = baseURL.host,
               let rootURL = Self.originRootURL(for: baseURL)
         else { return nil }
@@ -30,7 +37,12 @@ actor FaviconFetcher {
             return data
         }
 
-        // Try common high-resolution paths first, then lower-resolution paths.
+        // A page can have its own branding, distinct from its site's root icon.
+        if let data = await fetchFromHTMLLinks(url: baseURL) {
+            return data
+        }
+
+        // Fall back to common high-resolution paths, then lower-resolution paths.
         // Resolve them from the origin so a custom port is preserved.
         let candidatePaths = [
             "apple-touch-icon.png",
@@ -42,16 +54,12 @@ actor FaviconFetcher {
         ]
 
         for path in candidatePaths {
+            guard !Task.isCancelled else { return nil }
             let candidate = rootURL.appending(path: path).absoluteString
             if let data = await fetchURL(candidate), isValidImage(data) {
                 AppLogger.favicon.debug("Favicon found at \(candidate, privacy: .private)")
                 return data
             }
-        }
-
-        // Try HTML icon links and the linked web-app manifest.
-        if let data = await fetchFromHTMLLinks(url: baseURL) {
-            return data
         }
 
         #if !APP_STORE
@@ -82,6 +90,7 @@ actor FaviconFetcher {
         // A page can link to more than one manifest, but a small cap prevents a
         // hostile page from turning icon discovery into an unbounded fetch loop.
         for manifestURL in Self.parseManifestURLs(from: html, baseURL: url).prefix(3) {
+            guard !Task.isCancelled else { return nil }
             guard Self.isFetchableIconURL(manifestURL),
                   let manifestData = await fetchURL(manifestURL.absoluteString)
             else { continue }
@@ -97,6 +106,7 @@ actor FaviconFetcher {
         let sorted = iconURLs.sorted { $0.size > $1.size }
 
         for iconInfo in sorted.prefix(32) {
+            guard !Task.isCancelled else { return nil }
             // The href came from (possibly hostile / compromised) page HTML, so
             // gate it: http/https only, no loopback/link-local/private hosts.
             // Without this a `<link rel=icon href="file:///…">` or an internal-IP
@@ -232,7 +242,7 @@ actor FaviconFetcher {
             let tag = String(match.output)
             guard let rel = attributeValue(in: tag, named: "rel")?.lowercased() else { continue }
             let relTokens = Set(rel.split(whereSeparator: \.isWhitespace).map(String.init))
-            guard relTokens.contains("icon") || relTokens.contains("apple-touch-icon") else { continue }
+            guard !relTokens.isDisjoint(with: ["icon", "apple-touch-icon", "apple-touch-icon-precomposed"]) else { continue }
 
             guard let href = attributeValue(in: tag, named: "href"),
                   let resolvedURL = URL(string: href, relativeTo: baseURL)?.absoluteURL
@@ -348,7 +358,11 @@ actor FaviconFetcher {
     private static let redirectGuard = FaviconRedirectGuard()
 
     private func fetchURL(_ urlString: String) async -> Data? {
-        guard let url = URL(string: urlString) else { return nil }
+        guard !Task.isCancelled, let url = URL(string: urlString) else { return nil }
+        return await load(url)
+    }
+
+    private nonisolated static func loadURL(_ url: URL) async -> Data? {
         do {
             var request = URLRequest(url: url, timeoutInterval: 10)
             request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
@@ -371,7 +385,7 @@ actor FaviconFetcher {
             }
             return data.isEmpty ? nil : data
         } catch {
-            AppLogger.favicon.debug("Fetch failed for \(urlString, privacy: .private): \(error.localizedDescription)")
+            AppLogger.favicon.debug("Fetch failed for \(url.absoluteString, privacy: .private): \(error.localizedDescription)")
         }
         return nil
     }

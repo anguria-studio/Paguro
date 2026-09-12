@@ -165,6 +165,7 @@ final class WorkspaceStore {
         catalogEntryID: String? = nil,
         userAgent: String? = nil,
         customIconData: Data? = nil,
+        fetchedIconData: Data? = nil,
         to spaceID: UUID
     ) throws -> UUID? {
         var descriptor = FetchDescriptor<Space>(predicate: #Predicate { $0.id == spaceID })
@@ -183,6 +184,10 @@ final class WorkspaceStore {
             userAgent: userAgent
         )
         context.insert(service)
+        if let fetchedIconData {
+            service.fetchedIconData = fetchedIconData
+            service.faviconFetchedAt = Date()
+        }
         context.insert(SpaceServiceLink(sortOrder: nextOrder, space: space, service: service))
         guard context.saveOrRollback(reason: "add service") else { return nil }
         return service.id
