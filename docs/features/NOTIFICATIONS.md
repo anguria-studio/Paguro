@@ -333,6 +333,27 @@ it in System Settings. `NotificationAuthorizationPolicy.merge` keeps
 or `provisional` at once. Without that rule the first activation would show the
 user a refusal that they never made.
 
+### Debug identifier case
+
+Keep a development bundle identifier stable, including its letter case.
+On a Mac that registered an earlier spelling, macOS can accept requests from
+the new spelling and show background banners. Yet it can fail to deliver the
+foreground `willPresent` callback. An `authorized` permission does not rule
+out this problem.
+
+Compare the running app's bundle identifier with the identifier in the
+macOS notification routing logs. Confirm the mismatch with a signed native
+notification test before changing the build. A page notification and a
+sidebar badge use separate paths, so neither proves that this callback works.
+
+To match a confirmed existing registration, set
+`PAGURO_DEBUG_BUNDLE_IDENTIFIER` in the ignored
+`Configuration/LocalSigning.xcconfig` file to that exact identifier. Generate
+the project again and rebuild. Only the Debug app uses this override.
+Release, Compatibility, and test identifiers keep their configured values.
+Do not change the public app identifier or delete service data to fix a local
+Debug registration.
+
 ### The Settings warning
 
 A permission that delivers nothing is silent without help. Paguro still builds

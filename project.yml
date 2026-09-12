@@ -65,7 +65,7 @@ targets:
         INFOPLIST_KEY_LSUIElement: NO
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro.debug
+          PRODUCT_BUNDLE_IDENTIFIER: $(PAGURO_DEBUG_BUNDLE_IDENTIFIER)
         Compatibility:
           PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro.compatibility
     scheme:

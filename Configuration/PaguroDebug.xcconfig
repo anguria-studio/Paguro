@@ -1,3 +1,6 @@
-// The local file gives Debug builds a stable Apple signing identity.
+// Keep the default lowercase. A local override can match an existing macOS
+// notification registration, which may retain an older identifier's case.
+PAGURO_DEBUG_BUNDLE_IDENTIFIER = studio.anguria.paguro.debug
+
 // Git ignores the local file so each contributor can use a different team.
 #include? "LocalSigning.xcconfig"
