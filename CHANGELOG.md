@@ -10,6 +10,8 @@ Changes that affect Paguro users appear here, with the newest release first.
   A compact Change Icon menu replaces the manual fetch controls in Add Service.
 - Website icon discovery prefers page-declared icons and manifests before
   conventional root filenames, preserving page-specific branding.
+- The lock screen follows the window glass and transparency settings while
+  keeping service content hidden.
 
 ### Fixed
 

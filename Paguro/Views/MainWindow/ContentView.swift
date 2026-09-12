@@ -111,6 +111,13 @@ struct ContentView: View {
             // top-left clear.
             .ignoresSafeArea(.container, edges: .top)
         }
+        // Keep service views mounted, but hide their content before revealing
+        // the behind-window glass on the lock screen.
+        .opacity(appState.isLocked ? 0 : 1)
+        .allowsHitTesting(!appState.isLocked)
+        .disabled(appState.isLocked)
+        .accessibilityHidden(appState.isLocked)
+        .animation(nil, value: appState.isLocked)
         // The top-bar layout puts draggable tabs in the title-bar drag band, so
         // turn the OS window drag off there (a click-drag on a tab would
         // otherwise move the window instead of reordering) and let the
@@ -286,8 +293,12 @@ struct ContentView: View {
         }
         .overlay {
             if appState.isLocked {
-                LockView(authenticate: appState.authenticate)
-                    .transition(.opacity)
+                LockView(
+                    glassIntensity: appState.liquidGlassIntensity,
+                    authenticate: appState.authenticate
+                )
+                .ignoresSafeArea()
+                .transition(.identity)
             }
         }
     }
@@ -490,6 +501,7 @@ enum UpstreamProjectLink {
 
 /// Keeps content hidden until the user chooses Unlock and authenticates.
 struct LockView: View {
+    var glassIntensity: Double = 1
     let authenticate: () -> Void
 
     var body: some View {
@@ -506,6 +518,6 @@ struct LockView: View {
             .keyboardShortcut(.defaultAction)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(PaguroColor.shellCanvas(intensity: glassIntensity))
     }
 }

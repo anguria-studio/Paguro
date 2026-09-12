@@ -75,6 +75,11 @@ Showing the lock screen does not request authentication. Start Touch ID or
 password authentication only when the user activates Unlock. Cancelling the
 prompt leaves the lock screen in place.
 
+The lock screen uses the same behind-window glass and protective tint as the
+empty-service view. It follows Window glass and Shell transparency settings.
+Hide the service content and sidebar while locked, including from hit testing
+and accessibility. The glass must not reveal service content.
+
 ## Updates
 
 Use Sparkle's standard update dialogs in the direct-download build. Put
