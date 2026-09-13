@@ -24,7 +24,7 @@ jobs:
     outputs:
       build: ${{ steps.changes.outputs.build }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Test CI policy
@@ -61,7 +61,7 @@ jobs:
             # test still guards every other toolchain.
             skipTesting: "-skip-testing:PaguroTests/WebRuntimeTests/testCoordinatorExposesWebUIDelegateMethods"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Paguro calls Liquid Glass behind an availability check, so it needs the
       # macOS 26 SDK to compile even when the deployment target is 15. The
@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify required jobs
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
