@@ -21,6 +21,7 @@ final class NotificationRuntime {
     private let workspaceNotificationCenter: NotificationCenter
     private let minuteOfDay: @MainActor () -> Int
     private let quietHoursInterval: Duration
+    private let waitForQuietHoursInterval: @MainActor (Duration) async throws -> Void
 
     @ObservationIgnored var writeDockMuteIndicator: @MainActor (Bool) -> Void = {
         DockMuteIndicator.shared.setMuted($0)
@@ -65,7 +66,10 @@ final class NotificationRuntime {
             let components = Calendar.current.dateComponents([.hour, .minute], from: Date())
             return (components.hour ?? 0) * 60 + (components.minute ?? 0)
         },
-        quietHoursInterval: Duration = .seconds(60)
+        quietHoursInterval: Duration = .seconds(60),
+        waitForQuietHoursInterval: @escaping @MainActor (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
     ) {
         self.context = context
         self.preferencesStore = preferencesStore
@@ -79,6 +83,7 @@ final class NotificationRuntime {
         self.workspaceNotificationCenter = workspaceNotificationCenter
         self.minuteOfDay = minuteOfDay
         self.quietHoursInterval = quietHoursInterval
+        self.waitForQuietHoursInterval = waitForQuietHoursInterval
         self.scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
         self.dndStartMinutes = preferencesStore.dndStartMinutes
         self.dndEndMinutes = preferencesStore.dndEndMinutes
@@ -321,10 +326,13 @@ final class NotificationRuntime {
             while !Task.isCancelled {
                 guard let self else { return }
                 do {
-                    try await Task.sleep(for: self.quietHoursInterval)
+                    try await self.waitForQuietHoursInterval(self.quietHoursInterval)
                 } catch {
                     return
                 }
+                // Sleep can finish just before shutdown cancels this task.
+                // Its queued continuation must not read a released store.
+                guard !Task.isCancelled, !self.hasShutDown else { return }
                 self.refreshEffectiveDoNotDisturb()
             }
         }

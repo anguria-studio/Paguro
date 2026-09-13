@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevent a queued quiet-hours check from accessing the store after shutdown.
+
 ## [1.0.4] — 2026-09-12
 
 Version 1.0.4, build 11.

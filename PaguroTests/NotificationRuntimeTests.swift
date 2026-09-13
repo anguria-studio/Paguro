@@ -112,6 +112,36 @@ final class NotificationRuntimeTests: XCTestCase {
     }
 
     @MainActor
+    func testQuietHoursWakeAfterShutdownDoesNotRefreshTheStoreOrMuteState() async throws {
+        let sleeping = expectation(description: "Quiet-hours timer is waiting")
+        let awake = expectation(description: "Queued wake returns normally after cancellation")
+        let refreshed = expectation(description: "No mute refresh after shutdown")
+        refreshed.isInverted = true
+        var wake: CheckedContinuation<Void, Never>?
+        let fixture = try makeFixture(waitForQuietHoursInterval: { _ in
+            // A completed sleep can already have queued a successful return.
+            // Preserve that return even after shutdown cancels the timer.
+            await withCheckedContinuation {
+                wake = $0
+                sleeping.fulfill()
+            }
+            awake.fulfill()
+        })
+        defer { fixture.shutdown() }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        await fixture.runtime.waitForActivation()
+        await fulfillment(of: [sleeping], timeout: 2)
+
+        fixture.runtime.shutdown()
+        fixture.runtime.writeDockMuteIndicator = { _ in refreshed.fulfill() }
+        wake?.resume()
+        wake = nil
+
+        await fulfillment(of: [awake], timeout: 2)
+        await fulfillment(of: [refreshed], timeout: 0.1)
+    }
+
+    @MainActor
     func testUnmutingDoesNotResumeSoftHibernatedMedia() async throws {
         let fixture = try makeFixture()
         defer { fixture.shutdown() }
@@ -818,7 +848,10 @@ final class NotificationRuntimeTests: XCTestCase {
     private func makeFixture(
         preferences: AppPreferences = AppPreferences(),
         minuteOfDay: @escaping @MainActor () -> Int = { 12 * 60 },
-        quietHoursInterval: Duration = .seconds(60)
+        quietHoursInterval: Duration = .seconds(60),
+        waitForQuietHoursInterval: @escaping @MainActor (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
     ) throws -> Fixture {
         let container = try ModelContainer(
             for: ServiceInstance.self,
@@ -859,7 +892,8 @@ final class NotificationRuntimeTests: XCTestCase {
             notificationCenter: notificationCenter,
             workspaceNotificationCenter: NotificationCenter(),
             minuteOfDay: minuteOfDay,
-            quietHoursInterval: quietHoursInterval
+            quietHoursInterval: quietHoursInterval,
+            waitForQuietHoursInterval: waitForQuietHoursInterval
         )
         runtime.writeDockMuteIndicator = { _ in }
         return Fixture(
