@@ -132,6 +132,10 @@ Shutdown is idempotent. It performs these actions:
 7. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
    record the store content.
 
+The quiet-hours timer checks cancellation and shutdown after each wait. A wait
+can finish before cancellation while its continuation is still queued. That
+continuation must not query the store or refresh mute state after shutdown.
+
 Service work stops after termination. Sparkle can use a temporary installer
 helper to finish an update in the direct build. This helper does not run
 services or notification polling.
