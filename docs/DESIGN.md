@@ -96,6 +96,19 @@ The card follows these rules:
   place.
 - It slides in from the trailing edge with a fade, and it leaves the same way.
   Reduce Motion uses a plain fade. The movement stays near 0.3 seconds.
+- A drag to the right dismisses the card, like a macOS notification banner.
+  The card follows the pointer, and it becomes lighter while it moves away. A
+  drag to the left gives resistance and never dismisses the card. The card
+  leaves when the drag passes one quarter of the card width, or when a shorter
+  drag ends with enough speed to the right. A shorter and slower drag returns
+  the card to its place. The drag starts only after a short movement, so a
+  click still reaches the close button, and a vertical drag leaves the card
+  still. The island cards and these cards share one drag rule.
+- Reduce Motion keeps the drag, because the pointer moves the card directly. It
+  removes the resistance to the left, the opacity change, and the slide out.
+  The card then leaves with a fade.
+- The close button stays the accessible way to dismiss the card. The card
+  element also offers a Dismiss action for VoiceOver.
 - It follows the shell glass rules. macOS 26 uses Liquid Glass, and an earlier
   system uses the material surface. Reduce Transparency uses an opaque window
   background. Increase Contrast adds a visible border. A soft shadow separates

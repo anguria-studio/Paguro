@@ -20,6 +20,8 @@ Changes that affect Paguro users appear here, with the newest release first.
   hibernation is off.
 - The passkey notice appears as a floating card in the top right corner of the
   browser, instead of a bar above the page. The page keeps its full height.
+  You can drag a floating card to the right to dismiss it, like a macOS
+  notification. The close button still dismisses it as well.
 
 ### Fixed
 

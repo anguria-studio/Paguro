@@ -287,7 +287,8 @@ override the browser preference.
 A transient notice about the active service appears as a floating card over the
 top trailing corner of the web content. The card holds a symbol, a short title,
 an explanation, and a close button. It leaves after 12 seconds, and the close
-button removes it at once.
+button removes it at once. A drag to the right also removes it, with the same
+action as the close button.
 
 Two notices use this card. The capacity notice reports the first service that
 the pool released to stay inside its size limit. The passkey notice reports
@@ -297,8 +298,10 @@ appears.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
 `FloatingNoticeLayout` in `PaguroCore` holds the width, the margins, and the
-gap that keeps the stack clear of the find bar. `docs/DESIGN.md` states which
-notices use this shape and which notices use the full-width strip.
+gap that keeps the stack clear of the find bar. The card reads the drag from
+`NotificationIslandSwipeRule`, the rule that the island cards already use, so
+both shapes have one dismiss movement. `docs/DESIGN.md` states which notices
+use this shape and which notices use the full-width strip.
 
 ### Page history
 

@@ -3,6 +3,9 @@
 /// A person moves a card to the right to dismiss it. A movement to the left
 /// gives resistance and returns. The rules use `Double` values, so this type
 /// stays independent of SwiftUI and AppKit.
+///
+/// The floating notice cards above the web content use the same rules, because
+/// both shapes copy the behavior of a macOS notification banner.
 public enum NotificationIslandSwipeRule: Sendable {
     /// Movement that starts the drag.
     ///
