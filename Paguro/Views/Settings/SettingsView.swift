@@ -253,7 +253,9 @@ struct GeneralSettingsView: View {
                 // Outside the toggle's own block: this limit applies even when
                 // idle hibernation is off, which is exactly when a released
                 // service surprises the user.
-                Text("Paguro also keeps a limited number of services loaded at the same time, and can release the oldest non-messaging services even when idle hibernation is off.")
+                // The sentence comes from PaguroCore, so the stated number
+                // follows `WebViewPoolCapacity.maxLoaded` and cannot go stale.
+                Text(CapacityEvictionNotice.settingsSummary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -10,11 +10,38 @@ public enum CapacityEvictionNotice {
     /// The longest service name that the notice shows in full.
     ///
     /// A longer name is cut, so one service cannot push the explanation out of
-    /// the notice strip.
+    /// the notice card.
     public static let maximumServiceNameLength = 40
 
     /// The name that the notice uses when the service has no usable label.
     public static let fallbackServiceName = "a background service"
+
+    /// The title line of the notice card.
+    ///
+    /// The card shows the title above the message, so the title carries the
+    /// result and the message carries the reason.
+    public static let title = "Service released to save memory"
+
+    /// The pool limit as user-facing words.
+    ///
+    /// Every text that states the limit reads this property, so the number
+    /// stays correct when `WebViewPoolCapacity.maxLoaded` changes.
+    public static var loadedServiceLimitPhrase: String {
+        "up to \(WebViewPoolCapacity.maxLoaded) services"
+    }
+
+    /// The sentence that Performance settings shows under the hibernation
+    /// controls.
+    ///
+    /// The limit applies even when the user turns idle hibernation off, so the
+    /// sentence stands apart from the toggle and states the number.
+    public static var settingsSummary: String {
+        """
+        Paguro also keeps \(loadedServiceLimitPhrase) loaded at the same time, \
+        and can release the oldest non-messaging services even when idle \
+        hibernation is off.
+        """
+    }
 
     /// True while the app run has not shown the notice yet.
     ///
@@ -27,8 +54,8 @@ public enum CapacityEvictionNotice {
     /// The notice text for the service that the pool released.
     public static func message(serviceName: String) -> String {
         """
-        Paguro released \(displayName(for: serviceName)) to control memory. \
-        It keeps a limited number of services loaded at the same time. \
+        Paguro keeps \(loadedServiceLimitPhrase) loaded at the same time, \
+        so it released \(displayName(for: serviceName)) to free memory. \
         Mark a service "Keep Loaded" to always keep it live.
         """
     }

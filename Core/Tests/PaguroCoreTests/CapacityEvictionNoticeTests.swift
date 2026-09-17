@@ -15,6 +15,29 @@ final class CapacityEvictionNoticeTests: XCTestCase {
         XCTAssertTrue(message.contains("memory"), message)
     }
 
+    func testTheMessageStatesThePoolLimit() {
+        let message = CapacityEvictionNotice.message(serviceName: "Notion")
+
+        XCTAssertTrue(
+            message.contains("\(WebViewPoolCapacity.maxLoaded)"),
+            "the notice must state the number of services that stay loaded: \(message)"
+        )
+    }
+
+    func testTheSettingsSentenceStatesThePoolLimit() {
+        let sentence = CapacityEvictionNotice.settingsSummary
+
+        XCTAssertTrue(
+            sentence.contains("\(WebViewPoolCapacity.maxLoaded)"),
+            sentence
+        )
+        XCTAssertTrue(sentence.contains("idle hibernation is off"), sentence)
+    }
+
+    func testTheCardTitleCarriesText() {
+        XCTAssertFalse(CapacityEvictionNotice.title.isEmpty)
+    }
+
     func testAnEmptyLabelUsesTheFallbackName() {
         XCTAssertEqual(
             CapacityEvictionNotice.message(serviceName: "   \n "),
