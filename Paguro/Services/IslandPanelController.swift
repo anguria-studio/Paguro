@@ -1737,6 +1737,16 @@ struct NotificationIslandPanelView: View {
         .accessibilityLabel("Paguro recent notifications")
     }
 
+    /// Height of one toolbar capsule.
+    ///
+    /// The camera housing decides this height, so a lower housing keeps the
+    /// controls inside the band. `NotificationIslandLayout` owns the rule.
+    private var toolbarControlHeight: CGFloat {
+        CGFloat(NotificationIslandLayout.toolbarControlHeight(
+            cameraHousingHeight: Double(cameraHousingHeight)
+        ))
+    }
+
     private var expandedNotchToolbar: some View {
         HStack(spacing: 0) {
             HStack(spacing: 6) {
@@ -1749,7 +1759,7 @@ struct NotificationIslandPanelView: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .frame(height: toolbarControlHeight)
             .background(toolbarControlBackground, in: .capsule)
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1764,9 +1774,10 @@ struct NotificationIslandPanelView: View {
                     Text("Clear All")
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 10)
-                        .frame(height: 28)
+                        .frame(height: toolbarControlHeight)
                         .contentShape(.capsule)
                 }
                 .buttonStyle(.plain)
@@ -1788,7 +1799,13 @@ struct NotificationIslandPanelView: View {
             .background(toolbarControlBackground, in: .capsule)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(height: cameraHousingHeight)
+        // A larger text size must not push a control into the top screen
+        // edge, because the camera band keeps one height.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        // The controls start below the top screen edge and keep the camera
+        // band height, so the list below the toolbar does not move.
+        .padding(.top, CGFloat(NotificationIslandLayout.toolbarTopInset))
+        .frame(height: cameraHousingHeight, alignment: .top)
         .padding(
             .horizontal,
             CGFloat(NotificationIslandLayout.horizontalInset)

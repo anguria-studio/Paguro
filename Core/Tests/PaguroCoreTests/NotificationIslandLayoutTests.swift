@@ -16,6 +16,35 @@ struct NotificationIslandLayoutTests {
         #expect(layout.panelWidth(bodyWidth: 0) == 12)
     }
 
+    @Test("Each toolbar control starts below the island top edge")
+    func eachToolbarControlStartsBelowTheIslandTopEdge() {
+        let layout = NotificationIslandLayout.self
+
+        #expect(layout.toolbarTopInset > 0)
+        #expect(layout.toolbarBandHeight(cameraHousingHeight: housingHeight) == 32)
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: housingHeight) == 26)
+        // The inset and the control stay inside the camera band, so the
+        // toolbar changes no panel height.
+        #expect(
+            layout.toolbarTopInset
+                + layout.toolbarControlHeight(cameraHousingHeight: housingHeight)
+                <= housingHeight
+        )
+    }
+
+    @Test("A lower camera housing gives a smaller toolbar control")
+    func lowerCameraHousingGivesASmallerToolbarControl() {
+        let layout = NotificationIslandLayout.self
+
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: 30) == 24)
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: 50) == 26)
+        // A housing that is too low keeps the pointer minimum, because a
+        // control that the pointer cannot hit is of no use.
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: 20) == 20)
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: 0) == 20)
+        #expect(layout.toolbarBandHeight(cameraHousingHeight: -10) == 0)
+    }
+
     @Test("The height table matches the stack rule")
     func heightTableMatchesTheStackRule() {
         let layout = NotificationIslandLayout.self
