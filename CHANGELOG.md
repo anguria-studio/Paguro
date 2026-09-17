@@ -9,14 +9,17 @@ Changes that affect Paguro users appear here, with the newest release first.
 - A live service page can handle its original notification click, allowing a
   provider to open the related conversation when it supplies no destination URL.
 - A notice explains the first service that Paguro releases to control memory.
-  It names the service and points to Keep Loaded. It appears one time for each
-  time you start Paguro.
+  It names the service, states how many services stay loaded, and points to
+  Keep Loaded. It appears one time for each time you start Paguro, as a
+  floating card in the top right corner of the browser.
 
 ### Changed
 
-- Performance settings state that Paguro keeps a limited number of services
-  loaded at the same time. Paguro can release the oldest non-messaging services
-  even when idle hibernation is off.
+- Performance settings state how many services Paguro keeps loaded at the same
+  time. Paguro can release the oldest non-messaging services even when idle
+  hibernation is off.
+- The passkey notice appears as a floating card in the top right corner of the
+  browser, instead of a bar above the page. The page keeps its full height.
 
 ### Fixed
 

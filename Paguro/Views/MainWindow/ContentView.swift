@@ -18,8 +18,10 @@ struct ContentView: View {
         @Bindable var recovery = appState.storeRecovery
 
         VStack(spacing: 0) {
-            // All notices share one shape. `NoticeStrip` carries severity in the
-            // icon and lower rule, plus the window-drag handle each notice needs.
+            // Every app-level notice shares one shape. `NoticeStrip` carries
+            // severity in the icon and lower rule, plus the window-drag handle
+            // each notice needs. A transient, service-scoped notice uses the
+            // floating card above the web content instead (`FloatingNoticeCard`).
             if let banner = recovery.banner {
                 NoticeStrip(severity: .error) {
                     Text(banner.message)
@@ -95,28 +97,6 @@ struct ContentView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(feedback)
-            }
-
-            // The pool's own size limit can release a background service while
-            // idle hibernation is off. Say so one time, so the user does not
-            // read the reload as a fault.
-            if let notice = appState.hibernationScheduler.capacityEvictionNotice {
-                NoticeStrip(severity: .info, systemImage: "moon.zzz.fill") {
-                    Text(notice)
-                        .font(.caption)
-                        .lineLimit(2)
-                    Spacer()
-                    Button {
-                        appState.hibernationScheduler.dismissCapacityEvictionNotice()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                    .help("Dismiss")
-                    .accessibilityLabel("Dismiss")
-                }
-                .accessibilityElement(children: .combine)
             }
 
             mainLayout(
