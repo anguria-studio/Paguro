@@ -1747,6 +1747,14 @@ struct NotificationIslandPanelView: View {
         ))
     }
 
+    /// Height of the count badge inside the left toolbar capsule.
+    ///
+    /// The badge keeps a small inset inside that capsule. It follows the
+    /// control height, so it never grows past the capsule.
+    private var toolbarBadgeHeight: CGFloat {
+        max(0, toolbarControlHeight - 6)
+    }
+
     private var expandedNotchToolbar: some View {
         HStack(spacing: 0) {
             HStack(spacing: 6) {
@@ -1755,9 +1763,11 @@ struct NotificationIslandPanelView: View {
                     .foregroundStyle(.secondary)
 
                 if let countLabel = unreviewedCountLabel {
-                    notificationCountBadge(countLabel)
+                    notificationCountBadge(countLabel, height: toolbarBadgeHeight)
                 }
             }
+            // No vertical padding here. The capsule keeps the control height,
+            // so its bottom edge stays above the camera band bottom edge.
             .padding(.horizontal, 8)
             .frame(height: toolbarControlHeight)
             .background(toolbarControlBackground, in: .capsule)
@@ -1802,7 +1812,8 @@ struct NotificationIslandPanelView: View {
         // A larger text size must not push a control into the top screen
         // edge, because the camera band keeps one height.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
-        // The controls start below the top screen edge and keep the camera
+        // The controls start below the top screen edge and end above the
+        // camera band bottom edge. The toolbar keeps the complete camera
         // band height, so the list below the toolbar does not move.
         .padding(.top, CGFloat(NotificationIslandLayout.toolbarTopInset))
         .frame(height: cameraHousingHeight, alignment: .top)
@@ -2154,12 +2165,27 @@ struct NotificationIslandPanelView: View {
         }
     }
 
-    private func notificationCountBadge(_ label: String) -> some View {
+    /// Shows the unreviewed count on a small capsule.
+    ///
+    /// The expanded toolbar gives a height, because the badge shares the
+    /// toolbar capsule and must not pass the camera band bottom edge. The
+    /// collapsed island has no band below it and uses the text size.
+    ///
+    /// - Parameters:
+    ///   - label: The count text.
+    ///   - height: Fixed badge height, or `nil` for the text size.
+    private func notificationCountBadge(
+        _ label: String,
+        height: CGFloat? = nil
+    ) -> some View {
         Text(label)
             .font(.caption.weight(.semibold).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .foregroundStyle(isCollapsedShape ? Color.white : Color.primary)
             .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.vertical, height == nil ? 3 : 0)
+            .frame(height: height)
             .background(counterBadgeFill, in: .capsule)
             .accessibilityLabel("\(label) unreviewed notifications")
     }

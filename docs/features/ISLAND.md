@@ -63,8 +63,8 @@ The type uses these values:
 - bottom inset: 8 points;
 - toolbar horizontal inset: 14 points;
 - toolbar top inset: 6 points;
+- toolbar bottom inset: 4 points;
 - largest toolbar control height: 26 points;
-- smallest toolbar control height: 20 points;
 - card horizontal inset: 10 points;
 - card corner radius: 12 points;
 - card vertical padding: 7 points;
@@ -79,11 +79,15 @@ The type uses these values:
 The card inset is smaller than the toolbar inset. Each card therefore extends
 4 points past the toolbar capsules on each side.
 
-The toolbar controls start one top inset below the island top edge. The
-control height is the camera-housing height without that inset, but never
-more than 26 points and never less than 20 points. A control of 20 points
-stays easy to hit with a pointer. The top inset and the control height stay
-inside the camera-housing band, so this rule changes no panel height.
+The toolbar controls start one top inset below the island top edge and end one
+bottom inset above the camera-housing bottom edge. The control height is the
+camera-housing height without these two insets, but never more than 26 points.
+The bottom edge of the notch is the hard limit: a control never passes it, so
+the rule keeps no smallest control height. The top inset is larger than the
+bottom inset because it also clears the rounded top screen edge. A 38-point
+housing gives a 26-point control; 32, 28, and 24 points give 22, 18, and 14
+points. The insets and the control stay inside the camera-housing band, so this
+rule changes no panel height.
 
 The visible row count is the event count, but not less than 1 and not more
 than 3.
@@ -169,8 +173,10 @@ clip.
 
 The count badge and the Clear All button sit on frosted capsules. These
 capsules start below the top screen edge and keep the control height from the
-layout rules. A larger system text size keeps that height: the label becomes a
-little smaller instead, and a control never moves up into the screen edge.
+layout rules. They never pass the bottom edge of the camera housing. The count
+badge follows the control height and stays inside its capsule. A larger system
+text size keeps these heights. The label becomes a little smaller instead, so a
+control never moves up into the screen edge or down past the housing.
 These capsules use the regular material. Reduce Transparency replaces that material
 with an opaque window background. The island background continues across the
 camera area. The toolbar reserves this space without a black camera replica.

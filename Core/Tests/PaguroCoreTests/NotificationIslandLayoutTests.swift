@@ -16,32 +16,52 @@ struct NotificationIslandLayoutTests {
         #expect(layout.panelWidth(bodyWidth: 0) == 12)
     }
 
-    @Test("Each toolbar control starts below the island top edge")
-    func eachToolbarControlStartsBelowTheIslandTopEdge() {
+    @Test("Each toolbar control stays between the two toolbar insets")
+    func eachToolbarControlStaysBetweenTheTwoToolbarInsets() {
         let layout = NotificationIslandLayout.self
 
         #expect(layout.toolbarTopInset > 0)
-        #expect(layout.toolbarBandHeight(cameraHousingHeight: housingHeight) == 32)
+        #expect(layout.toolbarBottomInset > 0)
+        #expect(layout.toolbarBandHeight(cameraHousingHeight: housingHeight) == 28)
+        // A standard camera housing holds the largest control.
         #expect(layout.toolbarControlHeight(cameraHousingHeight: housingHeight) == 26)
-        // The inset and the control stay inside the camera band, so the
-        // toolbar changes no panel height.
+
+        // The control never passes the camera band bottom edge, so the
+        // toolbar changes no panel height at any housing height.
+        for housing in [housingHeight, 32, 28, 24] {
+            let control = layout.toolbarControlHeight(cameraHousingHeight: housing)
+            #expect(layout.toolbarTopInset + control <= housing - layout.toolbarBottomInset)
+        }
+
+        // The list keeps the complete camera housing above the first card.
         #expect(
-            layout.toolbarTopInset
-                + layout.toolbarControlHeight(cameraHousingHeight: housingHeight)
-                <= housingHeight
+            layout.topSpacerHeight(cameraHousingHeight: housingHeight)
+                == housingHeight + layout.topInset
+        )
+        #expect(
+            layout.expandedHeight(eventCount: 1, cameraHousingHeight: housingHeight)
+                == 118
         )
     }
 
     @Test("A lower camera housing gives a smaller toolbar control")
     func lowerCameraHousingGivesASmallerToolbarControl() {
         let layout = NotificationIslandLayout.self
+        let housings = [housingHeight, 32, 28, 24]
+        let heights = housings.map {
+            layout.toolbarControlHeight(cameraHousingHeight: $0)
+        }
 
-        #expect(layout.toolbarControlHeight(cameraHousingHeight: 30) == 24)
+        #expect(heights == [26, 22, 18, 14])
+        // The height follows the housing without a step back.
+        for (smaller, larger) in zip(heights.dropFirst(), heights) {
+            #expect(smaller < larger)
+        }
         #expect(layout.toolbarControlHeight(cameraHousingHeight: 50) == 26)
-        // A housing that is too low keeps the pointer minimum, because a
-        // control that the pointer cannot hit is of no use.
-        #expect(layout.toolbarControlHeight(cameraHousingHeight: 20) == 20)
-        #expect(layout.toolbarControlHeight(cameraHousingHeight: 0) == 20)
+        // A housing that holds no control gives no height, because the
+        // bottom edge of the notch is the hard limit.
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: 8) == 0)
+        #expect(layout.toolbarControlHeight(cameraHousingHeight: 0) == 0)
         #expect(layout.toolbarBandHeight(cameraHousingHeight: -10) == 0)
     }
 

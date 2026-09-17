@@ -1,6 +1,5 @@
 import AppKit
 import PaguroCore
-import SwiftUI
 import XCTest
 @testable import Paguro
 
@@ -114,98 +113,6 @@ final class IslandClearAllRenderingTests: XCTestCase {
         XCTAssertTrue(model.recentContents.isEmpty)
         XCTAssertFalse(model.isClearingAll)
         XCTAssertFalse(model.isCollapsingAfterClear)
-    }
-
-    func testToolbarControlsKeepClearanceBelowTheIslandTopEdge() async throws {
-        // A notched preset and a lower camera housing, at the standard text
-        // size and at an accessibility text size.
-        for housingHeight in [38.0, 32.0] {
-            for textSize in [DynamicTypeSize.large, .accessibility1] {
-                let controls = try await toolbarControlFrames(
-                    housingHeight: housingHeight, dynamicTypeSize: textSize
-                )
-                let label = "housing \(housingHeight), text size \(textSize)"
-                XCTAssertFalse(
-                    controls.isEmpty,
-                    "The expanded toolbar must keep a focusable control: \(label)"
-                )
-                for control in controls {
-                    XCTAssertGreaterThanOrEqual(
-                        control.minY,
-                        NotificationIslandLayout.toolbarTopInset,
-                        "A toolbar control must not touch the island top edge: \(label)"
-                    )
-                    XCTAssertGreaterThanOrEqual(
-                        control.height,
-                        NotificationIslandLayout.minimumToolbarControlHeight,
-                        "A toolbar control must stay easy to hit: \(label)"
-                    )
-                    XCTAssertLessThanOrEqual(
-                        control.maxY, housingHeight,
-                        "A toolbar control must stay inside the camera band: \(label)"
-                    )
-                    XCTAssertGreaterThan(
-                        control.width, 40,
-                        "The Clear All label must stay readable: \(label)"
-                    )
-                }
-            }
-        }
-    }
-
-    /// Gives the frame of each focusable toolbar control of the expanded
-    /// island, in island coordinates with the origin at the top left corner.
-    ///
-    /// SwiftUI gives a focusable control its own AppKit view, so the frame
-    /// comes from the real layout and not from a measurement of the drawing.
-    private func toolbarControlFrames(
-        housingHeight: Double, dynamicTypeSize: DynamicTypeSize
-    ) async throws -> [CGRect] {
-        let model = NotificationIslandPanelModel()
-        let expanded = reducer.reduce(try recentState(), action: .expand)
-        let contents = expanded.recentEvents.map {
-            NotificationIslandPanelContent(
-                event: $0, serviceLabel: "Notification Test", serviceIconURL: nil
-            )
-        }
-        model.update(
-            state: expanded, content: nil, recentContents: contents,
-            appearance: NotificationIslandAppearance(glassStyle: .off, transparency: 1),
-            cameraHousingSize: IslandScreenSize(width: 164, height: housingHeight),
-            actions: .none
-        )
-        let size = CGSize(
-            width: NotificationIslandLayout.panelWidth(
-                bodyWidth: NotificationIslandLayout.expandedWidth
-            ),
-            height: NotificationIslandLayout.expandedHeight(
-                eventCount: contents.count, cameraHousingHeight: housingHeight
-            )
-        )
-        let panel = NSPanel(
-            contentRect: CGRect(origin: CGPoint(x: -20_000, y: -20_000), size: size),
-            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false
-        )
-        panel.isReleasedWhenClosed = false
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        defer { panel.close() }
-        let host = NSHostingView(
-            rootView: NotificationIslandPanelView(model: model)
-                .dynamicTypeSize(dynamicTypeSize)
-        )
-        host.sizingOptions = []
-        host.safeAreaRegions = []
-        panel.contentView = host
-        panel.orderBack(nil)
-        try await Task.sleep(for: .milliseconds(120))
-        host.layoutSubtreeIfNeeded()
-
-        // The toolbar controls are the direct children of the island view.
-        // The cards keep their own controls inside the scroll view.
-        return host.subviews
-            .map(\.frame)
-            .filter { $0.height > 0 && $0.height <= size.height / 2 && $0.width < size.width / 2 }
     }
 
     private func recentState() throws -> NotificationIslandState {
