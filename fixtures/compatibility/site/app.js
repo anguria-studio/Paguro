@@ -75,6 +75,60 @@ control("page-notification").addEventListener("click", async () => {
   }
 });
 
+control("destination-notification").addEventListener("click", async () => {
+  log("Destination notification button clicked.");
+  try {
+    await requestNotificationPermission();
+    new Notification("Paguro destination fixture", {
+      body: "Click to open the notification destination page.",
+      tag: "destination-notification",
+      data: {targetURL: "/notification-destination.html?source=notification"},
+    });
+    log("Destination notification requested.");
+  } catch (error) {
+    log(`Destination notification failed: ${error.message}`);
+  }
+});
+
+control("page-click-notification").addEventListener("click", async () => {
+  log("Page-handler notification button clicked.");
+  try {
+    await requestNotificationPermission();
+    const notification = new Notification("Paguro page-handler fixture", {
+      body: "Click to let the page open its notification destination.",
+      tag: "page-click-notification",
+    });
+    notification.addEventListener("click", () => {
+      window.location.assign("/notification-destination.html?source=page-handler");
+    });
+    log("Page-handler notification requested.");
+  } catch (error) {
+    log(`Page-handler notification failed: ${error.message}`);
+  }
+});
+
+control("provider-probe-notification").addEventListener("click", async () => {
+  log("Provider-shaped notification button clicked.");
+  try {
+    await requestNotificationPermission();
+    new Notification("Paguro provider probe fixture", {
+      body: "The data has stable identifier fields but no destination URL.",
+      tag: "provider-probe-notification",
+      data: {
+        workspaceId: "fixture-workspace",
+        channel: {
+          id: "fixture-channel",
+          kind: "channel",
+        },
+        sequence: 7,
+      },
+    });
+    log("Provider-shaped notification requested.");
+  } catch (error) {
+    log(`Provider-shaped notification failed: ${error.message}`);
+  }
+});
+
 control("worker-notification").addEventListener("click", async () => {
   log("Service worker notification button clicked.");
   try {
