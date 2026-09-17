@@ -36,8 +36,9 @@ __pycache__/
 # Playwright MCP scratch output
 .playwright-mcp/
 
-# Personal marketing drafts (not part of the repo)
+# Personal marketing drafts and generated marketing previews (not part of the repo)
 /marketing/
+/output/
 
 # Private work plans and local writing-tool files
 /.project/
