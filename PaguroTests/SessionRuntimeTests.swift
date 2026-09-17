@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import PaguroCore
 @testable import Paguro
 
 final class SessionRuntimeTests: XCTestCase {
@@ -34,7 +35,7 @@ final class SessionRuntimeTests: XCTestCase {
         let first = AppState.criticalServicesToKeepLive(among: services, covered: [], limit: 5)
         XCTAssertEqual(first.count, 5, "the cap must bound how many are kept live")
         XCTAssertLessThan(
-            AppState.maxCrossSpaceCriticalServices, 15,
+            AppState.maxCrossSpaceCriticalServices, WebViewPoolCapacity.maxLoaded,
             "the cap must stay below the pool's maxLoaded or the LRU sweep has nothing to reclaim"
         )
 

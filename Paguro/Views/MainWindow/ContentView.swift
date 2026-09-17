@@ -97,6 +97,28 @@ struct ContentView: View {
                 .accessibilityLabel(feedback)
             }
 
+            // The pool's own size limit can release a background service while
+            // idle hibernation is off. Say so one time, so the user does not
+            // read the reload as a fault.
+            if let notice = appState.hibernationScheduler.capacityEvictionNotice {
+                NoticeStrip(severity: .info, systemImage: "moon.zzz.fill") {
+                    Text(notice)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer()
+                    Button {
+                        appState.hibernationScheduler.dismissCapacityEvictionNotice()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .help("Dismiss")
+                    .accessibilityLabel("Dismiss")
+                }
+                .accessibilityElement(children: .combine)
+            }
+
             mainLayout(
                 spaceSelection: $state.selectedSpaceID,
                 serviceSelection: $state.selectedServiceID
