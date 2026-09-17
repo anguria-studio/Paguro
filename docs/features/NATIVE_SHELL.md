@@ -223,6 +223,9 @@ available. A stored icons-only value never reaches the sidebar, because
 The File menu can add a workspace.
 A secondary click on the sidebar background can add a service or workspace.
 Service rows keep their own context menus.
+The service context menu opens the live page in the user's default browser.
+The menu names this action Open in Browser, because Paguro asks the system for
+the default browser and does not choose Safari.
 
 ## Service reorder
 

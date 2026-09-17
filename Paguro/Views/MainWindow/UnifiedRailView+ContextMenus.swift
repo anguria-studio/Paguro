@@ -54,7 +54,7 @@ extension UnifiedRailView {
 
         Divider()
 
-        Button("Open in Safari") {
+        Button("Open in Browser") {
             openInDefaultBrowser(link.service)
         }
 
