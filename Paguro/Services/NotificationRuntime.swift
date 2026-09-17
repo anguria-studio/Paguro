@@ -26,6 +26,14 @@ final class NotificationRuntime {
     @ObservationIgnored var writeDockMuteIndicator: @MainActor (Bool) -> Void = {
         DockMuteIndicator.shared.setMuted($0)
     }
+    @ObservationIgnored var loadNotificationDestination: @MainActor (
+        ServiceInstance,
+        URL
+    ) -> Void
+    @ObservationIgnored var dispatchNotificationPageClick: @MainActor (
+        UUID,
+        UUID
+    ) async -> Bool
 
     private var currentSpaceID: @MainActor () -> UUID? = { nil }
     private var selectService: @MainActor (UUID?, UUID) -> Void = { _, _ in }
@@ -87,6 +95,35 @@ final class NotificationRuntime {
         self.scheduledDNDEnabled = preferencesStore.scheduledDNDEnabled
         self.dndStartMinutes = preferencesStore.dndStartMinutes
         self.dndEndMinutes = preferencesStore.dndEndMinutes
+        self.loadNotificationDestination = { [weak webViewPool] service, url in
+            let webView = webViewPool?.webView(for: service)
+            webView?.load(URLRequest(url: url))
+        }
+        self.dispatchNotificationPageClick = { [weak webViewPool] serviceID, token in
+            guard let webView = webViewPool?.liveWebView(for: serviceID) else {
+                AppLogger.notifications.info(
+                    "Notification page click unavailable because the service page is not live"
+                )
+                return false
+            }
+            do {
+                let result = try await webView.callAsyncJavaScript(
+                    "return window.__paguroDispatchNotificationClick?.(token) === true;",
+                    arguments: ["token": token.uuidString.lowercased()],
+                    in: nil,
+                    contentWorld: .page
+                )
+                let accepted = (result as? Bool) == true
+                let outcome = accepted ? "accepted" : "unavailable"
+                AppLogger.notifications.info(
+                    "Notification page click was \(outcome, privacy: .public)"
+                )
+                return accepted
+            } catch {
+                AppLogger.notifications.info("Notification page click was unavailable")
+                return false
+            }
+        }
         webViewPool.isMediaMuted = { [weak self] id in
             guard let self else { return false }
             return self.doNotDisturb || self.scheduledDNDActive || self.isServiceEffectivelyMuted(id)
@@ -141,7 +178,7 @@ final class NotificationRuntime {
         quietHoursTask = nil
 
         notificationManager.stopAllPolling()
-        notificationManager.onServiceRequested = nil
+        notificationManager.onNavigationRequested = nil
         transientBadgeFetcher.pause()
         transientBadgeFetcher.targetsProvider = nil
         transientBadgeFetcher.hasLiveWebView = nil
@@ -502,24 +539,44 @@ final class NotificationRuntime {
     }
 
     private func setupNotificationNavigation() {
-        notificationManager.onServiceRequested = { [weak self] serviceID in
-            self?.navigateToService(serviceID)
+        notificationManager.onNavigationRequested = { [weak self] request in
+            self?.navigateToNotification(request)
         }
         for pending in notificationManager.drainPendingNotifications() {
-            navigateToService(pending)
+            navigateToNotification(pending)
         }
     }
 
-    private func navigateToService(_ serviceID: UUID) {
-        guard let service = service(serviceID) else { return }
+    private func navigateToNotification(_ request: NotificationNavigationRequest) {
+        guard let service = service(request.serviceID) else { return }
         let spaces = service.spaceLinks.compactMap(\.liveSpace)
         let current = currentSpaceID()
         let isInCurrentSpace = spaces.contains { $0.id == current }
         let targetSpaceID = isInCurrentSpace ? nil : spaces.first?.id
         // Select first and show second, so the window that reaches the screen
         // already shows the service account that the user clicked.
-        selectService(targetSpaceID, serviceID)
+        selectService(targetSpaceID, request.serviceID)
         bringWindowForward()
+        let destination = URL(string: service.url).flatMap {
+            NotificationDestinationPolicy.approvedURL(
+                request.targetURLString,
+                serviceURL: $0
+            )
+        }
+        if let pageClickToken = request.pageClickToken {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let handled = await self.dispatchNotificationPageClick(
+                    request.serviceID,
+                    pageClickToken
+                )
+                if !handled, let destination {
+                    self.loadNotificationDestination(service, destination)
+                }
+            }
+        } else if let destination {
+            loadNotificationDestination(service, destination)
+        }
     }
 
     private func service(_ serviceID: UUID) -> ServiceInstance? {

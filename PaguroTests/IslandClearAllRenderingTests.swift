@@ -40,7 +40,7 @@ final class IslandClearAllRenderingTests: XCTestCase {
         XCTAssertTrue(model.isCollapsingAfterClear, "Keep the surface until the frame reaches the notch")
         try await Task.sleep(for: .milliseconds(100))
         try saveSnapshot(panel, name: "shrinking")
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitForCollapseToFinish(model)
         XCTAssertFalse(model.isCollapsingAfterClear)
         XCTAssertEqual(panel.frame.height, 38, accuracy: 0.1)
         XCTAssertEqual(panel.frame.maxY, -500, accuracy: 0.1)
@@ -158,6 +158,16 @@ final class IslandClearAllRenderingTests: XCTestCase {
         let url = directory.appendingPathComponent("\(name).png")
         try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: url)
         print("Clear All snapshot: \(url.path)")
+    }
+
+    private func waitForCollapseToFinish(
+        _ model: NotificationIslandPanelModel
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while model.isCollapsingAfterClear, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(25))
+        }
     }
 }
 

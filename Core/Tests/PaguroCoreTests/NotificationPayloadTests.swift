@@ -5,14 +5,15 @@ import Testing
 struct NotificationPayloadTests {
     @Test
     func validPayloadDecodesAndRemovesNonDisplayControls() throws {
-        let json = #"{"version":1,"type":"web-notification","title":"New\u0000 message","body":"Line 1\nLine 2","tag":"message-1"}"#
+        let json = #"{"version":1,"type":"web-notification","title":"New\u0000 message","body":"Line 1\nLine 2","tag":"message-1","targetURL":"/messages/1"}"#
 
         let payload = try NotificationPayload.decode(json)
 
         #expect(payload == NotificationPayload(
             title: "New message",
             body: "Line 1\nLine 2",
-            tag: "message-1"
+            tag: "message-1",
+            targetURL: "/messages/1"
         ))
     }
 
@@ -24,6 +25,31 @@ struct NotificationPayloadTests {
 
         #expect(payload.body.isEmpty)
         #expect(payload.tag.isEmpty)
+        #expect(payload.targetURL.isEmpty)
+        #expect(payload.pageClickToken.isEmpty)
+        #expect(payload.probe == nil)
+    }
+
+    @Test
+    func decodesAValidatedPageClickToken() throws {
+        let token = "33333333-3333-4333-8333-333333333333"
+        let payload = try NotificationPayload.decode(
+            Self.payloadJSON(pageClickToken: token)
+        )
+
+        #expect(payload.pageClickToken == token)
+    }
+
+    @Test
+    func decodesPrivacyLimitedProbeMetadata() throws {
+        let payload = try NotificationPayload.decode(
+            #"{"version":1,"type":"web-notification","title":"New message","probe":{"source":"constructor","dataShape":"{channelId:string,teamId:string}"}}"#
+        )
+
+        #expect(payload.probe == NotificationProbeMetadata(
+            source: .constructor,
+            dataShape: "{channelId:string,teamId:string}"
+        ))
     }
 
     @Test
@@ -82,6 +108,26 @@ struct NotificationPayloadTests {
                 .unsupportedType("unknown")
             ),
             (
+                "wrong target URL type",
+                #"{"version":1,"type":"web-notification","title":"Title","targetURL":12}"#,
+                .invalidField("targetURL")
+            ),
+            (
+                "invalid page click token",
+                #"{"version":1,"type":"web-notification","title":"Title","pageClickToken":"not-a-uuid"}"#,
+                .invalidField("pageClickToken")
+            ),
+            (
+                "unknown probe source",
+                #"{"version":1,"type":"web-notification","title":"Title","probe":{"source":"worker","dataShape":"object"}}"#,
+                .invalidField("probe.source")
+            ),
+            (
+                "probe shape contains a control character",
+                #"{"version":1,"type":"web-notification","title":"Title","probe":{"source":"constructor","dataShape":"line\nvalue"}}"#,
+                .invalidField("probe.dataShape")
+            ),
+            (
                 "over-long title",
                 Self.payloadJSON(title: String(
                     repeating: "é",
@@ -112,6 +158,33 @@ struct NotificationPayloadTests {
                 .fieldTooLong(
                     field: "tag",
                     maximumBytes: NotificationPayload.maximumTagBytes
+                )
+            ),
+            (
+                "over-long target URL",
+                Self.payloadJSON(targetURL: String(
+                    repeating: "x",
+                    count: NotificationPayload.maximumTargetURLBytes + 1
+                )),
+                .fieldTooLong(
+                    field: "targetURL",
+                    maximumBytes: NotificationPayload.maximumTargetURLBytes
+                )
+            ),
+            (
+                "over-long probe shape",
+                Self.payloadJSON(
+                    probe: [
+                        "source": NotificationProbeSource.constructor.rawValue,
+                        "dataShape": String(
+                            repeating: "x",
+                            count: NotificationPayload.maximumProbeShapeBytes + 1
+                        ),
+                    ]
+                ),
+                .fieldTooLong(
+                    field: "probe.dataShape",
+                    maximumBytes: NotificationPayload.maximumProbeShapeBytes
                 )
             ),
         ]
@@ -149,15 +222,21 @@ struct NotificationPayloadTests {
         type: String = NotificationPayloadType.webNotification.rawValue,
         title: String = "Title",
         body: String = "Body",
-        tag: String = ""
+        tag: String = "",
+        targetURL: String = "",
+        pageClickToken: String = "",
+        probe: [String: String]? = nil
     ) -> String {
-        let object: [String: Any] = [
+        var object: [String: Any] = [
             "version": version,
             "type": type,
             "title": title,
             "body": body,
             "tag": tag,
+            "targetURL": targetURL,
+            "pageClickToken": pageClickToken,
         ]
+        object["probe"] = probe
         let data = try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }

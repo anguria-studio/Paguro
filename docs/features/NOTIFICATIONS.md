@@ -35,8 +35,13 @@ available and the badge returns after unmuting if its preference is enabled.
 Paguro can wrap the page `Notification` constructor.
 It can also wrap page calls to `showNotification`.
 
-The current source provides a title, body, and tag.
+The current source provides a title, body, tag, and an optional target URL.
 It is the best generic source for an individual event.
+
+The URL must be explicit notification data. Paguro accepts a string in
+`options.data`, or a string in its `targetURL`, `url`, or `href` field. Paguro
+does not use the current page URL as a substitute. The page can show one
+conversation while it raises an event for another conversation.
 
 A service worker can create a notification outside the page context.
 Paguro cannot always see that event.
@@ -125,6 +130,51 @@ Each recipe needs these items:
 
 Paguro must not download executable recipes at run time.
 
+### Provider probe
+
+Provider web applications can put different fields in `NotificationOptions.data`.
+Paguro has an opt-in Debug probe that reports the shape of this value before a
+provider recipe exists. The probe reports the catalog service ID, the page API,
+field names, value types, and whether the generic bridge found a destination.
+It does not report field values, message text, identifier lengths, or URLs.
+
+Select the `Paguro Notification Probe` scheme and start this log capture in a
+second terminal:
+
+```sh
+scripts/capture_notification_probe_logs.sh
+```
+
+This scheme uses the separate Compatibility app container. Start the local
+fixture and select **Provider-shaped notification** to check the probe itself.
+The expected line has `service=custom`, `source=constructor`, nested field
+types, and `destination=absent`.
+
+The same capture reports whether a later native click was `accepted` by its
+live page or was `unavailable` because the page object no longer existed.
+
+Send a real incoming message while each provider is visible, while another
+service is visible, and while Paguro's main window is closed. A missing probe
+line means the page bridge did not see the notification call. Test an app quit
+separately, but expect no probe line because Command-Q stops all Paguro work.
+
+The probe uses the exact `--paguro-notification-probe` launch argument and is
+not available in Release builds. Treat field names as diagnostic data. Review
+the local file before sharing it, even though Paguro replaces unusual field
+names and never records values.
+
+Use observed shapes to add a bundled provider recipe. A recipe can read only
+the fields named in its fixture and can produce only a candidate URL. The
+native destination policy must still bind and validate that URL. Do not infer a
+route from message text, the current page, or an unaudited provider field.
+
+The September 15, 2026 captures for WhatsApp and Telegram used the page
+constructor with no `data` value and no generic destination. Their retained
+page click handlers opened the correct conversations in a signed physical test.
+A September 17, 2026 physical test verified that a Slack notification opens
+the correct conversation through the same generic route. No bundled provider
+recipe is necessary for WhatsApp, Telegram, or Slack.
+
 ## Event model
 
 The page bridge sends an untrusted signal.
@@ -139,6 +189,7 @@ The event contains these values:
 - optional body;
 - optional tag;
 - optional target URL;
+- optional page click token;
 - receipt time.
 
 `PaguroCore` owns this value type.
@@ -167,12 +218,19 @@ The bridge must not expose file access, shell access, or a general native comman
 
 The current signal uses schema version `1` and type `web-notification`. The
 complete UTF-8 message can use 16,384 bytes. A title can use 512 bytes, a body
-can use 4,096 bytes, and a tag can use 512 bytes. The decoder rejects another
-version or type. It removes control characters that have no display use. It
-keeps tabs and line breaks.
+can use 4,096 bytes, a tag can use 512 bytes, and a target URL can use 4,096
+bytes. A page click token is a UUID. The decoder rejects another version or
+type. It removes control characters that have no display use from display
+text. A URL with a control character is not a destination.
+
+`NotificationDestinationPolicy` resolves an absolute URL or a relative path
+against the configured service URL. It accepts only HTTP and HTTPS URLs without
+embedded credentials. The target host must belong to the configured service.
+An unsafe target does not suppress the event. It removes only the destination.
 
 The page does not send a service ID or notification icon. The native message
-handler binds each signal to its service account. Native presentation uses the
+handler binds each signal to its service account. A target URL cannot select a
+different account. Native presentation uses the
 known service icon. Extra page fields cannot replace these values.
 
 Both presentation routes read the current saved service icon when a new
@@ -481,8 +539,29 @@ service.
 
 ## Click routing
 
-A click first selects the service account.
-It then loads the approved target URL when one exists.
+A click first selects the service account. For a page constructor notification,
+Paguro keeps the original page `Notification` in a 128-entry registry. The
+native event carries an opaque, one-use UUID that identifies that object. A
+click asks the same live service page to dispatch the original `click` event.
+The provider's own handler can then open its conversation without Paguro reading
+message text or guessing a route.
+
+A retained provider handler takes priority over an approved target URL. Paguro
+uses the approved URL only when the handler is unavailable. This fallback
+survives a cold launch, while the handler can preserve provider-specific routing
+that the notification payload does not expose.
+
+Paguro does not create or revive a web view to run a handler. A quit, reload,
+full hibernation, registry eviction, or missing handler uses an approved target
+URL when one exists. Otherwise, the click selects the service without
+navigation. The page-side `showNotification` wrapper has no constructor object,
+so it can use only an approved target URL.
+
+Both the macOS and island routes create the same `NotificationNavigationRequest`.
+The macOS notification keeps the native service ID, validated target string,
+and optional page click token in its metadata. A validated URL survives a cold
+launch. A page click token works only while the original page object remains
+live. The island creates the request from its in-memory event.
 
 A click also shows the main window. Paguro activates the application and orders
 that window forward, or asks SwiftUI to build the window again when the user
@@ -492,12 +571,17 @@ changes no selection and shows no window.
 
 The route policy must reject these values:
 
-- a non-HTTP scheme unless Paguro has a specific handler;
+- a non-HTTP or non-HTTPS scheme;
 - a host that the service does not own;
 - a URL with invalid syntax;
+- a URL with embedded credentials;
 - a URL that exceeds the size limit.
 
-When no safe URL exists, Paguro opens the service root.
+Paguro validates the URL when it accepts the page signal and again when the
+click arrives. The second check uses the current service URL, because the user
+can edit a service after macOS receives a notification. When no safe URL
+exists, Paguro selects the account identified by the native service ID and
+preserves its current page.
 
 ## Background behavior
 
@@ -527,7 +611,8 @@ Diagnostic output can contain a service ID and a redacted host.
 - A service-worker-only event can be invisible to Paguro.
 - A title badge can show unread state without a new-event boundary.
 - A service page change can break a recipe.
-- Exact conversation routing is not always available.
+- Exact conversation routing is available only when notification data contains
+  a supported destination value or a live page retains its original handler.
 - A hibernated service cannot promise instant events.
 
 The service matrix must state these limits for each service.

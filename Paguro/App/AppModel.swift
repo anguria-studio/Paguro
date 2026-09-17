@@ -245,9 +245,8 @@ final class AppModel {
         appState.bringMainWindowForward = { [weak self] in
             self?.bringMainWindowForward()
         }
-        islandPanelController.onServiceRequested = { [weak self] serviceID in
-            self?.appState.notificationManager.routeServiceRequest(serviceID)
-            self?.bringMainWindowForward()
+        islandPanelController.onNavigationRequested = { [weak self] request in
+            self?.appState.notificationManager.routeNotificationRequest(request)
         }
         delegate.didBecomeActive = { [weak self] in
             guard let self else { return }

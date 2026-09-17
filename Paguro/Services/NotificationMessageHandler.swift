@@ -7,14 +7,23 @@ import PaguroCore
 final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
     let serviceID: UUID
     let presentationRouter: NotificationPresentationRouter
+    private let serviceURLProvider: @MainActor () -> URL?
+    private let probeEnabled: Bool
+    private let probeServiceKind: String
     private var deduplicator = NotificationDeduplicator()
 
     init(
         serviceID: UUID,
-        presentationRouter: NotificationPresentationRouter
+        serviceURLProvider: @escaping @MainActor () -> URL?,
+        presentationRouter: NotificationPresentationRouter,
+        probeEnabled: Bool,
+        probeServiceKind: String
     ) {
         self.serviceID = serviceID
+        self.serviceURLProvider = serviceURLProvider
         self.presentationRouter = presentationRouter
+        self.probeEnabled = probeEnabled
+        self.probeServiceKind = probeServiceKind
         super.init()
     }
 
@@ -78,12 +87,35 @@ final class NotificationMessageHandler: NSObject, WKScriptMessageHandler {
             return
         }
 
+        #if DEBUG
+        if probeEnabled {
+            let source = payload.probe?.source.rawValue ?? "unavailable"
+            let dataShape = payload.probe?.dataShape ?? "unavailable"
+            let destination = payload.targetURL.isEmpty ? "absent" : "present"
+            AppLogger.notifications.info(
+                "Provider probe: service=\(self.probeServiceKind, privacy: .public) source=\(source, privacy: .public) data=\(dataShape, privacy: .public) destination=\(destination, privacy: .public)"
+            )
+        }
+        #endif
+
         let event: NotificationEvent
         do {
+            let targetURL = serviceURLProvider().flatMap {
+                NotificationDestinationPolicy.approvedURL(
+                    payload.targetURL,
+                    serviceURL: $0
+                )
+            }
+            if !payload.targetURL.isEmpty, targetURL == nil {
+                AppLogger.notifications.warning(
+                    "Notification trace \(traceID, privacy: .public): rejected unsafe destination"
+                )
+            }
             event = try NotificationEvent.normalize(
                 id: eventID,
                 serviceID: serviceID,
                 payload: payload,
+                targetURL: targetURL,
                 receivedAt: Date()
             )
         } catch {

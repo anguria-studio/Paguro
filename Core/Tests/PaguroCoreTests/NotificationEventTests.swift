@@ -27,6 +27,7 @@ struct NotificationEventTests {
 
     @Test
     func normalizesAValidatedPagePayload() throws {
+        let targetURL = URL(string: "https://chat.example/messages/1")!
         let event = try NotificationEvent.normalize(
             id: eventID,
             serviceID: serviceID,
@@ -35,13 +36,43 @@ struct NotificationEventTests {
                 body: " Body ",
                 tag: " "
             ),
+            targetURL: targetURL,
             receivedAt: receivedAt
         )
 
         #expect(event.title == "New message")
         #expect(event.body == "Body")
         #expect(event.tag == nil)
+        #expect(event.targetURL == targetURL)
         #expect(event.source == .pageNotification)
+    }
+
+    @Test
+    func keepsAPageClickTokenWithAndWithoutADestination() throws {
+        let token = UUID(uuidString: "33333333-3333-4333-8333-333333333333")!
+        let clickEvent = try NotificationEvent.normalize(
+            id: eventID,
+            serviceID: serviceID,
+            payload: NotificationPayload(
+                title: "New message",
+                pageClickToken: token.uuidString
+            ),
+            receivedAt: receivedAt
+        )
+        let destinationEvent = try NotificationEvent.normalize(
+            id: eventID,
+            serviceID: serviceID,
+            payload: NotificationPayload(
+                title: "New message",
+                targetURL: "/messages/1",
+                pageClickToken: token.uuidString
+            ),
+            targetURL: URL(string: "https://chat.example/messages/1"),
+            receivedAt: receivedAt
+        )
+
+        #expect(clickEvent.pageClickToken == token)
+        #expect(destinationEvent.pageClickToken == token)
     }
 
     @Test

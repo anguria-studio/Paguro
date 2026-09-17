@@ -9,6 +9,7 @@ public struct NotificationEvent: Equatable, Sendable {
     public let body: String?
     public let tag: String?
     public let targetURL: URL?
+    public let pageClickToken: UUID?
     public let receivedAt: Date
 
     /// Creates an event from a validated page notification signal.
@@ -27,6 +28,7 @@ public struct NotificationEvent: Equatable, Sendable {
             body: payload.body,
             tag: payload.tag,
             targetURL: targetURL,
+            pageClickToken: UUID(uuidString: payload.pageClickToken),
             receivedAt: receivedAt
         )
     }
@@ -40,6 +42,7 @@ public struct NotificationEvent: Equatable, Sendable {
         body: String? = nil,
         tag: String? = nil,
         targetURL: URL? = nil,
+        pageClickToken: UUID? = nil,
         receivedAt: Date
     ) throws -> NotificationEvent {
         let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -60,6 +63,7 @@ public struct NotificationEvent: Equatable, Sendable {
             body: normalizedBody,
             tag: nonEmptyTrimmed(tag),
             targetURL: targetURL,
+            pageClickToken: pageClickToken,
             receivedAt: receivedAt
         )
     }
@@ -81,6 +85,7 @@ public struct NotificationEvent: Equatable, Sendable {
         body: String?,
         tag: String?,
         targetURL: URL?,
+        pageClickToken: UUID?,
         receivedAt: Date
     ) {
         self.id = id
@@ -90,6 +95,7 @@ public struct NotificationEvent: Equatable, Sendable {
         self.body = body
         self.tag = tag
         self.targetURL = targetURL
+        self.pageClickToken = pageClickToken
         self.receivedAt = receivedAt
     }
 

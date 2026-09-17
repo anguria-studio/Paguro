@@ -43,6 +43,9 @@ class FixtureServerTests(unittest.TestCase):
             html = response.read().decode("utf-8")
         for control_id in (
             "page-notification",
+            "destination-notification",
+            "page-click-notification",
+            "provider-probe-notification",
             "worker-notification",
             "increment-badge",
             "open-popup",
@@ -64,6 +67,32 @@ class FixtureServerTests(unittest.TestCase):
         ):
             self.assertIn(f'id="{control_id}"', html)
         self.assertIn("https://127.0.0.1:8444/cross-origin.html", html)
+
+    def test_provider_probe_control_uses_structured_data_without_a_url(self) -> None:
+        with self.get("/app.js") as response:
+            script = response.read().decode("utf-8")
+        start = script.index('control("provider-probe-notification")')
+        end = script.index('control("worker-notification")')
+        handler = script[start:end]
+        self.assertIn('workspaceId: "fixture-workspace"', handler)
+        self.assertIn('id: "fixture-channel"', handler)
+        self.assertNotIn("targetURL", handler)
+
+    def test_page_click_control_uses_a_handler_without_destination_data(self) -> None:
+        with self.get("/app.js") as response:
+            script = response.read().decode("utf-8")
+        start = script.index('control("page-click-notification")')
+        end = script.index('control("provider-probe-notification")')
+        handler = script[start:end]
+        self.assertIn('notification.addEventListener("click"', handler)
+        self.assertIn("/notification-destination.html?source=page-handler", handler)
+        self.assertNotIn("data:", handler)
+
+    def test_notification_destination_is_a_same_origin_static_page(self) -> None:
+        with self.get("/notification-destination.html?source=notification") as response:
+            html = response.read().decode("utf-8")
+        self.assertIn('id="notification-destination-status"', html)
+        self.assertIn("Destination opened", html)
 
     def test_download_has_an_attachment_filename(self) -> None:
         with self.get("/download") as response:
