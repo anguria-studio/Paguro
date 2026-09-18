@@ -44,8 +44,20 @@ Old upstream comments can remain until a change touches that code.
 Update the architecture document when a dependency direction changes.
 Update the design document when a visual rule changes.
 Update the feature document when feature behavior changes.
-Update `.project/docs/BACKLOG.md` when work starts or ends, if the local file exists.
-Public contributors can track unfinished work in GitHub issues.
+Close a ticket in the pull request that completes it.
+Do not leave this step for a later cleanup.
+
+- Set the backlog row to `ACTIVE` when work starts, if `.project/docs/BACKLOG.md` exists.
+- Before you open the pull request, set the row to `DONE` and write the evidence in it.
+- Add the pull request number to the row immediately after you open the pull request.
+- Write `Closes ATL-000` in the pull request description, with the real ticket number.
+- If the pull request closes without a merge, set the row back to `ACTIVE`.
+- A check that only a person can do on hardware goes to the open hardware row.
+  It does not keep a completed row open.
+
+The backlog is a private file that Git ignores, so the pull request diff cannot show it.
+The pull request template has a box that confirms the update.
+Public contributors track unfinished work in GitHub issues and write `Closes #000`.
 
 Add a dated entry to `.project/docs/ERRORS.md` when a failed approach teaches a reusable lesson, if the local file exists.
 Keep contributor-facing constraints in the related public feature document.

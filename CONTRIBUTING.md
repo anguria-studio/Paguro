@@ -86,10 +86,13 @@ scripts/lint_docs.sh
 
 ## Pull requests
 
-Make changes on a branch and open a pull request into `main`. The repository
-blocks direct pushes, force pushes, and deletion of `main`. The `Code quality`
-and `Vale` checks must pass, and you must resolve review conversations before
-merging.
+Make changes on a branch and open a pull request into `main`. Name the issue
+that the pull request completes, for example `Closes #12`, so the issue closes
+with the merge.
+
+The repository blocks direct pushes, force pushes, and deletion of `main`. The
+`Code quality` and `Vale` checks must pass, and you must resolve review
+conversations before merging.
 A merge conflict with `main` blocks merging. A branch without conflicts does
 not have to be up to date with `main`. The checks run again on `main` after
 each merge and find a problem between two changes. GitHub deletes the branch
