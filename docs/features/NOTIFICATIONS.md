@@ -525,13 +525,6 @@ mute change then writes the new value to the live document and to the documents
 that load next. A user script reaches no document that is already open, so a
 guard installed later than the page could not cover it.
 
-At that same point the script measures the level that the page sends to the
-speakers. One analyser for each context taps the signal before the mute gain. The
-measurement changes nothing that the user hears. It answers whether the page
-produces sound. The background audio exemption needs that answer for a service
-that plays without a media element. `docs/features/WEB-SESSIONS.md` holds that
-rule. Mute still ends the exemption, so a muted service stays silent.
-
 Clearing mute permits playback again unless the view is still suspended in the
 background. The website and WebKit control whether paused media resumes.
 This control does not change microphone capture or request call termination.

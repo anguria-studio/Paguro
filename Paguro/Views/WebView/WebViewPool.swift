@@ -86,23 +86,11 @@ final class WebViewPool {
     @ObservationIgnored
     var audibilityProbe: (@MainActor (UUID) async -> Bool)?
 
-    /// What the last audibility probe saw. It serves the one log line that
-    /// explains a decision.
+    /// How many media elements the last audibility probe saw, and how many of
+    /// them were audible. It serves the one log line that explains a decision.
     struct AudibleMediaCounts: Equatable, Sendable {
         var elements = 0
         var audible = 0
-        /// How many Web Audio contexts run and reach the speakers. A context
-        /// that never connects to its destination is not measured and not
-        /// counted.
-        var contexts = 0
-        /// Whether the measured Web Audio output carried sound recently. This is
-        /// the only evidence for a page that plays without a media element.
-        var signal = false
-        /// Whether the page holds the Web Audio guard. It is installed with the
-        /// web view configuration, so every document has it. A false here says
-        /// that this document has no tap at all, which is a different fault
-        /// from a page that plays no Web Audio.
-        var hasGuard = false
     }
     private var lastAudibleMediaCounts: [UUID: AudibleMediaCounts] = [:]
 
@@ -253,8 +241,7 @@ final class WebViewPool {
     /// Telegram Web keep muted looping videos for stickers and avatars, so the
     /// state alone marked both as playing on every switch. The audibility probe
     /// is the second condition. It asks the page whether any media element is
-    /// audible now, or whether the Web Audio output carried sound recently.
-    /// Both must hold, at the switch and on each poll.
+    /// audible now. Both must hold, at the switch and on each poll.
     ///
     /// The probe runs only when the state already reports playing, so an
     /// ordinary background service costs one WebKit query, as before.
@@ -269,20 +256,13 @@ final class WebViewPool {
     ///
     /// A count of -1 means that no page was counted: the state answered alone,
     /// the page could not answer, or a test replaced the probe.
-    ///
-    /// `guard` reports whether the page holds the Web Audio guard. It is false
-    /// for a decision that counted no page, and false for a document that never
-    /// received the guard. Without the guard nothing measures the Web Audio
-    /// output, so a report of no context and no signal proves nothing.
     private func logAudioCheck(for id: UUID, state: WKMediaPlaybackState, isAudible: Bool) {
         let counts = lastAudibleMediaCounts[id]
         AppLogger.webView.debug(
             """
             Background audio check for \(id): state \(Self.name(of: state)), \
             audible \(isAudible), elements \(counts?.elements ?? -1), \
-            audible elements \(counts?.audible ?? -1), \
-            audio contexts \(counts?.contexts ?? -1), signal \(counts?.signal ?? false), \
-            guard \(counts?.hasGuard ?? false)
+            audible elements \(counts?.audible ?? -1)
             """
         )
     }
@@ -334,18 +314,8 @@ final class WebViewPool {
             lastAudibleMediaCounts.removeValue(forKey: id)
             return false
         }
-        let counts = AudibleMediaCounts(
-            elements: elements,
-            audible: audible,
-            contexts: report["contexts"] as? Int ?? 0,
-            signal: report["signal"] as? Bool ?? false,
-            hasGuard: report["guard"] as? Bool ?? false
-        )
-        lastAudibleMediaCounts[id] = counts
-        // Two sources, either one enough. An audible element is the common case.
-        // A measured Web Audio signal is the only evidence for a page that
-        // decodes the sound itself, as WhatsApp Web does for a voice message.
-        return counts.audible > 0 || counts.signal
+        lastAudibleMediaCounts[id] = AudibleMediaCounts(elements: elements, audible: audible)
+        return audible > 0
     }
 
     /// Reads one playback state with a bound, for the same reason that

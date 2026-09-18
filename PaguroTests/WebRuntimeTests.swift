@@ -825,178 +825,34 @@ final class WebRuntimeTests: XCTestCase {
         )
     }
 
-    // MARK: - Web Audio output measurement
-
-    /// The reported case, without the page. WhatsApp Web decodes a voice message
-    /// itself and plays it through Web Audio, so no media element exists to
-    /// read. An idle context must still report silence, because WhatsApp Web and
-    /// Telegram Web both keep one running while they play nothing.
-    @MainActor
-    func testWebAudioTapReportsNoSignalForASilentContext() async throws {
-        let webView = makeWebAudioProbeWebView()
-        let window = present(webView)
-        defer { window.contentView = nil }
-        try await startAudioContext(on: webView, title: "Silent context fixture")
-
-        // Nothing reaches the destination yet, so the guard measures no context.
-        var counts = try await audibleMediaCounts(on: webView)
-        XCTAssertEqual(
-            counts,
-            Counts(elements: 0, audible: 0, contexts: 0, signal: false, hasGuard: true)
-        )
-
-        // A connected source of silence is the idle case. It is measured, and it
-        // reports no signal.
-        _ = try await webView.evaluateJavaScript("""
-            window.silence = context.createBufferSource();
-            silence.buffer = context.createBuffer(1, 48000, 48000);
-            silence.loop = true;
-            silence.connect(context.destination);
-            silence.start();
-            void 0;
-            """)
-        try await waitForPage("outputGains.length === 1", on: webView)
-        try await waitForPage(Self.probe("contexts") + " === 1", on: webView)
-        counts = try await audibleMediaCounts(on: webView)
-        XCTAssertEqual(
-            counts,
-            Counts(elements: 0, audible: 0, contexts: 1, signal: false, hasGuard: true),
-            "a running context that sends silence must not earn the exemption"
-        )
-        _ = try await webView.evaluateJavaScript("context.close(); void 0")
-    }
-
-    /// Real sound through the ordinary path: the measurement reports it inside
-    /// the window, and forgets it again once the source stops.
-    @MainActor
-    func testWebAudioTapReportsAnOscillatorAndForgetsItAfterItStops() async throws {
-        let webView = makeWebAudioProbeWebView()
-        let window = present(webView)
-        defer { window.contentView = nil }
-        try await startAudioContext(on: webView, title: "Oscillator fixture")
-        _ = try await webView.evaluateJavaScript("""
-            window.oscillator = context.createOscillator();
-            oscillator.frequency.value = 440;
-            // A quiet tone. It stays far above the measurement threshold and far
-            // below a level that a person in the room would call loud.
-            window.level = context.createGain();
-            level.gain.value = \(Self.testToneLevel);
-            oscillator.connect(level);
-            level.connect(context.destination);
-            oscillator.start();
-            void 0;
-            """)
-        try await waitForPage(Self.probe("signal") + " === true", on: webView)
-        let counts = try await audibleMediaCounts(on: webView)
-        XCTAssertEqual(
-            counts,
-            Counts(elements: 0, audible: 0, contexts: 1, signal: true, hasGuard: true),
-            "sound with no media element must report a signal and one context"
-        )
-
-        // The tone stops. The recent-signal window then runs out, and the page
-        // reports silence again, so the exemption ends on the next poll.
-        _ = try await webView.evaluateJavaScript("oscillator.stop(); void 0")
-        try await waitForPage(Self.probe("signal") + " === false", on: webView)
-        try await waitForPage(Self.probe("contexts") + " === 1", on: webView)
-        _ = try await webView.evaluateJavaScript("context.close(); void 0")
-    }
-
-    /// The measurement must not depend on the node the page plays through.
-    /// WhatsApp Web may write the decoded samples itself, so a node that has no
-    /// buffer and no source of its own has to report a signal as well.
-    @MainActor
-    func testWebAudioTapReportsSoundWrittenByAScriptProcessor() async throws {
-        let webView = makeWebAudioProbeWebView()
-        let window = present(webView)
-        defer { window.contentView = nil }
-        try await startAudioContext(on: webView, title: "Script processor fixture")
-        let hasScriptProcessor = try await webView.evaluateJavaScript(
-            "typeof context.createScriptProcessor === 'function'"
-        ) as? Bool
-        try XCTSkipUnless(
-            hasScriptProcessor == true,
-            "This WebKit build offers no ScriptProcessorNode to write samples with"
-        )
-        _ = try await webView.evaluateJavaScript("""
-            window.processor = context.createScriptProcessor(4096, 1, 1);
-            window.phase = 0;
-            var step = 2 * Math.PI * 440 / context.sampleRate;
-            processor.onaudioprocess = function(event) {
-                var samples = event.outputBuffer.getChannelData(0);
-                for (var i = 0; i < samples.length; i++) {
-                    samples[i] = Math.sin(phase) * \(Self.testToneLevel);
-                    phase += step;
-                }
-            };
-            processor.connect(context.destination);
-            void 0;
-            """)
-        try await waitForPage(Self.probe("signal") + " === true", on: webView)
-        _ = try await webView.evaluateJavaScript("context.close(); void 0")
-    }
-
-    /// The tap sits before the mute gain. Mute still silences what the user
-    /// hears, and the measurement still answers the other question: whether the
-    /// page produces sound. Mute ends the exemption in the pool, not here.
-    @MainActor
-    func testWebAudioTapMeasuresBeforeTheMuteGain() async throws {
-        let webView = makeWebAudioProbeWebView(muted: true)
-        let window = present(webView)
-        defer { window.contentView = nil }
-        try await startAudioContext(on: webView, title: "Muted context fixture")
-        _ = try await webView.evaluateJavaScript("""
-            window.oscillator = context.createOscillator();
-            oscillator.frequency.value = 440;
-            oscillator.connect(context.destination);
-            oscillator.start();
-            void 0;
-            """)
-        // The gain the page plays through is zero, so nothing reaches the
-        // speakers. The full tone above is therefore silent.
-        try await waitForPage(
-            "outputGains.length === 1 && outputGains[0].gain.value === 0", on: webView
-        )
-        try await waitForPage(Self.probe("signal") + " === true", on: webView)
-        _ = try await webView.evaluateJavaScript("context.close(); void 0")
-    }
+    // MARK: - The Web Audio guard install
 
     /// The guard must arrive with the web view, not with the first mute write. A
     /// user script reaches only the documents that load after it, so a guard that
-    /// a later call adds cannot patch a document that already plays: its
-    /// connections exist, and no tap can reach them. This test therefore builds
-    /// the web view through the production configuration path and never calls
-    /// `WebAudioMuteScript.apply`.
+    /// a later call adds cannot cover a document that already plays: its
+    /// connections to the destination exist, and no gain can reach them. This
+    /// test therefore builds the web view through the production configuration
+    /// path and never calls `WebAudioMuteScript.apply`.
     @MainActor
     func testConfigurationPathAloneInstallsTheWebAudioGuard() async throws {
         let webView = makeConfiguredWebView()
-        let window = present(webView)
-        defer { window.contentView = nil }
-        try await startAudioContext(on: webView, title: "Configured guard fixture")
-        _ = try await webView.evaluateJavaScript("""
-            window.oscillator = context.createOscillator();
-            oscillator.frequency.value = 440;
-            window.level = context.createGain();
-            level.gain.value = \(Self.testToneLevel);
-            oscillator.connect(level);
-            level.connect(context.destination);
-            oscillator.start();
-            void 0;
-            """)
-        try await waitForPage(Self.probe("guard") + " === true", on: webView)
-        try await waitForPage(Self.probe("signal") + " === true", on: webView)
-        let counts = try await audibleMediaCounts(on: webView)
         XCTAssertEqual(
-            counts,
-            Counts(elements: 0, audible: 0, contexts: 1, signal: true, hasGuard: true),
-            "the configuration alone must give the first document the guard and the tap"
+            guardScriptCount(in: webView), 1,
+            "the configuration alone must install exactly one guard"
         )
-        _ = try await webView.evaluateJavaScript("context.close(); void 0")
+
+        // The first document therefore holds the guard: it defines the entry
+        // point that a later mute change writes to.
+        webView.loadHTMLString("<title>Configured guard fixture</title>", baseURL: nil)
+        try await waitForPage("document.title === 'Configured guard fixture'", on: webView)
+        try await waitForPage(
+            "typeof window.__paguroSetMediaMuted === 'function'", on: webView
+        )
     }
 
     /// One guard, whatever follows. The configuration installs it, and each new
     /// muted value replaces that one copy. A second copy would patch `connect`
-    /// twice and tap the same output twice.
+    /// twice and route the output through two gains.
     @MainActor
     func testApplyKeepsOneGuardScriptAfterTheConfigurationInstall() {
         let webView = makeConfiguredWebView()
@@ -1038,80 +894,11 @@ final class WebRuntimeTests: XCTestCase {
             .count
     }
 
-    /// The level of every test tone. It is about 30 dB below full scale: loud
-    /// enough for the measurement, quiet enough for the room that runs the test.
-    private static let testToneLevel = 0.03
-
-    /// A page expression that runs the pool's probe and reads one field of it.
-    private static func probe(_ field: String) -> String {
-        "(\(UserScriptManager.audibleMediaQueryJS)).\(field)"
-    }
-
-    /// A web view with the media registry script and the Web Audio guard, as the
-    /// pool builds one. The first script records every gain the guard creates,
-    /// so a test can read the value that decides what the user hears.
-    @MainActor
-    private func makeWebAudioProbeWebView(muted: Bool = false) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        let controller = configuration.userContentController
-        controller.addUserScript(WKUserScript(source: """
-            window.outputGains = [];
-            const originalCreateGain = AudioContext.prototype.createGain;
-            AudioContext.prototype.createGain = function() {
-                const gain = originalCreateGain.call(this);
-                outputGains.push(gain); return gain;
-            };
-            """, injectionTime: .atDocumentStart, forMainFrameOnly: false))
-        controller.addUserScript(WKUserScript(
-            source: WebAudioMuteScript.source(muted: muted),
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
-        ))
-        controller.addUserScript(WKUserScript(
-            source: UserScriptManager.makeAudibleMediaRegistryScript(),
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
-        ))
-        return WKWebView(frame: .zero, configuration: configuration)
-    }
-
-    /// Puts a web view in a window. WebKit runs an audio context only for a page
-    /// that a window holds, which is how the mute tests reach a running context
-    /// without a user gesture.
-    @MainActor
-    private func present(_ webView: WKWebView) -> NSWindow {
-        let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 320, height: 200),
-            styleMask: .borderless, backing: .buffered, defer: false
-        )
-        window.contentView = webView
-        return window
-    }
-
-    /// Loads a bare page and leaves one running `AudioContext` in `context`.
-    @MainActor
-    private func startAudioContext(on webView: WKWebView, title: String) async throws {
-        webView.loadHTMLString("<title>\(title)</title>", baseURL: nil)
-        try await waitForPage("document.title === '\(title)'", on: webView)
-        _ = try await webView.evaluateJavaScript("""
-            window.context = new AudioContext();
-            context.resume();
-            void 0;
-            """)
-        try await waitForPage("context.state === 'running'", on: webView)
-    }
-
-    /// What one probe reported: how many media elements the page holds, how many
-    /// of them are audible, how many Web Audio contexts reach the speakers, and
-    /// whether their output carried sound recently.
+    /// What one probe reported: how many media elements the page holds, and how
+    /// many of them are audible.
     private struct Counts: Equatable {
         var elements: Int
         var audible: Int
-        var contexts = 0
-        var signal = false
-        /// Whether the page holds the Web Audio guard. A fixture without the
-        /// guard reports false, and no context of such a page is measured.
-        var hasGuard = false
     }
 
     /// A web view with the media registry script, as the pool builds it.
@@ -1130,13 +917,10 @@ final class WebRuntimeTests: XCTestCase {
     @MainActor
     private func audibleMediaCounts(on webView: WKWebView) async throws -> Counts {
         let result = try await webView.evaluateJavaScript(UserScriptManager.audibleMediaQueryJS)
-        let report = try XCTUnwrap(result as? [String: Any], "the probe must report its counts")
+        let report = try XCTUnwrap(result as? [String: Any], "the probe must report two counts")
         return Counts(
             elements: try XCTUnwrap(report["elements"] as? Int),
-            audible: try XCTUnwrap(report["audible"] as? Int),
-            contexts: try XCTUnwrap(report["contexts"] as? Int),
-            signal: try XCTUnwrap(report["signal"] as? Bool),
-            hasGuard: try XCTUnwrap(report["guard"] as? Bool)
+            audible: try XCTUnwrap(report["audible"] as? Int)
         )
     }
 

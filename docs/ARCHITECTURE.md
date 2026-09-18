@@ -206,9 +206,8 @@ service that plays audio each cancel the background reason; mute wins over both.
 `BackgroundAudioExemptions` in `PaguroCore` holds the life cycle of the audio
 exemption, and the pool owns the poll timer and the WebKit playback calls.
 The bundled `WebAudioMuteScript` also silences Web Audio contexts created
-after suspension, including those in child frames. The same script measures the
-level that each context sends to the speakers. That level is the only public
-evidence of sound for a page that plays without a media element.
+after suspension, including those in child frames. The web view configuration
+installs that script, so the first document of a service already holds it.
 The backlog tracks the split of that handler into detection and presentation
 parts, and a shared event type in `PaguroCore` for the island.
 

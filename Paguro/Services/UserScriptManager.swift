@@ -165,17 +165,16 @@ final class UserScriptManager {
         controller.addUserScript(mediaRegistryScript)
 
         // Web Audio mute guard — routes every connection to a context
-        // destination through one gain for each context, and taps the output
-        // level at that same point. It belongs with the other document-start
-        // scripts, because a user script reaches only the documents that load
-        // after it. A document that loaded without the guard cannot be patched
-        // later: its connections to the destination already exist. Installed
-        // here, the guard no longer depends on the order of the first playback
-        // policy write, which is the only other route that adds it. `false` is
-        // the value for a service that is not muted;
-        // `WebAudioMuteScript.apply` writes the real value to the live document
-        // and replaces this copy for the next one. The order against the media
-        // registry does not matter: one script patches
+        // destination through one gain for each context, which mute sets to
+        // zero. It belongs with the other document-start scripts, because a user
+        // script reaches only the documents that load after it. A document that
+        // loaded without the guard cannot be patched later: its connections to
+        // the destination already exist. Installed here, the guard no longer
+        // depends on the order of the first playback policy write, which is the
+        // only other route that adds it. `false` is the value for a service that
+        // is not muted; `WebAudioMuteScript.apply` writes the real value to the
+        // live document and replaces this copy for the next one. The order
+        // against the media registry does not matter: one script patches
         // `HTMLMediaElement.prototype.play`, the other
         // `AudioNode.prototype.connect`, and neither reads what the other
         // defines.
@@ -305,20 +304,14 @@ final class UserScriptManager {
         """
     }
 
-    /// JavaScript that reports what the page plays: how many media elements it
-    /// holds, how many of them are audible now, how many Web Audio contexts the
-    /// mute guard measures, and whether their output carried a signal recently.
+    /// JavaScript that reports how many media elements the page holds and how
+    /// many of them are audible now.
     ///
-    /// The result is `{elements, audible, contexts, signal, guard}`, or `null`
-    /// when the page cannot answer. The pool grants background audio when
-    /// `audible` is above zero or `signal` is true; it reports every fact in one
-    /// log line, so the reason for a decision is visible in the console. No
-    /// address, title, or media source leaves the page.
-    ///
-    /// `guard` says whether the main frame holds the Web Audio guard. Without
-    /// the guard there is no tap, so `contexts` and `signal` answer for a
-    /// measurement that does not exist. The one flag separates that case from a
-    /// page that truly plays no Web Audio.
+    /// The result is `{elements, audible}`, or `null` when the page cannot
+    /// answer. The pool grants background audio only when `audible` is above
+    /// zero; it reports both counts in one log line, so the reason for a
+    /// decision is visible in the console. No address, title, or media source
+    /// leaves the page.
     ///
     /// An element counts as audible when it is not paused, not ended, has data
     /// to play, is not muted, has a volume above zero, and carries sound. The
@@ -327,40 +320,12 @@ final class UserScriptManager {
     /// audible when the page reports neither. A muted looping video — a
     /// sticker, an avatar, a GIF — therefore counts as silent.
     ///
-    /// The second source covers a page that plays sound with no media element.
-    /// WhatsApp Web decodes a voice message itself and sends it to the speakers
-    /// through the Web Audio API, so no element exists to read, not even a
-    /// detached one. `WebAudioMuteScript` measures the level that each context
-    /// sends to its destination and records when it last carried sound. A
-    /// running context alone still grants nothing: WhatsApp Web and Telegram Web
-    /// both keep a silent context while idle.
-    ///
     /// Elements come from the registry and from the document, so media that
     /// started before the registry saw it is still found. Same-origin frames
-    /// answer as well, for the elements and for the Web Audio measurement. A
-    /// cross-origin frame denies every read, and the probe skips it.
+    /// answer as well. A cross-origin frame denies every read, and the probe
+    /// skips it.
     nonisolated static let audibleMediaQueryJS = """
     (function() {
-        // How long a measured Web Audio signal still counts. Speech has gaps
-        // between two words, and a background page throttles its timers to about
-        // one tick per second, so a shorter window would report silence in the
-        // middle of a voice message. The exemption itself lives far longer: the
-        // pool polls every 5 seconds and holds a 90 second grace period, so this
-        // window decides only whether one answer says "sound now".
-        var signalWindow = 2000;
-        function readWebAudio(view, counts) {
-            try {
-                var read = view.\(WebAudioMuteScript.stateReaderName);
-                if (typeof read !== 'function') return;
-                var report = read();
-                if (!report) return;
-                if (typeof report.running === 'number') counts.contexts += report.running;
-                if (typeof report.since === 'number' &&
-                    report.since >= 0 && report.since <= signalWindow) {
-                    counts.signal = true;
-                }
-            } catch (e) {}
-        }
         function hasSound(element) {
             // WebKit reports the decoded audio bytes of an element that carries
             // sound. A silent video decodes none of them.
@@ -404,21 +369,13 @@ final class UserScriptManager {
                 counts.elements++;
                 if (isAudible(element)) counts.audible++;
             });
-            readWebAudio(view, counts);
             if (depth >= 4) return;
             for (var j = 0; j < view.frames.length; j++) {
                 try { collect(view.frames[j], counts, depth + 1); } catch (e) {}
             }
         }
         try {
-            var counts = {
-                elements: 0, audible: 0, contexts: 0, signal: false, guard: false
-            };
-            // The main frame alone answers for the guard. A missing guard means
-            // that this document loaded without it, so nothing measures its
-            // Web Audio output.
-            counts.guard =
-                typeof window.\(WebAudioMuteScript.stateReaderName) === 'function';
+            var counts = {elements: 0, audible: 0};
             collect(window, counts, 0);
             return counts;
         } catch (e) {
