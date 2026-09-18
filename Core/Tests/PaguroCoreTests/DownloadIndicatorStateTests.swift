@@ -374,4 +374,184 @@ struct DownloadIndicatorStateTests {
         #expect(DownloadIndicatorState.percentText(1.5) == "100")
         #expect(DownloadIndicatorState.percentText(0.005) == "1")
     }
+
+    @Test("A start announcement names its file")
+    func startAnnouncementNamesItsFile() {
+        #expect(
+            DownloadIndicatorState.startAnnouncement(filename: "report.pdf")
+                == "Download started: report.pdf"
+        )
+    }
+
+    @Test("A start announcement without a name still reports the start")
+    func startAnnouncementWithoutANameStillReportsTheStart() {
+        #expect(DownloadIndicatorState.startAnnouncement(filename: "") == "Download started")
+        #expect(DownloadIndicatorState.startAnnouncement(filename: "  ") == "Download started")
+    }
+
+    // MARK: - The mark that reports a start
+
+    @Test("One flight lasts between half a second and seven tenths")
+    func oneFlightLastsInsideItsBudget() {
+        let total = DownloadIndicatorMotion.flightTotal
+
+        #expect(total == .milliseconds(560))
+        #expect(total >= .milliseconds(500))
+        #expect(total <= .milliseconds(700))
+    }
+
+    @Test("A flight lands after the control has earned its place")
+    func aFlightLandsAfterTheControlEntered() {
+        // The first download of a service shows no control until the ring
+        // delay passes. A landing before that would reach an empty header.
+        #expect(DownloadIndicatorMotion.flightTotal >= DownloadIndicatorState.ringDelay)
+    }
+
+    @Test("The fade at the end stays inside the travel")
+    func theFadeAtTheEndStaysInsideTheTravel() {
+        #expect(DownloadIndicatorMotion.flightExit < DownloadIndicatorMotion.flightTravel)
+    }
+
+    @Test("The mark grows into its start place and shrinks into the control")
+    func theMarkGrowsThenShrinks() {
+        #expect(DownloadIndicatorMotion.flightEntryScale < 1)
+        #expect(DownloadIndicatorMotion.flightArrivalScale < 1)
+        #expect(DownloadIndicatorMotion.flightArrivalScale
+            < DownloadIndicatorMotion.flightEntryScale)
+    }
+
+    @Test("The mark starts above the middle of the web content")
+    func theMarkStartsAboveTheMiddleOfTheContent() {
+        #expect(DownloadIndicatorMotion.flightStartFraction > 0)
+        #expect(DownloadIndicatorMotion.flightStartFraction < 0.5)
+    }
+
+    // MARK: - Reduce Motion
+
+    @Test("Reduce Motion replaces the travel with a fade at the control")
+    func reduceMotionReplacesTheTravel() {
+        let cue = DownloadStartCue.resolve(reduceMotion: true)
+
+        #expect(cue == .destinationFade)
+        #expect(cue.hasTravel == false)
+        #expect(cue.duration == DownloadIndicatorMotion.flightFade)
+        #expect(cue.duration < DownloadIndicatorMotion.flightTotal)
+    }
+
+    @Test("Full motion sends the mark on its travel")
+    func fullMotionSendsTheMarkOnItsTravel() {
+        let cue = DownloadStartCue.resolve(reduceMotion: false)
+
+        #expect(cue == .flight)
+        #expect(cue.hasTravel)
+        #expect(cue.duration == DownloadIndicatorMotion.flightTotal)
+    }
+
+    // MARK: - Concurrent starts
+
+    /// A fixed moment. Every planner test measures from it, so no test reads a
+    /// clock.
+    private static let firstStart = Date(timeIntervalSince1970: 3_000_000)
+
+    private static func moment(_ seconds: Double) -> Date {
+        firstStart.addingTimeInterval(seconds)
+    }
+
+    @Test("The first start sends one mark at once")
+    func theFirstStartSendsOneMarkAtOnce() {
+        var planner = DownloadFlightPlanner()
+
+        #expect(planner.plan(startedAt: Self.firstStart) == .launch(flightID: 1, delay: .zero))
+        #expect(planner.flightCount == 1)
+    }
+
+    @Test("Starts inside the group window share one mark")
+    func startsInsideTheWindowShareOneMark() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+
+        #expect(planner.plan(startedAt: Self.moment(0.1)) == .joinsFlight(flightID: 1))
+        #expect(planner.plan(startedAt: Self.moment(0.29)) == .joinsFlight(flightID: 1))
+        #expect(planner.flightCount == 1)
+        #expect(planner.count(ofFlight: 1) == 3)
+    }
+
+    @Test("Ten downloads at one moment send one mark")
+    func tenDownloadsAtOneMomentSendOneMark() {
+        var planner = DownloadFlightPlanner()
+
+        for index in 0..<10 {
+            _ = planner.plan(startedAt: Self.moment(Double(index) * 0.01))
+        }
+
+        #expect(planner.flightCount == 1)
+        #expect(planner.count(ofFlight: 1) == 10)
+    }
+
+    @Test("A start after the window waits for the minimum gap")
+    func aStartAfterTheWindowWaitsForTheMinimumGap() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+
+        // 0.35 seconds is outside the group window and inside the gap, so the
+        // second mark leaves 0.4 seconds after the first one.
+        #expect(
+            planner.plan(startedAt: Self.moment(0.35))
+                == .launch(flightID: 2, delay: .milliseconds(50))
+        )
+        #expect(planner.flightCount == 2)
+    }
+
+    @Test("A later start needs no delay")
+    func aLaterStartNeedsNoDelay() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+
+        #expect(planner.plan(startedAt: Self.moment(0.9)) == .launch(flightID: 2, delay: .zero))
+    }
+
+    @Test("A mark that reached the control leaves the count")
+    func aMarkThatReachedTheControlLeavesTheCount() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+
+        planner.forget(flightID: 1)
+
+        #expect(planner.flightCount == 0)
+        #expect(planner.count(ofFlight: 1) == nil)
+        // The next start opens a group of its own, because no mark remains.
+        #expect(planner.plan(startedAt: Self.moment(0.1)) == .launch(flightID: 2, delay: .zero))
+    }
+
+    @Test("The limit stops a fourth mark and the header keeps the count")
+    func theLimitStopsAFourthMark() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+        _ = planner.plan(startedAt: Self.moment(0.5))
+        _ = planner.plan(startedAt: Self.moment(1.0))
+
+        #expect(planner.flightCount == DownloadFlightPlanner.maximumFlights)
+        #expect(planner.plan(startedAt: Self.moment(1.5)) == .capped)
+        #expect(planner.flightCount == DownloadFlightPlanner.maximumFlights)
+    }
+
+    @Test("A mark that no caller reported leaves after its stale life")
+    func aStaleMarkLeavesTheCount() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+
+        #expect(planner.plan(startedAt: Self.moment(2.0)) == .launch(flightID: 2, delay: .zero))
+        #expect(planner.flightCount == 1)
+    }
+
+    @Test("Forgetting every mark empties the planner")
+    func forgettingEveryMarkEmptiesThePlanner() {
+        var planner = DownloadFlightPlanner()
+        _ = planner.plan(startedAt: Self.firstStart)
+        _ = planner.plan(startedAt: Self.moment(0.5))
+
+        planner.forgetAll()
+
+        #expect(planner.flightCount == 0)
+    }
 }

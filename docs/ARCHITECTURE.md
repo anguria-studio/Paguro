@@ -82,6 +82,8 @@ The main services and startup adapters are:
 - `WebDialogPresenter` for file pickers and page dialogs.
 - `WebDownloadHandler` for download lifetime, destinations, and cancellation.
 - `DownloadTracker` for the download list that the content header shows.
+- `DownloadFlightState` for the marks that report a download start and land in
+  the header control.
 - `ErrorPage` for escaped local WebKit recovery pages.
 - `NotificationManager` for WebKit badge polling and notification authorization.
 - `NotificationPresenter` for validated native notification requests and delivery.

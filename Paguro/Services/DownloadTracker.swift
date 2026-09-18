@@ -80,6 +80,32 @@ final class DownloadTracker {
     /// One wake task for each result that still counts toward the badge.
     @ObservationIgnored private var badgeWindowTasks: [UUID: Task<Void, Never>] = [:]
 
+    /// One download that has just started.
+    ///
+    /// The header animates from this value, so it names one download instead of
+    /// describing the whole list.
+    struct StartEvent: Equatable {
+        /// Counts the starts of the app run. It grows by one for each download,
+        /// so a view can tell a start it has not shown from one it has.
+        let sequence: Int
+        /// The service that started the download, or nil when Paguro cannot
+        /// attribute it. A download without a service belongs to every header.
+        let serviceID: UUID?
+        let filename: String
+        let startedAt: Date
+    }
+
+    /// The newest download start, or nil before the first download.
+    ///
+    /// Only `begin(...)` writes it. A progress report, a result, a dismiss, and
+    /// a service switch leave it alone, so a view that observes it answers a
+    /// real new download only. The value stays after its animation ends: a view
+    /// that appears later reads it without a change notification, so a download
+    /// that is already running starts no animation.
+    private(set) var lastStart: StartEvent?
+
+    @ObservationIgnored private var startSequence = 0
+
     /// Changes when a timed rule reaches its moment.
     ///
     /// Two rules run on a clock: a download becomes old enough for a ring, and
@@ -115,6 +141,13 @@ final class DownloadTracker {
             )
         )
         cancelActions[id] = cancel
+        startSequence += 1
+        lastStart = StartEvent(
+            sequence: startSequence,
+            serviceID: serviceID,
+            filename: filename,
+            startedAt: startedAt
+        )
         scheduleRingDelayWake(for: id)
         trimHistory()
     }
@@ -379,6 +412,7 @@ final class DownloadTracker {
     /// `AppState.shutdown()` calls this.
     func stop() {
         cancelActions.removeAll()
+        lastStart = nil
         for task in ringDelayTasks.values { task.cancel() }
         ringDelayTasks.removeAll()
         for task in badgeWindowTasks.values { task.cancel() }

@@ -70,6 +70,207 @@ public enum DownloadIndicatorMotion {
     public static let completionPulseScale: Double = 1.12
     /// The length of that pulse, including its return.
     public static let completionPulse: Duration = .milliseconds(300)
+
+    // MARK: - The mark that reports a start
+
+    /// Where the flying mark starts, as a part of the web content height.
+    ///
+    /// The mark keeps the x position of the header control, so it travels
+    /// straight up. A little above the middle of the page reads as a start
+    /// place, not as a notice that covers the content.
+    public static let flightStartFraction: Double = 0.42
+
+    /// The fade and growth of the mark at its start place.
+    public static let flightEntry: Duration = .milliseconds(120)
+
+    /// The scale the mark grows from at its start place.
+    public static let flightEntryScale: Double = 0.72
+
+    /// The travel from the start place up to the control.
+    public static let flightTravel: Duration = .milliseconds(440)
+
+    /// The fade at the end of the travel.
+    ///
+    /// It runs inside the last part of the travel, so the mark stays readable
+    /// for most of the way and gives its place to the control at the end.
+    public static let flightExit: Duration = .milliseconds(240)
+
+    /// The scale the mark shrinks to as it reaches the control.
+    public static let flightArrivalScale: Double = 0.55
+
+    /// The complete length of one flight, from the first frame to the landing.
+    ///
+    /// The value is longer than `DownloadIndicatorState.ringDelay` on purpose.
+    /// The first download of a service has no control in the header yet,
+    /// because the indicator earns its place after that delay. A landing after
+    /// it therefore meets a control that has already entered, so the entry and
+    /// the landing read as one handoff.
+    public static var flightTotal: Duration { flightEntry + flightTravel }
+
+    /// The fade at the control that replaces the travel for Reduce Motion.
+    public static let flightFade: Duration = .milliseconds(200)
+
+    /// How long a mark waits for a control that is not in the header yet.
+    ///
+    /// A download that the user stops inside the ring delay never gives the
+    /// control a place, so a mark that waits needs an end of its own.
+    public static let flightDestinationWait: Duration = .milliseconds(1500)
+}
+
+/// How Paguro reports a download start.
+///
+/// Reduce Motion removes the travel. The cue then happens at the control only,
+/// so the user still sees that a download began and nothing crosses the page.
+public enum DownloadStartCue: Equatable, Sendable {
+    /// A mark rises from the web content into the header control.
+    case flight
+    /// A short fade at the control, with no travel.
+    case destinationFade
+
+    public static func resolve(reduceMotion: Bool) -> DownloadStartCue {
+        reduceMotion ? .destinationFade : .flight
+    }
+
+    /// How long the cue lasts.
+    public var duration: Duration {
+        switch self {
+        case .flight: return DownloadIndicatorMotion.flightTotal
+        case .destinationFade: return DownloadIndicatorMotion.flightFade
+        }
+    }
+
+    /// Whether the cue moves a mark across the window.
+    public var hasTravel: Bool { self == .flight }
+}
+
+/// Decides how many flying marks a group of download starts produces.
+///
+/// One mark for each start would read as noise: ten files at one time would
+/// send ten marks up the same line. The rule therefore groups the starts that
+/// share a moment, keeps two marks apart when they do not, and stops adding
+/// marks at a limit. The header badge still counts every download, so the
+/// limit hides no download.
+///
+/// The planner reads no clock. The caller gives the start time, the way
+/// `DownloadIndicatorState` receives its elapsed value. The caller also reports
+/// the end of each flight with `forget(flightID:)`, because only the view knows
+/// when a mark reached the control. `staleLife` removes a flight that no caller
+/// ever reported, so one lost report cannot stop every later mark.
+public struct DownloadFlightPlanner: Equatable, Sendable {
+
+    /// Starts inside this time of a flight join that flight.
+    public static let coalesceWindow: Duration = .milliseconds(300)
+
+    /// The shortest gap between the launch of two marks.
+    ///
+    /// It is longer than `coalesceWindow`, so a start that misses the group of
+    /// one mark still waits until that mark is clear of its start place.
+    public static let minimumGap: Duration = .milliseconds(400)
+
+    /// How many marks can be on the way at one time.
+    public static let maximumFlights = 3
+
+    /// How long the planner keeps a flight that the caller never reported.
+    public static let staleLife: Duration = .seconds(2)
+
+    /// What one download start produces.
+    public enum Outcome: Equatable, Sendable {
+        /// A new mark leaves after this delay.
+        case launch(flightID: Int, delay: Duration)
+        /// The start joins a mark that is already on the way, so no new mark
+        /// appears. The header count reports the download.
+        case joinsFlight(flightID: Int)
+        /// Too many marks are already on the way. The header count reports the
+        /// download.
+        case capped
+    }
+
+    /// One mark that the planner has promised.
+    private struct Flight: Equatable, Sendable {
+        let id: Int
+        /// When the mark leaves its start place.
+        let launchAt: Date
+        /// How many starts this mark reports.
+        var count: Int
+    }
+
+    private var flights: [Flight] = []
+    private var lastFlightID = 0
+
+    public init() {}
+
+    /// The marks that the planner still counts.
+    public var flightCount: Int { flights.count }
+
+    /// How many starts one mark reports, or nil for a mark the planner dropped.
+    public func count(ofFlight id: Int) -> Int? {
+        flights.first { $0.id == id }?.count
+    }
+
+    /// Answers one download start.
+    public mutating func plan(startedAt: Date) -> Outcome {
+        dropStaleFlights(before: startedAt)
+
+        if let index = newestFlightIndex,
+           startedAt.timeIntervalSince(flights[index].launchAt)
+               < Self.coalesceWindow.timeIntervalValue {
+            flights[index].count += 1
+            return .joinsFlight(flightID: flights[index].id)
+        }
+
+        guard flights.count < Self.maximumFlights else { return .capped }
+
+        let earliestLaunch = newestFlightIndex.map {
+            flights[$0].launchAt.addingTimeInterval(Self.minimumGap.timeIntervalValue)
+        }
+        let launchAt = max(startedAt, earliestLaunch ?? startedAt)
+        lastFlightID += 1
+        flights.append(Flight(id: lastFlightID, launchAt: launchAt, count: 1))
+        return .launch(flightID: lastFlightID, delay: Self.delay(from: startedAt, to: launchAt))
+    }
+
+    /// The wait before a mark leaves, in whole milliseconds.
+    ///
+    /// A date difference carries floating-point noise. An animation delay needs
+    /// no more resolution than a millisecond, so the rounding keeps the result
+    /// exact for a reader and for a test.
+    private static func delay(from startedAt: Date, to launchAt: Date) -> Duration {
+        let milliseconds = max(0, launchAt.timeIntervalSince(startedAt)) * 1000
+        return .milliseconds(Int(milliseconds.rounded()))
+    }
+
+    /// Removes one mark, because it reached the control or ended another way.
+    public mutating func forget(flightID: Int) {
+        flights.removeAll { $0.id == flightID }
+    }
+
+    /// Removes every mark. `AppState.shutdown()` reaches this through the app
+    /// state that owns the planner.
+    public mutating func forgetAll() {
+        flights.removeAll()
+    }
+
+    /// The newest promised mark, which is the only one a start can join.
+    private var newestFlightIndex: Int? {
+        guard !flights.isEmpty else { return nil }
+        return flights.indices.max { flights[$0].launchAt < flights[$1].launchAt }
+    }
+
+    private mutating func dropStaleFlights(before now: Date) {
+        flights.removeAll {
+            now.timeIntervalSince($0.launchAt) >= Self.staleLife.timeIntervalValue
+        }
+    }
+}
+
+extension Duration {
+    /// The value in seconds, for arithmetic with `Date`.
+    ///
+    /// The type stays inside this package, so the app target keeps its own
+    /// conversion for the SwiftUI animation API.
+    var timeIntervalValue: Double {
+        Double(components.seconds) + Double(components.attoseconds) / 1e18
+    }
 }
 
 /// What the content header shows for the downloads of one service.
@@ -266,6 +467,17 @@ public enum DownloadIndicatorState: Equatable, Sendable {
         case let .failed(count, failedCount, _):
             return "\(Self.countText(count)), \(failedCount) failed"
         }
+    }
+
+    /// The VoiceOver announcement for a download that has just started.
+    ///
+    /// The flying mark carries no accessibility element, and the control keeps
+    /// its own label, so this announcement is the only spoken report of a
+    /// start. The app posts one announcement for each mark, so a group of
+    /// starts does not talk over itself.
+    public static func startAnnouncement(filename: String) -> String {
+        let name = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Download started" : "Download started: \(name)"
     }
 
     /// Readable text for a number of download records.

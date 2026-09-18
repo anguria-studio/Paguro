@@ -75,6 +75,23 @@ Make notification controls usable with a pointer, keyboard, and VoiceOver.
 Scroll focused cards into view. Keep dismiss controls available while their
 card or button has hover or keyboard focus. Respect Reduce Motion.
 
+## Motion
+
+Movement reports a change that the user did not see happen. It never carries
+information of its own, and Reduce Motion always keeps that information.
+
+A download start sends a download mark from the web content up into the header
+download control. The mark keeps the x position of the control and travels
+straight up, the way the system reports a download. The complete movement stays
+between 0.5 and 0.7 seconds. The control plays its own entry or pulse as the
+mark lands, so the handoff reads as one movement instead of two. The mark takes
+no pointer input, no keyboard focus, and no place in the accessibility tree.
+Reduce Motion removes the travel and keeps a short fade at the control.
+
+Movement that reports several changes at one time groups them. Starts inside a
+short window share one mark, and a limit caps how many marks travel at one time.
+The count in the header stays the source of truth for how many downloads exist.
+
 ## Notices
 
 Paguro has two notice shapes. Choose the shape from what the notice reports,

@@ -86,6 +86,11 @@ struct WebContentView: View {
                 .background(
                     PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
                 )
+                // The mark that reports a download start leaves from this area,
+                // on the vertical line of the header control. It reports the
+                // frame only; the layout of the page, the find bar, and the
+                // notice cards stays as it is.
+                .downloadFlightOrigin()
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: webViewState.isLoading)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: appState.findInPageVisible)
             } else if selectedService != nil {

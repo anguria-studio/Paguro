@@ -592,6 +592,105 @@ final class DownloadTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.activeItems(for: serviceID).map(\.id), [running])
     }
 
+    // MARK: - The start signal
+
+    func testAStartedDownloadReportsOneStart() {
+        let tracker = DownloadTracker()
+
+        tracker.begin(
+            id: UUID(),
+            serviceID: serviceID,
+            filename: "report.pdf",
+            startedAt: start,
+            cancel: {}
+        )
+
+        let event = tracker.lastStart
+        XCTAssertEqual(event?.sequence, 1)
+        XCTAssertEqual(event?.serviceID, serviceID)
+        XCTAssertEqual(event?.filename, "report.pdf")
+        XCTAssertEqual(event?.startedAt, start)
+    }
+
+    func testANewTrackerReportsNoStart() {
+        XCTAssertNil(DownloadTracker().lastStart)
+    }
+
+    func testEachNewDownloadReportsItsOwnStart() {
+        let tracker = DownloadTracker()
+
+        tracker.begin(id: UUID(), serviceID: serviceID, filename: "a.zip", startedAt: start, cancel: {})
+        tracker.begin(id: UUID(), serviceID: otherServiceID, filename: "b.zip", startedAt: start, cancel: {})
+
+        XCTAssertEqual(tracker.lastStart?.sequence, 2)
+        XCTAssertEqual(tracker.lastStart?.filename, "b.zip")
+        XCTAssertEqual(tracker.lastStart?.serviceID, otherServiceID)
+    }
+
+    /// Everything that happens to a download after it starts leaves the signal
+    /// alone, so the header animates one time for each transfer.
+    func testProgressAndResultsReportNoNewStart() {
+        let tracker = DownloadTracker()
+        let id = UUID()
+        tracker.begin(id: id, serviceID: serviceID, filename: "a.zip", startedAt: start, cancel: {})
+        let afterBegin = tracker.lastStart
+
+        tracker.updateProgress(id: id, received: 100, expected: 400)
+        tracker.setDestination(id: id, destination: URL(fileURLWithPath: "/tmp/a.zip"))
+        tracker.updateProgress(id: id, received: 400, expected: 400)
+        tracker.finish(id: id, destination: URL(fileURLWithPath: "/tmp/a.zip"), at: afterDelay)
+        tracker.acknowledgeAll(for: serviceID)
+        tracker.dismiss(id: id)
+
+        XCTAssertEqual(tracker.lastStart, afterBegin)
+        XCTAssertEqual(tracker.lastStart?.sequence, 1)
+    }
+
+    func testAFailureReportsNoNewStart() {
+        let tracker = DownloadTracker()
+        let id = UUID()
+        tracker.begin(id: id, serviceID: serviceID, filename: "a.zip", startedAt: start, cancel: {})
+
+        tracker.fail(id: id, at: afterDelay)
+
+        XCTAssertEqual(tracker.lastStart?.sequence, 1)
+    }
+
+    /// Reading the list of a service, or of another service, is not a start.
+    /// This is what happens when the user switches to a service whose downloads
+    /// are already running.
+    func testReadingAnExistingDownloadReportsNoNewStart() {
+        let tracker = DownloadTracker()
+        tracker.begin(id: UUID(), serviceID: serviceID, filename: "a.zip", startedAt: start, cancel: {})
+
+        _ = tracker.state(for: serviceID, now: afterDelay)
+        _ = tracker.state(for: otherServiceID, now: afterDelay)
+        _ = tracker.items(for: serviceID)
+        _ = tracker.activeItems(for: serviceID)
+        _ = tracker.unseenCount(for: serviceID, now: afterDelay)
+
+        XCTAssertEqual(tracker.lastStart?.sequence, 1)
+    }
+
+    func testAStoppedDownloadReportsNoNewStart() {
+        let tracker = DownloadTracker()
+        let id = UUID()
+        tracker.begin(id: id, serviceID: serviceID, filename: "a.zip", startedAt: start, cancel: {})
+
+        tracker.markCancelled(id: id)
+
+        XCTAssertEqual(tracker.lastStart?.sequence, 1)
+    }
+
+    func testStopDropsTheStartSignal() {
+        let tracker = DownloadTracker()
+        tracker.begin(id: UUID(), serviceID: serviceID, filename: "a.zip", startedAt: start, cancel: {})
+
+        tracker.stop()
+
+        XCTAssertNil(tracker.lastStart)
+    }
+
     // MARK: - Handler rules
 
     func testTheHandlerReadsAStopAsACancellation() {

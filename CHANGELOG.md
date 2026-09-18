@@ -6,6 +6,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Added
 
+- A download mark rises from the page into the download control in the header
+  when a download starts. It shows you where the file went. Several downloads
+  that start together send one mark, and the control keeps the count. Reduce
+  Motion replaces the movement with a short fade at the control.
 - A live service page can handle its original notification click, allowing a
   provider to open the related conversation when it supplies no destination URL.
 - A notice explains the first service that Paguro releases to control memory.
