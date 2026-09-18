@@ -28,6 +28,12 @@ available on macOS 26; macOS 15 uses the fallback surface materials.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
+Explanatory text under a Settings control uses the settings caption style at 12
+points. Never use the 10 point system caption font for it, because that size is
+hard to read in a Settings row. The style is one shared modifier, so the size,
+the color, and the wrap rule stay the same in every Settings row. The color
+stays below the control label, and Increase Contrast raises it.
+
 A command row at the bottom of a popover list uses the menu row style. The row
 takes the full width of the list and lines up with the rows above it. The
 pointer, keyboard focus, and a press give it the accent highlight with white

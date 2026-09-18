@@ -34,6 +34,7 @@ Changes that affect Paguro users appear here, with the newest release first.
   focus. A
   download that starts in a service you are not reading reports itself with a
   short fade at the control. No mark rises from the page for it.
+- Settings explanations use larger, more readable text.
 - Performance settings state how many services Paguro keeps loaded at the same
   time. Paguro can release the oldest non-messaging services even when idle
   hibernation is off.

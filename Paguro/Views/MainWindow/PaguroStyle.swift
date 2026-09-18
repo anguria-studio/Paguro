@@ -13,6 +13,13 @@ enum PaguroTypeSize {
     static let toolbarTitle: CGFloat = 14
     static let toolbarControl: CGFloat = 12
     static let body: CGFloat = 12.5
+    /// The explanatory text under a Settings control.
+    ///
+    /// The system caption font is 10 points on macOS, which is too small to
+    /// read comfortably in a Form row. This size matches the system callout and
+    /// stays under the 13 point control label beside it, so the explanation
+    /// still reads as secondary text.
+    static let settingsCaption: CGFloat = 12
 }
 
 extension Font {
@@ -38,6 +45,9 @@ extension Font {
         weight: .medium
     )
     static let paguroBody = Font.system(size: PaguroTypeSize.body)
+    /// Use `settingsCaption()` instead of this token, so a caption also takes
+    /// the shared color and wrap rules.
+    static let paguroSettingsCaption = Font.system(size: PaguroTypeSize.settingsCaption)
 }
 
 /// Main-window geometry that is shared by the rail views.
@@ -320,6 +330,37 @@ enum PaguroColor {
         )
     }
 
+    /// An ink color with its own pair of alpha values for Increase Contrast.
+    ///
+    /// A fixed alpha does not answer that setting, while a system label color
+    /// does. Text that must not become the weakest thing on the surface needs
+    /// the stronger pair.
+    static func ink(
+        light: CGFloat,
+        dark: CGFloat,
+        contrastLight: CGFloat,
+        contrastDark: CGFloat
+    ) -> Color {
+        let matches: [NSAppearance.Name] = [
+            .aqua,
+            .darkAqua,
+            .accessibilityHighContrastAqua,
+            .accessibilityHighContrastDarkAqua
+        ]
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            switch appearance.bestMatch(from: matches) {
+            case .accessibilityHighContrastAqua:
+                return .black.withAlphaComponent(contrastLight)
+            case .accessibilityHighContrastDarkAqua:
+                return .white.withAlphaComponent(contrastDark)
+            case .darkAqua:
+                return .white.withAlphaComponent(dark)
+            default:
+                return .black.withAlphaComponent(light)
+            }
+        })
+    }
+
     enum Text {
         static let primary = Color(nsColor: .labelColor)
         static let secondary = PaguroColor.ink(light: 0.60, dark: 0.62)
@@ -327,6 +368,20 @@ enum PaguroColor {
         static let selectedOnGlass = PaguroColor.dynamic(
             light: .black,
             dark: .white
+        )
+        /// The explanatory text under a Settings control.
+        ///
+        /// The normal pair is the shared secondary ink, which is stronger than
+        /// `secondaryLabelColor` and therefore reads better on the Form
+        /// background. Increase Contrast raises it further, so the caption
+        /// never becomes weaker than the system secondary color it replaces. It
+        /// stays below the primary label, which that setting takes to full
+        /// strength.
+        static let settingsCaption = PaguroColor.ink(
+            light: 0.60,
+            dark: 0.62,
+            contrastLight: 0.78,
+            contrastDark: 0.82
         )
     }
 
@@ -488,10 +543,34 @@ private struct PaguroMaterialBackgroundModifier: ViewModifier {
     }
 }
 
+/// The shared style of the explanatory text under a Settings control.
+///
+/// One modifier holds the size, the color, and the wrap rule. A change to the
+/// readable size is then a change to `PaguroTypeSize.settingsCaption` alone.
+private struct SettingsCaptionModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.paguroSettingsCaption)
+            .foregroundStyle(PaguroColor.Text.settingsCaption)
+            // A Form gives a row its width but not its height, so a long
+            // explanation needs this to wrap instead of losing its end.
+            .fixedSize(horizontal: false, vertical: true)
+            .lineSpacing(2)
+    }
+}
+
 extension View {
     /// Gives a Paguro-owned surface native material and the shared shell tint.
     func paguroMaterialBackground(_ material: Material) -> some View {
         modifier(PaguroMaterialBackgroundModifier(material: material))
+    }
+
+    /// Styles explanatory text under a Settings control.
+    ///
+    /// Use this for every such explanation. The system caption font is 10
+    /// points on macOS, which is too small to read in a Settings row.
+    func settingsCaption() -> some View {
+        modifier(SettingsCaptionModifier())
     }
 }
 
