@@ -148,7 +148,9 @@ which is 15 at this time. Above that number it releases the least recently used
 services, even when idle hibernation is off.
 It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
-microphone is in use. A download continues after hibernation, because the
+microphone is in use. `HibernationGate` in `PaguroCore` holds that rule, and the
+idle sweep, the capacity sweep, and the immediate policy all read it, so one
+guard covers every route. A download continues after hibernation, because the
 download handler keeps itself alive until the transfer ends.
 The pool reports service activation and hibernation through callbacks.
 `HibernationScheduler` owns the hibernate, wake, and removal callbacks and

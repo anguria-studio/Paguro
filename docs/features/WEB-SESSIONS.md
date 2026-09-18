@@ -101,9 +101,32 @@ It must first check these conditions:
 
 - the service is not the active service;
 - no active call;
-- no active microphone, including a muted one;
+- no active microphone, including a muted one that the page still holds;
 - no active camera;
 - policy permits hibernation.
+
+`HibernationGate` in `PaguroCore` holds the deterministic part of that
+decision. It reads one `HibernationFacts` value and returns the reason that
+blocks the release, so a log line and a test name the same reason. The pool
+keeps the WebKit state and the JavaScript call probe, because those are not
+deterministic values.
+
+Both sweeps read that one rule, so the same service is safe from both:
+
+- the idle sweep, which releases a service after its idle threshold;
+- the capacity sweep, which releases the least recently used services above
+  the pool limit.
+
+A call therefore blocks a capacity release as well. The capacity sweep does not
+stop at a protected service. It takes the next candidate instead, so the pool
+still returns to its limit. A call blocks the immediate policy as well, because
+the grace task ends in the same shared decision.
+
+The camera and microphone state comes from public WebKit properties, which no
+test process can drive. The pool has one internal seam for the capture state
+and one for the call probe. A test sets the facts that a real device and a real
+page would report. Production behavior does not change, because the pool runs
+its own probe when no test replaces it.
 
 A download does not block hibernation. Its download handler stays alive until
 the transfer ends, and `Command-Q` cancels it.
@@ -124,6 +147,13 @@ hibernation state through `MediaPlaybackPolicy` in `PaguroCore`.
 It applies public `setAllMediaPlaybackSuspended` before the first page load
 and whenever either suspension reason changes. Activating a muted service
 clears only soft hibernation. Clearing mute does not wake a background view.
+
+A page that holds the camera or the microphone is in a call. Background
+suspension must not silence the far end while the user reads another service,
+so capture cancels the background reason. An explicit mute still wins, because
+the user asked for silence. A call that starts or ends on a background service
+changes this answer at once. The exception needs a local device, so a call that
+only receives audio and video still follows the background rule.
 New and rebuilt views read the current mute state, including quiet hours
 before deferred notification startup completes.
 

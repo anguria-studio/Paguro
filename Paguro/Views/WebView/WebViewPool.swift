@@ -34,9 +34,13 @@ final class WebViewPool {
 
     private func applyMediaPlaybackPolicy(for id: UUID) {
         guard let webView = webViews[id] else { return }
+        // A capturing page is in a call. Background suspension must not silence
+        // the far end after the user switches to another service, so the Core
+        // rule drops the background reason while capture runs.
         let suspended = MediaPlaybackPolicy.shouldSuspend(
             isMuted: isMediaMuted?(id) ?? false,
-            isSoftHibernated: softHibernatedIDs.contains(id)
+            isSoftHibernated: softHibernatedIDs.contains(id),
+            isCapturingMedia: isCapturingMedia(id)
         )
         guard appliedMediaSuspension[id] != suspended else { return }
         appliedMediaSuspension[id] = suspended
@@ -96,6 +100,25 @@ final class WebViewPool {
     }
     private(set) var mediaCaptureStates: [UUID: MediaCaptureState] = [:]
     private var mediaObservations: [UUID: [NSKeyValueObservation]] = [:]
+
+    /// True while the page holds the camera or the microphone, a muted
+    /// microphone included. Both hibernation sweeps and the media playback
+    /// policy read this one answer.
+    func isCapturingMedia(_ id: UUID) -> Bool {
+        mediaCaptureStates[id]?.isCapturing ?? false
+    }
+
+    /// Test seam. A test process has no camera and no microphone, so KVO
+    /// reports no capture. A test sets the state that WebKit would report.
+    /// Production drives this state through `refreshMediaCaptureState`.
+    func setMediaCaptureState(_ state: MediaCaptureState?, for id: UUID) {
+        if let state, state.isCapturing {
+            mediaCaptureStates[id] = state
+        } else {
+            mediaCaptureStates.removeValue(forKey: id)
+        }
+        applyMediaPlaybackPolicy(for: id)
+    }
 
     var activeMicrophoneCount: Int {
         mediaCaptureStates.values.count(where: \.micActive)
@@ -465,6 +488,11 @@ final class WebViewPool {
         AppLogger.webView.info("Fully hibernated service \(instanceID)")
     }
 
+    /// Test seam. It replaces the JavaScript call probe, because a test process
+    /// runs no call. Unset, the pool runs its own probe, so production behavior
+    /// does not change.
+    @ObservationIgnored var callDetectionProbe: (@MainActor (UUID) async -> Bool)?
+
     /// Check if a service currently has an active WebRTC call.
     func hasActiveCall(for instanceID: UUID) async -> Bool {
         guard webViews[instanceID] != nil else { return false }
@@ -502,6 +530,7 @@ final class WebViewPool {
     /// tasks carry only Sendable values.
     private func probeCallDetection(_ instanceID: UUID) async -> Bool {
         guard let webView = webViews[instanceID] else { return false }
+        if let callDetectionProbe { return await callDetectionProbe(instanceID) }
         let result = try? await webView.evaluateJavaScript(UserScriptManager.callDetectionQueryJS)
         return (result as? Bool) == true
     }
@@ -658,6 +687,11 @@ final class WebViewPool {
         } else {
             mediaCaptureStates.removeValue(forKey: id)
         }
+        // Capture is one of the two reasons to suspend playback, so a start or
+        // an end changes the answer for a background service: a call that
+        // starts there must be audible, and the service goes quiet again when
+        // the call ends.
+        applyMediaPlaybackPolicy(for: id)
     }
 
     /// Mutes or unmutes a service's live microphone (host-side, so the far end
@@ -837,20 +871,34 @@ final class WebViewPool {
         webView.appearance = NSAppearance(named: name)
     }
 
+    /// Collects the facts that `HibernationGate` needs about one service.
+    ///
+    /// Only `hasDetectedCall` needs the JavaScript probe, so the caller supplies
+    /// that answer after it runs the probe.
+    private func hibernationFacts(
+        _ id: UUID,
+        hasDetectedCall: Bool = false
+    ) -> HibernationFacts {
+        HibernationFacts(
+            isLoaded: webViews[id] != nil,
+            isActiveService: id == activeServiceID,
+            isEvictionInFlight: evictionInFlight.contains(id),
+            keepsLoaded: neverHibernateIDs.contains(id),
+            isNotificationCritical: notificationCriticalIDs.contains(id),
+            isPinned: pinnedIDs.contains(id),
+            isCapturingMedia: isCapturingMedia(id),
+            hasDetectedCall: hasDetectedCall
+        )
+    }
+
     /// Live services eligible for auto-hibernation, each paired with how long it
-    /// has been idle: not the active service, not "Keep Loaded", not chat, not
-    /// pinned, and actually loaded. The caller resolves each service's own idle
-    /// threshold (its per-service policy, or the global one) and the active-call
-    /// exemption — this only does the flag-and-liveness selection the pool can
-    /// answer on its own.
+    /// has been idle. `HibernationGate` answers every deterministic fact,
+    /// including the camera and microphone guard. The caller resolves each
+    /// service's own idle threshold, which is the one value the pool does not
+    /// hold.
     func idleCandidates(now: Date) -> [(id: UUID, idle: TimeInterval)] {
         lastAccessTimes.compactMap { id, accessed in
-            guard id != activeServiceID,
-                  !neverHibernateIDs.contains(id),
-                  !notificationCriticalIDs.contains(id),
-                  !pinnedIDs.contains(id),
-                  webViews[id] != nil
-            else { return nil }
+            guard HibernationGate.permits(hibernationFacts(id)) else { return nil }
             return (id, now.timeIntervalSince(accessed))
         }
     }
@@ -865,36 +913,22 @@ final class WebViewPool {
     /// keeps two passes (the cap sweep and the idle sweep) from racing the same
     /// id. Shared by both callers so the re-validation lives in one place.
     /// Returns true iff it hibernated.
+    ///
+    /// The first pass also stops a capturing service before the probe runs. The
+    /// JavaScript probe sees only WebRTC calls, so a live camera or microphone
+    /// outside a call — a voice memo, a video preview — must keep the page too.
     @discardableResult
     func hibernateIfStillIdle(_ id: UUID) async -> Bool {
-        guard webViews[id] != nil,
-              id != activeServiceID,
-              !pinnedIDs.contains(id),
-              !neverHibernateIDs.contains(id),
-              !notificationCriticalIDs.contains(id),
-              !evictionInFlight.contains(id)
-        else { return false }
+        guard HibernationGate.permits(hibernationFacts(id)) else { return false }
 
         evictionInFlight.insert(id)
         let hasCall = await hasActiveCall(for: id)
         evictionInFlight.remove(id)
 
-        // Re-validate every guard across the suspension.
-        guard webViews[id] != nil,
-              id != activeServiceID,
-              !pinnedIDs.contains(id),
-              !neverHibernateIDs.contains(id),
-              !notificationCriticalIDs.contains(id)
-        else { return false }
-
-        if hasCall {
-            AppLogger.webView.info("Skipping hibernation of \(id) — active call detected")
-            return false
-        }
-        // The JS probe sees only WebRTC calls. A live camera or microphone
-        // outside a call (a voice memo, a video preview) must keep the page too.
-        if let capture = mediaCaptureStates[id], capture.isCapturing {
-            AppLogger.webView.info("Skipping hibernation of \(id) — camera or microphone in use")
+        // Read every fact again across the suspension. The probe result joins
+        // them now, and no suspension follows before the teardown.
+        if let block = HibernationGate.block(hibernationFacts(id, hasDetectedCall: hasCall)) {
+            AppLogger.webView.info("Skipping hibernation of \(id) — \(block.reason)")
             return false
         }
 
@@ -903,7 +937,9 @@ final class WebViewPool {
     }
 
     /// When exceeding maxLoaded web views, fully hibernate the least recently used ones.
-    /// Skips services that have an active WebRTC call, via `hibernateIfStillIdle`.
+    /// A service that `HibernationGate` protects — a call, a live camera or
+    /// microphone, or any other exemption — stays live, and the sweep takes the
+    /// next candidate instead.
     /// Not private, so a test can await one deterministic pass.
     func evictIfNeeded() async {
         guard !isEvicting, webViews.count > maxLoaded else { return }
@@ -911,11 +947,7 @@ final class WebViewPool {
         defer { isEvicting = false }
 
         let sorted = lastAccessTimes
-            .filter { $0.key != activeServiceID
-                   && !evictionInFlight.contains($0.key)
-                   && !neverHibernateIDs.contains($0.key)
-                   && !notificationCriticalIDs.contains($0.key)
-                   && !pinnedIDs.contains($0.key) }
+            .filter { HibernationGate.permits(hibernationFacts($0.key)) }
             .sorted { $0.value < $1.value }
 
         for (id, _) in sorted {

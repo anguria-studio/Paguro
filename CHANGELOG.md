@@ -29,6 +29,11 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Fixed
 
+- A service in a call keeps its sound when you switch to another service. Paguro
+  pauses the sound of a service that you leave, to keep a background page quiet.
+  That rule also silenced the other person in a call, while your microphone kept
+  sending. A service that holds the camera or the microphone now keeps its sound
+  until the call ends. Muting the service still silences it.
 - A long icon rail keeps its icons on the rail centerline when it scrolls. The
   rail no longer shows the system scroll bar. That scroll bar took width from
   the icons and pushed them left, when the system setting for scroll bars is

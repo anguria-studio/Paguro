@@ -163,6 +163,176 @@ final class WebViewPoolActivationTests: XCTestCase {
         XCTAssertEqual(pool.loadedCount, WebViewPoolCapacity.maxLoaded)
     }
 
+    // MARK: - Call protection (ATL-302)
+
+    /// A call must keep its service loaded. The capacity sweep releases the
+    /// least recently used service, so a protected least-recent service is the
+    /// strongest test of the guard: it must stay live, and the sweep must take
+    /// the next candidate instead.
+    @MainActor
+    func testCapacitySweepSparesAnActiveMicrophone() async throws {
+        try await assertCapacitySweepSparesTheLeastRecentService { pool, serviceID in
+            pool.setMediaCaptureState(
+                WebViewPool.MediaCaptureState(micActive: true),
+                for: serviceID
+            )
+        }
+    }
+
+    @MainActor
+    func testCapacitySweepSparesAnActiveCamera() async throws {
+        try await assertCapacitySweepSparesTheLeastRecentService { pool, serviceID in
+            pool.setMediaCaptureState(
+                WebViewPool.MediaCaptureState(cameraActive: true),
+                for: serviceID
+            )
+        }
+    }
+
+    /// A muted microphone still holds the device, so the page is still in a
+    /// call. `isCapturing` includes it, and the sweep must respect that.
+    @MainActor
+    func testCapacitySweepSparesAMutedMicrophone() async throws {
+        try await assertCapacitySweepSparesTheLeastRecentService { pool, serviceID in
+            pool.setMediaCaptureState(
+                WebViewPool.MediaCaptureState(micMuted: true),
+                for: serviceID
+            )
+        }
+    }
+
+    /// The call probe covers a call that holds no local device, such as a page
+    /// that only receives audio and video.
+    @MainActor
+    func testCapacitySweepSparesAReportedCall() async throws {
+        try await assertCapacitySweepSparesTheLeastRecentService { pool, serviceID in
+            pool.callDetectionProbe = { $0 == serviceID }
+        }
+    }
+
+    /// The guard is not permanent. The service becomes a candidate again after
+    /// its call ends, so the pool does not keep a stale exemption.
+    @MainActor
+    func testAServiceBecomesEligibleAgainAfterCaptureEnds() async throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let pool = makePool()
+        defer { pool.shutdown() }
+
+        let store = UUID()
+        let services = (0...(WebViewPoolCapacity.maxLoaded + 1)).map {
+            Self.poolService(label: "Service \($0)", store: store)
+        }
+        for item in services { context.insert(item) }
+        try context.save()
+
+        var evicted: [UUID] = []
+        pool.onServiceEvictedForCapacity = { evicted.append($0) }
+
+        pool.preload(services[0])
+        pool.setMediaCaptureState(
+            WebViewPool.MediaCaptureState(micActive: true),
+            for: services[0].id
+        )
+        for item in services.dropFirst().dropLast() { pool.preload(item) }
+
+        await pool.evictIfNeeded()
+        try await waitForLoadedCountToSettle(pool)
+        XCTAssertEqual(evicted, [services[1].id], "the call keeps the least recent service loaded")
+
+        // The call ends, and one more service pushes the pool over its limit
+        // again. The service that the call protected is now the least recent
+        // candidate, so the sweep must release it.
+        pool.setMediaCaptureState(nil, for: services[0].id)
+        pool.preload(services[services.count - 1])
+
+        await pool.evictIfNeeded()
+        try await waitForLoadedCountToSettle(pool)
+
+        XCTAssertEqual(evicted, [services[1].id, services[0].id])
+        XCTAssertTrue(pool.isHibernated(services[0].id))
+    }
+
+    /// The idle sweep reads its candidates from the pool, so the guard must
+    /// remove a capturing service from that list as well.
+    @MainActor
+    func testIdleCandidatesExcludeACapturingService() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let pool = makePool()
+        defer { pool.shutdown() }
+
+        let store = UUID()
+        let calling = Self.poolService(label: "Meeting", store: store)
+        let idle = Self.poolService(label: "Notes", store: store)
+        context.insert(calling)
+        context.insert(idle)
+        try context.save()
+
+        pool.preload(calling)
+        pool.preload(idle)
+        pool.setMediaCaptureState(
+            WebViewPool.MediaCaptureState(micActive: true, micMuted: false),
+            for: calling.id
+        )
+
+        let candidates = pool.idleCandidates(now: Date()).map(\.id)
+        XCTAssertEqual(candidates, [idle.id])
+    }
+
+    /// Fills the pool one service past its limit, protects the least recently
+    /// used service with `protect`, and proves that the sweep spared it and
+    /// released the next candidate.
+    ///
+    /// Every preload starts a sweep of its own, so the protection is applied
+    /// before the pool goes over its limit.
+    @MainActor
+    private func assertCapacitySweepSparesTheLeastRecentService(
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        protect: (WebViewPool, UUID) -> Void
+    ) async throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let pool = makePool()
+        defer { pool.shutdown() }
+
+        let store = UUID()
+        let services = (0...WebViewPoolCapacity.maxLoaded).map {
+            Self.poolService(label: "Service \($0)", store: store)
+        }
+        for item in services { context.insert(item) }
+        try context.save()
+
+        var evicted: [UUID] = []
+        pool.onServiceEvictedForCapacity = { evicted.append($0) }
+
+        pool.preload(services[0])
+        protect(pool, services[0].id)
+        for item in services.dropFirst() { pool.preload(item) }
+        XCTAssertEqual(pool.loadedCount, WebViewPoolCapacity.maxLoaded + 1, file: file, line: line)
+
+        await pool.evictIfNeeded()
+        try await waitForLoadedCountToSettle(pool)
+
+        XCTAssertEqual(
+            evicted,
+            [services[1].id],
+            "the sweep releases the next candidate instead",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            pool.isHibernated(services[0].id),
+            "a call keeps the least recently used service loaded",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(pool.hasWebView(for: services[0].id), file: file, line: line)
+        XCTAssertTrue(pool.isHibernated(services[1].id), file: file, line: line)
+        XCTAssertEqual(pool.loadedCount, WebViewPoolCapacity.maxLoaded, file: file, line: line)
+    }
+
     /// A capacity test needs many services at the same time. They share one
     /// WebKit data-store identifier, so the test makes one store instead of one
     /// for each service. The pool keys every rule on the service id, so the

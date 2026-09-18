@@ -269,6 +269,99 @@ final class HibernationSchedulerTests: XCTestCase {
         XCTAssertTrue(notice.contains(CapacityEvictionNotice.fallbackServiceName), notice)
     }
 
+    /// A call must survive the idle sweep as well as the capacity sweep. This
+    /// test runs the real pool decision instead of an injected one, so it proves
+    /// that the idle path honors both guards: a live camera and a call that the
+    /// probe reports.
+    @MainActor
+    func testIdleSweepSparesCaptureAndReportedCalls() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.pool.shutdown() }
+        let context = fixture.container.mainContext
+        let capturing = service(label: "Camera", policy: .after, afterMinutes: 1, url: "about:blank")
+        let calling = service(label: "Meeting", policy: .after, afterMinutes: 1, url: "about:blank")
+        let idle = service(label: "Notes", policy: .after, afterMinutes: 1, url: "about:blank")
+        for item in [capturing, calling, idle] { context.insert(item) }
+        try context.save()
+
+        for item in [capturing, calling, idle] { fixture.pool.preload(item) }
+        fixture.pool.setMediaCaptureState(
+            WebViewPool.MediaCaptureState(cameraActive: true),
+            for: capturing.id
+        )
+        fixture.pool.callDetectionProbe = { $0 == calling.id }
+
+        // No injected `hibernate`, so the sweep calls the pool guard itself.
+        let scheduler = HibernationScheduler(
+            context: context,
+            webViewPool: fixture.pool,
+            idleCandidates: { _ in
+                [(capturing.id, 61), (calling.id, 61), (idle.id, 61)]
+            }
+        )
+        defer { scheduler.shutdown() }
+        scheduler.start(
+            globalEnabled: false,
+            globalIdleMinutes: 10,
+            isLocked: { false }
+        )
+
+        await scheduler.runIdleSweep()
+
+        XCTAssertFalse(
+            fixture.pool.isHibernated(capturing.id),
+            "a live camera keeps its service loaded"
+        )
+        XCTAssertTrue(fixture.pool.hasWebView(for: capturing.id))
+        XCTAssertFalse(
+            fixture.pool.isHibernated(calling.id),
+            "a reported call keeps its service loaded"
+        )
+        XCTAssertTrue(fixture.pool.hasWebView(for: calling.id))
+        XCTAssertTrue(
+            fixture.pool.isHibernated(idle.id),
+            "an idle service without a call still hibernates"
+        )
+    }
+
+    /// The guard releases the service after the call ends, so the next sweep
+    /// hibernates it.
+    @MainActor
+    func testIdleSweepHibernatesAServiceAfterItsCaptureEnds() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.pool.shutdown() }
+        let context = fixture.container.mainContext
+        let capturing = service(label: "Camera", policy: .after, afterMinutes: 1, url: "about:blank")
+        context.insert(capturing)
+        try context.save()
+
+        fixture.pool.preload(capturing)
+        fixture.pool.setMediaCaptureState(
+            WebViewPool.MediaCaptureState(micMuted: true),
+            for: capturing.id
+        )
+        fixture.pool.callDetectionProbe = { _ in false }
+
+        let scheduler = HibernationScheduler(
+            context: context,
+            webViewPool: fixture.pool,
+            idleCandidates: { _ in [(capturing.id, 61)] }
+        )
+        defer { scheduler.shutdown() }
+        scheduler.start(
+            globalEnabled: false,
+            globalIdleMinutes: 10,
+            isLocked: { false }
+        )
+
+        await scheduler.runIdleSweep()
+        XCTAssertFalse(fixture.pool.isHibernated(capturing.id))
+
+        fixture.pool.setMediaCaptureState(nil, for: capturing.id)
+        await scheduler.runIdleSweep()
+        XCTAssertTrue(fixture.pool.isHibernated(capturing.id))
+    }
+
     @MainActor
     private func makeFixture() throws -> (container: ModelContainer, pool: WebViewPool) {
         let container = try ModelContainer(
@@ -290,11 +383,12 @@ final class HibernationSchedulerTests: XCTestCase {
         label: String,
         policy: HibernationPolicy,
         afterMinutes: Int? = nil,
-        catalogEntryID: String? = nil
+        catalogEntryID: String? = nil,
+        url: String? = nil
     ) -> ServiceInstance {
         ServiceInstance(
             label: label,
-            url: "https://\(label.lowercased()).example",
+            url: url ?? "https://\(label.lowercased()).example",
             catalogEntryID: catalogEntryID,
             hibernationPolicyRaw: policy.rawValue,
             hibernateAfterMinutes: afterMinutes
