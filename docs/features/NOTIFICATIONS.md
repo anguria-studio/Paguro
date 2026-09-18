@@ -519,6 +519,12 @@ speaker output through a gain that is zero while muted. These new contexts
 can advance silently. The script also handles nested frames and leaves offline
 audio rendering unchanged.
 
+Paguro installs that script with the web view configuration, next to the other
+document-start scripts, so the first document of a service already holds it. A
+mute change then writes the new value to the live document and to the documents
+that load next. A user script reaches no document that is already open, so a
+guard installed later than the page could not cover it.
+
 At that same point the script measures the level that the page sends to the
 speakers. One analyser for each context taps the signal before the mute gain. The
 measurement changes nothing that the user hears. It answers whether the page

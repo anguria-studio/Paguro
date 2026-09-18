@@ -164,6 +164,28 @@ final class UserScriptManager {
         )
         controller.addUserScript(mediaRegistryScript)
 
+        // Web Audio mute guard — routes every connection to a context
+        // destination through one gain for each context, and taps the output
+        // level at that same point. It belongs with the other document-start
+        // scripts, because a user script reaches only the documents that load
+        // after it. A document that loaded without the guard cannot be patched
+        // later: its connections to the destination already exist. Installed
+        // here, the guard no longer depends on the order of the first playback
+        // policy write, which is the only other route that adds it. `false` is
+        // the value for a service that is not muted;
+        // `WebAudioMuteScript.apply` writes the real value to the live document
+        // and replaces this copy for the next one. The order against the media
+        // registry does not matter: one script patches
+        // `HTMLMediaElement.prototype.play`, the other
+        // `AudioNode.prototype.connect`, and neither reads what the other
+        // defines.
+        let webAudioGuardScript = WKUserScript(
+            source: WebAudioMuteScript.source(muted: false),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        controller.addUserScript(webAudioGuardScript)
+
         if autoDismissCookieBanners {
             let cookieScript = WKUserScript(
                 source: CookieConsentManager.makeConsentDismissalScript(),
@@ -287,11 +309,16 @@ final class UserScriptManager {
     /// holds, how many of them are audible now, how many Web Audio contexts the
     /// mute guard measures, and whether their output carried a signal recently.
     ///
-    /// The result is `{elements, audible, contexts, signal}`, or `null` when the
-    /// page cannot answer. The pool grants background audio when `audible` is
-    /// above zero or `signal` is true; it reports every fact in one log line, so
-    /// the reason for a decision is visible in the console. No address, title,
-    /// or media source leaves the page.
+    /// The result is `{elements, audible, contexts, signal, guard}`, or `null`
+    /// when the page cannot answer. The pool grants background audio when
+    /// `audible` is above zero or `signal` is true; it reports every fact in one
+    /// log line, so the reason for a decision is visible in the console. No
+    /// address, title, or media source leaves the page.
+    ///
+    /// `guard` says whether the main frame holds the Web Audio guard. Without
+    /// the guard there is no tap, so `contexts` and `signal` answer for a
+    /// measurement that does not exist. The one flag separates that case from a
+    /// page that truly plays no Web Audio.
     ///
     /// An element counts as audible when it is not paused, not ended, has data
     /// to play, is not muted, has a volume above zero, and carries sound. The
@@ -384,7 +411,14 @@ final class UserScriptManager {
             }
         }
         try {
-            var counts = {elements: 0, audible: 0, contexts: 0, signal: false};
+            var counts = {
+                elements: 0, audible: 0, contexts: 0, signal: false, guard: false
+            };
+            // The main frame alone answers for the guard. A missing guard means
+            // that this document loaded without it, so nothing measures its
+            // Web Audio output.
+            counts.guard =
+                typeof window.\(WebAudioMuteScript.stateReaderName) === 'function';
             collect(window, counts, 0);
             return counts;
         } catch (e) {

@@ -840,7 +840,10 @@ final class WebRuntimeTests: XCTestCase {
 
         // Nothing reaches the destination yet, so the guard measures no context.
         var counts = try await audibleMediaCounts(on: webView)
-        XCTAssertEqual(counts, Counts(elements: 0, audible: 0, contexts: 0, signal: false))
+        XCTAssertEqual(
+            counts,
+            Counts(elements: 0, audible: 0, contexts: 0, signal: false, hasGuard: true)
+        )
 
         // A connected source of silence is the idle case. It is measured, and it
         // reports no signal.
@@ -857,7 +860,7 @@ final class WebRuntimeTests: XCTestCase {
         counts = try await audibleMediaCounts(on: webView)
         XCTAssertEqual(
             counts,
-            Counts(elements: 0, audible: 0, contexts: 1, signal: false),
+            Counts(elements: 0, audible: 0, contexts: 1, signal: false, hasGuard: true),
             "a running context that sends silence must not earn the exemption"
         )
         _ = try await webView.evaluateJavaScript("context.close(); void 0")
@@ -887,7 +890,7 @@ final class WebRuntimeTests: XCTestCase {
         let counts = try await audibleMediaCounts(on: webView)
         XCTAssertEqual(
             counts,
-            Counts(elements: 0, audible: 0, contexts: 1, signal: true),
+            Counts(elements: 0, audible: 0, contexts: 1, signal: true, hasGuard: true),
             "sound with no media element must report a signal and one context"
         )
 
@@ -956,6 +959,83 @@ final class WebRuntimeTests: XCTestCase {
         )
         try await waitForPage(Self.probe("signal") + " === true", on: webView)
         _ = try await webView.evaluateJavaScript("context.close(); void 0")
+    }
+
+    /// The guard must arrive with the web view, not with the first mute write. A
+    /// user script reaches only the documents that load after it, so a guard that
+    /// a later call adds cannot patch a document that already plays: its
+    /// connections exist, and no tap can reach them. This test therefore builds
+    /// the web view through the production configuration path and never calls
+    /// `WebAudioMuteScript.apply`.
+    @MainActor
+    func testConfigurationPathAloneInstallsTheWebAudioGuard() async throws {
+        let webView = makeConfiguredWebView()
+        let window = present(webView)
+        defer { window.contentView = nil }
+        try await startAudioContext(on: webView, title: "Configured guard fixture")
+        _ = try await webView.evaluateJavaScript("""
+            window.oscillator = context.createOscillator();
+            oscillator.frequency.value = 440;
+            window.level = context.createGain();
+            level.gain.value = \(Self.testToneLevel);
+            oscillator.connect(level);
+            level.connect(context.destination);
+            oscillator.start();
+            void 0;
+            """)
+        try await waitForPage(Self.probe("guard") + " === true", on: webView)
+        try await waitForPage(Self.probe("signal") + " === true", on: webView)
+        let counts = try await audibleMediaCounts(on: webView)
+        XCTAssertEqual(
+            counts,
+            Counts(elements: 0, audible: 0, contexts: 1, signal: true, hasGuard: true),
+            "the configuration alone must give the first document the guard and the tap"
+        )
+        _ = try await webView.evaluateJavaScript("context.close(); void 0")
+    }
+
+    /// One guard, whatever follows. The configuration installs it, and each new
+    /// muted value replaces that one copy. A second copy would patch `connect`
+    /// twice and tap the same output twice.
+    @MainActor
+    func testApplyKeepsOneGuardScriptAfterTheConfigurationInstall() {
+        let webView = makeConfiguredWebView()
+        XCTAssertEqual(
+            guardScriptCount(in: webView), 1, "the configuration installs exactly one guard"
+        )
+        for muted in [true, false, true, false] {
+            WebAudioMuteScript.apply(muted: muted, to: webView)
+            XCTAssertEqual(
+                guardScriptCount(in: webView), 1, "one guard is left after muted \(muted)"
+            )
+        }
+    }
+
+    /// A web view built as the pool builds one: the same `UserScriptManager`
+    /// entry point on a fresh content controller, and nothing else. No test
+    /// helper adds a script to it, and nothing applies a muted value.
+    @MainActor
+    private func makeConfiguredWebView() -> WKWebView {
+        let manager = UserScriptManager(notificationProbeEnabled: false)
+        let controller = WKUserContentController()
+        manager.configureScripts(
+            for: ModelFixtures.service(label: "Configured", catalogID: nil),
+            customCSS: nil,
+            stayActiveInBackground: false,
+            on: controller
+        )
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController = controller
+        return WKWebView(frame: .zero, configuration: configuration)
+    }
+
+    /// How many copies of the Web Audio guard the content controller of one web
+    /// view holds.
+    @MainActor
+    private func guardScriptCount(in webView: WKWebView) -> Int {
+        webView.configuration.userContentController.userScripts
+            .filter { $0.source.hasPrefix(WebAudioMuteScript.marker) }
+            .count
     }
 
     /// The level of every test tone. It is about 30 dB below full scale: loud
@@ -1029,6 +1109,9 @@ final class WebRuntimeTests: XCTestCase {
         var audible: Int
         var contexts = 0
         var signal = false
+        /// Whether the page holds the Web Audio guard. A fixture without the
+        /// guard reports false, and no context of such a page is measured.
+        var hasGuard = false
     }
 
     /// A web view with the media registry script, as the pool builds it.
@@ -1052,7 +1135,8 @@ final class WebRuntimeTests: XCTestCase {
             elements: try XCTUnwrap(report["elements"] as? Int),
             audible: try XCTUnwrap(report["audible"] as? Int),
             contexts: try XCTUnwrap(report["contexts"] as? Int),
-            signal: try XCTUnwrap(report["signal"] as? Bool)
+            signal: try XCTUnwrap(report["signal"] as? Bool),
+            hasGuard: try XCTUnwrap(report["guard"] as? Bool)
         )
     }
 

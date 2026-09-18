@@ -221,6 +221,14 @@ question: does the page produce sound? It answers the same way while mute
 applies. Offline rendering gets no tap. A node that the page disconnects from
 the destination leaves the branch as well.
 
+The guard is installed with the web view configuration, next to the other
+document-start scripts. It is therefore present from the first document of a
+service, and it does not wait for the first mute or suspension write. This order
+matters, because a user script reaches only the documents that load after it. A
+document that loaded without the guard cannot be tapped afterwards: its
+connections to the destination already exist. Paguro does not reload a page to
+repair that, so the guard has to be there from the first line.
+
 A page-side sampler runs every 250 milliseconds. It reads one small buffer for
 each running context and computes the level. It records the time of the last
 level above a threshold of about -60 dBFS. It allocates nothing for each tick, it
@@ -249,7 +257,9 @@ therefore treats the open question as playback and settles it one step later.
 
 One log line at debug level reports each switch-time decision. It names the
 public state, the audibility answer, and the element counts. It also names the
-number of Web Audio contexts and whether the output carried a signal. It holds no
+number of Web Audio contexts, whether the output carried a signal, and whether
+the page holds the guard. The last flag separates two different answers: a page
+that plays no Web Audio, and a document with no measurement at all. It holds no
 address, no title, and no media source.
 
 Playback that starts after the switch earns nothing. A background page must not
@@ -310,6 +320,12 @@ disconnection overloads, and it does not change offline rendering. Weak gain
 references avoid retaining closed or unused contexts. Live updates propagate
 from parent to child frames. New documents receive the current state at
 document start. This is a generic compatibility guard, not a service recipe.
+
+Paguro installs the guard with the web view configuration, so every document of
+a service holds it from its first line. A later mute change writes the new value
+two ways. It replaces that one copy, for the documents that load next. It also
+tells the live document directly. It never adds a second copy, and it cannot
+give the guard to a document that loaded without it.
 
 The same guard measures the output level for the background audio exemption. One
 `AnalyserNode` for each context observes the page signal before the output gain.

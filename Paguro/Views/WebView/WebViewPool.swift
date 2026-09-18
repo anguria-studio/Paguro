@@ -98,6 +98,11 @@ final class WebViewPool {
         /// Whether the measured Web Audio output carried sound recently. This is
         /// the only evidence for a page that plays without a media element.
         var signal = false
+        /// Whether the page holds the Web Audio guard. It is installed with the
+        /// web view configuration, so every document has it. A false here says
+        /// that this document has no tap at all, which is a different fault
+        /// from a page that plays no Web Audio.
+        var hasGuard = false
     }
     private var lastAudibleMediaCounts: [UUID: AudibleMediaCounts] = [:]
 
@@ -264,6 +269,11 @@ final class WebViewPool {
     ///
     /// A count of -1 means that no page was counted: the state answered alone,
     /// the page could not answer, or a test replaced the probe.
+    ///
+    /// `guard` reports whether the page holds the Web Audio guard. It is false
+    /// for a decision that counted no page, and false for a document that never
+    /// received the guard. Without the guard nothing measures the Web Audio
+    /// output, so a report of no context and no signal proves nothing.
     private func logAudioCheck(for id: UUID, state: WKMediaPlaybackState, isAudible: Bool) {
         let counts = lastAudibleMediaCounts[id]
         AppLogger.webView.debug(
@@ -271,7 +281,8 @@ final class WebViewPool {
             Background audio check for \(id): state \(Self.name(of: state)), \
             audible \(isAudible), elements \(counts?.elements ?? -1), \
             audible elements \(counts?.audible ?? -1), \
-            audio contexts \(counts?.contexts ?? -1), signal \(counts?.signal ?? false)
+            audio contexts \(counts?.contexts ?? -1), signal \(counts?.signal ?? false), \
+            guard \(counts?.hasGuard ?? false)
             """
         )
     }
@@ -327,7 +338,8 @@ final class WebViewPool {
             elements: elements,
             audible: audible,
             contexts: report["contexts"] as? Int ?? 0,
-            signal: report["signal"] as? Bool ?? false
+            signal: report["signal"] as? Bool ?? false,
+            hasGuard: report["guard"] as? Bool ?? false
         )
         lastAudibleMediaCounts[id] = counts
         // Two sources, either one enough. An audible element is the common case.
