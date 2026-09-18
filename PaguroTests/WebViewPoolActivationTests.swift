@@ -576,6 +576,118 @@ final class WebViewPoolActivationTests: XCTestCase {
         XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
     }
 
+    // MARK: - Audible playback only
+
+    /// The reported bug. WhatsApp Web and Telegram Web keep muted looping videos
+    /// for stickers and avatars, so the public playback state reports playing
+    /// with nothing audible. Such a service must earn nothing: no mark, the
+    /// normal suspension, and no protection from the idle sweep.
+    @MainActor
+    func testAPlayingButSilentServiceEarnsNoExemption() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+        pool.audibilityProbe = { _ in false }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        XCTAssertFalse(
+            pool.isPlayingBackgroundAudio(services[0].id),
+            "a silent video reports playing, so only the audibility probe can exclude it"
+        )
+        XCTAssertEqual(
+            suspension.value[ObjectIdentifier(leaving)],
+            true,
+            "a silent service follows the normal background rule"
+        )
+        let keepsPolling = await pool.pollBackgroundAudio()
+        XCTAssertFalse(keepsPolling)
+
+        // The second service is the active one, which the gate already blocks,
+        // so the first service alone proves that nothing protected it.
+        XCTAssertEqual(pool.idleCandidates(now: Date()).map(\.id), [services[0].id])
+    }
+
+    /// Both conditions are necessary, so audible playback still grants the
+    /// exemption and the service keeps its sound.
+    @MainActor
+    func testAnAudiblePlayingServiceKeepsItsSound() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+        pool.audibilityProbe = { _ in true }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], false)
+    }
+
+    /// A service that played audible media and then shows only a silent sticker
+    /// counts as silent from that poll on. The state alone still reports
+    /// playing, so the grace period, not the state, ends the exemption.
+    @MainActor
+    func testAnExemptServiceThatBecomesSilentExpiresAfterTheGracePeriod() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        let clock = MutableClock()
+        pool.backgroundAudioClock = { clock.now }
+        pool.playbackStateProbe = { _ in .playing }
+        pool.audibilityProbe = { _ in true }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        pool.audibilityProbe = { _ in false }
+        clock.advance(BackgroundAudioExemptions.gracePeriod - 1)
+        let insideTheGracePeriod = await pool.pollBackgroundAudio()
+        XCTAssertTrue(insideTheGracePeriod)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        clock.advance(1)
+        let afterTheGracePeriod = await pool.pollBackgroundAudio()
+        XCTAssertFalse(afterTheGracePeriod)
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// The capacity sweep releases the least recently used service. A silent
+    /// page earns no protection, so the sweep releases it like any other
+    /// background service.
+    @MainActor
+    func testTheCapacitySweepDoesNotSpareAPlayingButSilentService() async throws {
+        let (pool, services, _) = try makeAudioFixture(
+            count: WebViewPoolCapacity.maxLoaded + 1
+        )
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+        pool.audibilityProbe = { _ in false }
+        var evicted: [UUID] = []
+        pool.onServiceEvictedForCapacity = { evicted.append($0) }
+
+        // The first service shows a silent video and then leaves the screen. It
+        // is the least recently used service from here on.
+        _ = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+
+        for item in services.dropFirst(2) { pool.preload(item) }
+        XCTAssertEqual(pool.loadedCount, WebViewPoolCapacity.maxLoaded + 1)
+
+        await pool.evictIfNeeded()
+        try await waitForLoadedCountToSettle(pool)
+
+        XCTAssertEqual(evicted, [services[0].id], "a silent page holds no protection")
+        XCTAssertTrue(pool.isHibernated(services[0].id))
+    }
+
     /// Holds the container of the audio fixture. A service model reads from its
     /// container, so the container must outlive every service the test uses.
     private var audioFixtureContainer: ModelContainer?
@@ -584,7 +696,9 @@ final class WebViewPoolActivationTests: XCTestCase {
     /// the suspension writes, so each audio test states only its own rule.
     ///
     /// The recorder replaces the WebKit write, so no test depends on a real
-    /// media element.
+    /// media element. The audibility probe answers "audible" by default,
+    /// because a test process plays no sound. A test about a silent page
+    /// replaces that answer.
     @MainActor
     private func makeAudioFixture(
         count: Int
@@ -604,6 +718,7 @@ final class WebViewPoolActivationTests: XCTestCase {
         pool.writeMediaSuspension = { webView, suspended in
             recorder.record(ObjectIdentifier(webView), suspended)
         }
+        pool.audibilityProbe = { _ in true }
         return (pool, services, recorder)
     }
 

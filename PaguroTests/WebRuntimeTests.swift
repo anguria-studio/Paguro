@@ -669,6 +669,261 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertEqual(lightMatches, false)
     }
 
+    // MARK: - Audible media probe
+
+    /// The reported case, in a real page. A muted looping video and a muted
+    /// audio element both report playback to WebKit, and the probe must report
+    /// no audible element for them, so the pool grants no background audio.
+    @MainActor
+    func testAudibleMediaProbeReportsNoSoundForMutedMedia() async throws {
+        let webView = makeMediaProbeWebView()
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: .borderless, backing: .buffered, defer: false
+        )
+        window.contentView = webView
+        defer { window.contentView = nil }
+        webView.loadHTMLString("""
+            <title>Muted media fixture</title>
+            <video id="video" muted loop playsinline></video>
+            <audio id="audio" muted loop></audio>
+            <script>
+            \(Self.silentWAVScript)
+            audio.src = silentWAVURL;
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const drawing = canvas.getContext('2d');
+            setInterval(() => drawing.fillRect(0, 0, 32, 32), 50);
+            video.srcObject = canvas.captureStream(20);
+            video.play().catch(() => {});
+            audio.play().catch(() => {});
+            </script>
+            """, baseURL: nil)
+        try await waitForPage(
+            "document.title === 'Muted media fixture' && !video.paused && !audio.paused",
+            on: webView
+        )
+
+        let counts = try await audibleMediaCounts(on: webView)
+        XCTAssertEqual(counts.elements, 2, "the probe sees the video and the audio element")
+        XCTAssertEqual(counts.audible, 0, "a muted element carries no sound to the user")
+    }
+
+    /// Each rule of the audibility predicate, one case at a time. The registry
+    /// holds objects, so a stub states one element's exact state without asking
+    /// a test process to play sound it cannot play.
+    @MainActor
+    func testAudibleMediaProbeAppliesEachAudibilityRule() async throws {
+        let webView = makeMediaProbeWebView()
+        webView.loadHTMLString("<title>Stub media fixture</title>", baseURL: nil)
+        try await waitForPage("document.title === 'Stub media fixture'", on: webView)
+
+        // An audio element that plays, is not muted, and has data counts.
+        var counts = try await audibleMediaCounts(forStub: "{}", on: webView)
+        XCTAssertEqual(counts, Counts(elements: 1, audible: 1))
+
+        // A paused or finished element leaves the registry, so the page holds
+        // no element it will never play again.
+        for stopped in ["{paused: true}", "{ended: true}"] {
+            counts = try await audibleMediaCounts(forStub: stopped, on: webView)
+            XCTAssertEqual(counts, Counts(elements: 0, audible: 0), "stub \(stopped)")
+            let size = try await webView.evaluateJavaScript(
+                "window.\(UserScriptManager.mediaRegistryName).size"
+            ) as? Int
+            XCTAssertEqual(size, 0, "the probe drops \(stopped) from the registry")
+        }
+
+        // An element without enough data, a muted one, and a silent one all
+        // count as inaudible.
+        for silent in ["{readyState: 2}", "{muted: true}", "{volume: 0}"] {
+            counts = try await audibleMediaCounts(forStub: silent, on: webView)
+            XCTAssertEqual(counts, Counts(elements: 1, audible: 0), "stub \(silent)")
+        }
+
+        // A video answers through what WebKit exposes to the page: the decoded
+        // audio bytes first, then the audio track list.
+        let videoCases: [(stub: String, audible: Int)] = [
+            ("{tagName: 'VIDEO', webkitAudioDecodedByteCount: 0}", 0),
+            ("{tagName: 'VIDEO', webkitAudioDecodedByteCount: 4096}", 1),
+            ("{tagName: 'VIDEO', audioTracks: []}", 0),
+            ("{tagName: 'VIDEO', audioTracks: [{}]}", 1),
+            // Neither property: an unmuted video that plays counts as audible.
+            ("{tagName: 'VIDEO'}", 1),
+        ]
+        for videoCase in videoCases {
+            counts = try await audibleMediaCounts(forStub: videoCase.stub, on: webView)
+            XCTAssertEqual(
+                counts,
+                Counts(elements: 1, audible: videoCase.audible),
+                "stub \(videoCase.stub)"
+            )
+        }
+    }
+
+    /// A voice message or an alert sound often plays through `new Audio()`,
+    /// which never enters the document. The registry is the only public way to
+    /// see such an element, and the wrapper must return the original promise.
+    @MainActor
+    func testMediaRegistryHoldsADetachedAudioElement() async throws {
+        let webView = makeMediaProbeWebView()
+        webView.loadHTMLString("""
+            <title>Detached audio fixture</title>
+            <script>\(Self.silentWAVScript)</script>
+            """, baseURL: nil)
+        try await waitForPage(
+            "document.title === 'Detached audio fixture' && typeof silentWAVURL === 'string'",
+            on: webView
+        )
+        _ = try await webView.evaluateJavaScript("""
+            window.detached = new Audio();
+            detached.src = silentWAVURL;
+            detached.loop = true;
+            window.playResult = detached.play();
+            if (playResult && playResult.catch) playResult.catch(function() {});
+            void 0;
+            """)
+
+        let holdsElement = try await webView.evaluateJavaScript(
+            "window.\(UserScriptManager.mediaRegistryName).has(detached)"
+        ) as? Bool
+        XCTAssertEqual(holdsElement, true, "the registry holds the element that the page plays")
+        let attached = try await webView.evaluateJavaScript(
+            "document.querySelectorAll('audio,video').length"
+        ) as? Int
+        XCTAssertEqual(attached, 0, "the document query alone misses a detached element")
+        let returnsPromise = try await webView.evaluateJavaScript(
+            "playResult instanceof Promise"
+        ) as? Bool
+        XCTAssertEqual(returnsPromise, true, "the wrapper returns the result of the original play")
+    }
+
+    /// The registry must not grow. An element that stops leaves it through the
+    /// event listeners, so a finished element the page no longer holds can be
+    /// collected.
+    @MainActor
+    func testMediaRegistryDropsAnElementThatStops() async throws {
+        let webView = makeMediaProbeWebView()
+        webView.loadHTMLString("""
+            <title>Registry fixture</title>
+            <audio id="audio" muted loop></audio>
+            <script>
+            \(Self.silentWAVScript)
+            audio.src = silentWAVURL;
+            </script>
+            """, baseURL: nil)
+        try await waitForPage("document.title === 'Registry fixture'", on: webView)
+        _ = try await webView.evaluateJavaScript("void audio.play().catch(() => {})")
+        try await waitForPage(
+            "!audio.paused && window.\(UserScriptManager.mediaRegistryName).has(audio)",
+            on: webView
+        )
+
+        _ = try await webView.evaluateJavaScript("audio.pause(); void 0")
+        try await waitForPage(
+            "!window.\(UserScriptManager.mediaRegistryName).has(audio)",
+            on: webView
+        )
+    }
+
+    /// What one probe reported: how many media elements the page holds, and how
+    /// many of them are audible.
+    private struct Counts: Equatable {
+        var elements: Int
+        var audible: Int
+    }
+
+    /// A web view with the media registry script, as the pool builds it.
+    @MainActor
+    private func makeMediaProbeWebView() -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: UserScriptManager.makeAudibleMediaRegistryScript(),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+        return WKWebView(frame: .zero, configuration: configuration)
+    }
+
+    /// Runs the probe that the pool runs and reads its two counts.
+    @MainActor
+    private func audibleMediaCounts(on webView: WKWebView) async throws -> Counts {
+        let result = try await webView.evaluateJavaScript(UserScriptManager.audibleMediaQueryJS)
+        let report = try XCTUnwrap(result as? [String: Any], "the probe must report two counts")
+        return Counts(
+            elements: try XCTUnwrap(report["elements"] as? Int),
+            audible: try XCTUnwrap(report["audible"] as? Int)
+        )
+    }
+
+    /// Puts one stub element in the registry and reads the counts for it alone.
+    /// `stub` states only the properties that differ from an audio element that
+    /// plays with sound.
+    @MainActor
+    private func audibleMediaCounts(
+        forStub stub: String,
+        on webView: WKWebView
+    ) async throws -> Counts {
+        _ = try await webView.evaluateJavaScript("""
+            window.\(UserScriptManager.mediaRegistryName).clear();
+            window.\(UserScriptManager.mediaRegistryName).add(Object.assign({
+                paused: false, ended: false, readyState: 4,
+                muted: false, volume: 1, tagName: 'AUDIO'
+            }, \(stub)));
+            void 0;
+            """)
+        return try await audibleMediaCounts(on: webView)
+    }
+
+    /// Waits for a page expression to become true.
+    ///
+    /// A page loads, decodes media, and delivers events in the web content
+    /// process, so a test cannot read the answer in the same turn. The timeout
+    /// is generous, because a slow machine must not fail a correct page, and the
+    /// failure reports the last value the page returned.
+    @MainActor
+    private func waitForPage(
+        _ expression: String,
+        on webView: WKWebView,
+        timeout: Duration = .seconds(20),
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let deadline = ContinuousClock.now + timeout
+        var lastValue: Any?
+        while ContinuousClock.now < deadline {
+            lastValue = try? await webView.evaluateJavaScript(expression)
+            if (lastValue as? Bool) == true { return }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        XCTFail(
+            """
+            The page never reported true for: \(expression). \
+            Last value: \(String(describing: lastValue))
+            """,
+            file: file,
+            line: line
+        )
+    }
+
+    /// Builds one second of silent 8-bit audio as a blob URL, so a fixture can
+    /// play a real media element without a file and without sound.
+    private static let silentWAVScript = """
+    window.silentWAVURL = (function() {
+        const bytes = new Uint8Array(8044);
+        const header = new DataView(bytes.buffer);
+        function text(offset, value) {
+            for (let i = 0; i < value.length; i++) bytes[offset + i] = value.charCodeAt(i);
+        }
+        text(0, 'RIFF'); header.setUint32(4, 8036, true); text(8, 'WAVE');
+        text(12, 'fmt '); header.setUint32(16, 16, true);
+        header.setUint16(20, 1, true); header.setUint16(22, 1, true);
+        header.setUint32(24, 8000, true); header.setUint32(28, 8000, true);
+        header.setUint16(32, 1, true); header.setUint16(34, 8, true);
+        text(36, 'data'); header.setUint32(40, 8000, true); bytes.fill(128, 44);
+        return URL.createObjectURL(new Blob([bytes], {type: 'audio/wav'}));
+    })();
+    """
+
     /// Runs the catalog's Gmail `badgeJS` against a stub Gmail DOM. `hiddenUnread`
     /// models the unread rows Gmail leaves mounted outside the visible list after
     /// you visit another label — the ones that made a document-wide row count read

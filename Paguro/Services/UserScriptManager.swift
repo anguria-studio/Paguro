@@ -154,6 +154,16 @@ final class UserScriptManager {
         )
         controller.addUserScript(callDetectionScript)
 
+        // Media registry — records the elements the page plays, so the pool can
+        // ask whether any of them is audible. Same frames as the Web Audio mute
+        // script, because a voice message can play inside a frame.
+        let mediaRegistryScript = WKUserScript(
+            source: Self.makeAudibleMediaRegistryScript(),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        controller.addUserScript(mediaRegistryScript)
+
         if autoDismissCookieBanners {
             let cookieScript = WKUserScript(
                 source: CookieConsentManager.makeConsentDismissalScript(),
@@ -213,6 +223,145 @@ final class UserScriptManager {
     /// JavaScript that can be evaluated to check if a WebRTC call is active.
     /// Returns `true` if any RTCPeerConnection is in a connected/active state.
     nonisolated static let callDetectionQueryJS = "window.__paguroActiveCall === true"
+
+    /// The name of the page-side registry of media elements that play. It is
+    /// long and prefixed, so a page is unlikely to hold the same name, and the
+    /// registry is defined as a non-enumerable property, so a page that lists
+    /// the properties of `window` does not see it.
+    nonisolated static let mediaRegistryName = "__paguroPlayingMedia"
+
+    /// Records each media element that the page plays.
+    ///
+    /// `document.querySelectorAll('audio,video')` reports only the elements in
+    /// the document. Many web apps play a voice message or an alert sound
+    /// through `new Audio()`, which never enters the document, so the registry
+    /// is the only public way to see those elements. It wraps
+    /// `HTMLMediaElement.prototype.play` and holds the element until it stops.
+    ///
+    /// The registry holds strong references, so listeners for `pause`, `ended`,
+    /// and `emptied` remove the element again. A finished element that the page
+    /// no longer holds can then be collected.
+    ///
+    /// The wrapper calls the original `play` and returns its result unchanged,
+    /// so page behavior does not change. Every step runs inside `try`, so an
+    /// unusual or hostile page cannot break the page or the probe.
+    static func makeAudibleMediaRegistryScript() -> String {
+        return """
+        (function() {
+            try {
+                var Media = window.HTMLMediaElement;
+                if (!Media || !Media.prototype || !window.Set || !window.WeakSet) return;
+                if (window.\(mediaRegistryName)) return;
+                var playing = new Set();
+                Object.defineProperty(window, '\(mediaRegistryName)', {
+                    value: playing,
+                    configurable: false,
+                    enumerable: false,
+                    writable: false
+                });
+                // One shared listener for every element, so the registry adds no
+                // closure for each element it watches.
+                var forget = function(event) {
+                    try { playing.delete(event.target); } catch (e) {}
+                };
+                var watched = new WeakSet();
+                var play = Media.prototype.play;
+                Media.prototype.play = function() {
+                    try {
+                        if (!watched.has(this)) {
+                            watched.add(this);
+                            this.addEventListener('pause', forget);
+                            this.addEventListener('ended', forget);
+                            this.addEventListener('emptied', forget);
+                        }
+                        playing.add(this);
+                    } catch (e) {}
+                    return play.apply(this, arguments);
+                };
+            } catch (e) {}
+        })();
+        """
+    }
+
+    /// JavaScript that reports how many media elements the page holds and how
+    /// many of them are audible now.
+    ///
+    /// The result is `{elements, audible}`, or `null` when the page cannot
+    /// answer. The pool grants background audio only when `audible` is above
+    /// zero; it reports both counts in one log line, so the reason for a
+    /// decision is visible in the console. No address, title, or media source
+    /// leaves the page.
+    ///
+    /// An element counts as audible when it is not paused, not ended, has data
+    /// to play, is not muted, has a volume above zero, and carries sound. The
+    /// last test uses what WebKit exposes to a page: decoded audio bytes, then
+    /// the audio track list, and an unmuted `<video>` that plays counts as
+    /// audible when the page reports neither. A muted looping video — a
+    /// sticker, an avatar, a GIF — therefore counts as silent.
+    ///
+    /// Elements come from the registry and from the document, so media that
+    /// started before the registry saw it is still found. Same-origin frames
+    /// answer as well. A cross-origin frame denies every read, and the probe
+    /// skips it.
+    nonisolated static let audibleMediaQueryJS = """
+    (function() {
+        function hasSound(element) {
+            // WebKit reports the decoded audio bytes of an element that carries
+            // sound. A silent video decodes none of them.
+            if (typeof element.webkitAudioDecodedByteCount === 'number') {
+                return element.webkitAudioDecodedByteCount > 0;
+            }
+            if (element.audioTracks) return element.audioTracks.length > 0;
+            // The page reports neither, so an unmuted element that plays counts.
+            return true;
+        }
+        function isAudible(element) {
+            try {
+                if (element.paused || element.ended) return false;
+                if (!(element.readyState > 2)) return false;
+                if (element.muted || !(element.volume > 0)) return false;
+                // An audio element carries sound by definition. The tag name
+                // holds in every frame, which `instanceof` does not.
+                if (String(element.tagName).toUpperCase() === 'AUDIO') return true;
+                return hasSound(element);
+            } catch (e) {
+                return false;
+            }
+        }
+        function collect(view, counts, depth) {
+            var media = new Set();
+            var registry = view.\(mediaRegistryName);
+            if (registry && typeof registry.forEach === 'function') {
+                registry.forEach(function(element) {
+                    try {
+                        // A refused `play` leaves a paused element behind, and
+                        // no event follows it. Drop those here as well, so the
+                        // registry cannot grow without an end.
+                        if (element.paused || element.ended) registry.delete(element);
+                        else media.add(element);
+                    } catch (e) {}
+                });
+            }
+            var attached = view.document.querySelectorAll('audio,video');
+            for (var i = 0; i < attached.length; i++) media.add(attached[i]);
+            media.forEach(function(element) {
+                counts.elements++;
+                if (isAudible(element)) counts.audible++;
+            });
+            if (depth >= 4) return;
+            for (var j = 0; j < view.frames.length; j++) {
+                try { collect(view.frames[j], counts, depth + 1); } catch (e) {}
+            }
+        }
+        try {
+            var counts = {elements: 0, audible: 0};
+            collect(window, counts, 0);
+            return counts;
+        } catch (e) {
+            return null;
+        }
+    })()
+    """
 
     /// Reports the page as visible even when its web view is preloaded/off-screen,
     /// so services that gate their unread-count title updates on Page Visibility

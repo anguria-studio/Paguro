@@ -130,8 +130,8 @@ the reason the log line reports.
 
 The camera and microphone state comes from public WebKit properties, which no
 test process can drive. The pool has one internal seam for each answer it cannot
-compute. These are the capture state, the call probe, the playback state, and
-the clock of the audio grace period. A test sets the facts that a real device
+compute. These are the capture state, the call probe, the playback state, the
+audibility probe, and the clock of the audio grace period. A test sets the facts that a real device
 and a real page would report. Production behavior does not change, because the pool
 runs its own probe when no test replaces it.
 
@@ -165,20 +165,65 @@ only receives audio and video still follows the background rule.
 
 ### Background audio exemption
 
-A service that plays media at the moment it leaves the screen keeps playing.
-Music and a voice message therefore survive a switch to another service.
+A service that plays audible media at the moment it leaves the screen keeps
+playing. Music and a voice message therefore survive a switch to another
+service.
 
-The pool asks the page with public `requestMediaPlaybackState` at the switch,
-before suspension applies. Suspension applied in that short window and lifted
-again would cut the sound. The pool therefore treats the open question as
-playback and settles it one step later.
+Two conditions must hold, at the switch and on each poll:
+
+1. public `requestMediaPlaybackState` reports playing;
+2. the audibility probe finds at least one audible media element.
+
+The public state alone is not enough. It reports playing for a muted video as
+well, and WhatsApp Web and Telegram Web keep muted looping videos for stickers,
+avatars, and animated images. Those two services therefore held the mark, the
+sound, and the protection from both hibernation sweeps on every switch, with
+nothing audible.
+
+The probe is a bounded, read-only JavaScript call that the pool starts, like the
+call probe. It is not a page-to-native message, and it adds nothing to the
+bridge. It returns two counts: how many media elements the page holds, and how
+many of them are audible. An element counts as audible when it plays, has data
+to play, and is not muted. Its volume must be above zero, and it must carry
+sound. An `<audio>` element carries sound by definition. A `<video>` answers
+through what WebKit exposes to the page: the decoded audio bytes first, then the
+audio track list. An unmuted video that plays counts as audible when the page
+reports neither of them.
+
+A page can play a voice message or an alert sound through `new Audio()`, which
+never enters the document, so `document.querySelectorAll('audio,video')` alone
+would miss it. A bundled script wraps `HTMLMediaElement.prototype.play` at
+document start, in every frame, and records each element that the page plays.
+Listeners for `pause`, `ended`, and `emptied` remove the element again, so a
+finished element can be collected. The script calls the original `play` and
+returns its result unchanged. The probe reads the registry and the document
+together, and it reads same-origin frames as well.
+
+Each of these answers counts as not audible:
+
+- a failed probe;
+- a missing registry;
+- a result of another shape;
+- a probe that does not answer inside its bound.
+
+A page that cannot answer therefore earns no exemption.
+
+The pool asks the page at the switch, before suspension applies. Suspension
+applied in that short window and lifted again would cut the sound. The pool
+therefore treats the open question as playback and settles it one step later.
+
+One log line at debug level reports each switch-time decision: the public state,
+the audibility answer, and both counts. It holds no address, no title, and no
+media source.
 
 Playback that starts after the switch earns nothing. A background page must not
 be able to keep itself awake by autoplay, so only the answer at the switch can
 create the exemption.
 
 `BackgroundAudioExemptions` in `PaguroCore` holds the life cycle: it grants at
-the switch, refreshes on each poll, and expires after the grace period. The
+the switch, refreshes on each poll, and expires after the grace period. It reads
+one answer, so the pool combines the public state and the probe before it asks.
+The
 grace period is 90 seconds. It has to cover the gap between two tracks and a
 short pause. The user can pause and resume with the keyboard media keys without
 bringing Paguro forward. The pool polls each exempt service every 5
@@ -191,15 +236,21 @@ The exemption ends for one of these reasons:
 - the user uses Pause Audio;
 - mute applies;
 - Paguro removes the service;
-- the page has not reported playback for the grace period.
+- the page has not reported audible playback for the grace period.
 
 The normal background suspension applies again at that moment. `Command-Q` cancels the poll with the
 rest of the pool work.
 
-Known limit: the public playback state reports playing, paused, suspended, or
-none. It does not separate audible playback from a silent video. A silent video
-that plays at the switch therefore keeps its service loaded as well. Paguro
-accepts that result, because the alternative is a private selector.
+Known limits, with public APIs only:
+
+- Sound that a page produces through Web Audio alone, with no media element,
+  does not keep the service playing after a switch. A running audio context is
+  not proof of sound, because many web apps keep one context running in
+  silence. Counting it would return Paguro to the reported fault.
+- Media inside a cross-origin frame is not seen. That frame denies every read
+  from the page, so neither its registry nor its elements can be reached.
+- An unmuted element that plays pure silence counts as audible. No public API
+  reports the current loudness of an element.
 
 Mute wins over the exemption. Global, workspace, scheduled, and service mute
 each silence the service and end the exemption. Clearing mute does not restore
