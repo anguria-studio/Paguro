@@ -89,8 +89,11 @@ scripts/lint_docs.sh
 Make changes on a branch and open a pull request into `main`. Direct pushes,
 force pushes, and deletion of `main` are blocked. The `Code quality` and `Vale`
 checks must pass, and review conversations must be resolved before merging.
-Update the branch if `main` changes. Reviewer approval is optional while the
-project has one maintainer; maintainers use the same pull request process.
+A merge conflict with `main` blocks merging. A branch without conflicts does
+not have to be up to date with `main`. The checks run again on `main` after
+each merge and find a problem between two changes. GitHub deletes the branch
+after the merge. Reviewer approval is optional while the project has one maintainer;
+maintainers use the same pull request process.
 
 The code-quality workflow always reports a result. It runs macOS 15 and macOS 26
 tests when changes affect code or build files. Documentation-only changes skip
