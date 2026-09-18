@@ -28,6 +28,10 @@ available on macOS 26; macOS 15 uses the fallback surface materials.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
+A rail hides the system scroll bar and draws a thin overflow indicator over its
+trailing edge. A scroll bar that takes width from the rail content would move
+the icons off the rail centerline.
+
 Keep service website styling separate from the native application shell.
 Do not assume that a website follows the app's appearance preference.
 

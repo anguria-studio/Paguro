@@ -23,8 +23,14 @@ struct RailScrollGeometry: Equatable {
     }
 
     /// The rail scrolls only when its content is longer than its viewport.
+    ///
+    /// Automatic scroll and the overflow indicator read one rule, so a rail that
+    /// scrolls is always a rail that can show an indicator.
     var scrolls: Bool {
-        maximumOffset > 0.5
+        RailScrollIndicator.overflows(
+            contentLength: Double(contentLength),
+            viewportLength: Double(viewportLength)
+        )
     }
 }
 

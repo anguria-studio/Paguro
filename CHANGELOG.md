@@ -25,6 +25,11 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Fixed
 
+- A long icon rail keeps its icons on the rail centerline when it scrolls. The
+  rail no longer shows the system scroll bar. That scroll bar took width from
+  the icons and pushed them left, when the system setting for scroll bars is
+  Always. A thin indicator over the trailing edge now shows the scroll position
+  while you scroll, and it fades out when you stop.
 - The expanded island keeps its count badge and its Clear All button inside the
   camera housing. Both controls start below the top screen edge and never reach
   below the bottom edge of the notch. They stay easy to read and to hit, also at

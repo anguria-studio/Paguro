@@ -103,6 +103,11 @@ struct WorkspaceRailView: View {
                     .padding(.bottom, isCollapsed ? 0 : 8)
                 }
                 .scrollClipDisabled(isCollapsed)
+                // A legacy scroller takes its width from the scroll view
+                // content and moves the icons off the rail centerline. This
+                // rail borrows the geometry of the service rail, so it hides
+                // the system indicator the same way. See `UnifiedRailView`.
+                .scrollIndicators(.never)
                 // One fixed viewport receives every primary click. The
                 // resolver decides which drawn icon, if any, owns the event;
                 // no animated cell frame participates in mouse targeting.
@@ -142,6 +147,11 @@ struct WorkspaceRailView: View {
                     )
                 } action: { _, updated in
                     railScroll = updated
+                }
+                // Outside the gestures above, and without a hit test of its
+                // own, so the pointer keeps reaching the icons under it.
+                .overlay {
+                    RailScrollIndicatorView(geometry: railScroll)
                 }
                 // Measured by the rail rather than by its cells, which the
                 // pointer has already resized. See `UnifiedRailView`.
