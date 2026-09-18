@@ -28,6 +28,11 @@ available on macOS 26; macOS 15 uses the fallback surface materials.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
+A command row at the bottom of a popover list uses the menu row style. The row
+takes the full width of the list and lines up with the rows above it. The
+pointer, keyboard focus, and a press give it the accent highlight with white
+text, like a macOS menu item. No other state draws a fill.
+
 A rail hides the system scroll bar and draws a thin overflow indicator over its
 trailing edge. A scroll bar that takes width from the rail content would move
 the icons off the rail centerline.

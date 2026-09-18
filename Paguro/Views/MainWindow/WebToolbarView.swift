@@ -458,13 +458,13 @@ private struct DownloadListView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 4)
 
+                // The command row of the list. It uses the menu row style, so
+                // the pointer and the keyboard highlight it like a menu item.
                 Button("Clear All") {
                     appState.downloadTracker.clear()
                 }
-                .buttonStyle(.borderless)
-                .font(.paguroBody)
-                .padding(.horizontal, 12)
-                .padding(.top, 4)
+                .buttonStyle(PaguroMenuRowButtonStyle())
+                .padding(.top, 2)
                 .help("Remove every finished and failed download from this list")
                 .accessibilityLabel("Clear the download list")
                 .accessibilityIdentifier("web.downloads.clearAll")

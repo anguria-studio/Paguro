@@ -699,6 +699,67 @@ struct PaguroSidebarButtonStyle: ButtonStyle {
     }
 }
 
+/// A command row at the foot of a popover list, drawn like a native menu item.
+///
+/// The row takes the full width of the list, and the pointer, the keyboard, and
+/// a press all give it the accent highlight with white text, the way an `NSMenu`
+/// item answers. No other state draws a fill, so the row is quiet until the user
+/// reaches it.
+///
+/// The highlight stays 6 points inside the list edges and the label starts 12
+/// points from them, so the row lines up with the list rows above it. The style
+/// adds no animation: a native menu item changes at once, and that also keeps
+/// Reduce Motion satisfied without a second path.
+struct PaguroMenuRowButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
+    @State private var isHovering = false
+
+    /// The gap between the highlight and the edge of the list.
+    private static let highlightInset: CGFloat = 6
+    /// The distance from the edge of the list to the first letter. The rows
+    /// above use the same value.
+    private static let labelInset: CGFloat = 12
+    /// The height of a menu item at the regular control size.
+    private static let rowHeight: CGFloat = 22
+    /// How much a press darkens the highlight. The fill keeps full opacity, so
+    /// Increase Contrast and Reduce Transparency both keep a solid row.
+    private static let pressedBrightness: Double = -0.08
+
+    func makeBody(configuration: Configuration) -> some View {
+        let isHighlighted =
+            isEnabled && (isHovering || isFocused || configuration.isPressed)
+
+        return configuration.label
+            .font(.paguroBody)
+            .foregroundStyle(labelColor(isHighlighted: isHighlighted))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, Self.labelInset - Self.highlightInset)
+            .padding(.trailing, Self.highlightInset)
+            .frame(height: Self.rowHeight)
+            .background {
+                if isHighlighted {
+                    RoundedRectangle(
+                        cornerRadius: PaguroRadius.control,
+                        style: .continuous
+                    )
+                    .fill(Color.accentColor)
+                    .brightness(configuration.isPressed ? Self.pressedBrightness : 0)
+                }
+            }
+            .padding(.horizontal, Self.highlightInset)
+            .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
+    }
+
+    /// White over the highlight, like selected menu text. A row the user cannot
+    /// press keeps the secondary color and never takes the fill.
+    private func labelColor(isHighlighted: Bool) -> Color {
+        guard isEnabled else { return PaguroColor.Text.secondary }
+        return isHighlighted ? .white : PaguroColor.Text.primary
+    }
+}
+
 /// The round surface behind a toolbar control.
 ///
 /// macOS 26 draws it with interactive Liquid Glass. Earlier systems have no

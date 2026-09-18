@@ -512,6 +512,9 @@ An ended download has a dismiss control.
 The two controls never share a hit area with the line action.
 Keyboard focus reaches the line action before its dismiss control.
 Clear All removes every ended record at one time.
+It sits under a separator at the bottom of the list and reads as a menu item.
+The pointer, keyboard focus, and a press give it the accent highlight with
+white text.
 
 The VoiceOver label of the indicator always reports the number of records.
 It adds the completed percentage during a download.
