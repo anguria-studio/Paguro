@@ -151,6 +151,7 @@ struct WorkspaceCellView: View {
             .overlay(alignment: .topTrailing) {
                 if badgeCount > 0 {
                     BadgeCountView(count: badgeCount)
+                        .scaleEffect(0.86)
                         .offset(x: 7, y: -6)
                 }
             }

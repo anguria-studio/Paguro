@@ -216,6 +216,7 @@ struct ServiceRowView: View {
             .overlay(alignment: .topTrailing) {
                 if badgeCount > 0 && instance.showBadge {
                     BadgeCountView(count: badgeCount)
+                        .scaleEffect(0.86)
                         .offset(x: 7, y: -6)
                 }
             }
@@ -320,6 +321,7 @@ struct ServiceRowView: View {
             .overlay(alignment: .topTrailing) {
                 if badgeCount > 0 && instance.showBadge {
                     BadgeCountView(count: badgeCount)
+                        .scaleEffect(0.86)
                         .offset(x: 7, y: -6)
                 }
             }

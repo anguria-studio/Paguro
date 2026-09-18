@@ -36,6 +36,14 @@ enum PaguroTypeSize {
     /// apply to it. The value also keeps the rail row height, the icon
     /// positions, and the fixed rail pointer surface unchanged.
     static let rowAccessoryGlyph: CGFloat = 10.5
+    /// The unread count inside a badge capsule.
+    ///
+    /// The capsule sits on a service icon, and the smallest of those icons is 18
+    /// points wide on the collapsed rail. At the readable size the number almost
+    /// fills the icon that it marks, so the badge keeps the smaller size that it
+    /// was drawn for. The maintainer reverted the readable size here on
+    /// 2026-09-18.
+    static let unreadBadge: CGFloat = 9
 }
 
 extension Font {
@@ -72,6 +80,7 @@ extension Font {
     ///
     /// This sets a glyph size, not a text size. See
     /// `PaguroTypeSize.rowAccessoryGlyph`.
+    // small-text-ok: a row accessory mark is a symbol and not text
     static let paguroRowAccessoryGlyph = Font.system(
         size: PaguroTypeSize.rowAccessoryGlyph,
         weight: .medium

@@ -252,7 +252,8 @@ struct BadgeCountView: View {
 
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
-            .font(.paguroCaption.weight(.bold))
+            // small-text-ok: the badge capsule sits on an 18-point rail icon
+            .font(.system(size: PaguroTypeSize.unreadBadge, weight: .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 4)
             .frame(minWidth: 16, minHeight: 16)

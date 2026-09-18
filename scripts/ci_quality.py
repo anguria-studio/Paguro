@@ -90,6 +90,16 @@ FONT_SIZE_ARGUMENT = re.compile(r'\b(?:size|ofSize):([^,)]*)')
 # `tileSize * 0.44` follows the picture it sits in, so the number in it is a
 # proportion and not a point value.
 NUMERIC_SIZE = re.compile(r'^\d+(?:\.\d+)?$')
+# The app keeps its text sizes in the `PaguroTypeSize` ramp, so a font can carry
+# a size without writing the number. The scan reads the ramp and resolves a
+# reference to one of its names. Without this step a new token would hide a size
+# under the floor from the check.
+TYPE_SIZE_RAMP = 'PaguroTypeSize'
+TYPE_SIZE_ENUM = re.compile(
+    r'\benum\s+' + TYPE_SIZE_RAMP + r'\b[^{]*\{(.*?)\n\}', re.DOTALL
+)
+TYPE_SIZE_TOKEN = re.compile(r'\bstatic let (\w+)\s*:\s*CGFloat\s*=\s*([\w.]+)')
+TYPE_SIZE_REFERENCE = re.compile(r'^' + TYPE_SIZE_RAMP + r'\.(\w+)$')
 VIEW_CONSTRUCTORS = (
     'Image(', 'Text(', 'Label(', 'TextField(', 'TextEditor(', 'SecureField(',
     'Toggle(', 'Picker(', 'Button(', 'Link(', 'Stepper(', 'Slider(',
@@ -135,8 +145,37 @@ def _font_subject(lines, line_number):
     return None
 
 
-def small_text_findings(source, path):
+def type_size_values(source):
+    """Reads the point value of each size in the `PaguroTypeSize` ramp."""
+    written = {}
+    for block in TYPE_SIZE_ENUM.findall(source):
+        written.update(TYPE_SIZE_TOKEN.findall(block))
+    values = {}
+    for name in written:
+        # A size in the ramp can name another size in it, such as the Settings
+        # caption that shares the readable floor. Follow that chain to a number.
+        value, seen = written[name], set()
+        while value in written and value not in seen:
+            seen.add(value)
+            value = written[value]
+        if NUMERIC_SIZE.match(value):
+            values[name] = float(value)
+    return values
+
+
+def _point_size(expression, type_sizes):
+    """Returns the fixed point size that `expression` asks for, or None."""
+    if NUMERIC_SIZE.match(expression):
+        return float(expression)
+    reference = TYPE_SIZE_REFERENCE.match(expression)
+    if reference:
+        return type_sizes.get(reference.group(1))
+    return None
+
+
+def small_text_findings(source, path, type_sizes=None):
     """Reports every font in `source` that breaks the readable-text floor."""
+    type_sizes = type_sizes if type_sizes is not None else type_size_values(source)
     lines = source.splitlines()
     findings = []
     for anchor in FONT_ANCHORS.finditer(source):
@@ -148,13 +187,14 @@ def small_text_findings(source, path):
         ]
         for argument in FONT_SIZE_ARGUMENT.finditer(expression):
             # A ternary picks one size for each case, so each branch counts.
-            branches = re.split(r'[?:]', argument.group(1))
-            reasons += [
-                f'size {branch.strip()}'
-                for branch in branches
-                if NUMERIC_SIZE.match(branch.strip())
-                and float(branch.strip()) < READABLE_TEXT_FLOOR
-            ]
+            for branch in re.split(r'[?:]', argument.group(1)):
+                branch = branch.strip()
+                size = _point_size(branch, type_sizes)
+                if size is None or size >= READABLE_TEXT_FLOOR:
+                    continue
+                # A token names the size, so the report also prints the number.
+                written = f'{branch} ({size:g})' if branch != f'{size:g}' else branch
+                reasons.append(f'size {written}')
         if not reasons:
             continue
         line_number = source.count('\n', 0, anchor.start())
@@ -174,11 +214,18 @@ def small_text_findings(source, path):
 
 def check_small_text(root):
     """Reports the readable-text floor over every Swift file in the app."""
+    sources = {
+        path: path.read_text(encoding='utf-8')
+        for path in sorted(Path(root).rglob('*.swift'))
+    }
+    # The ramp sits in one file, and the fonts that use it sit in others, so
+    # read every size first and then scan with the complete ramp.
+    type_sizes = {}
+    for source in sources.values():
+        type_sizes.update(type_size_values(source))
     findings = []
-    for path in sorted(Path(root).rglob('*.swift')):
-        findings += small_text_findings(
-            path.read_text(encoding='utf-8'), path.as_posix()
-        )
+    for path, source in sources.items():
+        findings += small_text_findings(source, path.as_posix(), type_sizes)
     return findings
 
 

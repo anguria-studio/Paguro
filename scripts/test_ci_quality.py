@@ -4,7 +4,8 @@ import unittest
 from unittest.mock import patch
 
 from ci_quality import (build_needed, check_small_text, requires_build,
-                        revision_range, small_text_findings, verify_jobs)
+                        revision_range, small_text_findings, type_size_values,
+                        verify_jobs)
 
 
 class CIQualityTests(unittest.TestCase):
@@ -131,6 +132,39 @@ class ReadableTextFloorTests(unittest.TestCase):
     def test_the_app_type_token_is_not_a_system_style(self):
         self.assertEqual(self.findings(
             'static let paguroCaption = Font.system(size: PaguroTypeSize.caption)\n'
+        ), [])
+
+    def test_a_type_size_token_under_the_floor_is_reported(self):
+        findings = self.findings(
+            'enum PaguroTypeSize {\n'
+            '    static let caption: CGFloat = 12\n'
+            '    static let unreadBadge: CGFloat = 9\n'
+            '}\n'
+            'Text(count)\n'
+            '    .font(.system(size: PaguroTypeSize.unreadBadge, weight: .bold))\n'
+            'Text("Saved")\n'
+            '    .font(.system(size: PaguroTypeSize.caption))\n'
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertIn('PaguroTypeSize.unreadBadge (9)', findings[0])
+
+    def test_a_token_that_names_another_token_keeps_its_value(self):
+        self.assertEqual(type_size_values(
+            'enum PaguroTypeSize {\n'
+            '    static let caption: CGFloat = 12\n'
+            '    static let settingsCaption: CGFloat = caption\n'
+            '    static let rowAccessoryGlyph: CGFloat = 10.5\n'
+            '}\n'
+        ), {'caption': 12.0, 'settingsCaption': 12.0, 'rowAccessoryGlyph': 10.5})
+
+    def test_a_marker_answers_a_token_under_the_floor(self):
+        self.assertEqual(self.findings(
+            'enum PaguroTypeSize {\n'
+            '    static let unreadBadge: CGFloat = 9\n'
+            '}\n'
+            'Text(count)\n'
+            '    // small-text-ok: the badge capsule has a fixed size\n'
+            '    .font(.system(size: PaguroTypeSize.unreadBadge, weight: .bold))\n'
         ), [])
 
     def test_a_size_that_follows_a_picture_is_a_proportion(self):

@@ -64,15 +64,27 @@ and the fixed rail pointer surface. A letter monogram or an emoji inside a
 service tile follows the tile size. It stands for the picture that the tile has
 no artwork for.
 
-The island toolbar is the one place where a fixed geometry can be smaller than
-the text. Clear All and the count badge take the control height from the island
-layout rules. That height is 26, 22, 18, or 14 points, from the camera housing.
-The readable size fits the first three. At 14 points a minimum scale factor
-shrinks the label instead, because the bottom edge of the housing always wins.
+Two fixed geometries stay below the readable size. The space they sit in cannot
+grow with the text.
+
+The unread badge draws its count at 9 points. The capsule sits on a service
+icon. The smallest of those icons is 18 points wide on the collapsed rail. At
+the readable size the number almost fills the icon that it marks. One badge view
+draws every unread count. An expanded row, an icon rail, a top bar tab, and a
+workspace cell therefore show the same badge.
+
+The island keeps the system caption styles for all of its text. That text is the
+service name, the message body, the card time, Clear All, and the two count
+badges. The island is not a window. Each control in it takes a height of 26, 22,
+18, or 14 points from the camera housing. A card row is 68 points high. Work on
+that hardware set the text sizes that fit these heights. The toolbar labels also
+keep a minimum scale factor. A larger system text size therefore shrinks a
+label, instead of moving a control into the screen edge or past the housing.
 
 A source check holds this rule. It reports any font under 12 points that is not
-on an `Image`. A site in a fixed geometry answers it with a marker comment that
-names the reason.
+on an `Image`. It also reads the value of a size token, so a name cannot hide a
+small number. A site in a fixed geometry answers the check with a marker comment
+that names the reason.
 
 ## App and menu-bar icons
 

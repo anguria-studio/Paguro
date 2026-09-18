@@ -176,11 +176,9 @@ capsules start below the top screen edge and keep the control height from the
 layout rules. They never pass the bottom edge of the camera housing. The count
 badge follows the control height and stays inside its capsule. A larger system
 text size keeps these heights. The label becomes a little smaller instead, so a
-control never moves up into the screen edge or down past the housing. The two
-labels take the readable text size that the whole app uses, which fits the 26,
-22, and 18 point control heights. The 14 point height on the lowest camera
-housing is the one place where the shrink also applies at the normal system
-text size.
+control never moves up into the screen edge or down past the housing. Both
+labels use the system caption style. The control heights come from work on that
+size, on the camera housing of each machine.
 These capsules use the regular material. Reduce Transparency replaces that material
 with an opaque window background. The island background continues across the
 camera area. The toolbar reserves this space without a black camera replica.
@@ -295,8 +293,10 @@ Tab moves between event actions and Clear All.
 Tab, Shift-Tab, arrow-key navigation, and VoiceOver reveal the focused card
 above the bottom fold. Moving between a card and its dismiss button keeps the
 scroll position. Card titles and message bodies use the system body text size.
-The service name and the time above the title take the readable text size of the
-whole app. A quieter secondary color separates them from the title.
+The service name above the title uses the system caption style, and the time
+beside it uses the smaller caption2 style. A card row has a fixed height of 68
+points, so these two sizes stay as the hardware work set them. A quieter
+secondary color separates them from the title.
 Keyboard focus uses a brighter card with a quiet neutral edge for its open
 action, or an inverted dismiss button. Controls use these custom highlights
 instead of the default blue focus outlines.
