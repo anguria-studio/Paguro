@@ -11,7 +11,9 @@ final class WebViewPool {
     private var coordinators: [UUID: WebViewCoordinator] = [:]
     private var suspendedURLs: [UUID: String] = [:]
     private var snapshots: [UUID: NSImage] = [:]
-    private let maxLoaded: Int = 15
+    /// The live-view limit. It lives in `PaguroCore` so the rule, the tests,
+    /// and the user-facing documents all state one number.
+    private let maxLoaded: Int = WebViewPoolCapacity.maxLoaded
     private var hasShutDown = false
     private var softHibernatedIDs: Set<UUID> = []
     private var appliedMediaSuspension: [UUID: Bool] = [:]
@@ -43,6 +45,13 @@ final class WebViewPool {
 
     /// Guard set: IDs currently being evaluated for eviction.
     private var evictionInFlight: Set<UUID> = []
+
+    /// True while a capacity sweep runs. Every activation and preload starts a
+    /// sweep, and each sweep suspends inside its call probe. Two sweeps that
+    /// overlap select different candidates from the same over-capacity state,
+    /// so both hibernate and the pool drops below its limit. One sweep at a
+    /// time keeps the pool at the limit and keeps the capacity notice truthful.
+    private var isEvicting = false
 
     /// Services the user has marked as never-hibernate. Exempt from both
     /// soft hibernation (media pause) and full eviction.
@@ -114,6 +123,13 @@ final class WebViewPool {
 
     /// Called when a service is fully hibernated (for badge poller tracking)
     var onServiceHibernated: ((UUID) -> Void)?
+
+    /// Called after the capacity sweep hibernates a service, in addition to
+    /// `onServiceHibernated`. The idle sweep and the capacity sweep share one
+    /// hibernation path, so this callback is the only signal that names the
+    /// pool limit as the reason. `HibernationScheduler` uses it to explain the
+    /// release one time in each app run.
+    var onServiceEvictedForCapacity: ((UUID) -> Void)?
 
     /// Called when a service wakes from full hibernation (for badge poller untracking)
     var onServiceWoke: ((UUID) -> Void)?
@@ -392,9 +408,11 @@ final class WebViewPool {
         neverHibernateIDs.removeAll()
         notificationCriticalIDs.removeAll()
         evictionInFlight.removeAll()
+        isEvicting = false
         activeServiceID = nil
 
         onServiceHibernated = nil
+        onServiceEvictedForCapacity = nil
         onServiceWoke = nil
         onServiceSoftHibernated = nil
         onServiceSoftWoke = nil
@@ -886,8 +904,11 @@ final class WebViewPool {
 
     /// When exceeding maxLoaded web views, fully hibernate the least recently used ones.
     /// Skips services that have an active WebRTC call, via `hibernateIfStillIdle`.
-    private func evictIfNeeded() async {
-        guard webViews.count > maxLoaded else { return }
+    /// Not private, so a test can await one deterministic pass.
+    func evictIfNeeded() async {
+        guard !isEvicting, webViews.count > maxLoaded else { return }
+        isEvicting = true
+        defer { isEvicting = false }
 
         let sorted = lastAccessTimes
             .filter { $0.key != activeServiceID
@@ -903,7 +924,9 @@ final class WebViewPool {
             // hibernateIfStillIdle) may have already hibernated views, and a
             // stale target would evict past the cap, dropping below maxLoaded.
             guard webViews.count > maxLoaded else { break }
-            await hibernateIfStillIdle(id)
+            if await hibernateIfStillIdle(id) {
+                onServiceEvictedForCapacity?(id)
+            }
         }
     }
 }

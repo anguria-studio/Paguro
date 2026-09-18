@@ -18,8 +18,10 @@ struct ContentView: View {
         @Bindable var recovery = appState.storeRecovery
 
         VStack(spacing: 0) {
-            // All notices share one shape. `NoticeStrip` carries severity in the
-            // icon and lower rule, plus the window-drag handle each notice needs.
+            // Every app-level notice shares one shape. `NoticeStrip` carries
+            // severity in the icon and lower rule, plus the window-drag handle
+            // each notice needs. A transient, service-scoped notice uses the
+            // floating card above the web content instead (`FloatingNoticeCard`).
             if let banner = recovery.banner {
                 NoticeStrip(severity: .error) {
                     Text(banner.message)

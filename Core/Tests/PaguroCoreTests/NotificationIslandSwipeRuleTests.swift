@@ -218,6 +218,31 @@ struct NotificationIslandSwipeRuleTests {
         )
     }
 
+    @Test("A card without a width still answers a fast movement")
+    func cardWithoutAWidthStillAnswersAFastMovement() {
+        let rule = NotificationIslandSwipeRule.self
+
+        // A very narrow window can give a card no width at all. The distance
+        // threshold then has no meaning, so only speed dismisses the card.
+        for width in [0.0, -320.0] {
+            #expect(
+                !rule.shouldDismiss(dragX: 500, velocityX: 0, cardWidth: width)
+            )
+            #expect(
+                rule.shouldDismiss(
+                    dragX: rule.minimumDistance + 1,
+                    velocityX: rule.dismissVelocity,
+                    cardWidth: width
+                )
+            )
+            #expect(
+                !rule.shouldDismiss(dragX: -500, velocityX: 5_000, cardWidth: width)
+            )
+            #expect(rule.displayOffset(dragX: 40, cardWidth: width) == 40)
+            #expect(rule.displayOpacity(offset: 40, cardWidth: width) == 1)
+        }
+    }
+
     @Test("The card leaves past the complete card width")
     func cardLeavesPastTheCompleteCardWidth() {
         let rule = NotificationIslandSwipeRule.self

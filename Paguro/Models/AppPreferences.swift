@@ -175,6 +175,12 @@ final class AppPreferences {
     /// so real-time alerts for chat apps are preserved; a hibernated service still
     /// refreshes its unread badge on a periodic background sweep (every few
     /// minutes), and that count only climbs until the service is reopened.
+    ///
+    /// This setting does not control `WebViewPoolCapacity.maxLoaded`. The pool
+    /// keeps up to that number of services loaded at the same time, and can
+    /// release the oldest non-messaging services even when this setting is off.
+    /// `CapacityEvictionNotice.settingsSummary` states the same rule to the
+    /// user, with the number read from the same constant.
     var autoHibernateIdleEnabled: Bool?
 
     /// Idle minutes before auto-hibernation kicks in. Optional; nil resolves to 10.
