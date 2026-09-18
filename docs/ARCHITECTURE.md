@@ -141,14 +141,18 @@ Each service account has a stable UUID.
 That UUID identifies a persistent `WKWebsiteDataStore`.
 The data store keeps cookies and local storage separate from other accounts.
 
-`WebViewPool` limits the number of live web views.
+`WebViewPool` limits the number of live web views to `WebViewPoolCapacity`,
+which is 15 at this time. Above that number it releases the least recently used
+services, even when idle hibernation is off.
 It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
 microphone is in use. A download continues after hibernation, because the
 download handler keeps itself alive until the transfer ends.
 The pool reports service activation and hibernation through callbacks.
 `HibernationScheduler` owns the hibernate, wake, and removal callbacks and
-forwards notification-related events to `NotificationRuntime`.
+forwards notification-related events to `NotificationRuntime`. It also owns the
+capacity notice, because it already reads the service record that names the
+released service.
 `NotificationRuntime` owns the pool callbacks that start active or background
 badge polling. SwiftUI views do not start or stop polling.
 

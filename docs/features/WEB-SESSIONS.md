@@ -76,6 +76,26 @@ callbacks and forwards notification-related events to `NotificationRuntime`.
 `NotificationRuntime` owns the activation and navigation callbacks that start
 or refresh polling. The content view does not start or stop pollers.
 
+The pool keeps a limited number of live web views. `WebViewPoolCapacity` in
+`PaguroCore` holds that number, which is 15 at this time. The number is
+provisional until a memory measurement confirms it.
+
+This limit is separate from idle hibernation. Above the limit, the pool
+releases the least recently used services, even when the user turns idle
+hibernation off. The same exemptions apply: the active service, a pinned
+service, a service with the "Keep Loaded" policy, and a messaging service stay
+live.
+
+The first release of an app run shows a floating notice card above the web
+content. The card names the service, states the number of services that stay
+loaded, and points to "Keep Loaded". Later releases in the same app run show no
+card, because they repeat one rule. `CapacityEvictionNotice` in `PaguroCore`
+holds the rule, the title, and the text, and it builds the number from
+`WebViewPoolCapacity.maxLoaded`. Performance settings state the same number from
+the same source. `HibernationScheduler` owns the once-for-each-run flag and the
+task that removes the notice after 12 seconds. `WebContentView` presents the
+card. `docs/DESIGN.md` holds the shape, placement, and motion rules.
+
 The pool can hibernate an inactive service.
 It must first check these conditions:
 

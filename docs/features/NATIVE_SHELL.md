@@ -282,6 +282,27 @@ and service.
 Web appearance stays in the service editor because websites can ignore or
 override the browser preference.
 
+### Floating notices
+
+A transient notice about the active service appears as a floating card over the
+top trailing corner of the web content. The card holds a symbol, a short title,
+an explanation, and a close button. It leaves after 12 seconds, and the close
+button removes it at once. A drag to the right also removes it, with the same
+action as the close button.
+
+Two notices use this card. The capacity notice reports the first service that
+the pool released to stay inside its size limit. The passkey notice reports
+that `WKWebView` cannot use a passkey for sign-in. Paguro shows the passkey
+notice one time for each service, and it stores the seen state as the card
+appears.
+
+`FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
+`FloatingNoticeLayout` in `PaguroCore` holds the width, the margins, and the
+gap that keeps the stack clear of the find bar. The card reads the drag from
+`NotificationIslandSwipeRule`, the rule that the island cards already use, so
+both shapes have one dismiss movement. `docs/DESIGN.md` states which notices
+use this shape and which notices use the full-width strip.
+
 ### Page history
 
 Back and forward move inside the page history of the active service.

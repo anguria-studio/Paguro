@@ -71,6 +71,53 @@ Make notification controls usable with a pointer, keyboard, and VoiceOver.
 Scroll focused cards into view. Keep dismiss controls available while their
 card or button has hover or keyboard focus. Respect Reduce Motion.
 
+## Notices
+
+Paguro has two notice shapes. Choose the shape from what the notice reports,
+not from how important it feels.
+
+Use the full-width strip at the top of the window for an app-level state. The
+strip suits a notice that needs an action, or that stays until the state
+changes. Store recovery, the backup offer, the offline state, and the
+microphone feedback use this shape.
+
+Use the floating card above the web content for a transient, informational,
+notice about one service. The card suits a notice that reports a fact and then
+leaves on its own. The capacity release and the passkey limit use this shape.
+
+The card follows these rules:
+
+- It floats over the top trailing corner of the web content, inset 14 points
+  from the content edges. It never covers the find bar. The card stack moves
+  below the find bar while the find bar is open.
+- It keeps a comfortable reading width of 350 points. A narrow window reduces
+  the width and keeps the margin on both sides.
+- Two cards stack downward with a 9 point gap. The newest card takes the top
+  place.
+- It slides in from the trailing edge with a fade, and it leaves the same way.
+  Reduce Motion uses a plain fade. The movement stays near 0.3 seconds.
+- A drag to the right dismisses the card, like a macOS notification banner.
+  The card follows the pointer, and it becomes lighter while it moves away. A
+  drag to the left gives resistance and never dismisses the card. The card
+  leaves when the drag passes one quarter of the card width, or when a shorter
+  drag ends with enough speed to the right. A shorter and slower drag returns
+  the card to its place. The drag starts only after a short movement, so a
+  click still reaches the close button, and a vertical drag leaves the card
+  still. The island cards and these cards share one drag rule.
+- Reduce Motion keeps the drag, because the pointer moves the card directly. It
+  removes the resistance to the left, the opacity change, and the slide out.
+  The card then leaves with a fade.
+- The close button stays the accessible way to dismiss the card. The card
+  element also offers a Dismiss action for VoiceOver.
+- It follows the shell glass rules. macOS 26 uses Liquid Glass, and an earlier
+  system uses the material surface. Reduce Transparency uses an opaque window
+  background. Increase Contrast adds a visible border. A soft shadow separates
+  the card from the page.
+- It takes no keyboard focus from the page, and it accepts pointer input only
+  inside its own frame.
+- VoiceOver reads the title and the explanation as one element and reaches the
+  close button separately. Paguro announces the card when it appears.
+
 ## Accessibility
 
 Use descriptive accessibility labels and a logical focus order. Make each
