@@ -65,7 +65,7 @@ struct MenuBarView: View {
                     Text("Paguro")
                         .font(.headline)
                     Text(MenuBarPresentation.unreadSummary(appState.badgeManager.totalCount))
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .foregroundStyle(PaguroColor.Text.secondary)
                         .lineLimit(1)
                 }
@@ -184,7 +184,7 @@ struct MenuBarView: View {
                     .accessibilityHidden(true)
             }
         }
-        .font(.caption.weight(.semibold))
+        .font(.paguroCaption.weight(.semibold))
         .foregroundStyle(PaguroColor.Text.secondary)
         .padding(.horizontal, 8)
         .accessibilityElement(children: .ignore)

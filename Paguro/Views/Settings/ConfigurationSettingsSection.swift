@@ -20,8 +20,7 @@ struct ConfigurationSettingsSection: View {
             }
             .disabled(appState.isLocked)
             Text("Save your workspaces, services, and preferences to a file, or transfer them to another Mac. Login sessions are not included.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .settingsCaption()
         }
         .sheet(isPresented: Binding(
             get: { pendingArchive != nil },
@@ -63,9 +62,7 @@ struct ConfigurationSettingsSection: View {
                 .fixedSize(horizontal: false, vertical: true)
             Toggle("Apply app preferences from this file", isOn: $applyPreferences)
             Text("This includes appearance, notifications, app lock, and camera and microphone rules. macOS permissions and launch at login stay on this Mac.")
-                .fixedSize(horizontal: false, vertical: true)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .settingsCaption()
             HStack {
                 Spacer()
                 Button("Cancel") { pendingArchive = nil }

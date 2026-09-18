@@ -127,7 +127,7 @@ struct QuickSwitcherView: View {
                 LazyVStack(spacing: 0) {
                     if results.isEmpty {
                         Text("No matching services")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
@@ -207,10 +207,10 @@ private struct QuickSwitcherRow: View {
                 HStack(spacing: 4) {
                     if let emoji = WorkspaceEmoji.displayValue(result.spaceEmoji) {
                         Text(emoji)
-                            .font(.caption2)
+                            .font(.paguroCaption)
                     }
                     Text(result.spaceName)
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .foregroundStyle(.secondary)
                 }
             }

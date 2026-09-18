@@ -33,7 +33,7 @@ struct CatalogGridView: View {
                 ForEach(groupedEntries, id: \.0) { category, entries in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(category)
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .fontWeight(.semibold)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 4)
@@ -89,7 +89,7 @@ private struct CatalogEntryButton: View {
                     .clipShape(RoundedRectangle(cornerRadius: PaguroRadius.control))
 
                 Text(entry.name)
-                    .font(.caption)
+                    .font(.paguroCaption)
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .foregroundStyle(.primary)

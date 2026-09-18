@@ -235,6 +235,12 @@ struct PaguroApp: App {
         }
     }
 
+    /// The size of the About panel credits.
+    ///
+    /// It keeps the readable floor that the rest of the app uses. AppKit takes
+    /// a number here, so this cannot read the SwiftUI token directly.
+    private static let aboutCreditsSize: CGFloat = 12
+
     /// Creates the credits text for the About panel.
     private static var aboutCredits: NSAttributedString {
         let centred = NSMutableParagraphStyle()
@@ -243,7 +249,7 @@ struct PaguroApp: App {
         let credits = NSMutableAttributedString(
             string: "A native workspace for the web services that you use.\n\n",
             attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
+                .font: NSFont.systemFont(ofSize: aboutCreditsSize),
                 .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: centred
             ]
@@ -252,7 +258,7 @@ struct PaguroApp: App {
             NSAttributedString(
                 string: "Based on Chorus",
                 attributes: [
-                    .font: NSFont.systemFont(ofSize: 11),
+                    .font: NSFont.systemFont(ofSize: aboutCreditsSize),
                     .foregroundColor: NSColor.linkColor,
                     .link: UpstreamProjectLink.url,
                     .paragraphStyle: centred

@@ -22,7 +22,7 @@ struct ServiceIconEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Icon")
-                .font(.subheadline)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 12) {
@@ -69,12 +69,12 @@ struct ServiceIconEditor: View {
                     }
 
                     Text("Leave the field blank to discover the icon from the service address.")
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .foregroundStyle(.secondary)
 
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(.caption)
+                            .font(.paguroCaption)
                             .foregroundStyle(.red)
                             .accessibilityLabel("Icon error: \(errorMessage)")
                     }

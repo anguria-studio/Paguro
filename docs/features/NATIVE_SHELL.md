@@ -328,6 +328,8 @@ the pool released to stay inside its size limit. The passkey notice reports
 that `WKWebView` cannot use a passkey for sign-in. Paguro shows the passkey
 notice one time for each service, and it stores the seen state as the card
 appears.
+The Add Service sheet does not repeat the passkey notice. The card is the one
+place that reports it.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
 `FloatingNoticeLayout` in `PaguroCore` holds the width, the margins, and the
@@ -366,6 +368,8 @@ The control carries a small badge with the number of new downloads.
 The badge counts the running downloads and the results the user has not seen.
 Three transfers at one time therefore show `3` before any of them ends.
 It prints `9+` above nine, so it stays narrow on a 28 point control.
+The count takes the readable text size that the whole app uses, and the capsule
+around it follows that size.
 The badge uses the accent color, not the unread red, because a download does
 not wait for a reply.
 

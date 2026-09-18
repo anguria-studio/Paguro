@@ -111,9 +111,11 @@ struct GeneralSettingsView: View {
                     }
 
                     Text("\(Int((appState.liquidGlassIntensity * 100).rounded()))%")
-                        .font(.caption.monospacedDigit())
+                        .font(.paguroCaption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .frame(width: 38, alignment: .trailing)
+                        // The readout holds "100%" at the readable size, so the
+                        // slider beside it keeps the same width at every value.
+                        .frame(width: 44, alignment: .trailing)
                 }
                 .help("Controls how much of the desktop appears through the Paguro shell. This control does not change web pages.")
 
@@ -122,7 +124,6 @@ struct GeneralSettingsView: View {
                     Button("Reset Glass Lab") {
                         appState.resetGlassLab()
                     }
-                    .controlSize(.small)
                 }
 
                 Picker("Layout", selection: Binding(
@@ -210,8 +211,7 @@ struct GeneralSettingsView: View {
                     .pickerStyle(.segmented)
 
                     Text("These settings apply when the sidebar is collapsed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .settingsCaption()
                 }
             }
 
@@ -221,8 +221,7 @@ struct GeneralSettingsView: View {
                     set: { appState.setAutoDismissCookieBanners($0) }
                 ))
                 Text("This accepts consent pop-ups for you. That includes advertising and tracking cookies, so turn it off to answer each site's banner yourself.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
 
             Section("Performance") {
@@ -247,8 +246,7 @@ struct GeneralSettingsView: View {
                 }
 
                 Text("Frees the memory and CPU of a service you haven't opened in a while, releasing its process until you return. Chat apps (Slack, Teams, WhatsApp, and the like) stay live so their notifications still arrive the instant a message lands, even when many services are open. A hibernated service still refreshes its unread badge every few minutes, though that count only climbs until you open it again. Mark any service \"Keep Loaded\" to exempt it.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
 
                 // Outside the toggle's own block: this limit applies even when
                 // idle hibernation is off, which is exactly when a released
@@ -256,8 +254,7 @@ struct GeneralSettingsView: View {
                 // The sentence comes from PaguroCore, so the stated number
                 // follows `WebViewPoolCapacity.maxLoaded` and cannot go stale.
                 Text(CapacityEvictionNotice.settingsSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
 
             Section("Startup") {
@@ -277,8 +274,7 @@ struct GeneralSettingsView: View {
                     }
                 }
                 Text("Applies to every service. Zoom a single service with ⌘- / ⌘+ to override this.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
 
             ConfigurationSettingsSection()
@@ -320,8 +316,7 @@ struct NotificationSettingsView: View {
                     ))
 
                     Text("On a display without a notch, island alerts use macOS notifications. Service mute and Do Not Disturb apply to both routes.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .settingsCaption()
 
                     #if DEBUG || TEST_CONTROLS
                     Button("Show Test Island Alert") {
@@ -340,8 +335,7 @@ struct NotificationSettingsView: View {
                     set: { appState.doNotDisturb = $0 }
                 ))
                 Text("Silences notifications and pauses audio and video in all services. Unread badges remain visible.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
 
             scheduledDNDSection
@@ -353,8 +347,7 @@ struct NotificationSettingsView: View {
                 } else {
                     serviceTable
                     Text("Turning a service off silences its alerts, hides its badge, and pauses its audio and video.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .settingsCaption()
                 }
             }
         }
@@ -389,9 +382,7 @@ struct NotificationSettingsView: View {
                         Text(warning.title)
                             .font(.headline)
                         Text(warning.message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .settingsCaption()
                         Button(warning.actionTitle) {
                             openNotificationSettings()
                         }
@@ -421,7 +412,7 @@ struct NotificationSettingsView: View {
                 Text("macOS").frame(width: 52)
                 Text("Badge").frame(width: 52)
             }
-            .font(.caption)
+            .font(.paguroCaption)
             .foregroundStyle(.secondary)
 
             Divider()
@@ -430,7 +421,7 @@ struct NotificationSettingsView: View {
                 if grouped.showsHeaders {
                     GridRow {
                         Text(headerTitle(group))
-                            .font(.caption.weight(.semibold))
+                            .font(.paguroCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 4)
@@ -535,8 +526,7 @@ struct NotificationSettingsView: View {
             }
 
             Text("Silences notifications and pauses audio and video during these hours. Unread badges remain visible.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .settingsCaption()
         }
     }
 
@@ -578,8 +568,7 @@ struct PrivacySettingsView: View {
                     ))
 
                     Text("Paguro fetches each service's icon from that service's own site. When a site serves none, this asks Google for one, which tells Google the hostname — including a private or self-hosted one. Off by default; services without an icon show their initial instead.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .settingsCaption()
                 }
             }
             #endif
@@ -602,8 +591,7 @@ struct PrivacySettingsView: View {
                 }
 
                 Text("Uses Touch ID, with your login password as a fallback. Lock from the menu-bar window or File > Lock Now (⇧⌘L).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
 
             Section("Content Blocking") {
@@ -613,8 +601,7 @@ struct PrivacySettingsView: View {
                 ))
 
                 Text("Blocks known ad and tracking domains across your services. It won't remove ads a site serves from its own domain, so YouTube and Facebook ads still get through.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
 
                 Toggle("Hide annoyances", isOn: Binding(
                     get: { appState.annoyanceBlockingEnabled },
@@ -622,8 +609,7 @@ struct PrivacySettingsView: View {
                 ))
 
                 Text("Hides cookie notices, newsletter pop-ups, floating share bars, and similar clutter. It's more aggressive than ad blocking and can occasionally hide something you wanted, so it's off by default.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
 
             Section("Camera & Microphone") {
@@ -648,8 +634,7 @@ struct PrivacySettingsView: View {
                 .pickerStyle(.segmented)
 
                 Text("The default for new services. \"Ask\" prompts the first time a service wants your camera or microphone and remembers the answer. Set a single service's own rule in its Edit sheet. Mute every live microphone at once with ⇧⌘M.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
             }
         }
         .formStyle(.grouped)
@@ -695,8 +680,7 @@ struct AboutSettingsView: View {
 
             Section("Content blocking") {
                 Text("Ad and tracker blocking uses the HaGezi DNS blocklist. Annoyance hiding uses Fanboy's Annoyance List from EasyList.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .settingsCaption()
                 Link("HaGezi blocklists (GPL-3.0)", destination: blocklistURL)
                 Link("EasyList / Fanboy Annoyance List", destination: annoyanceListURL)
             }

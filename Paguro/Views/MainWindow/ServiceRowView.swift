@@ -392,7 +392,7 @@ struct ServiceRowView: View {
 
             if isHibernated {
                 Image(systemName: "moon.zzz.fill")
-                    .font(.paguroSidebarAccessory)
+                    .font(.paguroRowAccessoryGlyph)
                     .foregroundStyle(PaguroColor.Text.tertiary)
                     .accessibilityHidden(true)
             }

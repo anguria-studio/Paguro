@@ -34,6 +34,9 @@ Changes that affect Paguro users appear here, with the newest release first.
   focus. A
   download that starts in a service you are not reading reports itself with a
   short fade at the control. No mark rises from the page for it.
+- Small text in the Paguro windows is larger and easier to read. The
+  notification island and the unread count badges keep the sizes that their
+  fixed spaces were built for.
 - Performance settings state how many services Paguro keeps loaded at the same
   time. Paguro can release the oldest non-messaging services even when idle
   hibernation is off.
@@ -41,6 +44,8 @@ Changes that affect Paguro users appear here, with the newest release first.
   browser, instead of a bar above the page. The page keeps its full height.
   You can drag a floating card to the right to dismiss it, like a macOS
   notification. The close button still dismisses it as well.
+- The Add Service sheet no longer repeats the passkey notice. The floating card
+  still shows it the first time you open a service.
 
 ### Fixed
 

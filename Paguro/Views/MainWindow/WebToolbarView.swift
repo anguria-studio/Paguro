@@ -285,18 +285,17 @@ struct DownloadIndicatorButton: View {
 /// A fast download never earns a ring, so this badge is what tells the user
 /// that something arrived. It counts running downloads and results the user
 /// has not seen, so it clears itself and never becomes a list to empty. It
-/// follows the rail badge shape at a smaller size, and it uses the accent
-/// color rather than the unread red, because a download is not a message that
-/// waits for a reply.
+/// follows the rail badge shape, and it uses the accent color rather than the
+/// unread red, because a download is not a message that waits for a reply.
 private struct DownloadCountBadge: View {
     let text: String
 
     var body: some View {
         Text(text)
-            .font(.system(size: 9, weight: .semibold).monospacedDigit())
+            .font(.paguroCaption.weight(.semibold).monospacedDigit())
             .foregroundStyle(.white)
             .padding(.horizontal, 3)
-            .frame(minWidth: 13, minHeight: 13)
+            .frame(minWidth: 15, minHeight: 15)
             .background(
                 Capsule()
                     .fill(Color.accentColor)

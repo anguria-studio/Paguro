@@ -85,14 +85,14 @@ struct StoreRecoveryView: View {
                 Text(candidate.displayTitle).fontWeight(.medium)
                 if candidate.kind == .live {
                     Text("Current")
-                        .font(.caption2)
+                        .font(.paguroCaption)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(Capsule().fill(Color.secondary.opacity(0.2)))
                 }
             }
             Text(candidate.displayDetail)
-                .font(.caption)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)

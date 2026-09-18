@@ -1442,6 +1442,14 @@ enum IslandKeyboardInput {
     static let dismissalKeys: Set<KeyEquivalent> = [.delete, .deleteForward, KeyEquivalent("\u{7f}")]
 }
 
+/// The island surface, from the collapsed capsule to the expanded card list.
+///
+/// Island text keeps the system caption styles, which are smaller than the
+/// readable-text floor that the rest of the app holds. The island is not a
+/// window: every row and control here takes a fixed height from the camera
+/// housing of the machine, and the sizes come from work on that hardware. The
+/// maintainer therefore reverted the 12-point sweep in this file on 2026-09-18.
+/// Each of these fonts carries the `small-text-ok` marker for the source check.
 struct NotificationIslandPanelView: View {
     private enum FocusTarget: Hashable {
         case dismissAll
@@ -1656,6 +1664,7 @@ struct NotificationIslandPanelView: View {
         HStack {
             if let countLabel = unreviewedCountLabel {
                 Text(countLabel)
+                    // small-text-ok: island text is tuned on notch hardware
                     .font(.caption2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -1675,6 +1684,7 @@ struct NotificationIslandPanelView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(content.serviceLabel)
+                    // small-text-ok: island text is tuned on notch hardware
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Text(content.event.title)
@@ -1682,6 +1692,7 @@ struct NotificationIslandPanelView: View {
                     .lineLimit(1)
                 if let body = content.event.body {
                     Text(body)
+                        // small-text-ok: island text is tuned on notch hardware
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1782,6 +1793,7 @@ struct NotificationIslandPanelView: View {
                     model.actions.dismissAll?()
                 } label: {
                     Text("Clear All")
+                        // small-text-ok: island text is tuned on notch hardware
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -2021,9 +2033,11 @@ struct NotificationIslandPanelView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(recentContent.serviceLabel)
+                                // small-text-ok: island text is tuned on notch hardware
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Text(recentContent.event.receivedAt, style: .time)
+                                // small-text-ok: island text is tuned on notch hardware
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -2179,6 +2193,7 @@ struct NotificationIslandPanelView: View {
         height: CGFloat? = nil
     ) -> some View {
         Text(label)
+            // small-text-ok: island text is tuned on notch hardware
             .font(.caption.weight(.semibold).monospacedDigit())
             .lineLimit(1)
             .minimumScaleFactor(0.8)

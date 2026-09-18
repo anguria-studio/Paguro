@@ -40,6 +40,52 @@ the icons off the rail centerline.
 Keep service website styling separate from the native application shell.
 Do not assume that a website follows the app's appearance preference.
 
+## Type sizes
+
+Text that a person reads is never smaller than 12 points. The macOS system
+styles `caption`, `caption2`, and `footnote` are 10 points and `subheadline` is
+11, so none of them carry text in Paguro. Secondary text below the body size
+shows that it is secondary with a quieter color or a heavier weight, never with
+a smaller size.
+
+One token holds this size, so the smallest text in the app is one number to
+change. A site that needs a weight, monospaced digits, or a monospaced design
+builds on the same token.
+
+Explanatory text under a Settings control uses the settings caption style, which
+is that same size. The style is one shared modifier, so the size, the color, and
+the wrap rule stay the same in every Settings row. The color stays below the
+control label, and Increase Contrast raises it.
+
+A symbol is a picture and not text, so an `Image` keeps its own glyph size. Row
+accessory marks draw at 10.5 points. The barred bell and the hibernation moon are
+two of them. A larger mark would change the rail row height, the icon positions,
+and the fixed rail pointer surface. A letter monogram or an emoji inside a
+service tile follows the tile size. It stands for the picture that the tile has
+no artwork for.
+
+Two fixed geometries stay below the readable size. The space they sit in cannot
+grow with the text.
+
+The unread badge draws its count at 9 points. The capsule sits on a service
+icon. The smallest of those icons is 18 points wide on the collapsed rail. At
+the readable size the number almost fills the icon that it marks. One badge view
+draws every unread count. An expanded row, an icon rail, a top bar tab, and a
+workspace cell therefore show the same badge.
+
+The island keeps the system caption styles for all of its text. That text is the
+service name, the message body, the card time, Clear All, and the two count
+badges. The island is not a window. Each control in it takes a height of 26, 22,
+18, or 14 points from the camera housing. A card row is 68 points high. Work on
+that hardware set the text sizes that fit these heights. The toolbar labels also
+keep a minimum scale factor. A larger system text size therefore shrinks a
+label, instead of moving a control into the screen edge or past the housing.
+
+A source check holds this rule. It reports any font under 12 points that is not
+on an `Image`. It also reads the value of a size token, so a name cannot hide a
+small number. A site in a fixed geometry answers the check with a marker comment
+that names the reason.
+
 ## App and menu-bar icons
 
 The app icon uses the layered Paguro shell. Default appearance has a light

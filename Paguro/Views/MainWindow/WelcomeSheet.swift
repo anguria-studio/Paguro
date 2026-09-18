@@ -106,7 +106,7 @@ struct WelcomeSheet: View {
                 )
             )
             Text("Alerts appear beside the camera housing instead of as a macOS banner. You can change this later in Settings.")
-                .font(.caption)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

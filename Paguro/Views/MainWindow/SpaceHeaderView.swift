@@ -94,7 +94,7 @@ struct SpaceHeaderView: View {
         HStack(spacing: Self.gutter) {
             if let emoji = WorkspaceEmoji.displayValue(emoji) {
                 Text(emoji)
-                    .font(.system(size: axis == .vertical ? 11 : 15))
+                    .font(.system(size: axis == .vertical ? 12 : 15))
                     .opacity(isMuted ? 0.5 : 1.0)
                     .accessibilityHidden(true)
             }
@@ -125,7 +125,10 @@ struct SpaceHeaderView: View {
             // Says the header does something. `chevron.up.chevron.down` is what
             // AppKit puts on a pop-up button, which is what this behaves like.
             Image(systemName: axis == .vertical ? "chevron.down" : "chevron.up.chevron.down")
-                .font(.system(size: axis == .vertical ? 8 : PaguroTypeSize.sidebarAccessory, weight: .medium))
+                .font(.system(
+                    size: axis == .vertical ? 8 : PaguroTypeSize.rowAccessoryGlyph,
+                    weight: .medium
+                ))
                 .foregroundStyle(PaguroColor.Text.tertiary)
                 .accessibilityHidden(true)
         }
@@ -181,7 +184,7 @@ struct WorkspaceSectionHeaderView: View {
 
                 if let emoji = WorkspaceEmoji.displayValue(emoji) {
                     Text(emoji)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .opacity(isMuted ? 0.5 : 1)
                         .accessibilityHidden(true)
                 }

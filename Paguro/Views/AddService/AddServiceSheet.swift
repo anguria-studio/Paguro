@@ -54,10 +54,6 @@ struct AddServiceSheet: View {
                 .padding(.bottom, 12)
             }
 
-            if !AppCapabilities.passkeysSupported {
-                passkeyNotice
-            }
-
             switch selectedTab {
             case .catalog:
                 catalogContent
@@ -66,29 +62,6 @@ struct AddServiceSheet: View {
             }
         }
         .frame(width: 520, height: 480)
-    }
-
-    /// Calm, non-blocking heads-up that passkey sign-in won't work in-app yet.
-    /// Shown for both catalog and custom adds. Gated by AppCapabilities so it
-    /// disappears in one edit once the WebAuthn browser entitlement is granted.
-    private var passkeyNotice: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "info.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(AppCapabilities.passkeyUnavailableNotice)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: PaguroRadius.control))
-        .padding(.horizontal, 20)
-        .padding(.bottom, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(AppCapabilities.passkeyUnavailableNotice)
     }
 
     private var header: some View {
@@ -142,14 +115,14 @@ struct AddServiceSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Name")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                         TextField("Service name", text: $customLabel, prompt: Text("My Service"))
                             .textFieldStyle(.roundedBorder)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Address")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                         TextField("Service address", text: $customURL, prompt: Text("https://example.com"))
                             .textFieldStyle(.roundedBorder)
@@ -163,13 +136,13 @@ struct AddServiceSheet: View {
 
             if let error = urlError {
                 Text(error)
-                    .font(.caption)
+                    .font(.paguroCaption)
                     .foregroundStyle(.red)
             }
 
             if let error = iconDraft.errorMessage {
                 Text(error)
-                    .font(.caption)
+                    .font(.paguroCaption)
                     .foregroundStyle(.red)
             }
 
