@@ -3,7 +3,8 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from ci_quality import build_needed, requires_build, revision_range, verify_jobs
+from ci_quality import (build_needed, check_small_text, requires_build,
+                        revision_range, small_text_findings, verify_jobs)
 
 
 class CIQualityTests(unittest.TestCase):
@@ -72,6 +73,104 @@ class CIQualityTests(unittest.TestCase):
         for needs in ({}, {'changes': {'result': 'success', 'outputs': {'build': 'true'}}}):
             with self.subTest(needs=needs), self.assertRaises(KeyError):
                 verify_jobs(needs)
+
+
+class ReadableTextFloorTests(unittest.TestCase):
+    """Text a person reads is never smaller than 12 points."""
+
+    def findings(self, source):
+        return small_text_findings(source, 'Sample.swift')
+
+    def test_a_small_system_style_on_text_is_reported(self):
+        for style in ('.caption', '.caption2', '.footnote', '.subheadline'):
+            with self.subTest(style=style):
+                findings = self.findings(
+                    f'Text("Saved")\n    .font({style})\n'
+                )
+                self.assertEqual(len(findings), 1)
+                self.assertIn('Text', findings[0])
+
+    def test_a_small_style_with_a_weight_is_reported(self):
+        self.assertEqual(
+            len(self.findings('Text(total)\n    .font(.caption.weight(.semibold))\n')),
+            1
+        )
+
+    def test_an_explicit_size_under_the_floor_on_text_is_reported(self):
+        findings = self.findings('Text(count)\n    .font(.system(size: 9, weight: .bold))\n')
+        self.assertEqual(len(findings), 1)
+        self.assertIn('size 9', findings[0])
+
+    def test_a_symbol_keeps_its_own_glyph_size(self):
+        self.assertEqual(self.findings(
+            'Image(systemName: "bell.slash.fill")\n'
+            '    .foregroundStyle(.secondary)\n'
+            '    .font(.system(size: 9))\n'
+        ), [])
+        self.assertEqual(self.findings(
+            'Image(systemName: "return")\n    .font(.caption2.weight(.medium))\n'
+        ), [])
+
+    def test_a_symbol_size_inside_a_multiline_font_is_allowed(self):
+        self.assertEqual(self.findings(
+            'Image(systemName: "bell.slash.fill")\n'
+            '    .font(\n'
+            '        isCompact\n'
+            '            ? .system(size: 7, weight: .bold)\n'
+            '            : .paguroRowAccessoryGlyph\n'
+            '    )\n'
+        ), [])
+
+    def test_the_readable_size_passes(self):
+        self.assertEqual(self.findings(
+            'Text("Saved")\n    .font(.paguroCaption)\n'
+            'Text(total)\n    .font(.paguroCaption.weight(.semibold).monospacedDigit())\n'
+            'Text("Body")\n    .font(.system(size: 12))\n'
+        ), [])
+
+    def test_the_app_type_token_is_not_a_system_style(self):
+        self.assertEqual(self.findings(
+            'static let paguroCaption = Font.system(size: PaguroTypeSize.caption)\n'
+        ), [])
+
+    def test_a_size_that_follows_a_picture_is_a_proportion(self):
+        self.assertEqual(self.findings(
+            'Text(initial)\n    .font(.system(size: size * 0.44, weight: .semibold))\n'
+        ), [])
+
+    def test_every_branch_of_a_chosen_size_counts(self):
+        findings = self.findings(
+            'Text(emoji)\n    .font(.system(size: isCompact ? 11 : 15))\n'
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertIn('size 11', findings[0])
+        self.assertEqual(self.findings(
+            'Text(emoji)\n    .font(.system(size: isCompact ? 12 : 15))\n'
+        ), [])
+
+    def test_an_appkit_font_under_the_floor_is_reported(self):
+        self.assertEqual(len(self.findings(
+            '.font: NSFont.systemFont(ofSize: 11),\n'
+        )), 1)
+
+    def test_a_font_with_no_named_subject_is_reported(self):
+        findings = self.findings('.font(.caption)\n')
+        self.assertEqual(len(findings), 1)
+        self.assertIn('unnamed view', findings[0])
+
+    def test_the_marker_allows_a_fixed_geometry(self):
+        self.assertEqual(self.findings(
+            'Text(count)\n'
+            '    // small-text-ok: the capsule cannot hold the readable size\n'
+            '    .font(.system(size: 9))\n'
+        ), [])
+        self.assertEqual(self.findings(
+            'Text(count)\n'
+            '    .font(.system(size: 9))  // small-text-ok: a fixed capsule\n'
+        ), [])
+
+    def test_the_app_sources_hold_the_floor(self):
+        self.assertEqual(check_small_text('Paguro'), [])
 
 
 if __name__ == '__main__':

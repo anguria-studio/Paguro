@@ -29,6 +29,9 @@ jobs:
           fetch-depth: 0
       - name: Test CI policy
         run: python3 -m unittest discover -s scripts -p 'test_ci_quality.py'
+      # A text scan, so it needs no macOS build and runs on every change.
+      - name: Check the readable-text floor
+        run: python3 scripts/ci_quality.py text-size
       - name: Detect changes that need a macOS build
         id: changes
         run: python3 scripts/ci_quality.py changes
