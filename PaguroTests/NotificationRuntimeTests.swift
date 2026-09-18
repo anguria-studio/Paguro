@@ -554,7 +554,9 @@ final class NotificationRuntimeTests: XCTestCase {
         context.insert(SpaceServiceLink(space: targetSpace, service: service))
         try context.save()
 
-        fixture.notificationManager.routeServiceRequest(service.id)
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(serviceID: service.id)
+        )
         var selectedSpaceID: UUID? = currentSpace.id
         var selections: [(UUID?, UUID)] = []
         fixture.runtime.start(
@@ -581,9 +583,8 @@ final class NotificationRuntimeTests: XCTestCase {
         XCTAssertEqual(selections[1].1, service.id)
     }
 
-    /// A banner click must select the service account and then show the main
-    /// window. Without the second step the selection changes behind a closed
-    /// window, and the click has no visible result.
+    /// A banner click without a destination must select the service account and
+    /// show the main window without reloading the service's current page.
     @MainActor
     func testNotificationRoutingSelectsTheServiceAndThenShowsTheWindow() async throws {
         let fixture = try makeFixture()
@@ -598,19 +599,181 @@ final class NotificationRuntimeTests: XCTestCase {
 
         enum Step: Equatable {
             case select(UUID)
+            case load(UUID, String)
             case showWindow
         }
         var steps: [Step] = []
+        fixture.runtime.loadNotificationDestination = { service, url in
+            steps.append(.load(service.id, url.absoluteString))
+        }
         fixture.runtime.start(
             currentSpaceID: { nil },
             selectService: { _, serviceID in steps.append(.select(serviceID)) },
             bringWindowForward: { steps.append(.showWindow) }
         )
 
-        fixture.notificationManager.routeServiceRequest(service.id)
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(serviceID: service.id)
+        )
         await Task.yield()
 
-        XCTAssertEqual(steps, [.select(service.id), .showWindow])
+        XCTAssertEqual(steps, [
+            .select(service.id),
+            .showWindow,
+        ])
+    }
+
+    @MainActor
+    func testNotificationRoutingLoadsAnApprovedDestinationInTheBoundAccount() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let service = ServiceInstance(label: "Slack Work", url: "https://app.slack.com/client/home")
+        let otherAccount = ServiceInstance(
+            label: "Slack Personal",
+            url: "https://app.slack.com/client/home"
+        )
+        context.insert(service)
+        context.insert(otherAccount)
+        try context.save()
+
+        var loaded: [(UUID, URL)] = []
+        fixture.runtime.loadNotificationDestination = { service, url in
+            loaded.append((service.id, url))
+        }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(
+                serviceID: service.id,
+                targetURLString: "https://workspace.slack.com/archives/general"
+            )
+        )
+        await Task.yield()
+
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded.first?.0, service.id)
+        XCTAssertNotEqual(loaded.first?.0, otherAccount.id)
+        XCTAssertEqual(
+            loaded.first?.1.absoluteString,
+            "https://workspace.slack.com/archives/general"
+        )
+    }
+
+    @MainActor
+    func testNotificationRoutingDispatchesTheBoundLivePageClick() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let service = ServiceInstance(label: "Telegram", url: "https://web.telegram.org/")
+        let otherAccount = ServiceInstance(label: "Telegram 2", url: "https://web.telegram.org/")
+        context.insert(service)
+        context.insert(otherAccount)
+        try context.save()
+
+        let token = UUID()
+        var dispatched: [(UUID, UUID)] = []
+        var loadedURL: URL?
+        fixture.runtime.dispatchNotificationPageClick = { serviceID, token in
+            dispatched.append((serviceID, token))
+            return true
+        }
+        fixture.runtime.loadNotificationDestination = { _, url in loadedURL = url }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(
+                serviceID: service.id,
+                pageClickToken: token
+            )
+        )
+        await Task.yield()
+
+        XCTAssertEqual(dispatched.count, 1)
+        XCTAssertEqual(dispatched.first?.0, service.id)
+        XCTAssertNotEqual(dispatched.first?.0, otherAccount.id)
+        XCTAssertEqual(dispatched.first?.1, token)
+        XCTAssertNil(loadedURL)
+    }
+
+    @MainActor
+    func testLivePageHandlerTakesPriorityOverAnApprovedDestination() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let service = ServiceInstance(label: "Chat", url: "https://chat.example/")
+        context.insert(service)
+        try context.save()
+
+        let token = UUID()
+        var loadedURL: URL?
+        fixture.runtime.dispatchNotificationPageClick = { _, _ in true }
+        fixture.runtime.loadNotificationDestination = { _, url in loadedURL = url }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(
+                serviceID: service.id,
+                targetURLString: "/messages/42",
+                pageClickToken: token
+            )
+        )
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertNil(loadedURL)
+    }
+
+    @MainActor
+    func testApprovedDestinationBacksUpAnUnavailablePageHandler() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let service = ServiceInstance(label: "Chat", url: "https://chat.example/")
+        context.insert(service)
+        try context.save()
+
+        let token = UUID()
+        var loadedURL: URL?
+        fixture.runtime.dispatchNotificationPageClick = { _, _ in false }
+        fixture.runtime.loadNotificationDestination = { _, url in loadedURL = url }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(
+                serviceID: service.id,
+                targetURLString: "/messages/42",
+                pageClickToken: token
+            )
+        )
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(loadedURL?.absoluteString, "https://chat.example/messages/42")
+    }
+
+    @MainActor
+    func testNotificationRoutingRejectsAForeignDestinationWithoutReloading() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let service = ServiceInstance(label: "Mail", url: "https://mail.google.com/mail/u/0/")
+        context.insert(service)
+        try context.save()
+
+        var loadedURL: URL?
+        fixture.runtime.loadNotificationDestination = { _, url in loadedURL = url }
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(
+                serviceID: service.id,
+                targetURLString: "https://docs.google.com/document/d/1"
+            )
+        )
+        await Task.yield()
+
+        XCTAssertNil(loadedURL)
     }
 
     /// A deleted service account has nowhere to go, so the click must show no
@@ -628,7 +791,9 @@ final class NotificationRuntimeTests: XCTestCase {
             bringWindowForward: { windowRequests += 1 }
         )
 
-        fixture.notificationManager.routeServiceRequest(UUID())
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(serviceID: UUID())
+        )
         await Task.yield()
 
         XCTAssertTrue(selections.isEmpty)
@@ -649,9 +814,17 @@ final class NotificationRuntimeTests: XCTestCase {
         context.insert(SpaceServiceLink(space: space, service: service))
         try context.save()
 
-        fixture.notificationManager.routeServiceRequest(service.id)
+        let destination = "https://chat.example/conversations/42"
+        fixture.notificationManager.routeNotificationRequest(
+            NotificationNavigationRequest(
+                serviceID: service.id,
+                targetURLString: destination
+            )
+        )
         var selections: [UUID] = []
         var windowRequests = 0
+        var loadedURL: URL?
+        fixture.runtime.loadNotificationDestination = { _, url in loadedURL = url }
         fixture.runtime.start(
             currentSpaceID: { nil },
             selectService: { _, serviceID in selections.append(serviceID) },
@@ -660,6 +833,7 @@ final class NotificationRuntimeTests: XCTestCase {
 
         XCTAssertEqual(selections, [service.id])
         XCTAssertEqual(windowRequests, 1)
+        XCTAssertEqual(loadedURL?.absoluteString, destination)
     }
 
     /// Opening a service must correct its badge at once. Waiting for the first
@@ -713,7 +887,7 @@ final class NotificationRuntimeTests: XCTestCase {
         fixture.runtime.startTransientBadgeFetcher()
         await fixture.runtime.waitForActivation()
 
-        XCTAssertNotNil(fixture.notificationManager.onServiceRequested)
+        XCTAssertNotNil(fixture.notificationManager.onNavigationRequested)
         XCTAssertNotNil(fixture.networkMonitor.onChange)
         XCTAssertNotNil(fixture.pool.onNavigationFinished)
         XCTAssertNotNil(fixture.pool.onServicePreloaded)
@@ -723,7 +897,7 @@ final class NotificationRuntimeTests: XCTestCase {
 
         fixture.runtime.shutdown()
 
-        XCTAssertNil(fixture.notificationManager.onServiceRequested)
+        XCTAssertNil(fixture.notificationManager.onNavigationRequested)
         XCTAssertNil(fixture.networkMonitor.onChange)
         XCTAssertNil(fixture.pool.onNavigationFinished)
         XCTAssertNil(fixture.pool.onServicePreloaded)

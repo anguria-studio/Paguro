@@ -4,9 +4,16 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+### Added
+
+- A live service page can handle its original notification click, allowing a
+  provider to open the related conversation when it supplies no destination URL.
+
 ### Fixed
 
 - Prevent a queued quiet-hours check from accessing the store after shutdown.
+- A notification without a destination no longer reloads the service root after
+  selecting the service.
 
 ## [1.0.4] — 2026-09-12
 

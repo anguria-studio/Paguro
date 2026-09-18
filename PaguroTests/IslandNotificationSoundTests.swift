@@ -22,7 +22,7 @@ final class IslandNotificationSoundTests: XCTestCase {
 
         let suppressed = AtomicBool(false)
         let delegate = NotificationCenterDelegate(
-            onServiceRequested: { _ in }, isPresentationSuppressed: { suppressed.value }
+            onNavigationRequested: { _ in }, isPresentationSuppressed: { suppressed.value }
         )
         XCTAssertEqual(delegate.presentationOptions(for: request), [.sound])
         let banner = UNNotificationRequest(

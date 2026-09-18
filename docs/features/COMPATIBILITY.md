@@ -9,7 +9,7 @@ It exercises the public WebKit paths that Paguro depends on.
 
 The fixture provides these controls:
 
-- page and service worker notification calls;
+- page, destination, provider-shaped, and service worker notification calls;
 - document title unread counts;
 - same-origin and cross-origin frames;
 - a pop-up window;
@@ -29,7 +29,9 @@ It does not add a certificate to the system trust store.
 The `Paguro Compatibility` scheme uses the `Compatibility` build configuration.
 This configuration uses the `studio.anguria.paguro.compatibility` bundle ID
 and adds the `--paguro-compatibility-fixture` argument.
-It is a debug build, so it can use the fixture argument.
+It is a debug build, so it can use the fixture argument or its exact bundle ID.
+The bundle ID keeps the fixture enabled when macOS opens this build from a
+notification and does not restore the Xcode scheme argument.
 Paguro then accepts the temporary certificate on ports 8443 and 8444 only.
 
 A Release build cannot enable this behavior.
@@ -83,6 +85,10 @@ The normal scheme does not accept its temporary certificate.
 | Check | Expected result |
 |---|---|
 | Page notification | Paguro receives one native notification request |
+| Destination notification | Clicking the alert opens the fixture destination page in the same service |
+| Cold destination notification | After Command-Q, clicking the alert relaunches Paguro and opens the destination without a certificate error |
+| Page-handler notification | Clicking the alert asks the live page's original handler to open the destination |
+| Provider-shaped notification | The provider probe reports nested field names and types without their values |
 | Service worker notification | Paguro receives the page call through the worker registration |
 | Delayed notification | Paguro receives the event after 10 seconds unless the app quits |
 | Title badge | The service unread count follows the document title |
@@ -177,8 +183,9 @@ Run the fixture server tests with this command:
 scripts/test_compatibility_fixture.sh
 ```
 
-The tests check static route safety, the required controls, uploads, downloads, and both request methods.
-The application tests check the Debug launch boundary and loopback certificate policy.
+The tests check static route safety, the notification destination, the required
+controls, uploads, downloads, and both request methods.
+The application tests check the debug runtime identity and loopback certificate policy.
 They also use two identifier-based data stores for one cookie origin.
 The test rebuilds the manager, reads both values, clears one value, and checks the other value.
 

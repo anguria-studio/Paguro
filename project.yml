@@ -103,6 +103,16 @@ schemes:
         "--paguro-fake-notch": true
         "--paguro-demo-notifications": true
 
+  Paguro Notification Probe:
+    build:
+      targets:
+        Paguro: all
+    run:
+      config: Compatibility
+      commandLineArguments:
+        "--paguro-compatibility-fixture": true
+        "--paguro-notification-probe": true
+
   Paguro Compatibility:
     build:
       targets:

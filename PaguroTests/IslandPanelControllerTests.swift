@@ -1051,9 +1051,15 @@ final class IslandPanelControllerTests: XCTestCase {
             renderer: renderer,
             scheduler: scheduler
         )
-        let event = try makeEvent(number: 1)
-        var requestedServiceIDs: [UUID] = []
-        controller.onServiceRequested = { requestedServiceIDs.append($0) }
+        let destination = URL(string: "https://chat.example/messages/1")!
+        let pageClickToken = UUID()
+        let event = try makeEvent(
+            number: 1,
+            targetURL: destination,
+            pageClickToken: pageClickToken
+        )
+        var requestedServices: [NotificationNavigationRequest] = []
+        controller.onNavigationRequested = { requestedServices.append($0) }
 
         controller.present(panelContent(for: event))
         await waitForShow(in: renderer)
@@ -1064,7 +1070,14 @@ final class IslandPanelControllerTests: XCTestCase {
 
         XCTAssertEqual(controller.state.phase, .collapsed)
         XCTAssertTrue(renderer.shows.last?.recentContents.isEmpty == true)
-        XCTAssertEqual(requestedServiceIDs, [event.serviceID])
+        XCTAssertEqual(
+            requestedServices,
+            [NotificationNavigationRequest(
+                serviceID: event.serviceID,
+                targetURL: event.targetURL,
+                pageClickToken: pageClickToken
+            )]
+        )
     }
 
     func testClosingExpandedIslandReturnsToCollapsed() async throws {
@@ -1221,7 +1234,9 @@ final class IslandPanelControllerTests: XCTestCase {
 
     private func makeEvent(
         number: Int,
-        serviceID: UUID = UUID()
+        serviceID: UUID = UUID(),
+        targetURL: URL? = nil,
+        pageClickToken: UUID? = nil
     ) throws -> NotificationEvent {
         try NotificationEvent.normalize(
             id: UUID(),
@@ -1229,6 +1244,8 @@ final class IslandPanelControllerTests: XCTestCase {
             source: .pageNotification,
             title: "Event \(number)",
             body: "Body \(number)",
+            targetURL: targetURL,
+            pageClickToken: pageClickToken,
             receivedAt: Date(timeIntervalSince1970: TimeInterval(number))
         )
     }

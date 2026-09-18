@@ -441,10 +441,38 @@ final class WebRuntimeTests: XCTestCase {
 
     // MARK: - Compatibility fixture boundary
 
-    func testCompatibilityFixtureNeedsItsExactLaunchArgument() {
-        XCTAssertFalse(CompatibilityFixture.isEnabled(arguments: []))
-        XCTAssertFalse(CompatibilityFixture.isEnabled(arguments: ["--paguro-compatibility"]))
-        XCTAssertTrue(CompatibilityFixture.isEnabled(arguments: [CompatibilityFixture.launchArgument]))
+    func testNotificationProbeNeedsItsExactLaunchArgument() {
+        XCTAssertFalse(NotificationProbeConfiguration.isEnabled(arguments: []))
+        XCTAssertFalse(NotificationProbeConfiguration.isEnabled(
+            arguments: ["--paguro-provider-probe"]
+        ))
+        XCTAssertTrue(NotificationProbeConfiguration.isEnabled(
+            arguments: [NotificationProbeConfiguration.launchArgument]
+        ))
+    }
+
+    func testCompatibilityFixtureNeedsItsExactRuntimeIdentity() {
+        let normalBundleIdentifier = "studio.anguria.paguro.debug"
+        XCTAssertFalse(CompatibilityFixture.isEnabled(
+            arguments: [],
+            bundleIdentifier: normalBundleIdentifier
+        ))
+        XCTAssertFalse(CompatibilityFixture.isEnabled(
+            arguments: ["--paguro-compatibility"],
+            bundleIdentifier: normalBundleIdentifier
+        ))
+        XCTAssertTrue(CompatibilityFixture.isEnabled(
+            arguments: [CompatibilityFixture.launchArgument],
+            bundleIdentifier: normalBundleIdentifier
+        ))
+        XCTAssertTrue(CompatibilityFixture.isEnabled(
+            arguments: [],
+            bundleIdentifier: CompatibilityFixture.appBundleIdentifier
+        ))
+        XCTAssertFalse(CompatibilityFixture.isEnabled(
+            arguments: [],
+            bundleIdentifier: "studio.anguria.paguro.compatibility-copy"
+        ))
     }
 
     func testCompatibilityFixtureTrustsOnlyLoopbackServerCertificates() {
@@ -477,7 +505,15 @@ final class WebRuntimeTests: XCTestCase {
             host: "localhost",
             port: 8443,
             authenticationMethod: NSURLAuthenticationMethodServerTrust,
-            arguments: []
+            arguments: [],
+            bundleIdentifier: "studio.anguria.paguro.debug"
+        ))
+        XCTAssertTrue(CompatibilityFixture.allowsUntrustedServerCertificate(
+            host: "localhost",
+            port: 8443,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust,
+            arguments: [],
+            bundleIdentifier: CompatibilityFixture.appBundleIdentifier
         ))
         XCTAssertFalse(CompatibilityFixture.allowsUntrustedServerCertificate(
             host: "localhost",
@@ -503,7 +539,13 @@ final class WebRuntimeTests: XCTestCase {
         ))
         XCTAssertFalse(CompatibilityFixture.isProcessFailureURL(
             URL(string: "paguro-fixture://web-content-process-failure")!,
-            arguments: []
+            arguments: [],
+            bundleIdentifier: "studio.anguria.paguro.debug"
+        ))
+        XCTAssertTrue(CompatibilityFixture.isProcessFailureURL(
+            URL(string: "paguro-fixture://web-content-process-failure")!,
+            arguments: [],
+            bundleIdentifier: CompatibilityFixture.appBundleIdentifier
         ))
     }
 

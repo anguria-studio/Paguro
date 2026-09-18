@@ -10,8 +10,8 @@ final class NotificationBridgeTests: XCTestCase {
 
     /// Pulls the injected notification script out of a configured controller.
     @MainActor
-    func notificationScriptSource() throws -> String {
-        let manager = UserScriptManager()
+    func notificationScriptSource(probeEnabled: Bool = false) throws -> String {
+        let manager = UserScriptManager(notificationProbeEnabled: probeEnabled)
         let controller = WKUserContentController()
         manager.installUserScripts(
             for: ModelFixtures.service(label: "Slack", catalogID: "slack"),
@@ -48,7 +48,12 @@ final class NotificationBridgeTests: XCTestCase {
         context.evaluateScript(try notificationScriptSource())
 
         XCTAssertEqual(
-            context.evaluateScript("(new window.Notification('hi', {body: 'b'})) instanceof window.Notification")?.toBool(),
+            context.evaluateScript("""
+                (new window.Notification('hi', {
+                    body: 'b',
+                    data: {targetURL: 'https://app.slack.com/client/team/channel'}
+                })) instanceof window.Notification
+                """)?.toBool(),
             true,
             "instanceof must still hold — a site that feature-detects this way breaks otherwise"
         )
@@ -68,8 +73,54 @@ final class NotificationBridgeTests: XCTestCase {
         XCTAssertTrue(posted[0].contains("\"body\":\"b\""), "the payload must carry the body")
         XCTAssertTrue(posted[0].contains("\"version\":1"), "the payload must carry its schema version")
         XCTAssertTrue(posted[0].contains("\"type\":\"web-notification\""), "the payload must carry its signal type")
+        XCTAssertEqual(
+            try NotificationPayload.decode(posted[0]).targetURL,
+            "https://app.slack.com/client/team/channel"
+        )
+        XCTAssertTrue(
+            try NotificationPayload.decode(posted[1]).targetURL.isEmpty,
+            "the current page URL must not become an implicit destination"
+        )
         XCTAssertFalse(posted[0].contains("serviceID"), "the page must not choose the native service identity")
         XCTAssertFalse(posted[0].contains("icon"), "the page must not choose a remote notification icon")
+        XCTAssertNil(try NotificationPayload.decode(posted[0]).probe)
+    }
+
+    @MainActor
+    func testNotificationProbeReportsStructureWithoutValues() throws {
+        let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
+        var posted: [String] = []
+        let record: @convention(block) (String) -> Void = { posted.append($0) }
+
+        context.evaluateScript("var window = this;")
+        context.setObject(record, forKeyedSubscript: "paguroPost" as NSString)
+        context.evaluateScript("""
+            window.webkit = { messageHandlers: { paguroNotification: { postMessage: function(m) { paguroPost(m); } } } };
+            function Notification() {}
+            window.Notification = Notification;
+            """)
+        context.evaluateScript(try notificationScriptSource(probeEnabled: true))
+
+        context.evaluateScript("""
+            new window.Notification('Private sender', {
+                body: 'Private message',
+                data: {
+                    teamId: 'T-SECRET',
+                    channel: {id: 'C-SECRET', displayName: 'Private room'},
+                    'unsafe key value': 'MUST-NOT-APPEAR'
+                }
+            });
+            """)
+
+        let raw = try XCTUnwrap(posted.first)
+        let probe = try XCTUnwrap(NotificationPayload.decode(raw).probe)
+        XCTAssertEqual(probe.source, .constructor)
+        XCTAssertEqual(
+            probe.dataShape,
+            "{channel:{displayName:string,id:string},teamId:string,<redacted-key>:string}"
+        )
+        XCTAssertFalse(probe.dataShape.contains("SECRET"))
+        XCTAssertFalse(probe.dataShape.contains("Private"))
     }
 
     /// The path that was not covered at all. Web apps raise notifications
@@ -94,12 +145,96 @@ final class NotificationBridgeTests: XCTestCase {
         context.evaluateScript(try notificationScriptSource())
 
         let returned = context.evaluateScript("""
-            (new ServiceWorkerRegistration()).showNotification('Nico', {body: 'sent a message'});
+            (new ServiceWorkerRegistration()).showNotification('Nico', {
+                body: 'sent a message',
+                data: '/messages/42'
+            });
             """)?.toString()
         XCTAssertEqual(returned, "orig", "the original call must still run and its result be passed through")
         XCTAssertEqual(context.evaluateScript("showCalls")?.toInt32(), 1, "exactly once — not swallowed, not doubled")
         XCTAssertEqual(posted.count, 1, "and the notification must reach Paguro")
         XCTAssertTrue(posted[0].contains("\"title\":\"Nico\""))
+        XCTAssertEqual(try NotificationPayload.decode(posted[0]).targetURL, "/messages/42")
+        XCTAssertTrue(try NotificationPayload.decode(posted[0]).pageClickToken.isEmpty)
+    }
+
+    @MainActor
+    func testNotificationShimCanDispatchTheOriginalPageClickOnce() throws {
+        let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
+        var posted: [String] = []
+        let record: @convention(block) (String) -> Void = { posted.append($0) }
+        let token = "abcdefab-cdef-4abc-8def-abcdefabcdef"
+
+        context.evaluateScript("var window = this;")
+        context.setObject(record, forKeyedSubscript: "paguroPost" as NSString)
+        context.evaluateScript("""
+            window.webkit = { messageHandlers: { paguroNotification: { postMessage: function(m) { paguroPost(m); } } } };
+            window.crypto = { randomUUID: function() { return '\(token)'; } };
+            function Event(type) { this.type = type; }
+            function Notification() { this.listeners = {}; }
+            Notification.prototype.addEventListener = function(type, listener) {
+                this.listeners[type] = listener;
+            };
+            Notification.prototype.dispatchEvent = function(event) {
+                if (this.listeners[event.type]) this.listeners[event.type](event);
+                if (event.type === 'click' && this.onclick) this.onclick(event);
+                return true;
+            };
+            window.Notification = Notification;
+            """)
+        context.evaluateScript(try notificationScriptSource())
+
+        context.evaluateScript("""
+            var pageClickCount = 0;
+            var notification = new window.Notification('New message');
+            notification.addEventListener('click', function() { pageClickCount += 1; });
+            """)
+
+        XCTAssertEqual(try NotificationPayload.decode(try XCTUnwrap(posted.first)).pageClickToken, token)
+        XCTAssertTrue(
+            context.evaluateScript(
+                "window.__paguroDispatchNotificationClick('\(token.uppercased())')"
+            )?.toBool() == true
+        )
+        XCTAssertEqual(context.evaluateScript("pageClickCount")?.toInt32(), 1)
+        XCTAssertFalse(
+            context.evaluateScript("window.__paguroDispatchNotificationClick('\(token)')")?.toBool() == true,
+            "a native notification click must not replay a retained page handler"
+        )
+
+        context.evaluateScript("new window.Notification('No handler')")
+        XCTAssertFalse(
+            context.evaluateScript("window.__paguroDispatchNotificationClick('\(token)')")?.toBool() == true,
+            "a retained object without a provider handler must allow native URL fallback"
+        )
+    }
+
+    @MainActor
+    func testNotificationProbeIdentifiesRegistrationCalls() throws {
+        let context = try XCTUnwrap(JSContext(), "Could not create a JSContext")
+        var posted: [String] = []
+        let record: @convention(block) (String) -> Void = { posted.append($0) }
+
+        context.evaluateScript("var window = this;")
+        context.setObject(record, forKeyedSubscript: "paguroPost" as NSString)
+        context.evaluateScript("""
+            window.webkit = { messageHandlers: { paguroNotification: { postMessage: function(m) { paguroPost(m); } } } };
+            function ServiceWorkerRegistration() {}
+            ServiceWorkerRegistration.prototype.showNotification = function() {};
+            window.ServiceWorkerRegistration = ServiceWorkerRegistration;
+            """)
+        context.evaluateScript(try notificationScriptSource(probeEnabled: true))
+
+        context.evaluateScript("""
+            (new ServiceWorkerRegistration()).showNotification('Title', {
+                data: {href: '/messages/42'}
+            });
+            """)
+
+        let payload = try NotificationPayload.decode(try XCTUnwrap(posted.first))
+        XCTAssertEqual(payload.probe?.source, .serviceWorkerRegistration)
+        XCTAssertEqual(payload.probe?.dataShape, "{href:string}")
+        XCTAssertEqual(payload.targetURL, "/messages/42")
     }
 
     /// A page that has torn the bridge down must not take the site's own
@@ -148,8 +283,10 @@ final class NotificationBridgeTests: XCTestCase {
             payload: NotificationPayload(
                 title: "New message",
                 body: "A short body",
-                tag: "message-1"
+                tag: "message-1",
+                pageClickToken: "33333333-3333-4333-8333-333333333333"
             ),
+            targetURL: URL(string: "https://app.slack.com/client/team/channel"),
             receivedAt: Date()
         )
         let content = NativeNotificationContentBuilder.makeContent(
@@ -163,6 +300,14 @@ final class NotificationBridgeTests: XCTestCase {
         XCTAssertEqual(content.attachments.count, 1)
         XCTAssertEqual(content.attachments.first?.identifier, "service-icon")
         XCTAssertEqual(content.userInfo["serviceID"] as? String, service.id.uuidString)
+        XCTAssertEqual(
+            content.userInfo["targetURL"] as? String,
+            "https://app.slack.com/client/team/channel"
+        )
+        XCTAssertEqual(
+            content.userInfo["pageClickToken"] as? String,
+            "33333333-3333-4333-8333-333333333333"
+        )
     }
 
     @MainActor
@@ -180,6 +325,7 @@ final class NotificationBridgeTests: XCTestCase {
                 body: "A short body",
                 tag: "message-1"
             ),
+            targetURL: URL(string: "https://app.slack.com/client/team/channel"),
             receivedAt: Date()
         )
 
@@ -193,6 +339,59 @@ final class NotificationBridgeTests: XCTestCase {
         XCTAssertEqual(request.content.title, "New message")
         XCTAssertEqual(request.content.subtitle, "Slack")
         XCTAssertEqual(request.content.userInfo["serviceID"] as? String, serviceID.uuidString)
+        XCTAssertEqual(
+            request.content.userInfo["targetURL"] as? String,
+            "https://app.slack.com/client/team/channel"
+        )
+    }
+
+    @MainActor
+    func testNativeNotificationKeepsTheLivePageClickToken() throws {
+        let serviceID = UUID()
+        let pageClickToken = UUID()
+        let event = try NotificationEvent.normalize(
+            id: UUID(),
+            serviceID: serviceID,
+            payload: NotificationPayload(
+                title: "New message",
+                pageClickToken: pageClickToken.uuidString
+            ),
+            receivedAt: Date()
+        )
+
+        let content = NativeNotificationContentBuilder.makeContent(
+            event: event,
+            serviceLabel: "Telegram",
+            serviceIconURL: nil
+        )
+
+        XCTAssertEqual(
+            content.userInfo["pageClickToken"] as? String,
+            pageClickToken.uuidString
+        )
+    }
+
+    func testNotificationDelegateReadsTheNativeBoundRoute() throws {
+        let serviceID = UUID()
+        let destination = "https://app.slack.com/client/team/channel"
+        let pageClickToken = UUID()
+
+        XCTAssertEqual(
+            NotificationCenterDelegate.navigationRequest(from: [
+                "serviceID": serviceID.uuidString,
+                "targetURL": destination,
+                "pageClickToken": pageClickToken.uuidString,
+            ]),
+            NotificationNavigationRequest(
+                serviceID: serviceID,
+                targetURLString: destination,
+                pageClickToken: pageClickToken
+            )
+        )
+        XCTAssertNil(NotificationCenterDelegate.navigationRequest(from: [
+            "serviceID": "not-a-uuid",
+            "targetURL": destination,
+        ]))
     }
 
     /// A fresh install has nothing at either path, and must simply open in the

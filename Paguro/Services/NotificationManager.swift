@@ -19,13 +19,13 @@ final class NotificationManager {
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
     }
-    /// Notification taps that arrived before `onServiceRequested` was wired
+    /// Notification taps that arrived before `onNavigationRequested` was wired
     /// (a tap can launch the app). Buffered in order and drained once the
     /// handler is set, so a burst of cold-launch taps isn't reduced to just the
     /// last one.
-    private var pendingServiceIDs: [UUID] = []
+    private var pendingNavigationRequests: [NotificationNavigationRequest] = []
 
-    var onServiceRequested: (@MainActor (UUID) -> Void)?
+    var onNavigationRequested: (@MainActor (NotificationNavigationRequest) -> Void)?
 
     /// The macOS notification permission, as Settings reads it.
     ///
@@ -337,21 +337,21 @@ final class NotificationManager {
 
     /// Routes a notification tap to the navigation handler, or buffers it if
     /// the handler isn't wired yet (a notification can launch the app before
-    /// NotificationRuntime finishes setting `onServiceRequested`). Drained by
+    /// NotificationRuntime finishes setting `onNavigationRequested`). Drained by
     /// the runtime when click routing starts.
-    func routeServiceRequest(_ serviceID: UUID) {
-        if let handler = onServiceRequested {
-            handler(serviceID)
+    func routeNotificationRequest(_ request: NotificationNavigationRequest) {
+        if let handler = onNavigationRequested {
+            handler(request)
         } else {
-            pendingServiceIDs.append(serviceID)
+            pendingNavigationRequests.append(request)
         }
     }
 
     /// Returns and clears every buffered cold-launch tap, in arrival order.
-    func drainPendingNotifications() -> [UUID] {
-        let ids = pendingServiceIDs
-        pendingServiceIDs = []
-        return ids
+    func drainPendingNotifications() -> [NotificationNavigationRequest] {
+        let requests = pendingNavigationRequests
+        pendingNavigationRequests = []
+        return requests
     }
 
     // MARK: - Polling
@@ -585,9 +585,9 @@ final class NotificationManager {
         let dndSnapshot = badgeManager.doNotDisturbSnapshot
         let lockSnapshot = lockSnapshot
         let delegate = NotificationCenterDelegate(
-            onServiceRequested: { [weak self] serviceID in
+            onNavigationRequested: { [weak self] request in
                 Task { @MainActor in
-                    self?.routeServiceRequest(serviceID)
+                    self?.routeNotificationRequest(request)
                 }
             },
             isPresentationSuppressed: {
@@ -657,7 +657,7 @@ struct ActivePollSchedule {
 // MARK: - Notification Center Delegate
 
 final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
-    let onServiceRequested: @Sendable (UUID) -> Void
+    let onNavigationRequested: @Sendable (NotificationNavigationRequest) -> Void
     let isPresentationSuppressed: @Sendable () -> Bool
     // Keeps the delegate alive (UNUserNotificationCenter holds it weakly).
     // Written once from the main-actor `configureNotificationDelegate()`, so
@@ -665,10 +665,10 @@ final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelega
     @MainActor static var retained: NotificationCenterDelegate?
 
     init(
-        onServiceRequested: @escaping @Sendable (UUID) -> Void,
+        onNavigationRequested: @escaping @Sendable (NotificationNavigationRequest) -> Void,
         isPresentationSuppressed: @escaping @Sendable () -> Bool
     ) {
-        self.onServiceRequested = onServiceRequested
+        self.onNavigationRequested = onNavigationRequested
         self.isPresentationSuppressed = isPresentationSuppressed
         super.init()
     }
@@ -678,11 +678,25 @@ final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelega
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        if let serviceIDString = response.notification.request.content.userInfo["serviceID"] as? String,
-           let serviceID = UUID(uuidString: serviceIDString) {
-            onServiceRequested(serviceID)
+        let userInfo = response.notification.request.content.userInfo
+        if let request = Self.navigationRequest(from: userInfo) {
+            onNavigationRequested(request)
         }
         completionHandler()
+    }
+
+    static func navigationRequest(
+        from userInfo: [AnyHashable: Any]
+    ) -> NotificationNavigationRequest? {
+        guard let serviceIDString = userInfo["serviceID"] as? String,
+              let serviceID = UUID(uuidString: serviceIDString) else {
+            return nil
+        }
+        return NotificationNavigationRequest(
+            serviceID: serviceID,
+            targetURLString: userInfo["targetURL"] as? String,
+            pageClickToken: (userInfo["pageClickToken"] as? String).flatMap(UUID.init)
+        )
     }
 
     func userNotificationCenter(

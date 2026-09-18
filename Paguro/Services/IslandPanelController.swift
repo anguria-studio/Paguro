@@ -193,7 +193,7 @@ private final class TaskNotificationIslandScheduledAction:
 final class IslandPanelController {
     private(set) var state: NotificationIslandState = .hidden
     private(set) var appearance: NotificationIslandAppearance
-    var onServiceRequested: (@MainActor (UUID) -> Void)?
+    var onNavigationRequested: (@MainActor (NotificationNavigationRequest) -> Void)?
     var onHistoryAvailabilityChanged: (@MainActor (Bool) -> Void)?
     private var openedFromKeyboard = false
     var canPresentIsland: Bool {
@@ -403,7 +403,11 @@ final class IslandPanelController {
               let event = state.recentEvents.first(where: { $0.id == eventID })
         else { return }
         let openingPhase = state.phase
-        onServiceRequested?(event.serviceID)
+        onNavigationRequested?(NotificationNavigationRequest(
+            serviceID: event.serviceID,
+            targetURL: event.targetURL,
+            pageClickToken: event.pageClickToken
+        ))
         dismissEvent(eventID)
         if openingPhase == .peek, state.phase == .peek {
             collapse()

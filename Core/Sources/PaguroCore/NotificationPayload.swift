@@ -7,25 +7,37 @@ public struct NotificationPayload: Equatable, Sendable {
     public static let maximumTitleBytes = 512
     public static let maximumBodyBytes = 4_096
     public static let maximumTagBytes = 512
+    public static let maximumTargetURLBytes = 4_096
+    public static let maximumPageClickTokenBytes = 36
+    public static let maximumProbeShapeBytes = 2_048
 
     public let version: Int
     public let type: NotificationPayloadType
     public let title: String
     public let body: String
     public let tag: String
+    public let targetURL: String
+    public let pageClickToken: String
+    public let probe: NotificationProbeMetadata?
 
     public init(
         version: Int = currentVersion,
         type: NotificationPayloadType = .webNotification,
         title: String,
         body: String = "",
-        tag: String = ""
+        tag: String = "",
+        targetURL: String = "",
+        pageClickToken: String = "",
+        probe: NotificationProbeMetadata? = nil
     ) {
         self.version = version
         self.type = type
         self.title = title
         self.body = body
         self.tag = tag
+        self.targetURL = targetURL
+        self.pageClickToken = pageClickToken
+        self.probe = probe
     }
 
     /// Decodes and validates one untrusted bridge message.
@@ -63,13 +75,51 @@ public struct NotificationPayload: Equatable, Sendable {
         try validate(raw.title, field: "title", maximumBytes: maximumTitleBytes)
         try validate(raw.body, field: "body", maximumBytes: maximumBodyBytes)
         try validate(raw.tag, field: "tag", maximumBytes: maximumTagBytes)
+        try validate(
+            raw.targetURL,
+            field: "targetURL",
+            maximumBytes: maximumTargetURLBytes
+        )
+        try validate(
+            raw.pageClickToken,
+            field: "pageClickToken",
+            maximumBytes: maximumPageClickTokenBytes
+        )
+        guard raw.pageClickToken.isEmpty || UUID(uuidString: raw.pageClickToken) != nil else {
+            throw NotificationPayloadDecodeError.invalidField("pageClickToken")
+        }
+        let probe: NotificationProbeMetadata?
+        if let rawProbe = raw.probe {
+            guard let source = NotificationProbeSource(rawValue: rawProbe.source) else {
+                throw NotificationPayloadDecodeError.invalidField("probe.source")
+            }
+            try validate(
+                rawProbe.dataShape,
+                field: "probe.dataShape",
+                maximumBytes: maximumProbeShapeBytes
+            )
+            guard rawProbe.dataShape.unicodeScalars.allSatisfy({
+                (0x20...0x7E).contains($0.value)
+            }) else {
+                throw NotificationPayloadDecodeError.invalidField("probe.dataShape")
+            }
+            probe = NotificationProbeMetadata(
+                source: source,
+                dataShape: rawProbe.dataShape
+            )
+        } else {
+            probe = nil
+        }
 
         return NotificationPayload(
             version: raw.version,
             type: type,
             title: removingControlCharacters(from: raw.title),
             body: removingControlCharacters(from: raw.body),
-            tag: removingControlCharacters(from: raw.tag)
+            tag: removingControlCharacters(from: raw.tag),
+            targetURL: raw.targetURL,
+            pageClickToken: raw.pageClickToken,
+            probe: probe
         )
     }
 
@@ -100,6 +150,9 @@ public struct NotificationPayload: Equatable, Sendable {
         let title: String
         let body: String
         let tag: String
+        let targetURL: String
+        let pageClickToken: String
+        let probe: RawProbe?
 
         private enum CodingKeys: String, CodingKey {
             case version
@@ -107,6 +160,9 @@ public struct NotificationPayload: Equatable, Sendable {
             case title
             case body
             case tag
+            case targetURL
+            case pageClickToken
+            case probe
         }
 
         init(from decoder: Decoder) throws {
@@ -116,8 +172,36 @@ public struct NotificationPayload: Equatable, Sendable {
             title = try container.decode(String.self, forKey: .title)
             body = try container.decodeIfPresent(String.self, forKey: .body) ?? ""
             tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? ""
+            targetURL = try container.decodeIfPresent(String.self, forKey: .targetURL) ?? ""
+            pageClickToken = try container.decodeIfPresent(
+                String.self,
+                forKey: .pageClickToken
+            ) ?? ""
+            probe = try container.decodeIfPresent(RawProbe.self, forKey: .probe)
         }
     }
+
+    private struct RawProbe: Decodable {
+        let source: String
+        let dataShape: String
+    }
+}
+
+/// A privacy-limited description from the opt-in provider probe.
+public struct NotificationProbeMetadata: Equatable, Sendable {
+    public let source: NotificationProbeSource
+    public let dataShape: String
+
+    public init(source: NotificationProbeSource, dataShape: String) {
+        self.source = source
+        self.dataShape = dataShape
+    }
+}
+
+/// The page API that produced a probed notification.
+public enum NotificationProbeSource: String, Equatable, Sendable {
+    case constructor
+    case serviceWorkerRegistration = "service-worker-registration"
 }
 
 /// The signal types that the notification bridge accepts.

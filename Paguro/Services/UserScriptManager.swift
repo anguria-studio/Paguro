@@ -5,6 +5,7 @@ import WebKit
 final class UserScriptManager {
     private var messageHandlers: [UUID: NotificationMessageHandler] = [:]
     private let islandPanelController: IslandPanelController?
+    private let notificationProbeEnabled: Bool
 
     var isServiceMuted: (@MainActor (UUID) -> Bool)?
     var notificationLockSnapshot = AtomicBool(false)
@@ -16,8 +17,12 @@ final class UserScriptManager {
     var isDoNotDisturbActive: (@MainActor () -> Bool)?
     var autoDismissCookieBanners = AppPreferenceDefaults.autoDismissCookieBanners
 
-    init(islandPanelController: IslandPanelController? = nil) {
+    init(
+        islandPanelController: IslandPanelController? = nil,
+        notificationProbeEnabled: Bool = NotificationProbeConfiguration.isEnabled()
+    ) {
         self.islandPanelController = islandPanelController
+        self.notificationProbeEnabled = notificationProbeEnabled
     }
 
     /// Full setup for a freshly built web view: the message handlers (added once)
@@ -85,9 +90,16 @@ final class UserScriptManager {
                 dndCheck?() ?? false
             }
         )
+        // Read the address for each event. A service edit can make a target
+        // that was safe for the old address unsafe for the current account.
         let handler = NotificationMessageHandler(
             serviceID: instance.id,
-            presentationRouter: presentationRouter
+            serviceURLProvider: { URL(string: instance.url) },
+            presentationRouter: presentationRouter,
+            probeEnabled: notificationProbeEnabled,
+            probeServiceKind: instance.catalogEntryID.flatMap {
+                ServiceCatalog.shared.entry(for: $0)?.id
+            } ?? "custom"
         )
         controller.add(handler, name: "paguroNotification")
         messageHandlers[instance.id] = handler
@@ -366,18 +378,152 @@ final class UserScriptManager {
     /// `WKUIDelegate` notification methods, and Paguro adopts none of them, so
     /// the original object is inert for display.
     private func makeNotificationInterceptionScript() -> String {
+        #if DEBUG
+        let probeEnabled = notificationProbeEnabled ? "true" : "false"
+        let probeSupport = """
+            // Report structure only. Values, lengths, and message text do not
+            // enter the probe output.
+            function notificationDataShape(value, depth, seen) {
+                try {
+                    if (value === undefined) return 'missing';
+                    if (value === null) return 'null';
+                    if (Array.isArray(value)) return 'array';
+                    var kind = typeof value;
+                    if (kind !== 'object') {
+                        return kind === 'string' || kind === 'number' ||
+                            kind === 'boolean' ? kind : 'other';
+                    }
+                    if (depth >= 2) return 'object';
+                    if (seen.indexOf(value) !== -1) return 'object(cycle)';
+                    seen.push(value);
+                    var keys = Object.keys(value).sort();
+                    var fields = [];
+                    for (var i = 0; i < keys.length && i < 16; i++) {
+                        var key = keys[i];
+                        var safeKey = /^[A-Za-z_$][A-Za-z0-9_$.-]{0,63}$/.test(key)
+                            ? key : '<redacted-key>';
+                        var fieldShape = 'unavailable';
+                        try {
+                            fieldShape = notificationDataShape(value[key], depth + 1, seen);
+                        } catch (e) {}
+                        fields.push(safeKey + ':' + fieldShape);
+                    }
+                    if (keys.length > 16) fields.push('<more>');
+                    seen.pop();
+                    return '{' + fields.join(',') + '}';
+                } catch (e) {
+                    return 'unavailable';
+                }
+            }
+        """
+        let probePayload = """
+                    if (probeEnabled) {
+                        payload.probe = {
+                            source: source,
+                            dataShape: notificationDataShape(
+                                options ? options.data : undefined,
+                                0,
+                                []
+                            )
+                        };
+                    }
+        """
+        #else
+        let probeEnabled = "false"
+        let probeSupport = ""
+        let probePayload = ""
+        #endif
         return """
         (function() {
-            function forward(title, options) {
+            var probeEnabled = \(probeEnabled);
+
+            // The current page can show a different conversation. Use only a
+            // destination that the notification supplies.
+            function notificationTarget(options) {
+                if (!options) return '';
+                var data = options.data;
+                if (typeof data === 'string') return data;
+                if (!data || typeof data !== 'object') return '';
+                var keys = ['targetURL', 'url', 'href'];
+                for (var i = 0; i < keys.length; i++) {
+                    var value = data[keys[i]];
+                    if (typeof value === 'string') return value;
+                }
+                return '';
+            }
+
+            \(probeSupport)
+
+            var notificationClicks = new Map();
+            var maximumNotificationClicks = 128;
+
+            function makeNotificationClickToken() {
                 try {
+                    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                        return window.crypto.randomUUID();
+                    }
+                } catch (e) {}
+                return '';
+            }
+
+            function retainNotificationClick(token, notification) {
+                if (!token || typeof token !== 'string') return;
+                var entry = {
+                    notification: notification,
+                    hasClickListener: false
+                };
+                var originalAddEventListener = notification.addEventListener;
+                if (typeof originalAddEventListener === 'function') {
+                    try {
+                        notification.addEventListener = function(type) {
+                            if (type === 'click') entry.hasClickListener = true;
+                            return originalAddEventListener.apply(this, arguments);
+                        };
+                    } catch (e) {}
+                }
+                while (notificationClicks.size >= maximumNotificationClicks) {
+                    var oldest = notificationClicks.keys().next().value;
+                    notificationClicks.delete(oldest);
+                }
+                notificationClicks.set(token.toLowerCase(), entry);
+            }
+
+            Object.defineProperty(window, '__paguroDispatchNotificationClick', {
+                value: function(token) {
+                    if (!token || typeof token !== 'string') return false;
+                    var normalizedToken = token.toLowerCase();
+                    var entry = notificationClicks.get(normalizedToken);
+                    if (!entry) return false;
+                    notificationClicks.delete(normalizedToken);
+                    var notification = entry.notification;
+                    var hasClickHandler = entry.hasClickListener ||
+                        typeof notification.onclick === 'function';
+                    try {
+                        notification.dispatchEvent(new Event('click'));
+                        return hasClickHandler;
+                    } catch (e) {
+                        return false;
+                    }
+                },
+                configurable: false,
+                enumerable: false,
+                writable: false
+            });
+
+            function forward(title, options, source, pageClickToken) {
+                try {
+                    var payload = {
+                        version: 1,
+                        type: 'web-notification',
+                        title: title == null ? '' : String(title),
+                        body: (options && options.body) || '',
+                        tag: (options && options.tag) || '',
+                        targetURL: notificationTarget(options),
+                        pageClickToken: pageClickToken || ''
+                    };
+            \(probePayload)
                     window.webkit.messageHandlers.paguroNotification.postMessage(
-                        JSON.stringify({
-                            version: 1,
-                            type: 'web-notification',
-                            title: title == null ? '' : String(title),
-                            body: (options && options.body) || '',
-                            tag: (options && options.tag) || ''
-                        })
+                        JSON.stringify(payload)
                     );
                 } catch (e) {
                     // A page that has torn down the bridge must not take the
@@ -388,8 +534,11 @@ final class UserScriptManager {
             var OrigNotification = window.Notification;
             if (OrigNotification) {
                 var PaguroNotification = function(title, options) {
-                    forward(title, options);
-                    return new OrigNotification(title, options);
+                    var notification = new OrigNotification(title, options);
+                    var pageClickToken = makeNotificationClickToken();
+                    retainNotificationClick(pageClickToken, notification);
+                    forward(title, options, 'constructor', pageClickToken);
+                    return notification;
                 };
 
                 // Same prototype object, so `instanceof Notification` holds for
@@ -423,7 +572,7 @@ final class UserScriptManager {
                 window.ServiceWorkerRegistration.prototype.showNotification) {
                 var origShow = window.ServiceWorkerRegistration.prototype.showNotification;
                 window.ServiceWorkerRegistration.prototype.showNotification = function(title, options) {
-                    forward(title, options);
+                    forward(title, options, 'service-worker-registration', '');
                     return origShow.apply(this, arguments);
                 };
             }

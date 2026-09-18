@@ -76,7 +76,14 @@ enum NativeNotificationContentBuilder {
         content.title = event.title
         content.subtitle = serviceLabel
         content.body = event.body ?? ""
-        content.userInfo = ["serviceID": event.serviceID.uuidString]
+        var userInfo = ["serviceID": event.serviceID.uuidString]
+        if let targetURL = event.targetURL {
+            userInfo["targetURL"] = targetURL.absoluteString
+        }
+        if let pageClickToken = event.pageClickToken {
+            userInfo["pageClickToken"] = pageClickToken.uuidString
+        }
+        content.userInfo = userInfo
         content.sound = .default
 
         // Each notification gets its own copy: the attachment consumes its file.

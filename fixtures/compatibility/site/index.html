@@ -22,6 +22,9 @@
       <h2>Notifications and unread state</h2>
       <div class="controls">
         <button id="page-notification" type="button">Page notification</button>
+        <button id="destination-notification" type="button">Destination notification</button>
+        <button id="page-click-notification" type="button">Page-handler notification</button>
+        <button id="provider-probe-notification" type="button">Provider-shaped notification</button>
         <button id="worker-notification" type="button">Service worker notification</button>
         <button id="delayed-notification" type="button">Notification after 10 seconds</button>
         <button id="increment-badge" type="button">Increment title badge</button>
@@ -29,6 +32,9 @@
       </div>
       <p class="note">
         Notification controls test alert delivery. They do not change unread state.
+        The destination notification must open its destination page when clicked.
+        The page-handler notification must use its original click handler to open that page.
+        The provider-shaped notification tests privacy-limited probe output.
         Use the title badge controls to test the service and Dock badges.
       </p>
       <p class="note">

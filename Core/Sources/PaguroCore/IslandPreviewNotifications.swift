@@ -1,7 +1,10 @@
-#if DEBUG
 import Foundation
 
 /// Fictional content for screenshots, separate from service notification detection.
+///
+/// This type stays available in every package configuration because Xcode does
+/// not pass an app's custom debug configuration to Swift package targets. The
+/// app can use it only from code that is guarded by `DEBUG`.
 public struct IslandPreviewNotifications: Sendable {
     public static let launchArgument = "--paguro-demo-notifications"
 
@@ -84,4 +87,3 @@ public struct IslandPreviewNotifications: Sendable {
         return Selection(serviceID: account.serviceID, message: message)
     }
 }
-#endif
