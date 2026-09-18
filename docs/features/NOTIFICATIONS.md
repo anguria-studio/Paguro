@@ -519,6 +519,12 @@ speaker output through a gain that is zero while muted. These new contexts
 can advance silently. The script also handles nested frames and leaves offline
 audio rendering unchanged.
 
+Paguro installs that script with the web view configuration, next to the other
+document-start scripts, so the first document of a service already holds it. A
+mute change then writes the new value to the live document and to the documents
+that load next. A user script reaches no document that is already open, so a
+guard installed later than the page could not cover it.
+
 Clearing mute permits playback again unless the view is still suspended in the
 background. The website and WebKit control whether paused media resumes.
 This control does not change microphone capture or request call termination.

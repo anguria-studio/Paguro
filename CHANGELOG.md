@@ -6,6 +6,12 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Added
 
+- Music and video that play when you switch to another service keep playing, for
+  example Spotify and YouTube. The service that plays shows a speaker mark in
+  the rail and in the menu-bar window, and its context menu offers Pause Audio.
+  Muting the service still silences it. A page that starts to play after you
+  leave it stays quiet, and a service that only shows a silent animation earns
+  no mark.
 - A download mark rises from the page into the download control in the header
   when a download starts. It shows you where the file went. Several downloads
   that start together send one mark, and the control keeps the count. Reduce

@@ -201,6 +201,9 @@ struct MenuBarView: View {
             manualGlobalMute: appState.doNotDisturb
         )
         let media = appState.webViewPool.mediaCaptureStates[service.id]
+        // A muted service is silent, so it never reports playing audio here.
+        let isPlayingAudio = !isMuted
+            && appState.webViewPool.isPlayingBackgroundAudio(service.id)
         let health = isHibernated
             ? ServiceHealth.live
             : appState.webViewPool.health(for: service.id)
@@ -212,6 +215,7 @@ struct MenuBarView: View {
             cameraActive: media?.cameraActive ?? false,
             micActive: media?.micActive ?? false,
             micMuted: media?.micMuted ?? false,
+            isPlayingAudio: isPlayingAudio,
             health: health
         )
 
@@ -227,6 +231,13 @@ struct MenuBarView: View {
                     .foregroundStyle(PaguroColor.Text.primary)
 
                 Spacer(minLength: 8)
+
+                if isPlayingAudio {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tint)
+                        .accessibilityHidden(true)
+                }
 
                 if isMuted {
                     Image(systemName: "bell.slash.fill")

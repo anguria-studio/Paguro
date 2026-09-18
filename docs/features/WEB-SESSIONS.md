@@ -103,6 +103,7 @@ It must first check these conditions:
 - no active call;
 - no active microphone, including a muted one that the page still holds;
 - no active camera;
+- no background audio exemption;
 - policy permits hibernation.
 
 `HibernationGate` in `PaguroCore` holds the deterministic part of that
@@ -122,11 +123,17 @@ stop at a protected service. It takes the next candidate instead, so the pool
 still returns to its limit. A call blocks the immediate policy as well, because
 the grace task ends in the same shared decision.
 
+A service that keeps playing audio holds the same kind of protection. Music and
+a voice message therefore survive the capacity sweep and the idle sweep. The
+audio reason is the last one in the list, so a call on the same service is still
+the reason the log line reports.
+
 The camera and microphone state comes from public WebKit properties, which no
-test process can drive. The pool has one internal seam for the capture state
-and one for the call probe. A test sets the facts that a real device and a real
-page would report. Production behavior does not change, because the pool runs
-its own probe when no test replaces it.
+test process can drive. The pool has one internal seam for each answer it cannot
+compute. These are the capture state, the call probe, the playback state, the
+audibility probe, and the clock of the audio grace period. A test sets the facts that a real device
+and a real page would report. Production behavior does not change, because the pool
+runs its own probe when no test replaces it.
 
 A download does not block hibernation. Its download handler stays alive until
 the transfer ends, and `Command-Q` cancels it. The header download list is
@@ -155,6 +162,105 @@ so capture cancels the background reason. An explicit mute still wins, because
 the user asked for silence. A call that starts or ends on a background service
 changes this answer at once. The exception needs a local device, so a call that
 only receives audio and video still follows the background rule.
+
+### Background audio exemption
+
+A service that plays audible media at the moment it leaves the screen keeps
+playing. Music and a voice message that plays through a media element therefore
+survive a switch to another service.
+
+Two conditions must hold, at the switch and on each poll:
+
+1. public `requestMediaPlaybackState` reports playing;
+2. the audibility probe finds at least one audible media element.
+
+The public state alone is not enough. It reports playing for a muted video as
+well, and WhatsApp Web and Telegram Web keep muted looping videos for stickers,
+avatars, and animated images. Those two services therefore held the mark, the
+sound, and the protection from both hibernation sweeps on every switch, with
+nothing audible.
+
+The probe is a bounded, read-only JavaScript call that the pool starts, like the
+call probe. It is not a page-to-native message, and it adds nothing to the
+bridge. It returns two counts: how many media elements the page holds, and how
+many of them are audible. An element counts as audible when it plays, has data
+to play, and is not muted. Its volume must be above zero, and it must carry
+sound. An `<audio>` element carries sound by definition. A `<video>` answers
+through what WebKit exposes to the page: the decoded audio bytes first, then the
+audio track list. An unmuted video that plays counts as audible when the page
+reports neither of them.
+
+A page can play a voice message or an alert sound through `new Audio()`, which
+never enters the document, so `document.querySelectorAll('audio,video')` alone
+would miss it. A bundled script wraps `HTMLMediaElement.prototype.play` at
+document start, in every frame, and records each element that the page plays.
+Listeners for `pause`, `ended`, and `emptied` remove the element again, so a
+finished element can be collected. The script calls the original `play` and
+returns its result unchanged. The probe reads the registry and the document
+together, and it reads same-origin frames as well.
+
+Each of these answers counts as not audible:
+
+- a failed probe;
+- a missing registry;
+- a result of another shape;
+- a probe that does not answer inside its bound.
+
+A page that cannot answer therefore earns no exemption.
+
+The pool asks the page at the switch, before suspension applies. Suspension
+applied in that short window and lifted again would cut the sound. The pool
+therefore treats the open question as playback and settles it one step later.
+
+One log line at debug level reports each switch-time decision: the public state,
+the audibility answer, and both counts. It holds no address, no title, and no
+media source.
+
+Playback that starts after the switch earns nothing. A background page must not
+be able to keep itself awake by autoplay, so only the answer at the switch can
+create the exemption.
+
+`BackgroundAudioExemptions` in `PaguroCore` holds the life cycle: it grants at
+the switch, refreshes on each poll, and expires after the grace period. It reads
+one answer, so the pool combines the public state and the probe before it asks.
+The
+grace period is 90 seconds. It has to cover the gap between two tracks and a
+short pause. The user can pause and resume with the keyboard media keys without
+bringing Paguro forward. The pool polls each exempt service every 5
+seconds. It polls no other service, so an ordinary background service costs
+nothing.
+
+The exemption ends for one of these reasons:
+
+- the service returns to the screen;
+- the user uses Pause Audio;
+- mute applies;
+- Paguro removes the service;
+- the page has not reported audible playback for the grace period.
+
+The normal background suspension applies again at that moment. `Command-Q` cancels the poll with the
+rest of the pool work.
+
+Known limits, with public APIs only:
+
+- Sound that a page produces without a media element that Paguro can see does
+  not keep the service playing after a switch. A WhatsApp Web voice message is
+  the known case. The page decodes the sound itself and plays it where no public
+  read reaches it. The probe therefore finds no element, not even a detached one.
+  A running Web Audio context is no proof of sound either, because many web apps
+  keep one context running in silence. Counting it would return Paguro to the
+  reported fault.
+- Media inside a cross-origin frame is not seen. That frame denies every read
+  from the page, so neither its registry nor its elements can be reached.
+- An unmuted element that plays pure silence counts as audible. No public API
+  reports the current loudness of an element.
+
+Mute wins over the exemption. Global, workspace, scheduled, and service mute
+each silence the service and end the exemption. Clearing mute does not restore
+it, which matches the rule that clearing mute does not wake a background view.
+
+`docs/features/NATIVE_SHELL.md` holds the speaker mark and the Pause Audio
+action.
 New and rebuilt views read the current mute state, including quiet hours
 before deferred notification startup completes.
 
@@ -166,6 +272,12 @@ disconnection overloads, and it does not change offline rendering. Weak gain
 references avoid retaining closed or unused contexts. Live updates propagate
 from parent to child frames. New documents receive the current state at
 document start. This is a generic compatibility guard, not a service recipe.
+
+Paguro installs the guard with the web view configuration, so every document of
+a service holds it from its first line. A later mute change writes the new value
+two ways. It replaces that one copy, for the documents that load next. It also
+tells the live document directly. It never adds a second copy, and it cannot
+give the guard to a document that loaded without it.
 
 Microphone capture remains under the separate capture controls.
 

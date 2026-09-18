@@ -149,7 +149,9 @@ which is 15 at this time. Above that number it releases the least recently used
 services, even when idle hibernation is off.
 It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
-microphone is in use. `HibernationGate` in `PaguroCore` holds that rule, and the
+microphone is in use.
+It must not hibernate a service that keeps playing audio either.
+`HibernationGate` in `PaguroCore` holds that rule, and the
 idle sweep, the capacity sweep, and the immediate policy all read it, so one
 guard covers every route. A download continues after hibernation, because the
 download handler keeps itself alive until the transfer ends.
@@ -199,9 +201,13 @@ macOS notification.
 scheduled Do Not Disturb, sleep and network suspension, and safe click routing.
 It also supplies effective service mute to `WebViewPool`. The pool uses the
 Core `MediaPlaybackPolicy` to combine mute with background suspension and
-applies the result through public WebKit media playback controls.
+applies the result through public WebKit media playback controls. A call and a
+service that plays audio each cancel the background reason; mute wins over both.
+`BackgroundAudioExemptions` in `PaguroCore` holds the life cycle of the audio
+exemption, and the pool owns the poll timer and the WebKit playback calls.
 The bundled `WebAudioMuteScript` also silences Web Audio contexts created
-after suspension, including those in child frames.
+after suspension, including those in child frames. The web view configuration
+installs that script, so the first document of a service already holds it.
 The backlog tracks the split of that handler into detection and presentation
 parts, and a shared event type in `PaguroCore` for the island.
 

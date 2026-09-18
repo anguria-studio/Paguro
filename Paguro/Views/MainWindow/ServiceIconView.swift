@@ -113,6 +113,7 @@ enum ServiceAccessibility {
         cameraActive: Bool = false,
         micActive: Bool = false,
         micMuted: Bool = false,
+        isPlayingAudio: Bool = false,
         health: ServiceHealth = .live
     ) -> String {
         var parts = [name]
@@ -131,6 +132,9 @@ enum ServiceAccessibility {
         } else if micMuted {
             parts.append("microphone muted")
         }
+        // The speaker mark says that this service keeps the sound after a
+        // switch. A screen reader cannot see the mark, so the state is said.
+        if isPlayingAudio { parts.append("playing audio") }
         return parts.joined(separator: ", ")
     }
 }
@@ -196,6 +200,50 @@ struct MutedNotificationGlyph: View {
                 y: isCompact ? 0.5 : 0
             )
             .accessibilityHidden(true)
+    }
+}
+
+/// The mark on a service that keeps playing audio in the background.
+///
+/// It takes the place of the barred bell on a compact cell, because mute
+/// silences the service and therefore ends the exemption: the two marks can
+/// never apply at the same time. The expanded row uses the same semantic
+/// accessory form as the other row marks, so no row changes height.
+struct BackgroundAudioGlyph: View {
+    var isCompact = true
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        Image(systemName: "speaker.wave.2.fill")
+            .font(
+                isCompact
+                    ? .system(size: 7, weight: .bold)
+                    : .paguroSidebarAccessory
+            )
+            .foregroundStyle(tint)
+            .frame(
+                width: isCompact ? 14 : nil,
+                height: isCompact ? 14 : nil
+            )
+            .shadow(
+                color: isCompact ? .black.opacity(0.7) : .clear,
+                radius: isCompact ? 1 : 0,
+                y: isCompact ? 0.5 : 0
+            )
+            .accessibilityHidden(true)
+    }
+
+    /// The compact mark stands over service artwork, so it stays white with a
+    /// contrast shadow like the barred bell. The expanded mark uses the accent
+    /// color, and Increase Contrast or Reduce Transparency makes it the primary
+    /// text color instead, which is the stronger value on the rail surface.
+    private var tint: AnyShapeStyle {
+        if isCompact { return AnyShapeStyle(.white) }
+        if contrast == .increased || reduceTransparency {
+            return AnyShapeStyle(PaguroColor.Text.primary)
+        }
+        return AnyShapeStyle(.tint)
     }
 }
 

@@ -2,10 +2,23 @@ import WebKit
 
 /// WebKit suspension does not silence an AudioContext created after suspension.
 /// An output gain for each context covers that path without identifying a sound.
+///
+/// `UserScriptManager` installs the guard with the web view configuration, so
+/// every document holds it from its first line. `apply(muted:to:)` then writes a
+/// new muted value: it replaces that one copy for the next document, and it
+/// tells the live document directly.
 @MainActor
 enum WebAudioMuteScript {
-    private static let marker = "// Paguro Web Audio mute\n"
+    /// The first line of the guard source. It identifies the one copy of the
+    /// guard in a content controller, so a new muted value replaces that copy
+    /// instead of adding a second one.
+    nonisolated static let marker = "// Paguro Web Audio mute\n"
 
+    /// Writes one muted value to a live web view: it replaces the single guard
+    /// copy in the content controller, for the documents that load next, and it
+    /// tells the current document at once. It does not install the guard in a
+    /// document that loaded without it, because the connections of that document
+    /// already exist. The configuration-time install covers that case.
     static func apply(muted: Bool, to webView: WKWebView) {
         let controller = webView.configuration.userContentController
         // Copy the bridged collection before changing WebKit's user scripts.

@@ -58,6 +58,16 @@ keyboard focus, context menu, tooltip, and VoiceOver label remain available in
 both states.
 Manual global mute adds a barred bell to every visible service in both states.
 It does not hide unread badges.
+A service that keeps playing audio after a switch shows a speaker mark in both
+states. A muted service never shows it, because mute ends that state.
+The mark therefore takes the place of the barred bell on a collapsed icon and on
+an icon-only tab. The unread badge keeps the trailing corner.
+An expanded row draws the mark beside the call mark, before the hibernation,
+mute, and unread marks.
+The mark changes no row height and no icon position. It takes no pointer event,
+so the rail keeps one fixed mouse surface and its magnification.
+Increase Contrast and Reduce Transparency make the expanded mark the primary
+text color.
 The collapsed barred bell has no background tile. It uses a small contrast
 shadow over the service icon.
 An expanded service row uses a neutral hover fill. The fill remains quieter
@@ -241,6 +251,9 @@ The File menu can add a workspace.
 A secondary click on the sidebar background can add a service or workspace.
 Service rows keep their own context menus.
 The service context menu opens the live page in the user's default browser.
+While a service keeps playing audio, the same menu offers Pause Audio. It stops
+that audio and ends the exemption. A click on the service in the rail is the
+route back to it.
 The menu names this action Open in Browser, because Paguro asks the system for
 the default browser and does not choose Safari.
 
@@ -615,8 +628,8 @@ The asset is a template image, so macOS tints the icon for the current
 menu-bar appearance.
 The window shows the visible unread total and a global notification mute
 control. Global mute does not hide the unread total. Workspace sections show
-their services with the same icons, unread badges, mute marks, and selected
-state as the main window.
+their services with the same icons, unread badges, mute marks, speaker marks,
+and selected state as the main window.
 
 Selecting a service opens the main window at that service. A bounded scrolling
 area keeps a large service list inside the available screen. The list reports
@@ -647,6 +660,9 @@ previous Paguro window. Pointer exit does not close a keyboard-opened island.
 Each icon-only service has a tooltip and a complete VoiceOver label.
 The label includes unread, mute, hibernation, media, and health states when they
 apply.
+The label of a service that keeps playing audio says "playing audio", and that
+service carries a named Pause Audio action. The action appears only while the
+state applies, because a named action that does nothing is worse than none.
 
 The first focusable service does not show a focus ring only because the window
 opened. Tab or arrow-key navigation enables the ring when focus differs from
