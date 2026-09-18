@@ -519,6 +519,13 @@ speaker output through a gain that is zero while muted. These new contexts
 can advance silently. The script also handles nested frames and leaves offline
 audio rendering unchanged.
 
+At that same point the script measures the level that the page sends to the
+speakers. One analyser for each context taps the signal before the mute gain. The
+measurement changes nothing that the user hears. It answers whether the page
+produces sound. The background audio exemption needs that answer for a service
+that plays without a media element. `docs/features/WEB-SESSIONS.md` holds that
+rule. Mute still ends the exemption, so a muted service stays silent.
+
 Clearing mute permits playback again unless the view is still suspended in the
 background. The website and WebKit control whether paused media resumes.
 This control does not change microphone capture or request call termination.

@@ -172,7 +172,7 @@ service.
 Two conditions must hold, at the switch and on each poll:
 
 1. public `requestMediaPlaybackState` reports playing;
-2. the audibility probe finds at least one audible media element.
+2. the audibility probe reports sound, from one of its two sources.
 
 The public state alone is not enough. It reports playing for a muted video as
 well, and WhatsApp Web and Telegram Web keep muted looping videos for stickers,
@@ -182,13 +182,19 @@ nothing audible.
 
 The probe is a bounded, read-only JavaScript call that the pool starts, like the
 call probe. It is not a page-to-native message, and it adds nothing to the
-bridge. It returns two counts: how many media elements the page holds, and how
-many of them are audible. An element counts as audible when it plays, has data
-to play, and is not muted. Its volume must be above zero, and it must carry
-sound. An `<audio>` element carries sound by definition. A `<video>` answers
-through what WebKit exposes to the page: the decoded audio bytes first, then the
-audio track list. An unmuted video that plays counts as audible when the page
-reports neither of them.
+bridge. It returns plain data. The page reports how many media elements it holds
+and how many of them are audible. It also reports how many Web Audio contexts
+reach the speakers, and whether their output carried sound recently. The service
+counts as audible when one media element is audible. It counts as audible as well
+when the Web Audio output carried sound. Either source alone is enough.
+
+#### The first source: an audible media element
+
+An element counts as audible when it plays, has data to play, and is not muted.
+Its volume must be above zero, and it must carry sound. An `<audio>` element
+carries sound by definition. A `<video>` answers through what WebKit exposes to
+the page: the decoded audio bytes first, then the audio track list. An unmuted
+video that plays counts as audible when the page reports neither of them.
 
 A page can play a voice message or an alert sound through `new Audio()`, which
 never enters the document, so `document.querySelectorAll('audio,video')` alone
@@ -198,6 +204,35 @@ Listeners for `pause`, `ended`, and `emptied` remove the element again, so a
 finished element can be collected. The script calls the original `play` and
 returns its result unchanged. The probe reads the registry and the document
 together, and it reads same-origin frames as well.
+
+#### The second source: the Web Audio output level
+
+A page can also play sound with no media element at all. WhatsApp Web decodes a
+voice message itself. It sends the samples to the speakers through the Web Audio
+API. No element exists to read, not even a detached one. An idle WhatsApp Web and
+an idle Telegram Web look the same at the element level. Both keep a Web Audio
+context running while they play nothing. Only the output level separates them.
+
+`WebAudioMuteScript` already interposes on every connection to a context
+destination, so it measures the level at that same point. Each context gets one
+`AnalyserNode` as a side branch, before the mute gain. The main path to the
+speakers stays as the page built it. The measurement therefore answers one
+question: does the page produce sound? It answers the same way while mute
+applies. Offline rendering gets no tap. A node that the page disconnects from
+the destination leaves the branch as well.
+
+A page-side sampler runs every 250 milliseconds. It reads one small buffer for
+each running context and computes the level. It records the time of the last
+level above a threshold of about -60 dBFS. It allocates nothing for each tick, it
+skips a suspended context, and it stops after the last context closes. The probe
+reports the output as audible when the last signal is at most 2 seconds old. The
+window covers two things: the gap between two words of a voice message, and timer
+throttling. A background page throttles its timers to about one tick each second.
+The window cannot hold an exemption open by itself: the pool polls every 5
+seconds, and the grace period is 90 seconds.
+
+A running context alone still grants nothing. Counting one would return Paguro to
+the reported fault, because both services keep a silent context while idle.
 
 Each of these answers counts as not audible:
 
@@ -212,9 +247,10 @@ The pool asks the page at the switch, before suspension applies. Suspension
 applied in that short window and lifted again would cut the sound. The pool
 therefore treats the open question as playback and settles it one step later.
 
-One log line at debug level reports each switch-time decision: the public state,
-the audibility answer, and both counts. It holds no address, no title, and no
-media source.
+One log line at debug level reports each switch-time decision. It names the
+public state, the audibility answer, and the element counts. It also names the
+number of Web Audio contexts and whether the output carried a signal. It holds no
+address, no title, and no media source.
 
 Playback that starts after the switch earns nothing. A background page must not
 be able to keep itself awake by autoplay, so only the answer at the switch can
@@ -243,14 +279,19 @@ rest of the pool work.
 
 Known limits, with public APIs only:
 
-- Sound that a page produces through Web Audio alone, with no media element,
-  does not keep the service playing after a switch. A running audio context is
-  not proof of sound, because many web apps keep one context running in
-  silence. Counting it would return Paguro to the reported fault.
 - Media inside a cross-origin frame is not seen. That frame denies every read
-  from the page, so neither its registry nor its elements can be reached.
+  from the page, so neither its registry, nor its elements, nor its Web Audio
+  measurement can be reached.
 - An unmuted element that plays pure silence counts as audible. No public API
-  reports the current loudness of an element.
+  reports the current loudness of an element, so only the Web Audio path carries
+  a real level.
+- Sound that leaves a Web Audio context on a route that the guard does not see
+  earns nothing. The guard covers every connection to a context destination,
+  which is the only public route to the speakers. A page that sends its sound
+  into a `MediaStreamAudioDestinationNode` and on to a peer connection is in a
+  call, and the capture rule protects it instead.
+- A context that the page creates but never connects to its destination is not
+  measured and not counted. It also produces no sound.
 
 Mute wins over the exemption. Global, workspace, scheduled, and service mute
 each silence the service and end the exemption. Clearing mute does not restore
@@ -269,6 +310,13 @@ disconnection overloads, and it does not change offline rendering. Weak gain
 references avoid retaining closed or unused contexts. Live updates propagate
 from parent to child frames. New documents receive the current state at
 document start. This is a generic compatibility guard, not a service recipe.
+
+The same guard measures the output level for the background audio exemption. One
+`AnalyserNode` for each context observes the page signal before the output gain.
+It is a side branch with no output of its own. The main path stays as the page
+built it, so the tap alters nothing that the user hears. WebKit collects a node
+with no route to the destination as soon as no reference holds it. The guard
+therefore holds each analyser until its context closes, and drops it then.
 
 Microphone capture remains under the separate capture controls.
 

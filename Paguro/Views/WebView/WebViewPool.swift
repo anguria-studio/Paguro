@@ -86,11 +86,18 @@ final class WebViewPool {
     @ObservationIgnored
     var audibilityProbe: (@MainActor (UUID) async -> Bool)?
 
-    /// How many media elements the last audibility probe saw, and how many of
-    /// them were audible. It serves the one log line that explains a decision.
+    /// What the last audibility probe saw. It serves the one log line that
+    /// explains a decision.
     struct AudibleMediaCounts: Equatable, Sendable {
         var elements = 0
         var audible = 0
+        /// How many Web Audio contexts run and reach the speakers. A context
+        /// that never connects to its destination is not measured and not
+        /// counted.
+        var contexts = 0
+        /// Whether the measured Web Audio output carried sound recently. This is
+        /// the only evidence for a page that plays without a media element.
+        var signal = false
     }
     private var lastAudibleMediaCounts: [UUID: AudibleMediaCounts] = [:]
 
@@ -241,7 +248,8 @@ final class WebViewPool {
     /// Telegram Web keep muted looping videos for stickers and avatars, so the
     /// state alone marked both as playing on every switch. The audibility probe
     /// is the second condition. It asks the page whether any media element is
-    /// audible now. Both must hold, at the switch and on each poll.
+    /// audible now, or whether the Web Audio output carried sound recently.
+    /// Both must hold, at the switch and on each poll.
     ///
     /// The probe runs only when the state already reports playing, so an
     /// ordinary background service costs one WebKit query, as before.
@@ -262,7 +270,8 @@ final class WebViewPool {
             """
             Background audio check for \(id): state \(Self.name(of: state)), \
             audible \(isAudible), elements \(counts?.elements ?? -1), \
-            audible elements \(counts?.audible ?? -1)
+            audible elements \(counts?.audible ?? -1), \
+            audio contexts \(counts?.contexts ?? -1), signal \(counts?.signal ?? false)
             """
         )
     }
@@ -314,8 +323,17 @@ final class WebViewPool {
             lastAudibleMediaCounts.removeValue(forKey: id)
             return false
         }
-        lastAudibleMediaCounts[id] = AudibleMediaCounts(elements: elements, audible: audible)
-        return audible > 0
+        let counts = AudibleMediaCounts(
+            elements: elements,
+            audible: audible,
+            contexts: report["contexts"] as? Int ?? 0,
+            signal: report["signal"] as? Bool ?? false
+        )
+        lastAudibleMediaCounts[id] = counts
+        // Two sources, either one enough. An audible element is the common case.
+        // A measured Web Audio signal is the only evidence for a page that
+        // decodes the sound itself, as WhatsApp Web does for a voice message.
+        return counts.audible > 0 || counts.signal
     }
 
     /// Reads one playback state with a bound, for the same reason that
