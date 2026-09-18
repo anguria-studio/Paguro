@@ -97,7 +97,7 @@ struct EmojiPickerView: View {
                         let results = EmojiData.search(searchText)
                         if results.isEmpty {
                             Text("No emoji found")
-                                .font(.caption)
+                                .font(.paguroCaption)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 20)
@@ -133,7 +133,7 @@ struct EmojiPickerView: View {
     private func emojiSection(id: String, title: String, emojis: [EmojiItem]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption)
+                .font(.paguroCaption)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .id(id)
@@ -175,7 +175,7 @@ struct EmojiPickerView: View {
                     Image(systemName: "minus.circle")
                         .font(.system(size: 10))
                     Text("No Emoji")
-                        .font(.system(size: 11))
+                        .font(.paguroCaption)
                 }
                 .foregroundStyle(.secondary)
             }
@@ -191,7 +191,7 @@ struct EmojiPickerView: View {
                     Image(systemName: "character.book.closed")
                         .font(.system(size: 10))
                     Text("More Emoji…")
-                        .font(.system(size: 11))
+                        .font(.paguroCaption)
                 }
                 .foregroundStyle(.secondary)
             }

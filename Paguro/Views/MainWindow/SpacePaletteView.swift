@@ -228,7 +228,7 @@ struct SpacePaletteView: View {
                     .font(.system(size: 11, weight: .medium))
                     .frame(width: 20)
                 Text("New Workspace")
-                    .font(.subheadline)
+                    .font(.paguroBody)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(.secondary)
@@ -357,14 +357,14 @@ private struct SpacePaletteRow: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(space.name)
-                        .font(.subheadline)
+                        .font(.paguroBody)
                         .fontWeight(isCurrent ? .semibold : .regular)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundStyle(.primary)
 
                     Text(SpacePalette.subtitle(serviceCount: serviceCount))
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .foregroundStyle(.secondary)
                 }
 
@@ -383,7 +383,7 @@ private struct SpacePaletteRow: View {
 
                 if let shortcutDigit {
                     Text("⌘\(shortcutDigit)")
-                        .font(.caption.monospacedDigit())
+                        .font(.paguroCaption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                         .accessibilityHidden(true)
                 }

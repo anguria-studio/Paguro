@@ -28,12 +28,6 @@ available on macOS 26; macOS 15 uses the fallback surface materials.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
-Explanatory text under a Settings control uses the settings caption style at 12
-points. Never use the 10 point system caption font for it, because that size is
-hard to read in a Settings row. The style is one shared modifier, so the size,
-the color, and the wrap rule stay the same in every Settings row. The color
-stays below the control label, and Increase Contrast raises it.
-
 A command row at the bottom of a popover list uses the menu row style. The row
 takes the full width of the list and lines up with the rows above it. The
 pointer, keyboard focus, and a press give it the accent highlight with white
@@ -45,6 +39,40 @@ the icons off the rail centerline.
 
 Keep service website styling separate from the native application shell.
 Do not assume that a website follows the app's appearance preference.
+
+## Type sizes
+
+Text that a person reads is never smaller than 12 points. The macOS system
+styles `caption`, `caption2`, and `footnote` are 10 points and `subheadline` is
+11, so none of them carry text in Paguro. Secondary text below the body size
+shows that it is secondary with a quieter color or a heavier weight, never with
+a smaller size.
+
+One token holds this size, so the smallest text in the app is one number to
+change. A site that needs a weight, monospaced digits, or a monospaced design
+builds on the same token.
+
+Explanatory text under a Settings control uses the settings caption style, which
+is that same size. The style is one shared modifier, so the size, the color, and
+the wrap rule stay the same in every Settings row. The color stays below the
+control label, and Increase Contrast raises it.
+
+A symbol is a picture and not text, so an `Image` keeps its own glyph size. Row
+accessory marks draw at 10.5 points. The barred bell and the hibernation moon are
+two of them. A larger mark would change the rail row height, the icon positions,
+and the fixed rail pointer surface. A letter monogram or an emoji inside a
+service tile follows the tile size. It stands for the picture that the tile has
+no artwork for.
+
+The island toolbar is the one place where a fixed geometry can be smaller than
+the text. Clear All and the count badge take the control height from the island
+layout rules. That height is 26, 22, 18, or 14 points, from the camera housing.
+The readable size fits the first three. At 14 points a minimum scale factor
+shrinks the label instead, because the bottom edge of the housing always wins.
+
+A source check holds this rule. It reports any font under 12 points that is not
+on an `Image`. A site in a fixed geometry answers it with a marker comment that
+names the reason.
 
 ## App and menu-bar icons
 

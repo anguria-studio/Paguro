@@ -77,7 +77,7 @@ struct AddServiceSheet: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(AppCapabilities.passkeyUnavailableNotice)
-                .font(.caption)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -142,14 +142,14 @@ struct AddServiceSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Name")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                         TextField("Service name", text: $customLabel, prompt: Text("My Service"))
                             .textFieldStyle(.roundedBorder)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Address")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                         TextField("Service address", text: $customURL, prompt: Text("https://example.com"))
                             .textFieldStyle(.roundedBorder)
@@ -163,13 +163,13 @@ struct AddServiceSheet: View {
 
             if let error = urlError {
                 Text(error)
-                    .font(.caption)
+                    .font(.paguroCaption)
                     .foregroundStyle(.red)
             }
 
             if let error = iconDraft.errorMessage {
                 Text(error)
-                    .font(.caption)
+                    .font(.paguroCaption)
                     .foregroundStyle(.red)
             }
 

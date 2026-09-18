@@ -59,7 +59,7 @@ struct EditServiceSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Name")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                         TextField("Service name", text: $label)
                             .textFieldStyle(.roundedBorder)
@@ -68,7 +68,7 @@ struct EditServiceSheet: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Address")
-                            .font(.subheadline)
+                            .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                         TextField("https://example.com", text: $url)
                             .textFieldStyle(.roundedBorder)
@@ -103,7 +103,7 @@ struct EditServiceSheet: View {
 
                         if service.isNotificationCritical {
                             Text("Chat apps stay loaded so their messages reach you the instant they arrive. This setting won't hibernate this one.")
-                                .font(.caption)
+                                .font(.paguroCaption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -127,7 +127,7 @@ struct EditServiceSheet: View {
 
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(.caption)
+                            .font(.paguroCaption)
                             .foregroundStyle(.red)
                             .accessibilityLabel("Error: \(errorMessage)")
                     }
@@ -221,7 +221,7 @@ struct EditServiceSheet: View {
     private var notificationsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Notifications")
-                .font(.subheadline)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
 
             Toggle("Allow notifications and media", isOn: $notify)
@@ -243,7 +243,7 @@ struct EditServiceSheet: View {
     private var cameraMicrophoneSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Camera & microphone")
-                .font(.subheadline)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
 
             Picker("Camera", selection: $cameraPolicy) {
@@ -263,7 +263,7 @@ struct EditServiceSheet: View {
             .help("Ask the first time this service wants your microphone and remember the choice, always allow, or always deny.")
 
             Text("Screen sharing is handled by macOS and isn't controlled here.")
-                .font(.caption)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -272,11 +272,11 @@ struct EditServiceSheet: View {
     private var customCSSSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Custom CSS")
-                .font(.subheadline)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
 
             TextEditor(text: $customCSS)
-                .font(.system(.caption, design: .monospaced))
+                .font(.paguroCaption.monospaced())
                 .frame(height: 90)
                 .overlay(
                     RoundedRectangle(cornerRadius: PaguroRadius.control)
@@ -294,7 +294,7 @@ struct EditServiceSheet: View {
             }
 
             Text("Injected into the page. Leave blank to use the built-in default.")
-                .font(.caption)
+                .font(.paguroCaption)
                 .foregroundStyle(.secondary)
         }
     }

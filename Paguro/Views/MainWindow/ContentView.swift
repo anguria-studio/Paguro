@@ -25,7 +25,7 @@ struct ContentView: View {
             if let banner = recovery.banner {
                 NoticeStrip(severity: .error) {
                     Text(banner.message)
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                     Spacer()
@@ -33,13 +33,13 @@ struct ContentView: View {
                         Button("Reveal in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([url])
                         }
-                        .font(.caption)
+                        .font(.paguroCaption)
                     }
                     if recovery.offer != nil {
                         Button("Review backups…") {
                             recovery.isShowingPicker = true
                         }
-                        .font(.caption)
+                        .font(.paguroCaption)
                     }
                     if banner.isDismissible {
                         Button {
@@ -48,7 +48,7 @@ struct ContentView: View {
                             Image(systemName: "xmark")
                         }
                         .buttonStyle(.borderless)
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .help("Dismiss")
                         .accessibilityLabel("Dismiss")
                     }
@@ -60,15 +60,15 @@ struct ContentView: View {
             if recovery.banner == nil, recovery.offer != nil {
                 NoticeStrip(severity: .info) {
                     Text("Paguro has a backup with more of your workspaces and services than it can see now.")
-                        .font(.caption)
+                        .font(.paguroCaption)
                         .lineLimit(2)
                     Spacer()
                     Button("Review backups…") {
                         recovery.isShowingPicker = true
                     }
-                    .font(.caption)
+                    .font(.paguroCaption)
                     Button("Not now") { recovery.declineOffer() }
-                        .font(.caption)
+                        .font(.paguroCaption)
                 }
                 // No accessibility-label override here, unlike the warning
                 // banner above: an explicit label replaces what `.combine`
@@ -82,7 +82,7 @@ struct ContentView: View {
             if !appState.networkMonitor.isOnline {
                 NoticeStrip(severity: .warning) {
                     Text("You're offline. Services won't load new content until your connection returns.")
-                        .font(.caption)
+                        .font(.paguroCaption)
                     Spacer()
                 }
                 .accessibilityElement(children: .combine)
@@ -92,7 +92,7 @@ struct ContentView: View {
             if let feedback = appState.mediaPermissions.microphoneActionFeedback {
                 NoticeStrip(severity: .info, systemImage: "mic.slash.fill") {
                     Text(feedback)
-                        .font(.caption)
+                        .font(.paguroCaption)
                     Spacer()
                 }
                 .accessibilityElement(children: .combine)

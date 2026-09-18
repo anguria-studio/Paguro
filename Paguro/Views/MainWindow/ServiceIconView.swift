@@ -183,7 +183,7 @@ struct MutedNotificationGlyph: View {
             .font(
                 isCompact
                     ? .system(size: 7, weight: .bold)
-                    : .paguroSidebarAccessory
+                    : .paguroRowAccessoryGlyph
             )
             .foregroundStyle(
                 isCompact
@@ -219,7 +219,7 @@ struct BackgroundAudioGlyph: View {
             .font(
                 isCompact
                     ? .system(size: 7, weight: .bold)
-                    : .paguroSidebarAccessory
+                    : .paguroRowAccessoryGlyph
             )
             .foregroundStyle(tint)
             .frame(
@@ -252,7 +252,7 @@ struct BadgeCountView: View {
 
     var body: some View {
         Text(count > 99 ? "99+" : "\(count)")
-            .font(.system(size: 9, weight: .bold))
+            .font(.paguroCaption.weight(.bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 4)
             .frame(minWidth: 16, minHeight: 16)

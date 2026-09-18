@@ -7,19 +7,35 @@ import SwiftUI
 /// Renewals and MacCleanerNative use the same compact type ramp. Paguro uses the
 /// parts of that ramp that apply to a service workspace.
 enum PaguroTypeSize {
+    /// The smallest size that any text a person reads is allowed to take.
+    ///
+    /// The system `caption`, `caption2`, and `footnote` styles are 10 points on
+    /// macOS, and `subheadline` is 11. All of them are hard to read in a window
+    /// that a person works in for hours. Secondary text therefore keeps this
+    /// size and shows that it is secondary with a quieter color or a heavier
+    /// weight, not with a smaller size.
+    ///
+    /// This is the one number to change when the smallest text needs a new
+    /// size. The other small sizes below build on it.
+    static let caption: CGFloat = 12
     static let sidebarLabel: CGFloat = 13
-    static let sidebarSection: CGFloat = 11
-    static let sidebarAccessory: CGFloat = 10.5
+    static let sidebarSection: CGFloat = caption
+    static let sidebarAccessory: CGFloat = caption
     static let toolbarTitle: CGFloat = 14
     static let toolbarControl: CGFloat = 12
     static let body: CGFloat = 12.5
     /// The explanatory text under a Settings control.
     ///
-    /// The system caption font is 10 points on macOS, which is too small to
-    /// read comfortably in a Form row. This size matches the system callout and
-    /// stays under the 13 point control label beside it, so the explanation
-    /// still reads as secondary text.
-    static let settingsCaption: CGFloat = 12
+    /// It shares the smallest readable size. The style around it stays separate
+    /// because a Settings explanation also owns a color and a wrap rule.
+    static let settingsCaption: CGFloat = caption
+    /// The glyph size of a row accessory mark, such as the barred bell, the
+    /// background-audio speaker, or the hibernation moon.
+    ///
+    /// A symbol is a picture, not text, so the readable-text floor does not
+    /// apply to it. The value also keeps the rail row height, the icon
+    /// positions, and the fixed rail pointer surface unchanged.
+    static let rowAccessoryGlyph: CGFloat = 10.5
 }
 
 extension Font {
@@ -45,6 +61,21 @@ extension Font {
         weight: .medium
     )
     static let paguroBody = Font.system(size: PaguroTypeSize.body)
+    /// The smallest text in the app.
+    ///
+    /// Use it in place of `caption`, `caption2`, `footnote`, and `subheadline`,
+    /// which are all smaller than the readable floor on macOS. Chain
+    /// `weight(_:)`, `monospacedDigit()`, or `monospaced()` on it where a site
+    /// needs one of those, so every small text still reads one size.
+    static let paguroCaption = Font.system(size: PaguroTypeSize.caption)
+    /// The barred bell and the other symbol marks on a rail row.
+    ///
+    /// This sets a glyph size, not a text size. See
+    /// `PaguroTypeSize.rowAccessoryGlyph`.
+    static let paguroRowAccessoryGlyph = Font.system(
+        size: PaguroTypeSize.rowAccessoryGlyph,
+        weight: .medium
+    )
     /// Use `settingsCaption()` instead of this token, so a caption also takes
     /// the shared color and wrap rules.
     static let paguroSettingsCaption = Font.system(size: PaguroTypeSize.settingsCaption)

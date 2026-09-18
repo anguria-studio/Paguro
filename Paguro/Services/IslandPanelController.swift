@@ -1656,7 +1656,7 @@ struct NotificationIslandPanelView: View {
         HStack {
             if let countLabel = unreviewedCountLabel {
                 Text(countLabel)
-                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .font(.paguroCaption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -1675,14 +1675,14 @@ struct NotificationIslandPanelView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(content.serviceLabel)
-                    .font(.caption.weight(.semibold))
+                    .font(.paguroCaption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Text(content.event.title)
                     .font(.headline)
                     .lineLimit(1)
                 if let body = content.event.body {
                     Text(body)
-                        .font(.subheadline)
+                        .font(.paguroCaption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -1782,7 +1782,7 @@ struct NotificationIslandPanelView: View {
                     model.actions.dismissAll?()
                 } label: {
                     Text("Clear All")
-                        .font(.caption.weight(.semibold))
+                        .font(.paguroCaption.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .fixedSize(horizontal: true, vertical: false)
@@ -2021,10 +2021,10 @@ struct NotificationIslandPanelView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(recentContent.serviceLabel)
-                                .font(.caption.weight(.semibold))
+                                .font(.paguroCaption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Text(recentContent.event.receivedAt, style: .time)
-                                .font(.caption2)
+                                .font(.paguroCaption)
                                 .foregroundStyle(.secondary)
                         }
                         Text(recentContent.event.title)
@@ -2179,7 +2179,7 @@ struct NotificationIslandPanelView: View {
         height: CGFloat? = nil
     ) -> some View {
         Text(label)
-            .font(.caption.weight(.semibold).monospacedDigit())
+            .font(.paguroCaption.weight(.semibold).monospacedDigit())
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .foregroundStyle(isCollapsedShape ? Color.white : Color.primary)

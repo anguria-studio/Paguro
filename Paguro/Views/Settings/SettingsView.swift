@@ -111,9 +111,11 @@ struct GeneralSettingsView: View {
                     }
 
                     Text("\(Int((appState.liquidGlassIntensity * 100).rounded()))%")
-                        .font(.caption.monospacedDigit())
+                        .font(.paguroCaption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                        .frame(width: 38, alignment: .trailing)
+                        // The readout holds "100%" at the readable size, so the
+                        // slider beside it keeps the same width at every value.
+                        .frame(width: 44, alignment: .trailing)
                 }
                 .help("Controls how much of the desktop appears through the Paguro shell. This control does not change web pages.")
 
@@ -122,7 +124,6 @@ struct GeneralSettingsView: View {
                     Button("Reset Glass Lab") {
                         appState.resetGlassLab()
                     }
-                    .controlSize(.small)
                 }
 
                 Picker("Layout", selection: Binding(
@@ -411,7 +412,7 @@ struct NotificationSettingsView: View {
                 Text("macOS").frame(width: 52)
                 Text("Badge").frame(width: 52)
             }
-            .font(.caption)
+            .font(.paguroCaption)
             .foregroundStyle(.secondary)
 
             Divider()
@@ -420,7 +421,7 @@ struct NotificationSettingsView: View {
                 if grouped.showsHeaders {
                     GridRow {
                         Text(headerTitle(group))
-                            .font(.caption.weight(.semibold))
+                            .font(.paguroCaption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 4)
