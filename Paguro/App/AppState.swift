@@ -348,8 +348,8 @@ final class AppState {
 
     /// Wires the WebViewPool's external-link handler so that cross-domain
     /// target=_blank navigations route through `handleExternalLink(_:)` —
-    /// which prefers switching to a matching Paguro service over opening
-    /// Safari, but falls back to NSWorkspace when no service matches.
+    /// which prefers switching to a matching Paguro service over opening the
+    /// default browser, but falls back to NSWorkspace when no service matches.
     private func setupExternalLinkRouting() {
         webViewPool.externalLinkHandler = { [weak self] url, sourceServiceID in
             self?.handleExternalLink(url, from: sourceServiceID)
