@@ -40,13 +40,8 @@ enum AppCapabilities {
         if #available(macOS 26, *) { true } else { false }
     }
 
-    /// User-facing explanation shown where the passkey limitation is relevant
-    /// (currently the Add Service sheet).
-    static let passkeyUnavailableNotice =
-        "Passkey sign-in isn’t available yet. Log in with your password and two-factor code instead."
-
-    /// Fuller wording for the passive banner shown the first time a service is
-    /// opened, where there's room to say why passkeys don't work.
+    /// Text of the floating notice card that shows the first time a service
+    /// opens. The Add Service sheet does not repeat it.
     static let passkeyUnavailableBanner =
         "Passkeys aren't available for sign-in here. Apple doesn't let apps like Paguro use them, so sign in with your password or another method."
 }

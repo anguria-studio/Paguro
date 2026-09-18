@@ -328,6 +328,8 @@ the pool released to stay inside its size limit. The passkey notice reports
 that `WKWebView` cannot use a passkey for sign-in. Paguro shows the passkey
 notice one time for each service, and it stores the seen state as the card
 appears.
+The Add Service sheet does not repeat the passkey notice. The card is the one
+place that reports it.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
 `FloatingNoticeLayout` in `PaguroCore` holds the width, the margins, and the
