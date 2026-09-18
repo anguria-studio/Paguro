@@ -32,6 +32,29 @@ public enum NotificationIslandLayout: Sendable {
     /// Space between the island edge and each toolbar control.
     public static let horizontalInset = 14.0
 
+    /// Space between the island top edge and each toolbar control.
+    ///
+    /// The toolbar shares the camera band with the physical camera and with
+    /// the top screen edge. A control on that edge is hard to read and hard
+    /// to hit, so each control starts below it. The toolbar keeps the camera
+    /// band height, so this inset changes no panel height.
+    public static let toolbarTopInset = 6.0
+
+    /// Space between each toolbar control and the camera band bottom edge.
+    ///
+    /// A toolbar control must not pass the bottom edge of the notch, because
+    /// a control below that edge hangs over the screen content. The value is
+    /// smaller than the top inset: the top inset must also clear the rounded
+    /// top screen edge, so the control looks centered in the band with the
+    /// smaller value below it.
+    public static let toolbarBottomInset = 4.0
+
+    /// Largest height of one toolbar control.
+    ///
+    /// The value keeps a comfortable pointer target on a standard 38-point
+    /// camera housing.
+    public static let maximumToolbarControlHeight = 26.0
+
     /// Space between the island edge and each card.
     ///
     /// A card is a little wider than the toolbar controls, so the pile stays
@@ -144,6 +167,37 @@ public enum NotificationIslandLayout: Sendable {
             eventCount: eventCount,
             cameraHousingHeight: cameraHousingHeight
         ) - bottomInset
+    }
+
+    /// Gives the height that the toolbar controls can use.
+    ///
+    /// The band is the camera housing without the two toolbar insets. A
+    /// control of this height starts below the island top edge and ends
+    /// above the camera band bottom edge.
+    ///
+    /// - Parameter cameraHousingHeight: Height of the camera housing toolbar.
+    /// - Returns: The available control height in points.
+    public static func toolbarBandHeight(cameraHousingHeight: Double) -> Double {
+        max(
+            0,
+            max(0, cameraHousingHeight) - toolbarTopInset - toolbarBottomInset
+        )
+    }
+
+    /// Gives the height of one toolbar control.
+    ///
+    /// A high camera housing gives the largest control height. A lower
+    /// housing gives a smaller control, because the band is the limit. The
+    /// bottom edge of the notch always wins: a control that passes that edge
+    /// hangs over the screen content, so the rule keeps no smallest height.
+    ///
+    /// - Parameter cameraHousingHeight: Height of the camera housing toolbar.
+    /// - Returns: The control height in points, never less than 0.
+    public static func toolbarControlHeight(cameraHousingHeight: Double) -> Double {
+        min(
+            maximumToolbarControlHeight,
+            toolbarBandHeight(cameraHousingHeight: cameraHousingHeight)
+        )
     }
 
     /// Gives the empty height above the first card.

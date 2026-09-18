@@ -25,6 +25,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Fixed
 
+- The expanded island keeps its count badge and its Clear All button inside the
+  camera housing. Both controls start below the top screen edge and never reach
+  below the bottom edge of the notch. They stay easy to read and to hit, also at
+  a larger system text size.
 - Prevent a queued quiet-hours check from accessing the store after shutdown.
 - A notification without a destination no longer reloads the service root after
   selecting the service.
