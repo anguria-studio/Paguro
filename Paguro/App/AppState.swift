@@ -287,6 +287,12 @@ final class AppState {
         )
         setupExternalLinkRouting()
         webViewPool.downloadTracker = downloadTracker
+        // The download list is global, so each record captures the name of its
+        // service as the transfer begins. The tracker reads no store, so the
+        // lookup arrives from here.
+        downloadTracker.serviceLabelProvider = { [weak self] serviceID in
+            self?.workspaceStore.service(id: serviceID)?.label
+        }
         mediaPermissions.start(
             isLocked: { [weak self] in self?.isLocked ?? true },
             onWebViewRebuilt: { [weak self] in self?.webViewRebuildToken &+= 1 }
@@ -974,6 +980,33 @@ final class AppState {
 
     func servicesForSpace(_ spaceID: UUID) -> [ServiceInstance] {
         workspaceStore.servicesForSpace(spaceID)
+    }
+
+    /// One service by its identifier, or nil when it is no longer in the
+    /// workspace.
+    ///
+    /// A view that holds only an identifier reads the service through this
+    /// method, so no view reaches into a store. The global download list uses it
+    /// for the icon of a source service.
+    func service(id: UUID) -> ServiceInstance? {
+        fetchService(id: id)
+    }
+
+    /// Shows one service, the way the rail does.
+    ///
+    /// The global download list offers a route from a record to the service that
+    /// started it. That route is one intent here, so the list changes no
+    /// selection of its own and the rail and the list cannot drift apart.
+    ///
+    /// A service can be in more than one workspace. The first one wins, so the
+    /// selection becomes visible in the rail instead of staying hidden in a
+    /// workspace that the window does not show.
+    func selectService(id: UUID) {
+        guard let service = fetchService(id: id) else { return }
+        if let firstSpace = service.spaceLinks.compactMap(\.liveSpace).first?.id {
+            selectedSpaceID = firstSpace
+        }
+        selectedServiceID = service.id
     }
 
     /// Records what a workspace is left on, so returning to it returns to the

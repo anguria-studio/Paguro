@@ -447,6 +447,137 @@ struct DownloadIndicatorStateTests {
         #expect(cue.duration == DownloadIndicatorMotion.flightTotal)
     }
 
+    // MARK: - The cue for one global control
+
+    private static let gmailID = UUID()
+    private static let calendarID = UUID()
+
+    @Test("A start in the service on screen keeps the travel")
+    func aStartInTheServiceOnScreenKeepsTheTravel() {
+        let cue = DownloadStartCue.resolve(
+            eventServiceID: Self.gmailID,
+            selectedServiceID: Self.gmailID,
+            reduceMotion: false,
+            contentIsOnScreen: true
+        )
+
+        #expect(cue == .flight)
+    }
+
+    /// The control is global, so the start has to reach the header. A mark from
+    /// the page on screen would name the wrong source, so the cue happens at the
+    /// control instead.
+    @Test("A start in another service uses the cue at the control")
+    func aStartInAnotherServiceUsesTheCueAtTheControl() {
+        let cue = DownloadStartCue.resolve(
+            eventServiceID: Self.calendarID,
+            selectedServiceID: Self.gmailID,
+            reduceMotion: false,
+            contentIsOnScreen: true
+        )
+
+        #expect(cue == .destinationFade)
+        #expect(cue?.hasTravel == false)
+    }
+
+    @Test("A download without a service keeps the travel")
+    func aDownloadWithoutAServiceKeepsTheTravel() {
+        let cue = DownloadStartCue.resolve(
+            eventServiceID: nil,
+            selectedServiceID: Self.gmailID,
+            reduceMotion: false,
+            contentIsOnScreen: true
+        )
+
+        #expect(cue == .flight)
+    }
+
+    @Test("Reduce Motion drops the travel for every service")
+    func reduceMotionDropsTheTravelForEveryService() {
+        for eventServiceID in [Self.gmailID, Self.calendarID, nil] {
+            let cue = DownloadStartCue.resolve(
+                eventServiceID: eventServiceID,
+                selectedServiceID: Self.gmailID,
+                reduceMotion: true,
+                contentIsOnScreen: true
+            )
+
+            #expect(cue == .destinationFade)
+        }
+    }
+
+    /// The window shows no service page, so a mark has no place to leave from.
+    @Test("A window without web content produces no cue")
+    func aWindowWithoutWebContentProducesNoCue() {
+        for reduceMotion in [true, false] {
+            let cue = DownloadStartCue.resolve(
+                eventServiceID: Self.gmailID,
+                selectedServiceID: Self.gmailID,
+                reduceMotion: reduceMotion,
+                contentIsOnScreen: false
+            )
+
+            #expect(cue == nil)
+        }
+    }
+
+    // MARK: - The source on one row
+
+    @Test("A live service names itself and draws its icon")
+    func aLiveServiceNamesItselfAndDrawsItsIcon() {
+        let source = DownloadSource.resolve(
+            serviceID: Self.gmailID,
+            label: "Gmail",
+            serviceExists: true
+        )
+
+        #expect(source == .service(label: "Gmail"))
+        #expect(source.label == "Gmail")
+        #expect(source.drawsServiceIcon)
+        #expect(source.spokenPhrase == "from Gmail")
+    }
+
+    /// The record keeps the name it captured, so the row stays readable after
+    /// the service leaves the workspace.
+    @Test("A removed service keeps its recorded name and loses its icon")
+    func aRemovedServiceKeepsItsRecordedName() {
+        let source = DownloadSource.resolve(
+            serviceID: Self.gmailID,
+            label: "Gmail",
+            serviceExists: false
+        )
+
+        #expect(source == .removedService(label: "Gmail"))
+        #expect(source.label == "Gmail")
+        #expect(source.drawsServiceIcon == false)
+        #expect(source.spokenPhrase == "from Gmail")
+    }
+
+    @Test("A download without a service shows no source")
+    func aDownloadWithoutAServiceShowsNoSource() {
+        let source = DownloadSource.resolve(
+            serviceID: nil,
+            label: "Gmail",
+            serviceExists: true
+        )
+
+        #expect(source == .unattributed)
+        #expect(source.label == nil)
+        #expect(source.drawsServiceIcon == false)
+        #expect(source.spokenPhrase == nil)
+    }
+
+    @Test("A blank recorded name shows no source", arguments: [nil, "", "   "])
+    func aBlankRecordedNameShowsNoSource(label: String?) {
+        let source = DownloadSource.resolve(
+            serviceID: Self.gmailID,
+            label: label,
+            serviceExists: false
+        )
+
+        #expect(source == .unattributed)
+    }
+
     // MARK: - Concurrent starts
 
     /// A fixed moment. Every planner test measures from it, so no test reads a

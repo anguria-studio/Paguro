@@ -81,7 +81,8 @@ The main services and startup adapters are:
 - `AuthPopupController` for popup windows and sign-in completion.
 - `WebDialogPresenter` for file pickers and page dialogs.
 - `WebDownloadHandler` for download lifetime, destinations, and cancellation.
-- `DownloadTracker` for the download list that the content header shows.
+- `DownloadTracker` for the global download list that the content header
+  shows, with the source service on each record.
 - `DownloadFlightState` for the marks that report a download start and land in
   the header control.
 - `ErrorPage` for escaped local WebKit recovery pages.

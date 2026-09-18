@@ -129,7 +129,8 @@ page would report. Production behavior does not change, because the pool runs
 its own probe when no test replaces it.
 
 A download does not block hibernation. Its download handler stays alive until
-the transfer ends, and `Command-Q` cancels it.
+the transfer ends, and `Command-Q` cancels it. The header download list is
+global, so it keeps reporting that transfer while the service sleeps.
 Paguro does not track user interaction inside a page. The pool never hibernates
 the active service, and it restarts the idle timer when the user selects a
 service.
@@ -227,7 +228,8 @@ hibernation of its service.
 A stopped web content process also cancels its downloads.
 
 `DownloadTracker` keeps the download records for the current app run.
-It holds plain values, so it holds no WebKit object.
+There is one download center for the whole app, so every query in it answers the
+downloads of every service. It holds plain values, so it holds no WebKit object.
 The handler reports the start, the byte counts, the destination, and the result.
 It reads `WKDownload.progress` on a short main-actor tick instead of a key-value
 observer. The observer delivers its values on an unspecified thread, and the
@@ -242,7 +244,7 @@ The tracker keeps the newest 25 records and drops the oldest ended one first.
 The app supplies the byte totals, the record count, the failed count, and the
 running time of its oldest active download.
 The state is therefore a pure function of its inputs. It reads no clock.
-`DownloadTracker.state(for:now:)` is the one place that reads the clock.
+`DownloadTracker.state(now:)` is the one place that reads the clock.
 
 The rules use one delay, `ringDelay`, of 500 milliseconds:
 
@@ -287,7 +289,7 @@ The header view maps each value to a drawing.
 A record leaves the list in three ways:
 
 1. The user dismisses one ended record.
-2. The user clears every ended record of the service.
+2. The user clears every ended record.
 3. The user stops a running download.
 
 A stop withdraws the download, so it removes the record instead of leaving a
@@ -298,11 +300,22 @@ Showing a file in the Finder keeps its record. The complete row of a finished
 download starts that action. Its dismiss control is a separate view beside
 that row action, so one click reaches one control only.
 
-Each header shows the downloads of its own service.
+The header shows the downloads of every service, and each record names the
+service that started it. `Item.serviceID` holds that service, and
+`Item.serviceLabel` holds its name as a snapshot from the moment the download
+began. The snapshot keeps a record readable after the user renames or deletes the
+service, and `AppState` supplies the name, so the tracker reads no store.
+`DownloadSource` in `PaguroCore` turns the two values into what one row shows.
+
 A sign-in popup uses the coordinator of the service that opened it, so its
 downloads stay with that service.
-A download without a service appears in every header. This rule keeps a
-download visible when Paguro cannot name its source.
+A download without a service shows no source. This keeps the record visible when
+Paguro cannot name its source, and it invents no source for it.
+
+A download continues after its service hibernates, so the list keeps reporting
+its progress while nothing shows that service's page. A capacity eviction and a
+deletion of the service leave the record in place for the same reason. The
+handler owns the transfer, and the record owns the name it captured.
 
 See [Native shell](NATIVE_SHELL.md) for the header control.
 

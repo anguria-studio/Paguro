@@ -28,6 +28,11 @@ available on macOS 26; macOS 15 uses the fallback surface materials.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
+A command row at the bottom of a popover list uses the menu row style. The row
+takes the full width of the list and lines up with the rows above it. The
+pointer, keyboard focus, and a press give it the accent highlight with white
+text, like a macOS menu item. No other state draws a fill.
+
 A rail hides the system scroll bar and draws a thin overflow indicator over its
 trailing edge. A scroll bar that takes width from the rail content would move
 the icons off the rail centerline.
@@ -87,6 +92,9 @@ between 0.5 and 0.7 seconds. The control plays its own entry or pulse as the
 mark lands, so the handoff reads as one movement instead of two. The mark takes
 no pointer input, no keyboard focus, and no place in the accessibility tree.
 Reduce Motion removes the travel and keeps a short fade at the control.
+The control is global, so a download that starts in a service the window does
+not show keeps that same fade. A mark out of the page on screen would name the
+wrong source.
 
 Movement that reports several changes at one time groups them. Starts inside a
 short window share one mark, and a limit caps how many marks travel at one time.

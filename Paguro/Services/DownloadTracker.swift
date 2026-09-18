@@ -4,6 +4,12 @@ import Foundation
 
 /// Keeps the download records that the content header shows.
 ///
+/// There is one download center for the whole app, the way a browser has one.
+/// Every query answers the downloads of every service, so the header control
+/// keeps its progress and its history when the user switches service. Each
+/// record still names the service that started it, so a global list does not
+/// lose the source of a file.
+///
 /// `WebDownloadHandler` owns the WebKit objects and reports plain values here.
 /// The tracker therefore holds no `WKDownload`, so tests can drive every state
 /// change without a network transfer.
@@ -15,7 +21,7 @@ import Foundation
 /// A record leaves the list in one of three ways:
 ///
 /// 1. The user dismisses an ended record with `dismiss(id:)`.
-/// 2. The user clears every ended record of a service with `clear(for:)`.
+/// 2. The user clears every ended record with `clear()`.
 /// 3. The user stops a running download with `cancel(id:)`.
 ///
 /// A stop withdraws the download, so it removes the record instead of leaving
@@ -43,6 +49,13 @@ final class DownloadTracker {
         /// The service that started the download. It is nil when Paguro cannot
         /// attribute the download to one service.
         let serviceID: UUID?
+        /// The name of that service when the download began.
+        ///
+        /// The list is global, so each row names its own source. The name is a
+        /// snapshot instead of a live read, so a record stays readable after the
+        /// user renames or deletes the service. It is nil for a download that
+        /// Paguro cannot attribute.
+        let serviceLabel: String?
         /// When the download started. The indicator uses it to hold the ring
         /// back until a download has run for `ringDelay`.
         let startedAt: Date
@@ -70,6 +83,14 @@ final class DownloadTracker {
 
     private(set) var items: [Item] = []
 
+    /// Answers the current name of one service.
+    ///
+    /// `begin` calls it once for each download and stores the answer on the
+    /// record. `AppState` supplies it, so the tracker reads no store and a view
+    /// needs no lookup of its own. A nil provider leaves each record without a
+    /// source name, which the list reads as a download it cannot attribute.
+    @ObservationIgnored var serviceLabelProvider: ((UUID) -> String?)?
+
     /// Cancel actions for the active downloads. `WKDownload` is not a value, so
     /// it stays behind this closure.
     @ObservationIgnored private var cancelActions: [UUID: () -> Void] = [:]
@@ -89,7 +110,8 @@ final class DownloadTracker {
         /// so a view can tell a start it has not shown from one it has.
         let sequence: Int
         /// The service that started the download, or nil when Paguro cannot
-        /// attribute it. A download without a service belongs to every header.
+        /// attribute it. The cue rule reads it to decide whether a mark can
+        /// travel from the page on screen.
         let serviceID: UUID?
         let filename: String
         let startedAt: Date
@@ -109,7 +131,7 @@ final class DownloadTracker {
     /// Changes when a timed rule reaches its moment.
     ///
     /// Two rules run on a clock: a download becomes old enough for a ring, and
-    /// a result stops being news. `state(for:now:)` reads this value, so the
+    /// a result stops being news. `state(now:)` reads this value, so the
     /// header re-reads the rules at each of those moments even though no
     /// record changed.
     private(set) var wakeTick = 0
@@ -131,6 +153,7 @@ final class DownloadTracker {
             Item(
                 id: id,
                 serviceID: serviceID,
+                serviceLabel: serviceID.flatMap { serviceLabelProvider?($0) },
                 startedAt: startedAt,
                 filename: filename,
                 receivedBytes: 0,
@@ -191,14 +214,15 @@ final class DownloadTracker {
         badgeWindowTasks.removeValue(forKey: id)?.cancel()
     }
 
-    /// Marks every ended record of one service as seen. The header calls this
-    /// when the user opens the download list.
+    /// Marks every ended record as seen. The header calls this when the user
+    /// opens the download list.
     ///
-    /// A running download keeps its unseen state on purpose. The user cannot
-    /// have seen a result that has not happened, so its completion is still
-    /// news when it arrives.
-    func acknowledgeAll(for serviceID: UUID?) {
-        for index in items.indices where matches(items[index], serviceID: serviceID) {
+    /// The list shows every service, so the user sees every result in it. A
+    /// running download keeps its unseen state on purpose. The user cannot have
+    /// seen a result that has not happened, so its completion is still news when
+    /// it arrives.
+    func acknowledgeAll() {
+        for index in items.indices {
             guard !items[index].state.isActive, !items[index].acknowledged else { continue }
             items[index].acknowledged = true
             cancelBadgeWindowWake(for: items[index].id)
@@ -249,9 +273,9 @@ final class DownloadTracker {
         cancelActions.removeValue(forKey: id)
     }
 
-    /// Stops every active download of one service.
-    func cancelAll(for serviceID: UUID?) {
-        for item in activeItems(for: serviceID) {
+    /// Stops every active download, whichever service started it.
+    func cancelAll() {
+        for item in activeItems {
             cancel(id: item.id)
         }
     }
@@ -286,18 +310,20 @@ final class DownloadTracker {
         items.removeAll { $0.id == id }
     }
 
-    /// Removes every ended record of one service and keeps its running
-    /// downloads.
-    func clear(for serviceID: UUID?) {
-        for item in items where matches(item, serviceID: serviceID) && item.state.isDismissible {
+    /// Removes every ended record and keeps the running downloads.
+    ///
+    /// The list is global, so Clear empties the whole list. A running download
+    /// of any service stays, because its row offers the stop action instead.
+    func clear() {
+        for item in items where item.state.isDismissible {
             cancelBadgeWindowWake(for: item.id)
         }
-        items.removeAll { matches($0, serviceID: serviceID) && $0.state.isDismissible }
+        items.removeAll { $0.state.isDismissible }
     }
 
-    /// Whether the list of one service has a record that the user can remove.
-    func hasDismissibleItems(for serviceID: UUID?) -> Bool {
-        items.contains { matches($0, serviceID: serviceID) && $0.state.isDismissible }
+    /// Whether the list has a record that the user can remove.
+    var hasDismissibleItems: Bool {
+        items.contains { $0.state.isDismissible }
     }
 
     /// Keeps the newest records and drops the oldest ended ones.
@@ -314,45 +340,40 @@ final class DownloadTracker {
 
     // MARK: - Queries
 
-    /// Whether a download belongs to the header of one service.
+    /// Every download, newest first.
     ///
-    /// A download without a service belongs to every header, so a download that
-    /// Paguro cannot attribute stays visible instead of disappearing.
-    private func matches(_ item: Item, serviceID: UUID?) -> Bool {
-        item.serviceID == nil || item.serviceID == serviceID
+    /// The list is global, so the order is the start order of the whole app run
+    /// and not of one service. A record of a hibernated or removed service stays
+    /// in it: the transfer keeps running, and its row keeps the name it captured.
+    var recentItems: [Item] {
+        Array(items.reversed())
     }
 
-    /// The downloads of one service, newest first.
-    func items(for serviceID: UUID?) -> [Item] {
-        Array(items.filter { matches($0, serviceID: serviceID) }.reversed())
+    /// The running downloads, newest first.
+    var activeItems: [Item] {
+        recentItems.filter(\.state.isActive)
     }
 
-    /// The running downloads of one service, newest first.
-    func activeItems(for serviceID: UUID?) -> [Item] {
-        items(for: serviceID).filter(\.state.isActive)
+    /// The newest finished download.
+    var lastFinishedItem: Item? {
+        recentItems.first { $0.state == .finished }
     }
 
-    /// The newest finished download of one service.
-    func lastFinishedItem(for serviceID: UUID?) -> Item? {
-        items(for: serviceID).first { $0.state == .finished }
-    }
-
-    /// The indicator state for one service.
+    /// The indicator state for the whole app.
     ///
     /// This is where the clock is read. `DownloadIndicatorState` stays a pure
     /// function, so the elapsed value arrives as an argument.
-    func state(for serviceID: UUID?, now: Date = Date()) -> DownloadIndicatorState {
+    func state(now: Date = Date()) -> DownloadIndicatorState {
         // Reading the tick registers this call with the observation system, so
         // the header refreshes when a timed rule reaches its moment.
         _ = wakeTick
 
-        let owned = items.filter { matches($0, serviceID: serviceID) }
         var totals = DownloadProgressTotals()
         var failedCount = 0
         var unseenCount = 0
         var oldestActiveStart: Date?
 
-        for item in owned {
+        for item in items {
             switch item.state {
             case .active:
                 totals.activeCount += 1
@@ -374,7 +395,7 @@ final class DownloadTracker {
 
         return DownloadIndicatorState.resolve(
             totals: totals,
-            recordCount: owned.count,
+            recordCount: items.count,
             unseenCount: unseenCount,
             failedCount: failedCount,
             longestActiveElapsed: oldestActiveStart.map {
@@ -395,9 +416,9 @@ final class DownloadTracker {
             < DownloadIndicatorState.badgeWindow
     }
 
-    /// The badge count for one service, for callers that need only that value.
-    func unseenCount(for serviceID: UUID?, now: Date = Date()) -> Int {
-        items.filter { matches($0, serviceID: serviceID) && isUnseen($0, now: now) }.count
+    /// The badge count, for callers that need only that value.
+    func unseenCount(now: Date = Date()) -> Int {
+        items.filter { isUnseen($0, now: now) }.count
     }
 
     // MARK: - Finder
