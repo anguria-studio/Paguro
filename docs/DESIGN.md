@@ -85,6 +85,17 @@ card or button has hover or keyboard focus. Respect Reduce Motion.
 Movement reports a change that the user did not see happen. It never carries
 information of its own, and Reduce Motion always keeps that information.
 
+## Service marks
+
+A rail cell carries at most one mark in each corner, so a new state reuses a
+corner that its own rule keeps free. The speaker mark and the barred bell share
+the leading corner. Mute silences a service and therefore ends its audio
+exemption, so the two states never apply together. The unread badge keeps the
+trailing corner in every state.
+
+A new mark must not change a row height, an icon position, or the fixed rail
+mouse surface.
+
 A download start sends a download mark from the web content up into the header
 download control. The mark keeps the x position of the control and travels
 straight up, the way the system reports a download. The complete movement stays

@@ -109,6 +109,12 @@ struct RailServiceCell<ContextMenu: View>: View {
                     }
                 }
             )
+            .modifier(
+                PauseAudioAccessibilityAction(
+                    isEnabled: appState.webViewPool.isPlayingBackgroundAudio(link.service.id),
+                    pause: { appState.webViewPool.pauseBackgroundAudio(for: link.service.id) }
+                )
+            )
             .accessibilityAction(named: "Move up") { moveUp() }
             .accessibilityAction(named: "Move down") { moveDown() }
             .accessibilityAction(.default) { select() }
@@ -139,6 +145,7 @@ struct RailServiceCell<ContextMenu: View>: View {
             manualGlobalMute: appState.doNotDisturb
         )
         let media = appState.webViewPool.mediaCaptureStates[link.service.id]
+        let playingAudio = appState.webViewPool.isPlayingBackgroundAudio(link.service.id)
         let health = hibernated
             ? ServiceHealth.live
             : appState.webViewPool.health(for: link.service.id)
@@ -162,6 +169,7 @@ struct RailServiceCell<ContextMenu: View>: View {
             cameraActive: media?.cameraActive ?? false,
             micActive: media?.micActive ?? false,
             micMuted: media?.micMuted ?? false,
+            isPlayingAudio: playingAudio,
             health: health,
             glassStyle: appState.liquidGlassStyle,
             glassIntensity: appState.liquidGlassIntensity,
@@ -297,6 +305,23 @@ struct RailServiceCell<ContextMenu: View>: View {
             relativeTo: workspaceLinks[index + 1].id,
             placement: .after
         )
+    }
+}
+
+/// Offers "Pause Audio" to a screen reader only while the service holds the
+/// background audio exemption. A named action that does nothing would be worse
+/// than no action at all.
+private struct PauseAudioAccessibilityAction: ViewModifier {
+    let isEnabled: Bool
+    let pause: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.accessibilityAction(named: "Pause Audio", pause)
+        } else {
+            content
+        }
     }
 }
 

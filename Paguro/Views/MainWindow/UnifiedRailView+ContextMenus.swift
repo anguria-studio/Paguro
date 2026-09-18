@@ -42,6 +42,15 @@ extension UnifiedRailView {
             }
         ))
 
+        // Shown only while the service keeps playing audio after a switch. It
+        // is the stop action for that audio; a click on the service in the rail
+        // is the return action.
+        if appState.webViewPool.isPlayingBackgroundAudio(link.service.id) {
+            Button("Pause Audio") {
+                appState.webViewPool.pauseBackgroundAudio(for: link.service.id)
+            }
+        }
+
         if let media = appState.webViewPool.mediaCaptureStates[link.service.id],
            media.micActive || media.micMuted {
             Button(media.micMuted ? "Unmute Microphone" : "Mute Microphone") {

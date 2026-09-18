@@ -4,14 +4,17 @@ public enum MediaPlaybackPolicy {
     ///
     /// A page that holds the camera or the microphone is in a call. Background
     /// suspension must not silence the far end while that call runs, so capture
-    /// cancels the background reason. An explicit mute still wins, because the
-    /// user asked for silence.
+    /// cancels the background reason. A service that was playing audible media
+    /// when it left the screen holds the same kind of exemption, so music and a
+    /// voice message survive a switch to another service. An explicit mute
+    /// still wins over both, because the user asked for silence.
     public static func shouldSuspend(
         isMuted: Bool,
         isSoftHibernated: Bool,
-        isCapturingMedia: Bool = false
+        isCapturingMedia: Bool = false,
+        isPlayingUserAudio: Bool = false
     ) -> Bool {
         if isMuted { return true }
-        return isSoftHibernated && !isCapturingMedia
+        return isSoftHibernated && !isCapturingMedia && !isPlayingUserAudio
     }
 }

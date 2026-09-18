@@ -6,6 +6,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Added
 
+- Music and voice messages keep playing when you switch to another service. The
+  service that plays shows a speaker mark in the rail and in the menu-bar
+  window, and its context menu offers Pause Audio. Muting the service still
+  silences it. A page that starts to play after you leave it stays quiet.
 - A download mark rises from the page into the download control in the header
   when a download starts. It shows you where the file went. Several downloads
   that start together send one mark, and the control keeps the count. Reduce

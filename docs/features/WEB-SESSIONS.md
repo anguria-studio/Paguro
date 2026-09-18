@@ -103,6 +103,7 @@ It must first check these conditions:
 - no active call;
 - no active microphone, including a muted one that the page still holds;
 - no active camera;
+- no background audio exemption;
 - policy permits hibernation.
 
 `HibernationGate` in `PaguroCore` holds the deterministic part of that
@@ -122,11 +123,17 @@ stop at a protected service. It takes the next candidate instead, so the pool
 still returns to its limit. A call blocks the immediate policy as well, because
 the grace task ends in the same shared decision.
 
+A service that keeps playing audio holds the same kind of protection. Music and
+a voice message therefore survive the capacity sweep and the idle sweep. The
+audio reason is the last one in the list, so a call on the same service is still
+the reason the log line reports.
+
 The camera and microphone state comes from public WebKit properties, which no
-test process can drive. The pool has one internal seam for the capture state
-and one for the call probe. A test sets the facts that a real device and a real
-page would report. Production behavior does not change, because the pool runs
-its own probe when no test replaces it.
+test process can drive. The pool has one internal seam for each answer it cannot
+compute. These are the capture state, the call probe, the playback state, and
+the clock of the audio grace period. A test sets the facts that a real device
+and a real page would report. Production behavior does not change, because the pool
+runs its own probe when no test replaces it.
 
 A download does not block hibernation. Its download handler stays alive until
 the transfer ends, and `Command-Q` cancels it. The header download list is
@@ -155,6 +162,51 @@ so capture cancels the background reason. An explicit mute still wins, because
 the user asked for silence. A call that starts or ends on a background service
 changes this answer at once. The exception needs a local device, so a call that
 only receives audio and video still follows the background rule.
+
+### Background audio exemption
+
+A service that plays media at the moment it leaves the screen keeps playing.
+Music and a voice message therefore survive a switch to another service.
+
+The pool asks the page with public `requestMediaPlaybackState` at the switch,
+before suspension applies. Suspension applied in that short window and lifted
+again would cut the sound. The pool therefore treats the open question as
+playback and settles it one step later.
+
+Playback that starts after the switch earns nothing. A background page must not
+be able to keep itself awake by autoplay, so only the answer at the switch can
+create the exemption.
+
+`BackgroundAudioExemptions` in `PaguroCore` holds the life cycle: it grants at
+the switch, refreshes on each poll, and expires after the grace period. The
+grace period is 90 seconds. It has to cover the gap between two tracks and a
+short pause. The user can pause and resume with the keyboard media keys without
+bringing Paguro forward. The pool polls each exempt service every 5
+seconds. It polls no other service, so an ordinary background service costs
+nothing.
+
+The exemption ends for one of these reasons:
+
+- the service returns to the screen;
+- the user uses Pause Audio;
+- mute applies;
+- Paguro removes the service;
+- the page has not reported playback for the grace period.
+
+The normal background suspension applies again at that moment. `Command-Q` cancels the poll with the
+rest of the pool work.
+
+Known limit: the public playback state reports playing, paused, suspended, or
+none. It does not separate audible playback from a silent video. A silent video
+that plays at the switch therefore keeps its service loaded as well. Paguro
+accepts that result, because the alternative is a private selector.
+
+Mute wins over the exemption. Global, workspace, scheduled, and service mute
+each silence the service and end the exemption. Clearing mute does not restore
+it, which matches the rule that clearing mute does not wake a background view.
+
+`docs/features/NATIVE_SHELL.md` holds the speaker mark and the Pause Audio
+action.
 New and rebuilt views read the current mute state, including quiet hours
 before deferred notification startup completes.
 

@@ -21,6 +21,44 @@ struct HibernationGateTests {
         #expect(HibernationGate.block(HibernationFacts(isPinned: true)) == .pinned)
         #expect(HibernationGate.block(HibernationFacts(isCapturingMedia: true)) == .mediaCapture)
         #expect(HibernationGate.block(HibernationFacts(hasDetectedCall: true)) == .activeCall)
+        #expect(
+            HibernationGate.block(HibernationFacts(isPlayingUserAudio: true))
+                == .playingAudio
+        )
+    }
+
+    /// The exit condition of the audio exemption: a service that keeps playing
+    /// music or a voice message survives the idle sweep and the capacity sweep,
+    /// because both read this one rule.
+    @Test
+    func backgroundAudioStopsHibernationOnItsOwn() {
+        #expect(!HibernationGate.permits(HibernationFacts(isPlayingUserAudio: true)))
+        #expect(!HibernationGate.permits(HibernationFacts(
+            isCapturingMedia: true,
+            isPlayingUserAudio: true
+        )))
+        #expect(!HibernationGate.permits(HibernationFacts(
+            hasDetectedCall: true,
+            isPlayingUserAudio: true
+        )))
+    }
+
+    /// Audio is the last reason in the list, so a call or capture on the same
+    /// service is still the reported reason.
+    @Test
+    func anEarlierReasonWinsOverBackgroundAudio() {
+        #expect(HibernationGate.block(HibernationFacts(
+            isCapturingMedia: true,
+            isPlayingUserAudio: true
+        )) == .mediaCapture)
+        #expect(HibernationGate.block(HibernationFacts(
+            hasDetectedCall: true,
+            isPlayingUserAudio: true
+        )) == .activeCall)
+        #expect(HibernationGate.block(HibernationFacts(
+            isActiveService: true,
+            isPlayingUserAudio: true
+        )) == .activeService)
     }
 
     /// The exit condition of the call protection: capture and a detected call
@@ -43,7 +81,8 @@ struct HibernationGateTests {
             isLoaded: false,
             isActiveService: true,
             isCapturingMedia: true,
-            hasDetectedCall: true
+            hasDetectedCall: true,
+            isPlayingUserAudio: true
         )
         #expect(HibernationGate.block(facts) == .notLoaded)
     }

@@ -333,6 +333,310 @@ final class WebViewPoolActivationTests: XCTestCase {
         XCTAssertEqual(pool.loadedCount, WebViewPoolCapacity.maxLoaded, file: file, line: line)
     }
 
+    // MARK: - Background audio (ATL-315)
+
+    /// The exit condition: music or a voice message that the user started keeps
+    /// playing after a switch to another service.
+    @MainActor
+    func testAPlayingServiceIsNotSuspendedOnASwitch() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], false)
+    }
+
+    /// The other half of the same rule: a silent service still goes quiet, so
+    /// the exemption costs nothing for an ordinary switch.
+    @MainActor
+    func testAPausedServiceIsSuspendedOnASwitch() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .paused }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// A background page must not keep itself awake by autoplay. Playback that
+    /// starts after the switch earns no exemption, so the poll grants nothing.
+    @MainActor
+    func testPlaybackThatStartsInTheBackgroundEarnsNoExemption() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .paused }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        pool.playbackStateProbe = { _ in .playing }
+        let keepsPolling = await pool.pollBackgroundAudio()
+
+        XCTAssertFalse(keepsPolling)
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// The exemption ends after the grace period, and the normal background
+    /// suspension applies again. The clock is injected, so the test does not
+    /// wait for it.
+    @MainActor
+    func testTheExemptionExpiresAfterTheGracePeriod() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        let clock = MutableClock()
+        pool.backgroundAudioClock = { clock.now }
+        pool.playbackStateProbe = { _ in .playing }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        // A gap between two tracks must not end the exemption.
+        pool.playbackStateProbe = { _ in .paused }
+        clock.advance(BackgroundAudioExemptions.gracePeriod - 1)
+        let insideTheGracePeriod = await pool.pollBackgroundAudio()
+        XCTAssertTrue(insideTheGracePeriod)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], false)
+
+        clock.advance(1)
+        let afterTheGracePeriod = await pool.pollBackgroundAudio()
+        XCTAssertFalse(afterTheGracePeriod)
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// Playback that continues keeps the exemption, however long it runs.
+    @MainActor
+    func testAPlayingServiceKeepsTheExemptionPastTheGracePeriod() async throws {
+        let (pool, services, _) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        let clock = MutableClock()
+        pool.backgroundAudioClock = { clock.now }
+        pool.playbackStateProbe = { _ in .playing }
+
+        _ = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        for _ in 0..<5 {
+            clock.advance(BackgroundAudioExemptions.gracePeriod - 1)
+            let keepsPolling = await pool.pollBackgroundAudio()
+            XCTAssertTrue(keepsPolling)
+        }
+
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+    }
+
+    /// Mute silences the service, so it ends the exemption. Clearing mute does
+    /// not bring it back: that matches the existing rule that clearing mute
+    /// does not wake a background view.
+    @MainActor
+    func testMuteRevokesTheExemption() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+        let mutedIDs = MutableSet()
+        pool.isMediaMuted = { mutedIDs.contains($0) }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        mutedIDs.insert(services[0].id)
+        pool.refreshMediaPlayback()
+
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+
+        mutedIDs.remove(services[0].id)
+        pool.refreshMediaPlayback()
+
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// Pause Audio is the stop action. It ends the exemption, so the service
+    /// follows the normal background rule again.
+    @MainActor
+    func testPauseAudioRevokesTheExemption() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        pool.pauseBackgroundAudio(for: services[0].id)
+
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// A service back on the screen no longer needs the exemption, and the next
+    /// switch away from it decides again.
+    @MainActor
+    func testReturningToTheServiceEndsTheExemption() async throws {
+        let (pool, services, _) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+
+        _ = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        _ = pool.webView(for: services[0])
+
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+    }
+
+    /// The idle sweep reads its candidates from the pool, so a service that
+    /// keeps playing audio must not appear in that list.
+    @MainActor
+    func testIdleCandidatesExcludeAServicePlayingAudio() async throws {
+        let (pool, services, _) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+
+        _ = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        // The second service is the active one, which the gate already blocks,
+        // so an empty list proves that the audio blocked the first one.
+        XCTAssertTrue(pool.idleCandidates(now: Date()).isEmpty)
+
+        pool.pauseBackgroundAudio(for: services[0].id)
+        XCTAssertEqual(pool.idleCandidates(now: Date()).map(\.id), [services[0].id])
+    }
+
+    /// The capacity sweep releases the least recently used service. A service
+    /// that plays audio is protected like a capturing one, so the sweep takes
+    /// the next candidate instead.
+    @MainActor
+    func testTheCapacitySweepSparesAServicePlayingAudio() async throws {
+        let (pool, services, _) = try makeAudioFixture(
+            count: WebViewPoolCapacity.maxLoaded + 1
+        )
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in .playing }
+        var evicted: [UUID] = []
+        pool.onServiceEvictedForCapacity = { evicted.append($0) }
+
+        // The first service plays and then leaves the screen. It is the least
+        // recently used service from here on.
+        _ = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+        XCTAssertTrue(pool.isPlayingBackgroundAudio(services[0].id))
+
+        for item in services.dropFirst(2) { pool.preload(item) }
+        XCTAssertEqual(pool.loadedCount, WebViewPoolCapacity.maxLoaded + 1)
+
+        await pool.evictIfNeeded()
+        try await waitForLoadedCountToSettle(pool)
+
+        XCTAssertEqual(evicted, [services[2].id], "the sweep takes the next candidate")
+        XCTAssertFalse(pool.isHibernated(services[0].id))
+        XCTAssertTrue(pool.hasWebView(for: services[0].id))
+        XCTAssertTrue(pool.isHibernated(services[2].id))
+    }
+
+    /// Nothing plays on an ordinary page, so nothing changes for it: no
+    /// exemption, no poll, and the normal suspension on a switch.
+    @MainActor
+    func testAServiceThatPlaysNothingKeepsTheOldBehavior() async throws {
+        let (pool, services, suspension) = try makeAudioFixture(count: 2)
+        defer { pool.shutdown() }
+        pool.playbackStateProbe = { _ in WKMediaPlaybackState.none }
+
+        let leaving = pool.webView(for: services[0])
+        _ = pool.webView(for: services[1])
+        await pool.resolveBackgroundAudio(for: services[0].id)
+
+        XCTAssertFalse(pool.isPlayingBackgroundAudio(services[0].id))
+        let keepsPolling = await pool.pollBackgroundAudio()
+        XCTAssertFalse(keepsPolling)
+        XCTAssertEqual(suspension.value[ObjectIdentifier(leaving)], true)
+    }
+
+    /// Holds the container of the audio fixture. A service model reads from its
+    /// container, so the container must outlive every service the test uses.
+    private var audioFixtureContainer: ModelContainer?
+
+    /// Builds a pool, a set of services in one container, and a recorder for
+    /// the suspension writes, so each audio test states only its own rule.
+    ///
+    /// The recorder replaces the WebKit write, so no test depends on a real
+    /// media element.
+    @MainActor
+    private func makeAudioFixture(
+        count: Int
+    ) throws -> (WebViewPool, [ServiceInstance], SuspensionRecorder) {
+        let container = try ModelFixtures.groupingContainer()
+        audioFixtureContainer = container
+        let context = container.mainContext
+        let store = UUID()
+        let services = (0..<count).map {
+            Self.poolService(label: "Service \($0)", store: store)
+        }
+        for item in services { context.insert(item) }
+        try context.save()
+
+        let pool = makePool()
+        let recorder = SuspensionRecorder()
+        pool.writeMediaSuspension = { webView, suspended in
+            recorder.record(ObjectIdentifier(webView), suspended)
+        }
+        return (pool, services, recorder)
+    }
+
+    /// The last suspension value written for each web view.
+    @MainActor
+    final class SuspensionRecorder {
+        private(set) var value: [ObjectIdentifier: Bool] = [:]
+
+        func record(_ webView: ObjectIdentifier, _ suspended: Bool) {
+            value[webView] = suspended
+        }
+    }
+
+    /// A clock the test moves by hand, so the grace period needs no waiting.
+    @MainActor
+    final class MutableClock {
+        private(set) var now = Date(timeIntervalSince1970: 1_000_000)
+
+        func advance(_ seconds: TimeInterval) {
+            now = now.addingTimeInterval(seconds)
+        }
+    }
+
+    /// Mute that the test changes between two reads of the pool.
+    @MainActor
+    final class MutableSet {
+        private var ids: Set<UUID> = []
+
+        func contains(_ id: UUID) -> Bool { ids.contains(id) }
+        func insert(_ id: UUID) { ids.insert(id) }
+        func remove(_ id: UUID) { ids.remove(id) }
+    }
+
     /// A capacity test needs many services at the same time. They share one
     /// WebKit data-store identifier, so the test makes one store instead of one
     /// for each service. The pool keys every rule on the service id, so the

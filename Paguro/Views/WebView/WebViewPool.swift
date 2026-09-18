@@ -34,17 +34,215 @@ final class WebViewPool {
 
     private func applyMediaPlaybackPolicy(for id: UUID) {
         guard let webView = webViews[id] else { return }
+        let isMuted = isMediaMuted?(id) ?? false
+        // Mute silences the service, so a background audio exemption has
+        // nothing left to keep audible. The user asked for silence, and
+        // clearing mute does not wake a background view.
+        if isMuted { revokeBackgroundAudio(for: id) }
         // A capturing page is in a call. Background suspension must not silence
         // the far end after the user switches to another service, so the Core
-        // rule drops the background reason while capture runs.
+        // rule drops the background reason while capture runs. A service that
+        // was playing audible media when it left the screen holds the same kind
+        // of exemption.
         let suspended = MediaPlaybackPolicy.shouldSuspend(
-            isMuted: isMediaMuted?(id) ?? false,
+            isMuted: isMuted,
             isSoftHibernated: softHibernatedIDs.contains(id),
-            isCapturingMedia: isCapturingMedia(id)
+            isCapturingMedia: isCapturingMedia(id),
+            isPlayingUserAudio: keepsBackgroundAudio(id)
         )
         guard appliedMediaSuspension[id] != suspended else { return }
         appliedMediaSuspension[id] = suspended
         writeMediaSuspension(webView, suspended)
+    }
+
+    // MARK: - Background audio (ATL-315)
+
+    /// Which background services keep their audio, and until when. The Core
+    /// value holds the rule; the pool owns the WebKit calls and the timer.
+    private var backgroundAudio = BackgroundAudioExemptions()
+
+    /// Services whose switch-time playback question has no answer yet.
+    ///
+    /// The answer needs one hop to the web content process. Suspension applied
+    /// in that window and lifted again would cut the sound the exemption exists
+    /// to protect, so the pool treats an open question as playback and settles
+    /// it a moment later. The mark is also the claim on that one decision, so
+    /// the answer is used exactly once.
+    private var pendingAudioChecks: Set<UUID> = []
+
+    /// The repeating poll that keeps or ends each exemption. One task covers
+    /// every exempt service, and it stops when none is left.
+    private var backgroundAudioPoll: Task<Void, Never>?
+
+    /// Test seam. A test process cannot play audio, so a test replaces the
+    /// WebKit playback query. Unset, the pool asks the web view itself.
+    @ObservationIgnored
+    var playbackStateProbe: (@MainActor (UUID) async -> WKMediaPlaybackState)?
+
+    /// Test seam for the grace period. A test moves this clock instead of
+    /// waiting, so no new test depends on wall-clock time.
+    @ObservationIgnored var backgroundAudioClock: () -> Date = Date.init
+
+    /// True while the service keeps playing audio that the user started in it.
+    /// The rail, the menu-bar list, and the context menu read this one answer.
+    func isPlayingBackgroundAudio(_ id: UUID) -> Bool {
+        backgroundAudio.isExempt(id)
+    }
+
+    /// The answer that the playback policy and both hibernation sweeps read. An
+    /// open switch-time question counts, so a sweep cannot release a service
+    /// while the pool is still deciding whether it plays.
+    private func keepsBackgroundAudio(_ id: UUID) -> Bool {
+        backgroundAudio.isExempt(id) || pendingAudioChecks.contains(id)
+    }
+
+    /// Stops the audio the user started in a background service and ends its
+    /// exemption. The rail context menu and the named accessibility action both
+    /// call this. Public WebKit playback control only.
+    func pauseBackgroundAudio(for id: UUID) {
+        guard let webView = webViews[id] else { return }
+        revokeBackgroundAudio(for: id)
+        webView.pauseAllMediaPlayback(completionHandler: nil)
+        applyMediaPlaybackPolicy(for: id)
+    }
+
+    /// Ends one exemption without asking the page anything. Every route that
+    /// cancels the exemption — mute, a return to the screen, the stop action,
+    /// removal — goes through here, so the poll and the pending mark stay
+    /// consistent with the Core value.
+    private func revokeBackgroundAudio(for id: UUID) {
+        backgroundAudio.revoke(id)
+        pendingAudioChecks.remove(id)
+        stopBackgroundAudioPollIfIdle()
+    }
+
+    /// Starts the switch-time question for a service that just left the screen.
+    private func startBackgroundAudioCheck(for id: UUID) {
+        guard !hasShutDown else { return }
+        pendingAudioChecks.insert(id)
+        Task { @MainActor [weak self] in
+            await self?.resolveBackgroundAudio(for: id)
+        }
+    }
+
+    /// Answers the switch-time question for one service.
+    ///
+    /// Not private, so a test can await the one decision instead of racing the
+    /// task that a switch starts. Removing the pending mark is the claim on the
+    /// decision, and nothing suspends after it, so a second call for the same
+    /// switch changes nothing.
+    func resolveBackgroundAudio(for id: UUID) async {
+        guard pendingAudioChecks.contains(id) else { return }
+        let isPlaying = await isPlayingMedia(id)
+        guard pendingAudioChecks.remove(id) != nil else { return }
+
+        // The user can come back, mute the service, or close it while the
+        // question is open, so read the state again. Only a service that is
+        // still in the background needs the exemption.
+        guard webViews[id] != nil,
+              softHibernatedIDs.contains(id),
+              isMediaMuted?(id) != true else {
+            applyMediaPlaybackPolicy(for: id)
+            return
+        }
+
+        if backgroundAudio.grantIfPlaying(id, isPlaying: isPlaying, now: backgroundAudioClock()) {
+            AppLogger.webView.debug("Service \(id) keeps playing audio in the background")
+            startBackgroundAudioPollIfNeeded()
+        }
+        applyMediaPlaybackPolicy(for: id)
+    }
+
+    /// Asks every exempt service whether it still plays, then ends the
+    /// exemptions whose grace period has run out. Returns whether any exemption
+    /// remains, so the poll task knows when to stop.
+    ///
+    /// Not private, so a test can await one deterministic pass.
+    @discardableResult
+    func pollBackgroundAudio() async -> Bool {
+        for id in backgroundAudio.exemptServiceIDs {
+            guard webViews[id] != nil else {
+                revokeBackgroundAudio(for: id)
+                continue
+            }
+            let isPlaying = await isPlayingMedia(id)
+            backgroundAudio.refresh(id, isPlaying: isPlaying, now: backgroundAudioClock())
+        }
+
+        for id in backgroundAudio.expire(now: backgroundAudioClock()) {
+            AppLogger.webView.debug("Service \(id) stopped playing audio; suspension applies again")
+            applyMediaPlaybackPolicy(for: id)
+        }
+        return !backgroundAudio.isEmpty
+    }
+
+    /// Counts the polls that this pool has started. The handle alone cannot say
+    /// which task holds it, so each task carries its own number.
+    private var backgroundAudioPollGeneration = 0
+
+    private func startBackgroundAudioPollIfNeeded() {
+        guard backgroundAudioPoll == nil, !hasShutDown, !backgroundAudio.isEmpty else { return }
+        backgroundAudioPollGeneration += 1
+        let generation = backgroundAudioPollGeneration
+        backgroundAudioPoll = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(BackgroundAudioExemptions.pollInterval))
+                guard !Task.isCancelled, let self else { break }
+                guard await self.pollBackgroundAudio() else { break }
+            }
+            self?.endBackgroundAudioPoll(generation: generation)
+        }
+    }
+
+    /// Frees the handle so a later grant can start a poll again. It acts only
+    /// for the current poll, so a task that ends late cannot drop the handle of
+    /// the task that replaced it.
+    private func endBackgroundAudioPoll(generation: Int) {
+        guard generation == backgroundAudioPollGeneration else { return }
+        backgroundAudioPoll = nil
+    }
+
+    private func stopBackgroundAudioPollIfIdle() {
+        guard backgroundAudio.isEmpty, pendingAudioChecks.isEmpty else { return }
+        backgroundAudioPoll?.cancel()
+        backgroundAudioPoll = nil
+    }
+
+    /// Whether the page reports playing media now.
+    ///
+    /// `requestMediaPlaybackState` is the public answer. It reports playing,
+    /// paused, suspended, or none. It does not separate audible playback from a
+    /// silent video, so a silent video that plays at the switch also keeps the
+    /// service loaded. `docs/features/WEB-SESSIONS.md` records that limit.
+    private func isPlayingMedia(_ id: UUID) async -> Bool {
+        await playbackState(for: id) == .playing
+    }
+
+    /// Reads one playback state with a bound, for the same reason that
+    /// `hasActiveCall` bounds its probe: a wedged web content process would
+    /// otherwise leave the question open forever, and the service would keep a
+    /// protection it no longer earns. "No answer" counts as no playback.
+    private func playbackState(for id: UUID) async -> WKMediaPlaybackState {
+        guard webViews[id] != nil else { return WKMediaPlaybackState.none }
+        return await withCheckedContinuation { continuation in
+            let gate = ProbeGate()
+            Task { @MainActor in
+                let state = await self.readPlaybackState(id)
+                if gate.claim() { continuation.resume(returning: state) }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if gate.claim() { continuation.resume(returning: WKMediaPlaybackState.none) }
+            }
+        }
+    }
+
+    /// Runs the playback query on the main actor. Re-fetches the web view by id
+    /// rather than capturing it, so the racing tasks carry Sendable values only.
+    private func readPlaybackState(_ id: UUID) async -> WKMediaPlaybackState {
+        if let playbackStateProbe { return await playbackStateProbe(id) }
+        guard let webView = webViews[id] else { return WKMediaPlaybackState.none }
+        return await webView.requestMediaPlaybackState()
     }
 
     /// Guard set: IDs currently being evaluated for eviction.
@@ -425,6 +623,11 @@ final class WebViewPool {
             teardownWebView(serviceID)
             userScriptManager.removeHandler(for: serviceID)
         }
+        // Command-Q stops all Paguro work, so the audio poll ends with the rest.
+        backgroundAudioPoll?.cancel()
+        backgroundAudioPoll = nil
+        backgroundAudio = BackgroundAudioExemptions()
+        pendingAudioChecks.removeAll()
         suspendedURLs.removeAll()
         hibernatedServiceIDs.removeAll()
         pinnedIDs.removeAll()
@@ -512,7 +715,7 @@ final class WebViewPool {
         // answers first, abandoning (not awaiting) the loser. A leaked wedged
         // probe just lingers until the OS reaps the process.
         return await withCheckedContinuation { continuation in
-            let gate = CallProbeGate()
+            let gate = ProbeGate()
             Task { @MainActor in
                 let hasCall = await self.probeCallDetection(instanceID)
                 if gate.claim() { continuation.resume(returning: hasCall) }
@@ -604,6 +807,10 @@ final class WebViewPool {
         guard let webView = webViews[id] else { return }
         guard !neverHibernateIDs.contains(id) else { return }
         softHibernatedIDs.insert(id)
+        // Ask before suspension applies. A service that plays audible media now
+        // keeps it; one that starts later, while it is already in the
+        // background, earns nothing.
+        startBackgroundAudioCheck(for: id)
         applyMediaPlaybackPolicy(for: id)
         webView.takeSnapshot(with: nil) { [weak self] image, _ in
             guard let image else { return }
@@ -624,6 +831,9 @@ final class WebViewPool {
     private func wakeService(_ id: UUID) {
         guard webViews[id] != nil else { return }
         softHibernatedIDs.remove(id)
+        // A service on the screen needs no exemption, and the next switch away
+        // from it decides again.
+        revokeBackgroundAudio(for: id)
         applyMediaPlaybackPolicy(for: id)
         AppLogger.webView.debug("Woke service \(id)")
         onServiceSoftWoke?(id)
@@ -733,6 +943,8 @@ final class WebViewPool {
     private func teardownWebView(_ instanceID: UUID) {
         softHibernatedIDs.remove(instanceID)
         appliedMediaSuspension.removeValue(forKey: instanceID)
+        // The page is going away, so there is no audio left to keep.
+        revokeBackgroundAudio(for: instanceID)
         if let webView = webViews[instanceID] {
             webView.configuration.userContentController.removeAllScriptMessageHandlers()
             webView.stopLoading()
@@ -887,7 +1099,8 @@ final class WebViewPool {
             isNotificationCritical: notificationCriticalIDs.contains(id),
             isPinned: pinnedIDs.contains(id),
             isCapturingMedia: isCapturingMedia(id),
-            hasDetectedCall: hasDetectedCall
+            hasDetectedCall: hasDetectedCall,
+            isPlayingUserAudio: keepsBackgroundAudio(id)
         )
     }
 
@@ -938,8 +1151,8 @@ final class WebViewPool {
 
     /// When exceeding maxLoaded web views, fully hibernate the least recently used ones.
     /// A service that `HibernationGate` protects — a call, a live camera or
-    /// microphone, or any other exemption — stays live, and the sweep takes the
-    /// next candidate instead.
+    /// microphone, background audio, or any other exemption — stays live, and
+    /// the sweep takes the next candidate instead.
     /// Not private, so a test can await one deterministic pass.
     func evictIfNeeded() async {
         guard !isEvicting, webViews.count > maxLoaded else { return }
@@ -963,11 +1176,11 @@ final class WebViewPool {
     }
 }
 
-/// One-shot guard that lets exactly one of `hasActiveCall`'s two racing tasks
+/// One-shot guard that lets exactly one of a bounded probe's two racing tasks
 /// resume the continuation. Both racers are `@MainActor`, so the plain flag is
 /// only ever touched on the main actor and needs no lock.
 @MainActor
-private final class CallProbeGate {
+private final class ProbeGate {
     private var used = false
     func claim() -> Bool {
         if used { return false }

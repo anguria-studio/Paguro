@@ -34,6 +34,9 @@ struct ServiceRowView: View {
     var cameraActive: Bool = false
     var micActive: Bool = false
     var micMuted: Bool = false
+    /// The service keeps playing audio that the user started in it, after a
+    /// switch to another service.
+    var isPlayingAudio: Bool = false
     var health: ServiceHealth = .live
     var glassStyle = GlassLabDefaults.style
     var glassIntensity = GlassIntensityScale.defaultValue
@@ -81,6 +84,13 @@ struct ServiceRowView: View {
 
     private var presentsHover: Bool {
         isDockItem ? isDockHovered : isHovering
+    }
+
+    /// A muted service is silent, so it never shows the speaker. The pool ends
+    /// the exemption on mute as well; this keeps the drawing right even during
+    /// the one frame between the two.
+    private var showsAudioMark: Bool {
+        isPlayingAudio && !isMuted
     }
 
     private var contextualName: String {
@@ -172,6 +182,7 @@ struct ServiceRowView: View {
             cameraActive: cameraActive,
             micActive: micActive,
             micMuted: micMuted,
+            isPlayingAudio: showsAudioMark,
             health: health
         ))
         .accessibilityAddTraits([.isButton, isSelected ? .isSelected : []])
@@ -196,6 +207,9 @@ struct ServiceRowView: View {
             .overlay(alignment: .topLeading) {
                 if isMuted {
                     MutedNotificationGlyph()
+                        .offset(x: -5, y: -5)
+                } else if isPlayingAudio {
+                    BackgroundAudioGlyph()
                         .offset(x: -5, y: -5)
                 }
             }
@@ -299,6 +313,9 @@ struct ServiceRowView: View {
                 if isMuted {
                     MutedNotificationGlyph()
                         .offset(x: -5, y: -5)
+                } else if isPlayingAudio {
+                    BackgroundAudioGlyph()
+                        .offset(x: -5, y: -5)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -365,6 +382,12 @@ struct ServiceRowView: View {
             // spends a spacing slot on it and the row picks up 4 dead points.
             if cameraActive || micActive || micMuted {
                 MediaIndicatorGlyph(cameraActive: cameraActive, micActive: micActive, micMuted: micMuted)
+            }
+
+            // Beside the call mark, because both report live media. The unread
+            // badge keeps the trailing edge.
+            if showsAudioMark {
+                BackgroundAudioGlyph(isCompact: false)
             }
 
             if isHibernated {

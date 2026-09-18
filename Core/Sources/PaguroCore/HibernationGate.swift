@@ -22,6 +22,9 @@ public enum HibernationBlock: String, Sendable, CaseIterable {
     case mediaCapture
     /// The page reports a call in progress.
     case activeCall
+    /// The service was playing audible media when it left the screen and keeps
+    /// that audio.
+    case playingAudio
 
     /// A short sentence for a log line.
     public var reason: String {
@@ -34,6 +37,7 @@ public enum HibernationBlock: String, Sendable, CaseIterable {
         case .pinned: "the service is pinned"
         case .mediaCapture: "the camera or microphone is in use"
         case .activeCall: "a call is in progress"
+        case .playingAudio: "the service keeps playing audio"
         }
     }
 }
@@ -54,6 +58,9 @@ public struct HibernationFacts: Equatable, Sendable {
     public var isCapturingMedia: Bool
     /// The call probe reported a call in progress.
     public var hasDetectedCall: Bool
+    /// The service holds the background audio exemption, so a release would
+    /// stop music or a voice message that the user started.
+    public var isPlayingUserAudio: Bool
 
     public init(
         isLoaded: Bool = true,
@@ -63,7 +70,8 @@ public struct HibernationFacts: Equatable, Sendable {
         isNotificationCritical: Bool = false,
         isPinned: Bool = false,
         isCapturingMedia: Bool = false,
-        hasDetectedCall: Bool = false
+        hasDetectedCall: Bool = false,
+        isPlayingUserAudio: Bool = false
     ) {
         self.isLoaded = isLoaded
         self.isActiveService = isActiveService
@@ -73,6 +81,7 @@ public struct HibernationFacts: Equatable, Sendable {
         self.isPinned = isPinned
         self.isCapturingMedia = isCapturingMedia
         self.hasDetectedCall = hasDetectedCall
+        self.isPlayingUserAudio = isPlayingUserAudio
     }
 }
 
@@ -92,6 +101,7 @@ public enum HibernationGate {
         if facts.isPinned { return .pinned }
         if facts.isCapturingMedia { return .mediaCapture }
         if facts.hasDetectedCall { return .activeCall }
+        if facts.isPlayingUserAudio { return .playingAudio }
         return nil
     }
 
