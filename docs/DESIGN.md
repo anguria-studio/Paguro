@@ -87,6 +87,9 @@ between 0.5 and 0.7 seconds. The control plays its own entry or pulse as the
 mark lands, so the handoff reads as one movement instead of two. The mark takes
 no pointer input, no keyboard focus, and no place in the accessibility tree.
 Reduce Motion removes the travel and keeps a short fade at the control.
+The control is global, so a download that starts in a service the window does
+not show keeps that same fade. A mark out of the page on screen would name the
+wrong source.
 
 Movement that reports several changes at one time groups them. Starts inside a
 short window share one mark, and a limit caps how many marks travel at one time.

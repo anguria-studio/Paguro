@@ -333,7 +333,13 @@ The service page keeps its own home action, and Paguro does not repeat it.
 
 ### Download indicator
 
-The download indicator appears when the service has one download record.
+The download indicator is the one global control in the content header.
+It reports the downloads of every service, the way a browser download center
+does. A switch of service therefore hides no running transfer and empties no
+history. The ring, the badge, the count, and the list stay as they are.
+Each record still names the service that started it.
+
+The indicator appears when the app has one download record.
 It stays in the header until the user removes the last record.
 No record disappears on its own, so the route to a finished file remains
 available after the transfer ends.
@@ -352,7 +358,8 @@ not wait for a reply.
 
 A result stops counting after 12 seconds, or when the user opens the list.
 The earlier of the two events applies.
-Opening the list marks every result in it as seen.
+Opening the list marks every result in it as seen, in every service, because the
+list shows every service.
 A download that is still running keeps its unseen state, because the user
 cannot have seen a result that has not happened.
 
@@ -445,9 +452,20 @@ landing to the control.
 Reduce Motion removes the travel. A short fade at the control reports the start
 instead, and a group of starts still produces one fade.
 
-A download that starts in a service that the window does not show sends no
-mark. A download that starts while the main window is closed sends none either,
-because the overlay that draws the marks exists with that window.
+A download that starts in a service that the window does not show sends no mark.
+The control is global, so that start still has to reach the header.
+A mark would rise out of a page that did not start the download.
+The short fade at the control reports it instead, the cue that Reduce Motion
+uses.
+
+A download that starts while the main window is closed reports nothing, because
+the overlay that draws the marks exists with that window. A window that shows no
+service page reports nothing either: the mark has no place to leave from.
+
+`DownloadStartCue.resolve` in `PaguroCore` holds this rule.
+It reads the selected service, the service of the start, Reduce Motion, and
+whether the window shows a service page.
+It answers with the travel, the fade at the control, or nothing.
 
 The mark crosses the area that holds the find bar and the floating notice
 cards. It draws above them for a moment, it changes no layout, and it takes no
@@ -461,7 +479,22 @@ and the mark travels to it there.
 A finished download never opens the list. The user opens it with a click.
 
 Clicking the indicator opens the download list.
-The list names each download and reports its state.
+The list holds the downloads of every service, newest first.
+It names each download and reports its state.
+
+Each line names its source on its secondary line.
+The source is the saved icon of the service and the service name, and it comes
+before the state of the transfer.
+The line reads the icon through the same resolution as the rail and the
+notification attachment, so one service cannot show two icons.
+The name is the one that applied when the download began, so a record stays
+readable after a rename or a deletion. A service that left the workspace keeps
+that name with a generic mark, because it has no icon left.
+A download that Paguro cannot attribute to a service shows no source.
+
+A secondary click on a line offers `Go to <service>`, which shows that service.
+The action uses the same selection route as the rail.
+A record of a service that left the workspace offers nothing.
 
 Clicking a finished line shows its file in the Finder.
 That line draws a quiet hover fill, so the user can see the action.

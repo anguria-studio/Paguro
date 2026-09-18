@@ -40,14 +40,15 @@ final class DownloadFlightState {
 
     init() {}
 
-    /// Answers one download start.
+    /// Answers one download start with the cue that the rules chose for it.
     ///
-    /// The caller filters the starts that must not animate: a start in another
-    /// service, and any start that happens while no window shows the content.
-    /// This method then decides how the start appears.
+    /// `DownloadStartCue.resolve` in `PaguroCore` decides the cue from the
+    /// selected service, the service of the start, and Reduce Motion. A start
+    /// that reports nothing never reaches this method, so this method plays every
+    /// cue it receives.
     func start(
         _ event: DownloadTracker.StartEvent,
-        reduceMotion: Bool,
+        cue: DownloadStartCue,
         at now: Date = Date()
     ) {
         // A repeated report of the same start changes nothing. The sequence
@@ -65,11 +66,12 @@ final class DownloadFlightState {
             .Announcement(DownloadIndicatorState.startAnnouncement(filename: event.filename))
             .post()
 
-        guard DownloadStartCue.resolve(reduceMotion: reduceMotion).hasTravel else {
-            // Reduce Motion has no travel. The control itself carries the cue,
-            // so the mark never leaves and the arrival happens at once. The
-            // flight stays with the planner for its group window, so a group of
-            // starts produces one fade instead of a row of them.
+        guard cue.hasTravel else {
+            // The destination cue has no travel. The control itself carries it,
+            // so the mark never leaves and the arrival happens at once. Reduce
+            // Motion and a start in another service both arrive here. The flight
+            // stays with the planner for its group window, so a group of starts
+            // produces one fade instead of a row of them.
             arrivalTick &+= 1
             scheduleEnd(of: flightID, after: DownloadFlightPlanner.coalesceWindow)
             return

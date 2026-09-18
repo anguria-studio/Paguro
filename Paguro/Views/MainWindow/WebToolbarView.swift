@@ -76,9 +76,13 @@ struct WebContentActions: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The indicator state for the service that the header names.
+    /// The indicator state for every service.
+    ///
+    /// The download control is the one global control in this group. A user
+    /// expects a browser download center, so a switch of service must not hide a
+    /// running transfer or the route back to a finished file.
     private var downloadState: DownloadIndicatorState {
-        appState.downloadTracker.state(for: appState.selectedServiceID)
+        appState.downloadTracker.state()
     }
 
     var body: some View {
@@ -86,7 +90,6 @@ struct WebContentActions: View {
             if downloadState.isVisible {
                 DownloadIndicatorButton(
                     state: downloadState,
-                    serviceID: appState.selectedServiceID,
                     glassIntensity: appState.liquidGlassIntensity
                 )
                 // The control grows into place, so a download that finished
@@ -167,12 +170,14 @@ struct WebContentActions: View {
 
 /// The header download control.
 ///
-/// It appears as soon as the service has one download record and stays until
-/// the user removes the last one. This keeps the route to a finished file
-/// available after the transfer ends.
+/// It appears as soon as the app has one download record and stays until the
+/// user removes the last one. This keeps the route to a finished file available
+/// after the transfer ends.
+///
+/// The control is global. It counts the downloads of every service, so its ring,
+/// its badge, and its list survive a switch of service.
 struct DownloadIndicatorButton: View {
     let state: DownloadIndicatorState
-    let serviceID: UUID?
     let glassIntensity: Double
 
     @Environment(AppState.self) private var appState
@@ -219,7 +224,7 @@ struct DownloadIndicatorButton: View {
         // The list opens on a click only. A finished download must not steal
         // the pointer or the keyboard from whatever the user is doing.
         .popover(isPresented: $showsList, arrowEdge: .bottom) {
-            DownloadListView(serviceID: serviceID)
+            DownloadListView()
         }
         .onChange(of: state.showsRing) { wasRinging, isRinging in
             guard wasRinging, !isRinging, state.isVisible else { return }
@@ -232,10 +237,11 @@ struct DownloadIndicatorButton: View {
             land()
         }
         // Opening the list is the user seeing it, so the badge clears here
-        // rather than waiting out its window. The control itself stays.
+        // rather than waiting out its window. The list holds every service, so
+        // the acknowledgement covers every service too. The control itself stays.
         .onChange(of: showsList) { _, isOpen in
             guard isOpen else { return }
-            appState.downloadTracker.acknowledgeAll(for: serviceID)
+            appState.downloadTracker.acknowledgeAll()
         }
     }
 
@@ -416,20 +422,21 @@ private struct DownloadProgressRing: View {
 
 /// The list behind the download control.
 ///
+/// The list holds the downloads of every service, newest first, so it is one
+/// download center for the app. Each line names the service that started it.
+///
 /// A running download has a stop action. An ended download has a dismiss
 /// action. Clicking a finished line shows its file in the Finder and keeps the
 /// record. Clear All removes every ended record and keeps the running
 /// downloads.
 private struct DownloadListView: View {
-    let serviceID: UUID?
-
     @Environment(AppState.self) private var appState
 
     /// The list stays short. Older files remain in the Downloads folder.
     private static let visibleRowLimit = 8
 
     private var items: [DownloadTracker.Item] {
-        Array(appState.downloadTracker.items(for: serviceID).prefix(Self.visibleRowLimit))
+        Array(appState.downloadTracker.recentItems.prefix(Self.visibleRowLimit))
     }
 
     var body: some View {
@@ -446,13 +453,13 @@ private struct DownloadListView: View {
                 }
             }
 
-            if appState.downloadTracker.hasDismissibleItems(for: serviceID) {
+            if appState.downloadTracker.hasDismissibleItems {
                 Divider()
                     .padding(.horizontal, 12)
                     .padding(.top, 4)
 
                 Button("Clear All") {
-                    appState.downloadTracker.clear(for: serviceID)
+                    appState.downloadTracker.clear()
                 }
                 .buttonStyle(.borderless)
                 .font(.paguroBody)
@@ -481,6 +488,10 @@ private struct DownloadListView: View {
 /// An active line and a failed line have no row action. An active line has no
 /// file yet, and a failed line has none at all. Neither one draws the hover
 /// highlight, so a line without a target never looks clickable.
+///
+/// The list holds every service, so each line names its own source on its
+/// secondary line: the saved icon of the service and the name the record
+/// captured. A secondary click offers a route to that service.
 private struct DownloadRow: View {
     let item: DownloadTracker.Item
 
@@ -488,9 +499,44 @@ private struct DownloadRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
 
+    /// The source icon matches the height of the secondary line beside it.
+    private static let sourceIconSize: CGFloat = 12
+
     private var revealLabel: String { "Show \(item.filename) in Finder" }
 
+    /// The service that started this download, or nil when it left the
+    /// workspace. A removed service keeps its record: only its icon is gone.
+    private var sourceService: ServiceInstance? {
+        item.serviceID.flatMap { appState.service(id: $0) }
+    }
+
+    private var source: DownloadSource {
+        DownloadSource.resolve(
+            serviceID: item.serviceID,
+            label: item.serviceLabel,
+            serviceExists: sourceService != nil
+        )
+    }
+
+    /// The line, with the route to its source service on a secondary click.
+    ///
+    /// The view sends the selection as an intent to `AppState`, the same route
+    /// the rail uses, so the list keeps no selection rule of its own. A record of
+    /// a service that left the workspace carries no menu at all, instead of an
+    /// empty one: there is nothing left to show.
     var body: some View {
+        if let sourceService {
+            line.contextMenu {
+                Button("Go to \(source.label ?? sourceService.label)") {
+                    appState.selectService(id: sourceService.id)
+                }
+            }
+        } else {
+            line
+        }
+    }
+
+    private var line: some View {
         HStack(spacing: 8) {
             if item.state == .finished {
                 Button {
@@ -504,12 +550,12 @@ private struct DownloadRow: View {
                 .onHover { isHovering = $0 }
                 .help(revealLabel)
                 .accessibilityLabel(revealLabel)
-                .accessibilityValue(statusText)
+                .accessibilityValue(spokenStatus)
                 .accessibilityIdentifier("web.downloads.reveal")
             } else {
                 rowContent
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(item.filename), \(statusText)")
+                    .accessibilityLabel("\(item.filename), \(spokenStatus)")
             }
 
             trailingAction
@@ -533,15 +579,62 @@ private struct DownloadRow: View {
                         .controlSize(.small)
                 }
 
-                Text(statusText)
-                    .font(.paguroSidebarAccessory)
-                    .foregroundStyle(PaguroColor.Text.secondary)
+                secondaryLine
             }
 
             Spacer(minLength: 4)
         }
         .padding(.leading, 12)
         .padding(.vertical, 6)
+    }
+
+    /// The source of the download and its state, on one quiet line.
+    ///
+    /// The two facts share a line, so a source costs the row no height. A
+    /// download that Paguro cannot attribute shows the state alone.
+    private var secondaryLine: some View {
+        HStack(spacing: 4) {
+            if let label = source.label {
+                sourceGlyph
+                Text(label)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(verbatim: "·")
+            }
+
+            Text(statusText)
+                .lineLimit(1)
+        }
+        .font(.paguroSidebarAccessory)
+        .foregroundStyle(PaguroColor.Text.secondary)
+        // The row's own label speaks the source and the state together.
+        .accessibilityHidden(true)
+    }
+
+    /// The saved icon of the source service.
+    ///
+    /// It resolves through `ServiceIconSquare`, the one icon source that the
+    /// rail and the notification attachment also use, so a download row cannot
+    /// show a different icon from the rest of the app. A service that left the
+    /// workspace has no icon to resolve, so its row keeps a generic mark beside
+    /// the name that the record captured.
+    @ViewBuilder
+    private var sourceGlyph: some View {
+        if source.drawsServiceIcon, let sourceService {
+            ServiceIconSquare(
+                instance: sourceService,
+                size: Self.sourceIconSize,
+                cornerRadius: 3
+            )
+        } else {
+            Image(systemName: "globe")
+        }
+    }
+
+    /// The spoken state of this row, with its source service in front of it.
+    private var spokenStatus: String {
+        guard let phrase = source.spokenPhrase else { return statusText }
+        return "\(phrase), \(statusText)"
     }
 
     /// The quiet fill that marks a line the user can click. Only a finished

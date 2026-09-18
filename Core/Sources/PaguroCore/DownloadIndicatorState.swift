@@ -52,6 +52,72 @@ public enum DownloadCountLabel {
     }
 }
 
+/// What one download row says about the service that started the download.
+///
+/// The download list is global, so every row has to name its own source. The
+/// record carries the service name that applied when the download began, so the
+/// row stays readable after a rename or a deletion.
+///
+/// The three cases differ in what the row can draw. A live service has a saved
+/// icon, so the row draws it. A service that no longer exists has none, so the
+/// row keeps the recorded name with a generic mark. A download that Paguro
+/// could not attribute has no source at all, and its row shows none: an invented
+/// source would be worse than no source.
+public enum DownloadSource: Equatable, Sendable {
+    /// Paguro could not name the service. The row shows no source.
+    case unattributed
+    /// The service still exists. The row draws its saved icon beside the name.
+    case service(label: String)
+    /// The service is gone. The row keeps the recorded name with a generic mark.
+    case removedService(label: String)
+
+    /// Returns the source for one download record.
+    ///
+    /// - Parameters:
+    ///   - serviceID: The service on the record, or nil for a download that
+    ///     Paguro could not attribute.
+    ///   - label: The service name that the record captured when the download
+    ///     began.
+    ///   - serviceExists: Whether that service is still in the workspace.
+    public static func resolve(
+        serviceID: UUID?,
+        label: String?,
+        serviceExists: Bool
+    ) -> DownloadSource {
+        guard serviceID != nil else { return .unattributed }
+        let name = label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // A record with a service but no usable name can say nothing useful,
+        // so it reads as a download without a source instead of as a blank row.
+        guard !name.isEmpty else { return .unattributed }
+        return serviceExists ? .service(label: name) : .removedService(label: name)
+    }
+
+    /// The name to print under the file name, or nil for no source line.
+    public var label: String? {
+        switch self {
+        case .unattributed: return nil
+        case let .service(label), let .removedService(label): return label
+        }
+    }
+
+    /// Whether the row draws the saved icon of the service.
+    ///
+    /// A removed service has no icon left, so its row draws a generic mark.
+    public var drawsServiceIcon: Bool {
+        if case .service = self { return true }
+        return false
+    }
+
+    /// The part of the row's spoken label that names the source, or nil.
+    ///
+    /// The row reads as "report.pdf, from Gmail, downloading", so the source
+    /// arrives between the file name and the state.
+    public var spokenPhrase: String? {
+        guard let label else { return nil }
+        return "from \(label)"
+    }
+}
+
 /// The motion values for the download control.
 ///
 /// The rules keep these numbers so the view has no private timings and a
@@ -129,6 +195,36 @@ public enum DownloadStartCue: Equatable, Sendable {
 
     public static func resolve(reduceMotion: Bool) -> DownloadStartCue {
         reduceMotion ? .destinationFade : .flight
+    }
+
+    /// The cue for one download start, with one global download control.
+    ///
+    /// The control counts the downloads of every service, so a start in a
+    /// service that the window does not show must still reach the header. A
+    /// mark cannot travel from that start, because the page it belongs to is
+    /// not on screen: a mark out of the visible page would name the wrong
+    /// source. The destination cue answers this case, the same cue that Reduce
+    /// Motion uses.
+    ///
+    /// `contentIsOnScreen` is false when the window shows no service page. The
+    /// mark then has no place to leave from, so the start produces no cue at
+    /// all. A start while the window is closed reaches this rule from no
+    /// caller, because the overlay that draws the marks lives with the window.
+    ///
+    /// A download without a service belongs to every service, so it keeps the
+    /// travel.
+    ///
+    /// - Returns: The cue, or nil when the start produces none.
+    public static func resolve(
+        eventServiceID: UUID?,
+        selectedServiceID: UUID?,
+        reduceMotion: Bool,
+        contentIsOnScreen: Bool
+    ) -> DownloadStartCue? {
+        guard contentIsOnScreen else { return nil }
+        guard !reduceMotion else { return .destinationFade }
+        let isOnScreen = eventServiceID == nil || eventServiceID == selectedServiceID
+        return isOnScreen ? .flight : .destinationFade
     }
 
     /// How long the cue lasts.

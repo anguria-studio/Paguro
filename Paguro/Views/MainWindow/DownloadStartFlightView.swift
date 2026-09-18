@@ -51,6 +51,10 @@ extension View {
 /// covers the rails and the content together, so the mark crosses from one into
 /// the other without a clip, whichever rail layout draws the control.
 ///
+/// The control is global, so it reports a download of every service. A start in
+/// a service that the window does not show therefore reaches the control without
+/// a mark: a mark would rise out of a page that did not start the download.
+///
 /// The overlay takes no pointer input, keeps no keyboard focus, and holds no
 /// accessibility element: the page below must not lose a click or a key while a
 /// download starts. `DownloadFlightState` posts the spoken announcement instead.
@@ -82,13 +86,13 @@ struct DownloadStartFlightOverlay: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        // A mark answers one new download of the service on screen. The value
-        // changes for a start only, so a progress report, a result, and a
-        // service switch send nothing. A window that is closed has no overlay,
-        // so a start while it is closed also sends nothing.
+        // A mark answers one new download. The value changes for a start only, so
+        // a progress report, a result, and a service switch send nothing. A
+        // window that is closed has no overlay, so a start while it is closed
+        // also sends nothing.
         .onChange(of: appState.downloadTracker.lastStart) { _, event in
-            guard let event, belongsToTheServiceOnScreen(event) else { return }
-            appState.downloadFlights.start(event, reduceMotion: reduceMotion)
+            guard let event, let cue = cue(for: event) else { return }
+            appState.downloadFlights.start(event, cue: cue)
         }
     }
 
@@ -97,12 +101,20 @@ struct DownloadStartFlightOverlay: View {
         content.minY + content.height * CGFloat(DownloadIndicatorMotion.flightStartFraction)
     }
 
-    /// Whether the header on screen is the one this download belongs to.
+    /// How this start reports itself, or nil for a start that reports nothing.
     ///
-    /// A download without a service belongs to every header, the same rule the
-    /// tracker uses for the list and the count.
-    private func belongsToTheServiceOnScreen(_ event: DownloadTracker.StartEvent) -> Bool {
-        event.serviceID == nil || event.serviceID == appState.selectedServiceID
+    /// The header control is global, so a download that starts in a service the
+    /// window does not show still has to reach it. A mark cannot travel from that
+    /// start, because it would rise out of the wrong page, so the rule answers
+    /// with the cue at the control instead. `DownloadStartCue` in `PaguroCore`
+    /// holds the rule; this method only reads the values it needs.
+    private func cue(for event: DownloadTracker.StartEvent) -> DownloadStartCue? {
+        DownloadStartCue.resolve(
+            eventServiceID: event.serviceID,
+            selectedServiceID: appState.selectedServiceID,
+            reduceMotion: reduceMotion,
+            contentIsOnScreen: contentFrame != nil
+        )
     }
 }
 

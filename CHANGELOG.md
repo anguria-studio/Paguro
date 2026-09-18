@@ -19,6 +19,13 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Changed
 
+- The download control in the header is now one download center for the whole
+  app, like the one in a browser. It shows the downloads of every service.
+  Switching service no longer hides a running download or its history. Each line
+  names the service that started it, with that service's icon. A secondary click
+  offers a route back to that service. Clear All empties the whole list. A
+  download that starts in a service you are not reading reports itself with a
+  short fade at the control. No mark rises from the page for it.
 - Performance settings state how many services Paguro keeps loaded at the same
   time. Paguro can release the oldest non-messaging services even when idle
   hibernation is off.
