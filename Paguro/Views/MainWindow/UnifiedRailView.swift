@@ -347,6 +347,12 @@ struct UnifiedRailView: View {
                     .coordinateSpace(.named(RailCoordinateSpace.name))
                 }
                 .scrollClipDisabled(sidebarPresentation == .collapsed)
+                // A legacy scroller takes its width from the scroll view
+                // content, which moves every icon off the rail centerline as
+                // soon as the rail overflows. The rail hides the system
+                // indicator and draws `RailScrollIndicatorView` in an overlay,
+                // which keeps one content width in both scroller styles.
+                .scrollIndicators(.never)
                 // One fixed viewport receives every primary click. The
                 // resolver decides which drawn icon, if any, owns the event;
                 // no animated cell frame participates in mouse targeting.
@@ -387,6 +393,11 @@ struct UnifiedRailView: View {
                     )
                 } action: { _, updated in
                     railScroll = updated
+                }
+                // Outside the gestures above, and without a hit test of its
+                // own, so the pointer keeps reaching the icons under it.
+                .overlay {
+                    RailScrollIndicatorView(geometry: railScroll)
                 }
                 .task(id: railReorder.draggingLinkID) {
                     await runRailAutoscroll()

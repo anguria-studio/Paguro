@@ -36,6 +36,23 @@ The first dock item aligns with the web-page area.
 The material surface keeps an 8 point gutter above the window bottom.
 This position keeps the dock edge away from the traffic lights.
 
+A rail with more items than it shows scrolls.
+Both rail presentations hide the system scroll bar.
+A legacy scroll bar takes its width from the rail content, which moves every
+icon off the rail centerline as soon as the rail overflows.
+The rail draws its own indicator instead: a 3 point capsule over the trailing
+edge, 2 points from the rail surface.
+The indicator is as long a part of the rail as the rail is of its content, and
+it is 20 points long at least.
+It appears while the rail scrolls and fades out after 0.9 seconds without
+movement.
+It takes no pointer event, so the rail keeps every hover, click, and context
+menu.
+`RailScrollIndicator` in PaguroCore holds its length and its position.
+The workspace rail follows the same rule.
+The top bar hides its own scroll bar already: a horizontal scroll bar takes
+height, and the bar keeps one height in every state.
+
 The selected service, drag order, badge count, health state, media state,
 keyboard focus, context menu, tooltip, and VoiceOver label remain available in
 both states.
@@ -527,6 +544,11 @@ apply.
 The first focusable service does not show a focus ring only because the window
 opened. Tab or arrow-key navigation enables the ring when focus differs from
 selection.
+
+The rail overflow indicator uses a fade alone, so Reduce Motion removes nothing
+from it. Its position follows the scroll position directly.
+Increase Contrast and Reduce Transparency make it stronger against the rail.
+VoiceOver skips the indicator, because the rail reports its items already.
 
 The collapse action has a keyboard route and a VoiceOver label.
 Reduce Motion removes the animated sidebar transition.
