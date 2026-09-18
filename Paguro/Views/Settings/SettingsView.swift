@@ -249,6 +249,15 @@ struct GeneralSettingsView: View {
                 Text("Frees the memory and CPU of a service you haven't opened in a while, releasing its process until you return. Chat apps (Slack, Teams, WhatsApp, and the like) stay live so their notifications still arrive the instant a message lands, even when many services are open. A hibernated service still refreshes its unread badge every few minutes, though that count only climbs until you open it again. Mark any service \"Keep Loaded\" to exempt it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                // Outside the toggle's own block: this limit applies even when
+                // idle hibernation is off, which is exactly when a released
+                // service surprises the user.
+                // The sentence comes from PaguroCore, so the stated number
+                // follows `WebViewPoolCapacity.maxLoaded` and cannot go stale.
+                Text(CapacityEvictionNotice.settingsSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Startup") {

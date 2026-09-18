@@ -182,19 +182,91 @@ final class HibernationSchedulerTests: XCTestCase {
             isLocked: { false }
         )
         fixture.pool.onServiceSoftHibernated?(service.id)
+        fixture.pool.onServiceEvictedForCapacity?(service.id)
         XCTAssertTrue(scheduler.isIdleSweepScheduled)
         XCTAssertTrue(scheduler.hasPendingImmediateHibernation(service.id))
+        XCTAssertNotNil(scheduler.capacityEvictionNotice)
 
         scheduler.shutdown()
 
         XCTAssertFalse(scheduler.isIdleSweepScheduled)
         XCTAssertFalse(scheduler.hasPendingImmediateHibernation(service.id))
+        XCTAssertNil(scheduler.capacityEvictionNotice)
         XCTAssertNil(fixture.pool.isNotificationCritical)
         XCTAssertNil(fixture.pool.onServiceHibernated)
+        XCTAssertNil(fixture.pool.onServiceEvictedForCapacity)
         XCTAssertNil(fixture.pool.onServiceWoke)
         XCTAssertNil(fixture.pool.onServiceSoftHibernated)
         XCTAssertNil(fixture.pool.onServiceSoftWoke)
         XCTAssertNil(fixture.pool.onServiceRemoved)
+    }
+
+    /// The capacity limit is invisible in the interface, so the first release
+    /// must explain itself and name the service. The rule does not change, so a
+    /// later release in the same app run must stay silent.
+    @MainActor
+    func testTheCapacityNoticeAppearsOnceForEachAppRun() throws {
+        let fixture = try makeFixture()
+        defer { fixture.pool.shutdown() }
+        let first = service(label: "Notion", policy: .followGlobal)
+        let second = service(label: "Linear", policy: .followGlobal)
+        fixture.container.mainContext.insert(first)
+        fixture.container.mainContext.insert(second)
+        try fixture.container.mainContext.save()
+
+        let scheduler = HibernationScheduler(
+            context: fixture.container.mainContext,
+            webViewPool: fixture.pool,
+            idleCandidates: { _ in [] },
+            hibernate: { _ in true }
+        )
+        defer { scheduler.shutdown() }
+        scheduler.start(
+            globalEnabled: false,
+            globalIdleMinutes: 10,
+            isLocked: { false }
+        )
+        XCTAssertNil(scheduler.capacityEvictionNotice)
+
+        fixture.pool.onServiceEvictedForCapacity?(first.id)
+
+        let notice = try XCTUnwrap(scheduler.capacityEvictionNotice)
+        XCTAssertTrue(notice.contains("Notion"), notice)
+        XCTAssertTrue(notice.contains("\"Keep Loaded\""), notice)
+
+        fixture.pool.onServiceEvictedForCapacity?(second.id)
+        XCTAssertEqual(scheduler.capacityEvictionNotice, notice, "the second release repeats no notice")
+
+        scheduler.dismissCapacityEvictionNotice()
+        XCTAssertNil(scheduler.capacityEvictionNotice)
+
+        fixture.pool.onServiceEvictedForCapacity?(second.id)
+        XCTAssertNil(scheduler.capacityEvictionNotice, "a dismissed notice does not return in the same run")
+    }
+
+    /// A released service can be deleted before the notice is built. The notice
+    /// must still explain the rule instead of naming nothing.
+    @MainActor
+    func testTheCapacityNoticeSurvivesAnUnknownService() throws {
+        let fixture = try makeFixture()
+        defer { fixture.pool.shutdown() }
+        let scheduler = HibernationScheduler(
+            context: fixture.container.mainContext,
+            webViewPool: fixture.pool,
+            idleCandidates: { _ in [] },
+            hibernate: { _ in true }
+        )
+        defer { scheduler.shutdown() }
+        scheduler.start(
+            globalEnabled: false,
+            globalIdleMinutes: 10,
+            isLocked: { false }
+        )
+
+        fixture.pool.onServiceEvictedForCapacity?(UUID())
+
+        let notice = try XCTUnwrap(scheduler.capacityEvictionNotice)
+        XCTAssertTrue(notice.contains(CapacityEvictionNotice.fallbackServiceName), notice)
     }
 
     @MainActor

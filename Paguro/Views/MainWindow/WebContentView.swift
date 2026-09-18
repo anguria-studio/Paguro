@@ -1,8 +1,13 @@
+import PaguroCore
 import SwiftUI
 import SwiftData
 import WebKit
 
 struct WebContentView: View {
+    /// How long a floating notice stays on screen. It matches the capacity
+    /// notice, which `HibernationScheduler` removes on the same schedule.
+    private static let passkeyNoticeSeconds = 12
+
     let selectedServiceID: UUID?
     let sidebarIsCollapsed: Bool
     let collapsedSidebarWidth: CGFloat
@@ -11,7 +16,9 @@ struct WebContentView: View {
     @Query private var services: [ServiceInstance]
     @State private var currentWebView: WKWebView?
     @State private var transitionSnapshot: NSImage?
-    @State private var showPasskeyNotice = false
+    /// The service whose passkey notice is on screen, or nil for none. The
+    /// identifier also restarts the auto-hide when another service raises it.
+    @State private var passkeyNoticeServiceID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -37,10 +44,6 @@ struct WebContentView: View {
             }
 
             if selectedService != nil, let webView = currentWebView {
-                if showPasskeyNotice {
-                    passkeyNoticeBanner
-                }
-
                 ZStack(alignment: .topTrailing) {
                     WebViewContainer(webView: webView)
 
@@ -68,6 +71,17 @@ struct WebContentView: View {
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
+
+                    // The cards float above the page instead of pushing it
+                    // down. The reader gives the stack the web width, so a
+                    // narrow window keeps the card inside the content.
+                    GeometryReader { proxy in
+                        FloatingNoticeStack(
+                            notices: floatingNotices,
+                            availableWidth: proxy.size.width,
+                            findBarIsVisible: appState.findInPageVisible
+                        )
+                    }
                 }
                 .background(
                     PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
@@ -84,7 +98,15 @@ struct WebContentView: View {
                 emptyState
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showPasskeyNotice)
+        .task(id: passkeyNoticeServiceID) {
+            // The passkey notice reports a fixed limit, so it leaves on its
+            // own. The "seen" state is already stored, and the card never
+            // returns for this service.
+            guard passkeyNoticeServiceID != nil else { return }
+            try? await Task.sleep(for: .seconds(Self.passkeyNoticeSeconds))
+            guard !Task.isCancelled else { return }
+            passkeyNoticeServiceID = nil
+        }
         .onAppear {
             loadWebViewForSelectedService()
         }
@@ -141,10 +163,10 @@ struct WebContentView: View {
         // capability switch as the Add Service notice, and marked seen as soon
         // as it's shown so switching away and back doesn't re-trigger it.
         if !AppCapabilities.passkeysSupported, appState.shouldShowPasskeyNotice(for: service) {
-            showPasskeyNotice = true
+            passkeyNoticeServiceID = service.id
             appState.markPasskeyNoticeSeen(for: service.id)
         } else {
-            showPasskeyNotice = false
+            passkeyNoticeServiceID = nil
         }
 
         // Once the view is shown its frame settles a render tick later. Some SPAs
@@ -159,40 +181,46 @@ struct WebContentView: View {
 
     }
 
-    /// A slim, dismissible bar warning that passkey sign-in isn't available in
-    /// Paguro's web views. Auto-hides after a short delay; the "seen" state is
-    /// already persisted when it appears, so it never returns for this service.
-    private var passkeyNoticeBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "person.badge.key.fill")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+    /// The transient notices for the service on screen.
+    ///
+    /// Both notices report a fixed Paguro limit, name no action the user must
+    /// take now, and leave on their own. That is the card's purpose. An
+    /// app-level state keeps the full-width strip in `ContentView`.
+    private var floatingNotices: [FloatingNotice] {
+        var notices: [FloatingNotice] = []
 
-            Text(AppCapabilities.passkeyUnavailableBanner)
-                .font(.callout)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 8)
-
-            Button {
-                showPasskeyNotice = false
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Dismiss")
+        // The pool's own size limit can release a background service while
+        // idle hibernation is off. Say so one time, so the user does not read
+        // the reload as a fault.
+        if let message = appState.hibernationScheduler.capacityEvictionNotice {
+            notices.append(
+                FloatingNotice(
+                    id: .capacityEviction,
+                    systemImage: "moon.zzz.fill",
+                    title: CapacityEvictionNotice.title,
+                    message: message,
+                    dismiss: {
+                        appState.hibernationScheduler.dismissCapacityEvictionNotice()
+                    }
+                )
+            )
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(PaguroColor.Fill.quietSurface)
-        .overlay(alignment: .bottom) { Divider() }
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .task {
-            try? await Task.sleep(for: .seconds(12))
-            showPasskeyNotice = false
+
+        // WKWebView cannot use passkeys for sign-in, so warn the user the first
+        // time each service is opened.
+        if passkeyNoticeServiceID != nil {
+            notices.append(
+                FloatingNotice(
+                    id: .passkeyUnavailable,
+                    systemImage: "person.badge.key.fill",
+                    title: "Passkeys are not available",
+                    message: AppCapabilities.passkeyUnavailableBanner,
+                    dismiss: { passkeyNoticeServiceID = nil }
+                )
+            )
         }
+
+        return notices
     }
 
     /// Whether the currently selected space contains any services. Only

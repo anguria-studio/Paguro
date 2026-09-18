@@ -3,9 +3,20 @@ import SwiftData
 import PaguroCore
 
 /// Schedules full hibernation for inactive service web views.
+///
+/// It also owns the capacity notice. The scheduler already installs the pool
+/// lifecycle callbacks and already reads a service record, so it can name the
+/// released service without a new dependency. A view reads the notice through
+/// `AppState`, which keeps the direction view -> application state ->
+/// controller -> pool.
 @MainActor
+@Observable
 final class HibernationScheduler {
     typealias IdleCandidate = (id: UUID, idle: TimeInterval)
+
+    /// How long the capacity notice stays on screen. It matches the other
+    /// timed notices in the window.
+    private static let capacityNoticeSeconds = 12
 
     private let context: ModelContext
     private let webViewPool: WebViewPool
@@ -15,13 +26,18 @@ final class HibernationScheduler {
     private let idleCandidates: @MainActor (Date) -> [IdleCandidate]
     private let hibernate: @MainActor (UUID) async -> Bool
 
-    private var globalEnabled = false
-    private var globalIdleMinutes = 10
-    private var isLocked: @MainActor () -> Bool = { true }
-    private var idleSweepTask: Task<Void, Never>?
-    private var pendingImmediateTasks: [UUID: Task<Void, Never>] = [:]
-    private var hasStarted = false
-    private var hasShutDown = false
+    @ObservationIgnored private var globalEnabled = false
+    @ObservationIgnored private var globalIdleMinutes = 10
+    @ObservationIgnored private var isLocked: @MainActor () -> Bool = { true }
+    @ObservationIgnored private var idleSweepTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingImmediateTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var hasStarted = false
+    @ObservationIgnored private var hasShutDown = false
+    @ObservationIgnored private var hasAnnouncedCapacityEviction = false
+    @ObservationIgnored private var capacityNoticeTask: Task<Void, Never>?
+
+    /// The current capacity-eviction explanation, or nil when there is none.
+    private(set) var capacityEvictionNotice: String?
 
     init(
         context: ModelContext,
@@ -63,6 +79,9 @@ final class HibernationScheduler {
             self?.cancelImmediateHibernation(serviceID)
             onServiceHibernated(serviceID)
         }
+        webViewPool.onServiceEvictedForCapacity = { [weak self] serviceID in
+            self?.announceCapacityEviction(serviceID)
+        }
         webViewPool.onServiceWoke = { [weak self] serviceID in
             self?.cancelImmediateHibernation(serviceID)
         }
@@ -91,10 +110,14 @@ final class HibernationScheduler {
         idleSweepTask = nil
         for task in pendingImmediateTasks.values { task.cancel() }
         pendingImmediateTasks.removeAll()
+        capacityNoticeTask?.cancel()
+        capacityNoticeTask = nil
+        capacityEvictionNotice = nil
 
         guard hasStarted else { return }
         webViewPool.isNotificationCritical = nil
         webViewPool.onServiceHibernated = nil
+        webViewPool.onServiceEvictedForCapacity = nil
         webViewPool.onServiceWoke = nil
         webViewPool.onServiceSoftHibernated = nil
         webViewPool.onServiceSoftWoke = nil
@@ -135,6 +158,42 @@ final class HibernationScheduler {
                   candidate.idle >= threshold
             else { continue }
             _ = await hibernate(candidate.id)
+        }
+    }
+
+    /// Removes the capacity notice after the user reads it.
+    func dismissCapacityEvictionNotice() {
+        capacityNoticeTask?.cancel()
+        capacityNoticeTask = nil
+        capacityEvictionNotice = nil
+    }
+
+    /// Explains the first capacity eviction of this app run.
+    ///
+    /// The pool releases the service because of its size limit, not because the
+    /// user turned idle hibernation on. Without this notice the service looks
+    /// broken. Later evictions repeat the same rule, so they stay silent.
+    private func announceCapacityEviction(_ serviceID: UUID) {
+        guard !hasShutDown,
+              CapacityEvictionNotice.shouldAnnounce(
+                  hasAnnouncedThisRun: hasAnnouncedCapacityEviction
+              )
+        else { return }
+        hasAnnouncedCapacityEviction = true
+
+        let message = CapacityEvictionNotice.message(
+            serviceName: service(serviceID)?.label ?? ""
+        )
+        capacityEvictionNotice = message
+        capacityNoticeTask?.cancel()
+        capacityNoticeTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(Self.capacityNoticeSeconds))
+            } catch {
+                return
+            }
+            guard self?.capacityEvictionNotice == message else { return }
+            self?.capacityEvictionNotice = nil
         }
     }
 
