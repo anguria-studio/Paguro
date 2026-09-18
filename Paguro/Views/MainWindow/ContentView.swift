@@ -112,6 +112,19 @@ struct ContentView: View {
             // the very top of the window; the traffic-light insets keep the
             // top-left clear.
             .ignoresSafeArea(.container, edges: .top)
+            // The mark that reports a download start travels from the web
+            // content into the header download control. Its overlay sits here,
+            // because this is the first level that holds both of them, in every
+            // rail layout. The two frames arrive as anchors from the views that
+            // own them, so nothing here knows where the control is.
+            .overlayPreferenceValue(DownloadFlightAnchorKey.self) { anchors in
+                GeometryReader { proxy in
+                    DownloadStartFlightOverlay(
+                        controlFrame: anchors.control.map { proxy[$0] },
+                        contentFrame: anchors.content.map { proxy[$0] }
+                    )
+                }
+            }
         }
         // Keep service views mounted, but hide their content before revealing
         // the behind-window glass on the lock screen.

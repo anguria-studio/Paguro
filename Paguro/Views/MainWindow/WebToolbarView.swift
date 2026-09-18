@@ -183,6 +183,11 @@ struct DownloadIndicatorButton: View {
     @State private var completionScale: CGFloat = 1
     /// The quieter Reduce Motion form of that pulse.
     @State private var completionOpacity: Double = 1
+    /// When this control entered the header.
+    ///
+    /// The control is created as it becomes visible, so its own appearance is
+    /// the moment its entry movement starts.
+    @State private var enteredAt: Date?
 
     var body: some View {
         Button {
@@ -205,6 +210,9 @@ struct DownloadIndicatorButton: View {
         .toolbarControlSurface(intensity: glassIntensity)
         .scaleEffect(completionScale)
         .opacity(completionOpacity)
+        // The mark that reports a download start lands here, so the window
+        // root reads this frame instead of guessing the control position.
+        .downloadFlightDestination()
         .help(state.helpText)
         .accessibilityLabel(state.accessibilityLabel)
         .accessibilityIdentifier("web.downloads")
@@ -217,12 +225,33 @@ struct DownloadIndicatorButton: View {
             guard wasRinging, !isRinging, state.isVisible else { return }
             pulse()
         }
+        .onAppear { enteredAt = Date() }
+        // A flying mark has reached this control. Reduce Motion sends no mark,
+        // and this change is then the complete cue.
+        .onChange(of: appState.downloadFlights.arrivalTick) { _, _ in
+            land()
+        }
         // Opening the list is the user seeing it, so the badge clears here
         // rather than waiting out its window. The control itself stays.
         .onChange(of: showsList) { _, isOpen in
             guard isOpen else { return }
             appState.downloadTracker.acknowledgeAll(for: serviceID)
         }
+    }
+
+    /// Answers a mark that has arrived from the web content.
+    ///
+    /// The handoff must read as one movement. A control that entered the header
+    /// a moment ago is already growing into place, and that growth is the
+    /// landing, so the pulse stays out of its way. This happens for the first
+    /// download of a service, where the control appears as the mark arrives.
+    private func land() {
+        guard state.isVisible else { return }
+        guard let enteredAt,
+              Date().timeIntervalSince(enteredAt)
+                  >= DownloadIndicatorMotion.entryDuration.seconds
+        else { return }
+        pulse()
     }
 
     /// Marks the moment a ring reaches its end and the control settles back to
@@ -287,7 +316,10 @@ extension Duration {
 /// The download mark is a `DownloadIcon` template asset, not an SF Symbol, so
 /// it needs an explicit size. A normal SwiftUI image honors its frame, unlike
 /// the menu-bar status item, which reads the intrinsic asset size instead.
-private struct DownloadGlyphView: View {
+///
+/// The mark that flies into the control at the start of a download draws the
+/// same view, so the two marks cannot differ.
+struct DownloadGlyphView: View {
     let glyph: DownloadIndicatorState.Glyph
 
     /// The width of the download mark.

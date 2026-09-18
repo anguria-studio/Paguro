@@ -370,6 +370,77 @@ on the resting mark.
 Reduce Motion replaces all three of these movements with an opacity change.
 It removes the turning arc, the growth, and the pulse.
 
+### The mark that reports a download start
+
+A download mark appears over the web content when a download starts, and it
+travels up into the header download control.
+The mark makes the start visible without a notice that the user must read or
+dismiss.
+
+The mark starts on the vertical line of the control, 42 percent down the web
+content, so it travels straight up.
+It reads the frame of the control and the frame of the web content from the
+views that own them. No value in this movement is a fixed position.
+The mark is as large as the control it lands on, and it draws the same
+`DownloadIcon` mark. The landing therefore reads as one object arriving.
+It follows the shell glass rules of the floating notice card.
+macOS 26 uses Liquid Glass, and an earlier system uses the material surface.
+Reduce Transparency uses an opaque window background, and Increase Contrast adds
+a visible border.
+
+The movement has three parts and lasts 560 milliseconds in total:
+
+1. A fade and a growth from 72 percent at the start place, over 120
+   milliseconds.
+2. A rise on an ease-in curve, over 440 milliseconds.
+3. A shrink to 55 percent and a fade, inside the last 240 milliseconds of that
+   rise.
+
+The control then plays its own movement, so one handoff ends in the header.
+The complete flight is longer than the 500 millisecond ring delay on purpose.
+The first download of a service has no control in the header until that delay
+passes. A shorter flight would land on an empty header.
+A control that entered the header inside the last 260 milliseconds keeps its
+entry growth and plays no pulse. That growth is the landing.
+
+The mark takes no pointer input and no keyboard focus, and it holds no
+accessibility element.
+The page below keeps every click and every key while a download starts.
+Paguro announces the start for VoiceOver as `Download started: <file name>`,
+one announcement for each mark.
+The control keeps its own label, so nothing is announced twice.
+
+Several starts in one moment stay understandable:
+
+- A start inside 300 milliseconds of a mark joins that mark, so ten files at
+  one time send one mark.
+- A later start sends its own mark, and two marks never leave closer together
+  than 400 milliseconds.
+- Three marks can be on the way at one time. A further start sends none.
+
+The header badge counts every download, so a start that sends no mark is still
+reported.
+`DownloadFlightPlanner` in `PaguroCore` holds this rule, and
+`DownloadIndicatorMotion` holds every number of the movement.
+`DownloadFlightState` keeps the marks that are on the way and reports each
+landing to the control.
+
+Reduce Motion removes the travel. A short fade at the control reports the start
+instead, and a group of starts still produces one fade.
+
+A download that starts in a service that the window does not show sends no
+mark. A download that starts while the main window is closed sends none either,
+because the overlay that draws the marks exists with that window.
+
+The mark crosses the area that holds the find bar and the floating notice
+cards. It draws above them for a moment, it changes no layout, and it takes no
+input from either of them.
+
+The overlay that draws the marks sits at the window root, above the rails and
+the web content together. The mark therefore crosses from the page into the
+header in every rail layout. The bar layouts keep the control in the top bar,
+and the mark travels to it there.
+
 A finished download never opens the list. The user opens it with a click.
 
 Clicking the indicator opens the download list.

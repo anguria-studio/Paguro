@@ -29,6 +29,11 @@ final class AppState {
     /// The downloads that the content header shows. `WebDownloadHandler`
     /// reports each transfer here through its coordinator.
     let downloadTracker = DownloadTracker()
+
+    /// The marks that fly into the header download control when a download
+    /// starts. The overlay in `ContentView` draws them, and the control reads
+    /// their arrival.
+    let downloadFlights = DownloadFlightState()
     var notificationManager: NotificationManager { notificationRuntime.notificationManager }
     var networkMonitor: NetworkMonitor { notificationRuntime.networkMonitor }
 
@@ -331,6 +336,7 @@ final class AppState {
         notificationRuntime.shutdown()
         contentBlocker.stop()
         downloadTracker.stop()
+        downloadFlights.stop()
         webViewPool.shutdown()
 
         for token in systemObserverTokens {
