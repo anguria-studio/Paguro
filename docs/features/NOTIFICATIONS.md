@@ -372,9 +372,13 @@ Paguro reads the permission first and then applies
 `notDetermined`, so Paguro asks and macOS shows its prompt.
 
 The first-run screen also carries a notification row while no service exists.
-The row offers Allow, which makes the same request, while macOS holds no
-decision. It reports "On" for a granted permission, and it routes to System
-Settings for a stored decision, because macOS never asks twice. The row is the
+The row offers "Turn on", which makes the same request while macOS holds no
+decision. It reports "On" for a granted permission. For a stored decision,
+"Turn on" opens Paguro’s notification controls in System Settings, where the
+user changes "Allow notifications". macOS never asks twice. Both this action
+and the Settings warning use the running app’s bundle identifier, so Debug
+builds open their own controls. If macOS has not registered the app, System
+Settings can show the main notification pane instead. The row is the
 only first-run offer: Paguro has no welcome sheet. Once the first service
 exists, the Settings warning below owns this state. See
 [Native shell](NATIVE_SHELL.md).

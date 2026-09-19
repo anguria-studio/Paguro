@@ -94,10 +94,37 @@ final class NotificationAuthorizationPresentationTests: XCTestCase {
         }
     }
 
-    func testSettingsURLOpensTheNotificationPane() {
-        XCTAssertEqual(
-            NotificationAuthorizationPresentation.systemSettingsURLString,
-            "x-apple.systempreferences:com.apple.preference.notifications"
+    func testSettingsURLTargetsTheRunningBuild() throws {
+        for identifier in ["studio.anguria.paguro", "studio.anguria.paguro.debug"] {
+            let url = try XCTUnwrap(
+                NotificationAuthorizationPresentation.systemSettingsURL(bundleIdentifier: identifier)
+            )
+            XCTAssertEqual(
+                url.absoluteString,
+                "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(identifier)"
+            )
+        }
+    }
+
+    func testSettingsURLKeepsTheIdentifierInOneQueryValue() throws {
+        let identifier = "example.app&other=value#fragment"
+        let url = try XCTUnwrap(
+            NotificationAuthorizationPresentation.systemSettingsURL(bundleIdentifier: identifier)
         )
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.queryItems, [URLQueryItem(name: "id", value: identifier)])
+        XCTAssertNil(components.fragment)
+    }
+
+    func testMissingIdentifierFallsBackToTheNotificationPane() throws {
+        for identifier: String? in [nil, ""] {
+            let url = try XCTUnwrap(
+                NotificationAuthorizationPresentation.systemSettingsURL(bundleIdentifier: identifier)
+            )
+            XCTAssertEqual(
+                url.absoluteString,
+                "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+            )
+        }
     }
 }

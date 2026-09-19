@@ -136,7 +136,7 @@ struct FirstRunHomeView: View {
             // A permission macOS has never been asked about can still be asked
             // for in the app. Once macOS holds a decision it never asks again,
             // so the only way back is System Settings.
-            Button("Allow") {
+            Button("Turn on") {
                 Task {
                     isRequestingPermission = true
                     await appState.notificationManager.requestAuthorization()
@@ -151,11 +151,13 @@ struct FirstRunHomeView: View {
             // switch complete.
             EmptyView()
         case .denied, .provisional, .unavailable:
-            Button("Off in System Settings") {
+            Button("Turn on") {
                 openNotificationSettings()
             }
             .buttonStyle(.link)
             .font(.paguroCaption)
+            .help("Open Paguro’s notification settings")
+            .accessibilityHint("Opens Paguro’s notification settings in System Settings")
             .disabled(!allowsActions)
         }
     }
@@ -269,8 +271,8 @@ struct FirstRunHomeView: View {
     }
 
     private func openNotificationSettings() {
-        guard let url = URL(
-            string: NotificationAuthorizationPresentation.systemSettingsURLString
+        guard let url = NotificationAuthorizationPresentation.systemSettingsURL(
+            bundleIdentifier: Bundle.main.bundleIdentifier
         ) else { return }
         NSWorkspace.shared.open(url)
     }

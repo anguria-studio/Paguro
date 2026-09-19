@@ -35,8 +35,9 @@ as the view that no selected service shows. It carries:
 - a quiet import line under it.
 
 The card holds at most two rows. The notification row reports the macOS
-permission. It offers Allow while macOS holds no decision. It reports "On", or
-it routes to System Settings, once macOS has decided. The island row appears
+permission. It offers "Turn on" to request permission while macOS holds no
+decision. For a stored refusal, "Turn on" opens Paguro’s own notification page
+in System Settings. The enabled state reads "On". The island row appears
 only on a display with a camera housing, with a switch for the island route.
 A permission that Paguro has not read yet shows no notification row, because
 the state would change under the user. The card is left out when neither row
