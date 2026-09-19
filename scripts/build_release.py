@@ -16,11 +16,43 @@ BUNDLE_ID = 'studio.anguria.paguro'
 ACCOUNT = 'com.tommasolaterza.Paguro'
 REPOSITORY = 'anguria-studio/Paguro'
 FEED = f'https://github.com/{REPOSITORY}/releases/latest/download/appcast.xml'
+# Text that only a Debug build may contain: the launch arguments that enable the
+# development surface, and one sentence from the island demo catalog.
+DEBUG_ONLY_MARKERS = (
+    '--paguro-demo-notifications',
+    '--paguro-notification-probe',
+    '--paguro-compatibility-fixture',
+    'Are we still on for coffee at 4?',
+)
+MACH_O_MAGIC = (b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe', b'\xca\xfe\xba\xbe',
+                b'\xbe\xba\xfe\xca')
 
 
 def run(*args, capture=False):
     return subprocess.run([str(a) for a in args], check=True, text=True,
                           stdout=subprocess.PIPE if capture else None).stdout
+
+
+def debug_markers(data):
+    """Return the Debug-only markers that the bytes of one file contain."""
+    return [marker for marker in DEBUG_ONLY_MARKERS if marker.encode() in data]
+
+
+def check_debug_markers(path):
+    """Reject a built app, or a single executable, that carries Debug-only text."""
+    files = [path] if path.is_file() else [
+        item for item in sorted(path.rglob('*')) if item.is_file() and not item.is_symlink()]
+    scanned = 0
+    for item in files:
+        data = item.read_bytes()
+        if item != path and data[:4] not in MACH_O_MAGIC:
+            continue
+        scanned += 1
+        found = debug_markers(data)
+        if found:
+            raise RuntimeError(f'{item.name} contains a Debug-only marker: {found[0]}')
+    if not scanned:
+        raise RuntimeError(f'No Mach-O file to scan in {path}')
 
 
 def validate_app_info(info, version, build, feed, bundle_id):
@@ -63,13 +95,23 @@ def notarize(path, profile):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', required=True)
-    parser.add_argument('--build', required=True, type=int)
-    parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--sparkle-tools', required=True, type=Path,
+    parser.add_argument('--scan', type=Path,
+                        help='Check one built app or executable for Debug-only text, then stop')
+    parser.add_argument('--version')
+    parser.add_argument('--build', type=int)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--sparkle-tools', type=Path,
                         help='bin directory from the pinned Sparkle distribution')
     parser.add_argument('--test-feed', help='Loopback feed for an isolated update test')
     args = parser.parse_args()
+    if args.scan:
+        check_debug_markers(args.scan.resolve())
+        print(f'No Debug-only marker in {args.scan}.', flush=True)
+        return
+    missing = [name for name in ('version', 'build', 'output', 'sparkle_tools')
+               if getattr(args, name) is None]
+    if missing:
+        parser.error('Missing options: ' + ', '.join('--' + n.replace('_', '-') for n in missing))
     if not re.fullmatch(r'\d+\.\d+\.\d+', args.version) or args.build < 1:
         parser.error('Use a three-part version and a positive build number')
     if args.test_feed and not re.fullmatch(r'http://127\.0\.0\.1:\d+/appcast\.xml', args.test_feed):
@@ -143,6 +185,7 @@ def main():
         # names after -verify_arch, and one name works in every version.
         for architecture in ('arm64', 'x86_64'):
             run('lipo', app / 'Contents/MacOS/Paguro', '-verify_arch', architecture)
+        check_debug_markers(app)
         app_zip = work / 'Paguro.zip'
         run('ditto', '-c', '-k', '--keepParent', app, app_zip)
         notarize(app_zip, profile)
