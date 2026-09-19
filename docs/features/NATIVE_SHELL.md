@@ -9,10 +9,14 @@ It does not change the web content of a service.
 
 ## First run
 
-The main window shows one welcome screen while no service exists. The screen
-replaces the complete shell: no rail in any of the four layouts, no content
-header, and no top bar. An empty rail beside an empty header said nothing, and
-the window had no route to its first service except a menu.
+The main window shows one welcome screen while no service exists. A new install
+therefore starts on this screen: `WorkspaceStore` seeds the two default
+workspaces, Personal and Work, and no service. A set of example services stood
+between a new user and the service they wanted.
+
+The screen replaces the complete shell: no rail in any of the four layouts, no
+content header, and no top bar. An empty rail beside an empty header said
+nothing, and the window had no route to its first service except a menu.
 
 `FirstRunPolicy` in PaguroCore holds the rule. Its input is the number of
 services in every workspace together, not the services of the current
@@ -684,9 +688,10 @@ Layout and appearance use the transactional app preferences row. Glass,
 icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so
 they remain available while Paguro repairs or restores the content store.
 
-On a fresh install, Paguro follows the system appearance, uses the left rail,
-shows all workspaces, and appears in both the Dock and menu bar. The Dock badge
-is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
+On a fresh install, Paguro creates the workspaces Personal and Work and no
+service, so the window opens on the first-run welcome screen. Paguro follows
+the system appearance, uses the left rail, shows all workspaces, and appears in
+both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
 choices remain unchanged.
 

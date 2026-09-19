@@ -436,8 +436,11 @@ final class WorkspaceStoreMutationTests: XCTestCase {
         XCTAssertEqual(selection.serviceID, personalService.id)
     }
 
+    /// A fresh install seeds the two default workspaces and no service, so the
+    /// window opens on the first-run home screen and the user adds the service
+    /// they want.
     @MainActor
-    func testSeedCreatesIsolatedDefaultServicesAndRecordsDurableData() throws {
+    func testSeedCreatesTwoEmptyWorkspacesAndRecordsDurableData() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext
         let store = makeStore(context: context)
@@ -449,13 +452,27 @@ final class WorkspaceStoreMutationTests: XCTestCase {
 
         XCTAssertTrue(outcome.didSeed)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 2)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 7)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<SpaceServiceLink>()), 7)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<SpaceServiceLink>()), 0)
         XCTAssertTrue(defaults.bool(forKey: DefaultsKey.hasEverHadData))
-        XCTAssertEqual(
-            store.servicesForSpace(try XCTUnwrap(outcome.selectedSpaceID)).count,
-            DefaultSeed.personalServices.count
+
+        let spaces = try context.fetch(
+            FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
         )
+        XCTAssertEqual(spaces.map(\.name), DefaultSeed.spaces.map(\.name))
+        XCTAssertEqual(spaces.map(\.emoji), DefaultSeed.spaces.map(\.emoji))
+        XCTAssertEqual(outcome.selectedSpaceID, spaces.first?.id)
+        XCTAssertTrue(
+            store.servicesForSpace(try XCTUnwrap(outcome.selectedSpaceID)).isEmpty
+        )
+
+        // The window therefore opens on the first-run home screen.
+        XCTAssertTrue(FirstRunPolicy.presentation(
+            serviceCount: store.allServices().count,
+            isLocked: false,
+            authorization: .authorized,
+            islandIsAvailable: false
+        ).showsHome)
     }
 
     @MainActor

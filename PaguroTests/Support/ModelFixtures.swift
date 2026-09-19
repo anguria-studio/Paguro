@@ -105,26 +105,18 @@ enum ModelFixtures {
         }
     }
 
+    /// Writes the shape of a fresh install: the two default workspaces and no
+    /// service.
     static func insertSeedShape(_ url: URL) throws {
         let spaceEntity = try SQLiteHelpers.run(
             url,
             "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'Space';"
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-        let serviceEntity = try SQLiteHelpers.run(
-            url,
-            "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'ServiceInstance';"
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
         for (index, entry) in DefaultSeed.spaces.enumerated() {
             _ = try SQLiteHelpers.run(url, """
                 INSERT INTO ZSPACE (Z_PK, Z_ENT, Z_OPT, ZNAME, ZEMOJI, ZSORTORDER)
                 VALUES (\(2000 + index), \(spaceEntity.isEmpty ? "1" : spaceEntity), 1, '\(entry.name)', '\(entry.emoji)', \(index));
-                """)
-        }
-        for (index, label) in DefaultSeed.allServiceLabels.enumerated() {
-            _ = try SQLiteHelpers.run(url, """
-                INSERT INTO ZSERVICEINSTANCE (Z_PK, Z_ENT, Z_OPT, ZLABEL, ZURL)
-                VALUES (\(3000 + index), \(serviceEntity.isEmpty ? "2" : serviceEntity), 1, '\(label)', 'https://example.com');
                 """)
         }
     }

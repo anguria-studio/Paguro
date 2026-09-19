@@ -2,45 +2,37 @@ import Foundation
 import SQLite3
 import PaguroCore
 
-/// The spaces and services `WorkspaceStore` writes on a genuine fresh
-/// install. Shared with `StoreContent.looksLikeUntouchedSeed` so the seeder and
-/// the fingerprint can never drift apart; `testSeededStoreIsFingerprintedAsSeed`
-/// fails if they do.
+/// The workspaces `WorkspaceStore` writes on a genuine fresh install. Shared
+/// with `StoreContent.looksLikeUntouchedSeed` so the seeder and the fingerprint
+/// can never drift apart; `testSeededStoreIsFingerprintedAsSeed` fails if they
+/// do.
+///
+/// Paguro seeds no service. A new user reaches the first-run home screen and
+/// adds the service they want. See `docs/features/NATIVE_SHELL.md`.
 enum DefaultSeed {
     static let spaces: [(name: String, emoji: String)] = [
         (name: "Personal", emoji: "🏠"),
         (name: "Work", emoji: "💼"),
     ]
-
-    static let personalServices: [(label: String, url: String, catalogID: String)] = [
-        (label: "Gmail", url: "https://mail.google.com/mail/u/0/#inbox", catalogID: "gmail"),
-        (label: "Discord", url: "https://discord.com/channels/@me", catalogID: "discord"),
-        (label: "ChatGPT", url: "https://chatgpt.com", catalogID: "chatgpt"),
-        (label: "Claude", url: "https://claude.ai", catalogID: "claude"),
-    ]
-
-    static let workServices: [(label: String, url: String, catalogID: String)] = [
-        (label: "Gmail", url: "https://mail.google.com/mail/u/0/#inbox", catalogID: "gmail"),
-        (label: "Slack", url: "https://app.slack.com/client", catalogID: "slack"),
-        (label: "Outlook", url: "https://outlook.cloud.microsoft/mail/", catalogID: "outlook"),
-    ]
-
-    /// Every seeded service label, including the duplicate Gmail that appears in
-    /// both spaces. Compared as a multiset, so the duplicate matters.
-    static var allServiceLabels: [String] {
-        (personalServices + workServices).map(\.label)
-    }
 }
 
 extension StoreContent {
-    /// True only when the store is exactly what `WorkspaceStore`
-    /// writes: the two seeded spaces, the seven seeded services, nothing added,
-    /// nothing renamed. A store like this holds nothing of the user's, which is
-    /// what makes it safe to preselect a backup over.
+    /// True only when the store is exactly what `WorkspaceStore` writes on a
+    /// fresh install: the two seeded workspaces under their own names, and no
+    /// service at all.
+    ///
+    /// The question this answers is "does the store hold anything of the
+    /// user's". One added service and one renamed workspace each make it false,
+    /// so the answer is no only while the store is untouched. That is what
+    /// makes it safe to preselect a backup over the live store, and what keeps
+    /// a snapshot of such a store from being protected from pruning.
+    ///
+    /// An empty store is not this: zero workspaces fails the count, because a
+    /// store that lost its workspaces is a loss and not a fresh install.
     var looksLikeUntouchedSeed: Bool {
         matchesUntouchedSeed(
             spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: DefaultSeed.allServiceLabels
+            serviceLabels: []
         )
     }
 }

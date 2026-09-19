@@ -494,31 +494,11 @@ final class WorkspaceStore {
             emoji: DefaultSeed.spaces[1].emoji,
             sortOrder: 1
         )
+        // The seed writes the two workspaces and no service. A set of example
+        // services stood between a new user and their own first service, and it
+        // hid the first-run home screen that asks for that service.
         context.insert(personalSpace)
         context.insert(workSpace)
-
-        for (index, entry) in DefaultSeed.personalServices.enumerated() {
-            let service = ServiceInstance(
-                label: entry.label,
-                url: entry.url,
-                catalogEntryID: entry.catalogID
-            )
-            context.insert(service)
-            context.insert(
-                SpaceServiceLink(sortOrder: index, space: personalSpace, service: service)
-            )
-        }
-        for (index, entry) in DefaultSeed.workServices.enumerated() {
-            let service = ServiceInstance(
-                label: entry.label,
-                url: entry.url,
-                catalogEntryID: entry.catalogID
-            )
-            context.insert(service)
-            context.insert(
-                SpaceServiceLink(sortOrder: index, space: workSpace, service: service)
-            )
-        }
 
         guard context.saveOrRollback(reason: "seed default data") else {
             return SeedOutcome(didSeed: false, selectedSpaceID: nil)

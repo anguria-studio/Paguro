@@ -6,11 +6,13 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ### Added
 
-- A window with no service now shows a welcome screen instead of an empty
-  sidebar and header. It tells you what Paguro does. It offers notifications
-  and, on a Mac with a notch, island alerts. One button adds your first
-  service, and a quiet line under it imports a configuration from another Mac.
-  The sidebar and the header appear as soon as that first service exists.
+- Paguro starts with a welcome screen where you add your first service, instead
+  of a set of example services. It tells you what Paguro does. It offers
+  notifications and, on a Mac with a notch, island alerts. One button adds your
+  first service, and a quiet line under it imports a configuration from another
+  Mac. The sidebar and the header appear as soon as that first service exists,
+  and the screen returns if you ever remove every service. Paguro still starts
+  with the two workspaces Personal and Work, now empty.
 
 - You can install Paguro with Homebrew:
   `brew install --cask anguria-studio/tap/paguro`. The cask installs the same

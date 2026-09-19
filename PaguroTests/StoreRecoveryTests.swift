@@ -424,24 +424,35 @@ final class StoreRecoveryTests: XCTestCase {
 
     // MARK: - Store content and the default-seed fingerprint
 
-    /// The fingerprint must match the seed exactly and nothing else.
+    /// The fingerprint must match the seed exactly and nothing else. The seed
+    /// is the two default workspaces with no service in them.
     func testUntouchedSeedFingerprint() {
         let seed = StoreContent(
             spaces: 2,
-            services: 7,
-            links: 7,
+            services: 0,
+            links: 0,
             spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: DefaultSeed.allServiceLabels
+            serviceLabels: []
         )
         XCTAssertTrue(seed.looksLikeUntouchedSeed, "the exact seed shape must match")
 
-        var labels = DefaultSeed.allServiceLabels
-        labels.append("Notion")
-        let plusOne = StoreContent(spaces: 2, services: 8, links: 8, spaceNames: DefaultSeed.spaces.map(\.name), serviceLabels: labels)
+        let plusOne = StoreContent(
+            spaces: 2, services: 1, links: 1,
+            spaceNames: DefaultSeed.spaces.map(\.name), serviceLabels: ["Notion"]
+        )
         XCTAssertFalse(plusOne.looksLikeUntouchedSeed, "one added service means the user has touched it")
 
-        let renamed = StoreContent(spaces: 2, services: 7, links: 7, spaceNames: ["Personal", "Clients"], serviceLabels: DefaultSeed.allServiceLabels)
+        let renamed = StoreContent(
+            spaces: 2, services: 0, links: 0,
+            spaceNames: ["Personal", "Clients"], serviceLabels: []
+        )
         XCTAssertFalse(renamed.looksLikeUntouchedSeed, "a renamed space means the user has touched it")
+
+        let added = StoreContent(
+            spaces: 3, services: 0, links: 0,
+            spaceNames: ["Personal", "Work", "Side"], serviceLabels: []
+        )
+        XCTAssertFalse(added.looksLikeUntouchedSeed, "an added workspace means the user has touched it")
 
         let empty = StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
         XCTAssertFalse(empty.looksLikeUntouchedSeed, "an empty store is empty, not seeded")
@@ -466,16 +477,6 @@ final class StoreRecoveryTests: XCTestCase {
             Space(name: entry.name, emoji: entry.emoji, sortOrder: index)
         }
         for space in spaces { ctx.insert(space) }
-        for (index, entry) in DefaultSeed.personalServices.enumerated() {
-            let service = ServiceInstance(label: entry.label, url: entry.url, catalogEntryID: entry.catalogID)
-            ctx.insert(service)
-            ctx.insert(SpaceServiceLink(sortOrder: index, space: spaces[0], service: service))
-        }
-        for (index, entry) in DefaultSeed.workServices.enumerated() {
-            let service = ServiceInstance(label: entry.label, url: entry.url, catalogEntryID: entry.catalogID)
-            ctx.insert(service)
-            ctx.insert(SpaceServiceLink(sortOrder: index, space: spaces[1], service: service))
-        }
         try ctx.save()
 
         let content = StoreContent(
