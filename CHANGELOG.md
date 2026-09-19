@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-09-19
+
+Version 1.0.5, build 14.
+
 ### Added
 
 - Music and video that play when you switch to another service keep playing, for
@@ -31,9 +35,8 @@ Changes that affect Paguro users appear here, with the newest release first.
   names the service that started it, with that service's icon. A secondary click
   offers a route back to that service. Clear All empties the whole list. It now
   reads as a menu item, and the row turns blue under the pointer or keyboard
-  focus. A
-  download that starts in a service you are not reading reports itself with a
-  short fade at the control. No mark rises from the page for it.
+  focus. A download that starts in a service you are not reading reports
+  itself with a short fade at the control. No mark rises from the page for it.
 - Small text in the Paguro windows is larger and easier to read. The
   notification island and the unread count badges keep the sizes that their
   fixed spaces were built for.
@@ -161,7 +164,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.4...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.5...main
+[1.0.5]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.5
 [1.0.4]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.4
 [1.0.3]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.3
 [1.0.2]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.2
