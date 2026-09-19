@@ -1,18 +1,21 @@
+#if DEBUG
 import Foundation
 
 /// Fictional content for screenshots, separate from service notification detection.
 ///
-/// This type stays available in every package configuration because Xcode does
-/// not pass an app's custom debug configuration to Swift package targets. The
-/// app can use it only from code that is guarded by `DEBUG`.
-public struct IslandPreviewNotifications: Sendable {
-    public static let launchArgument = "--paguro-demo-notifications"
+/// The type lives in the app target because only this target defines `DEBUG` in
+/// the `Debug` and in the custom `Compatibility` configuration. Xcode does not
+/// pass a custom debug configuration to Swift package targets, so the same guard
+/// in `PaguroCore` removed the type from a `Compatibility` build. A Release build
+/// compiles nothing from this file, so no demo text reaches a released binary.
+struct IslandPreviewNotifications: Sendable {
+    static let launchArgument = "--paguro-demo-notifications"
 
-    public struct Account: Sendable {
-        public let serviceID: UUID
+    struct Account: Sendable {
+        let serviceID: UUID
         let catalogID: String?
 
-        public init(serviceID: UUID, catalogID: String?, url: String) {
+        init(serviceID: UUID, catalogID: String?, url: String) {
             self.serviceID = serviceID
             self.catalogID = catalogID ?? Self.catalogID(for: url)
         }
@@ -29,18 +32,18 @@ public struct IslandPreviewNotifications: Sendable {
         }
     }
 
-    public struct Message: Equatable, Sendable {
-        public let catalogID: String
-        public let title: String
-        public let body: String
+    struct Message: Equatable, Sendable {
+        let catalogID: String
+        let title: String
+        let body: String
     }
 
-    public struct Selection: Sendable {
-        public let serviceID: UUID
-        public let message: Message
+    struct Selection: Sendable {
+        let serviceID: UUID
+        let message: Message
     }
 
-    public static let messages: [Message] = [
+    static let messages: [Message] = [
         Message(catalogID: "whatsapp", title: "Alex Morgan",
                 body: "Are we still on for coffee at 4?"),
         Message(catalogID: "whatsapp", title: "Weekend plans",
@@ -69,9 +72,9 @@ public struct IslandPreviewNotifications: Sendable {
 
     private var lastMessage: Message?
 
-    public init() {}
+    init() {}
 
-    public mutating func next(
+    mutating func next(
         accounts: [Account],
         using generator: inout some RandomNumberGenerator
     ) -> Selection? {
@@ -87,3 +90,4 @@ public struct IslandPreviewNotifications: Sendable {
         return Selection(serviceID: account.serviceID, message: message)
     }
 }
+#endif
