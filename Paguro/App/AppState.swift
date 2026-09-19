@@ -50,6 +50,12 @@ final class AppState {
     /// Drives the Find-in-Page overlay in WebContentView. Toggled by Cmd-F.
     var findInPageVisible = false
 
+    /// The service whose passkey card is on screen, or nil for none.
+    ///
+    /// The window owns it, because the card host in `ContentView` draws above
+    /// every state the window shows.
+    private(set) var passkeyNoticeServiceID: UUID?
+
     /// Bumped when a service's web view is rebuilt for an edit that only takes
     /// effect at creation time (custom CSS). WebContentView observes this and
     /// re-fetches the active service's web view so the change shows at once.
@@ -184,25 +190,8 @@ final class AppState {
         #else
         let config = ModelConfiguration(schema: schema, url: StoreRelocation.resolveStoreURL())
         #endif
-        // A restore the user picked last session, applied before anything opens
-        // the store.
-        StoreRepair.applyPendingRestore(at: config.url)
-
-        // Snapshot the store before a newly-installed version opens it, so a
-        // migration that loses or reshapes data is always recoverable. No-op
-        // when the running version is unchanged from the last launch. This runs
-        // once here (not inside the open/retry path) so the retry restores from
-        // the snapshot it just took rather than overwriting it.
-        StoreRepair.backupBeforeMigrationIfNeeded(at: config.url)
-
-        // Note the store's condition BEFORE the open path repairs it — once
-        // `tryOpen` has run `repairDanglingLinks`, the damage is gone and the
-        // evidence with it. The recovery coordinator keeps this launch state.
-        let storeWasDamagedAtLaunch = StoreRepair.hasDanglingLinks(at: config.url)
-
-        // Open the store, self-healing an emptied or unusable store from the
-        // newest usable pre-migration snapshot. The outcome drives the banner.
-        let (loadedContainer, outcome) = StoreLoader.load(schema: schema, config: config)
+        let preparedStore = StoreLoader.prepare(schema: schema, config: config)
+        let loadedContainer = preparedStore.container
         self.modelContainer = loadedContainer
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
@@ -220,15 +209,17 @@ final class AppState {
         )
         let storeRecovery = StoreRecoveryCoordinator(
             context: loadedContainer.mainContext,
-            storeURL: config.url,
-            outcome: outcome,
-            wasDamagedAtLaunch: storeWasDamagedAtLaunch
+            storeURL: preparedStore.url,
+            outcome: preparedStore.outcome,
+            wasDamagedAtLaunch: preparedStore.wasDamaged,
+            defaults: preparedStore.defaults
         )
         self.storeRecovery = storeRecovery
         self.websiteDataReclaimer = WebsiteDataReclaimer(
             context: loadedContainer.mainContext,
             dataStoreManager: dataStoreManager,
-            isSafeToReclaim: storeRecovery.isSafeToReclaim
+            isSafeToReclaim: preparedStore.allowsPersistentReclamation && storeRecovery.isSafeToReclaim,
+            defaults: preparedStore.defaults
         )
         self.hibernationScheduler = HibernationScheduler(
             context: loadedContainer.mainContext,
@@ -1262,6 +1253,28 @@ final class AppState {
     /// until the notice has been seen once for that service.
     func shouldShowPasskeyNotice(for service: ServiceInstance) -> Bool {
         service.needsPasskeyNotice
+    }
+
+    /// Raises the passkey card for a service that opens for the first time.
+    ///
+    /// The card host sits at the window level, above every state the window
+    /// shows, so the window state holds the notice instead of the web content
+    /// view. The seen state is stored as the card appears, so a switch away and
+    /// back does not raise it again. A service that needs no notice clears the
+    /// card of the service before it.
+    func raisePasskeyNoticeIfNeeded(for service: ServiceInstance) {
+        guard !AppCapabilities.passkeysSupported,
+              shouldShowPasskeyNotice(for: service) else {
+            passkeyNoticeServiceID = nil
+            return
+        }
+        passkeyNoticeServiceID = service.id
+        markPasskeyNoticeSeen(for: service.id)
+    }
+
+    /// Removes the passkey card.
+    func dismissPasskeyNotice() {
+        passkeyNoticeServiceID = nil
     }
 
     /// Records that the passkey notice has been shown for the given service so

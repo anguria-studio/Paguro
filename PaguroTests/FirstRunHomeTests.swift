@@ -125,6 +125,45 @@ final class FirstRunHomeTests: XCTestCase {
     }
 
     #if DEBUG
+    @MainActor
+    func testPreviewStartsEmptyOnEveryLaunchAndNeverOpensNormalStore() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let normalURL = directory.appending(path: "default.store")
+        let sentinel = Data("the normal store must not be opened or repaired".utf8)
+        try sentinel.write(to: normalURL)
+        let schema = Schema(versionedSchema: PaguroSchemaVCurrent.self)
+        let config = ModelConfiguration(schema: schema, url: normalURL)
+        let arguments = [FirstRunPreviewConfiguration.launchArgument]
+        let first = StoreLoader.prepare(schema: schema, config: config, arguments: arguments)
+        let store = makeStore(context: first.container.mainContext)
+        XCTAssertNotNil(try store.addService(label: "Preview", url: "https://example.com", to: nil))
+        XCTAssertEqual(store.allServices().count, 1)
+        first.defaults.set("preview history", forKey: DefaultsKey.lastKnownContent)
+
+        let second = StoreLoader.prepare(schema: schema, config: config, arguments: arguments)
+        XCTAssertEqual(try second.container.mainContext.fetchCount(FetchDescriptor<Space>()), 0)
+        XCTAssertEqual(try second.container.mainContext.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
+        XCTAssertNil(second.defaults.string(forKey: DefaultsKey.lastKnownContent))
+        XCTAssertFalse(second.allowsPersistentReclamation)
+        XCTAssertNotEqual(second.url, normalURL)
+        XCTAssertEqual(try Data(contentsOf: normalURL), sentinel)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["default.store"])
+    }
+
+    @MainActor
+    func testPreviewSessionsAreTemporaryAndSeparateForEachAccount() {
+        let manager = DataStoreManager(arguments: [FirstRunPreviewConfiguration.launchArgument])
+        let firstID = UUID()
+        let first = manager.dataStore(forIdentifier: firstID)
+        let second = manager.dataStore(forIdentifier: UUID())
+        XCTAssertFalse(first.isPersistent)
+        XCTAssertFalse(second.isPersistent)
+        XCTAssertTrue(first === manager.dataStore(forIdentifier: firstID))
+        XCTAssertFalse(first === second)
+    }
+
     /// The argument is read from the launch arguments alone, so it changes no
     /// stored value. The whole `FirstRunPreviewConfiguration` file sits inside
     /// `DEBUG`, so a Release build has neither the argument nor this route.

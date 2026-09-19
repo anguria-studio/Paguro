@@ -24,6 +24,45 @@ enum StoreLoader {
         case failed
     }
 
+    struct PreparedStore {
+        let container: ModelContainer
+        let outcome: StoreLoadOutcome
+        let url: URL
+        let wasDamaged: Bool
+        let defaults: UserDefaults
+        let allowsPersistentReclamation: Bool
+    }
+
+    /// Prepare recovery before opening the normal store. Preview launches must
+    /// leave before any restore, snapshot, or normal history write can run.
+    @MainActor
+    static func prepare(
+        schema: Schema,
+        config: ModelConfiguration,
+        arguments: [String] = ProcessInfo.processInfo.arguments
+    ) -> PreparedStore {
+        #if DEBUG
+        if FirstRunPreviewConfiguration.isEnabled(arguments: arguments) {
+            do {
+                return try FirstRunPreviewConfiguration.makeStore(schema: schema)
+            } catch {
+                fatalError("Could not create the temporary setup: \(error)")
+            }
+        }
+        #endif
+        StoreRepair.applyPendingRestore(at: config.url)
+        // Snapshot before migration so the earlier data remains recoverable.
+        StoreRepair.backupBeforeMigrationIfNeeded(at: config.url)
+        // Opening repairs dangling links, so retain the evidence first.
+        let wasDamaged = StoreRepair.hasDanglingLinks(at: config.url)
+        let (container, outcome) = load(schema: schema, config: config)
+        return PreparedStore(
+            container: container, outcome: outcome, url: config.url,
+            wasDamaged: wasDamaged, defaults: .standard,
+            allowsPersistentReclamation: true
+        )
+    }
+
     /// Opens the persistent store. If it is unusable, the loader restores the
     /// newest usable snapshot and retries once. It preserves every store and
     /// snapshot when recovery fails, then uses an in-memory container.

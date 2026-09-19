@@ -4,6 +4,15 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The welcome screen offers "Turn on" for notifications. When permission is
+  off, it opens Paguro’s own notification controls in System Settings.
+
+- First Run Preview starts with disposable services and sign-ins on every run.
+  Floating notices sit directly below the header without a second title-bar gap.
+
+- Backup offers, offline status, and microphone feedback use floating cards
+  over the window, including the welcome screen. Store errors keep their strip.
+
 - A new setup starts without workspaces. Adding the first service creates Home
   in the same save. The first-run preview ends after a successful add or import.
 
@@ -14,8 +23,7 @@ Changes that affect Paguro users appear here, with the newest release first.
   notifications and, on a Mac with a notch, island alerts. One button adds your
   first service, and a quiet line under it imports a configuration from another
   Mac. The sidebar and the header appear as soon as that first service exists,
-  and the screen returns if you ever remove every service. Paguro still starts
-  with the two workspaces Personal and Work, now empty.
+  and the screen returns if you ever remove every service.
 
 - You can install Paguro with Homebrew:
   `brew install --cask anguria-studio/tap/paguro`. The cask installs the same

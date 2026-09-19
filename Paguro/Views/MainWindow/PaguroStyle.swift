@@ -634,6 +634,9 @@ enum PaguroRadius {
 /// the tone is carried by the icon and the rule under the strip, not by shouting
 /// with the background. This replaces two raw SwiftUI yellows and a solid red
 /// bar that read as three unrelated designs.
+///
+/// Both notice shapes read the tint. The strip adds the rule under it, and a
+/// floating card carries the tone in its symbol tile alone.
 enum NoticeSeverity: CaseIterable {
     /// Something is offered, and nothing is wrong.
     case info
@@ -662,27 +665,27 @@ enum NoticeSeverity: CaseIterable {
     var fillOpacity: Double { 0.12 }
 }
 
-/// The one notice strip: a tinted band with a rule under it.
+/// The store-error strip: a tinted band with a rule under it.
+///
+/// Storage failures and recovery outcomes need a distinct window-level notice.
+/// Other notices use `FloatingNoticeCard` without moving the content.
 ///
 /// The window-drag handle is part of the shape rather than left to each caller.
-/// A notice sits at the very top of the window, inside the title-bar drag band,
+/// The strip sits at the very top of the window, inside the title-bar drag band,
 /// and the bar layout turns the OS window drag off (see
 /// `WindowChromeConfigurator`). Without a handle the strip is dead to dragging,
 /// and because it also pushes the rail's own handle down out of the band, the
-/// window could not be moved by its top edge at all while a notice was up. The
+/// window could not be moved by its top edge at all while the strip was up. The
 /// handle goes behind the content and in front of the fill, so buttons still
 /// take their own clicks.
 struct NoticeStrip<Content: View>: View {
     let severity: NoticeSeverity
-    /// Overrides the severity's own icon where a notice is about something more
-    /// specific than its seriousness.
-    var systemImage: String?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: systemImage ?? severity.systemImage)
+                Image(systemName: severity.systemImage)
                     .foregroundStyle(severity.tint)
                     .accessibilityHidden(true)
 

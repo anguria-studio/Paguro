@@ -395,8 +395,8 @@ struct NotificationSettingsView: View {
     }
 
     private func openNotificationSettings() {
-        guard let url = URL(
-            string: NotificationAuthorizationPresentation.systemSettingsURLString
+        guard let url = NotificationAuthorizationPresentation.systemSettingsURL(
+            bundleIdentifier: Bundle.main.bundleIdentifier
         ) else { return }
         NSWorkspace.shared.open(url)
     }

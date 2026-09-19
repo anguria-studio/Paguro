@@ -169,27 +169,29 @@ The count in the header stays the source of truth for how many downloads exist.
 
 ## Notices
 
-Paguro has two notice shapes. Choose the shape from what the notice reports,
-not from how important it feels.
+Use floating cards for the backup offer, offline status, microphone feedback,
+capacity notice, and passkey notice. Keep the store error as a full-width strip.
+The card host belongs to the window, so notices also appear over the welcome
+screen and empty states. A locked window hides the cards and their announcements.
 
-Use the full-width strip at the top of the window for an app-level state. The
-strip suits a notice that needs an action, or that stays until the state
-changes. Store recovery, the backup offer, the offline state, and the
-microphone feedback use this shape.
-
-Use the floating card above the web content for a transient, informational,
-notice about one service. The card suits a notice that reports a fact and then
-leaves on its own. The capacity release and the passkey limit use this shape.
+The backup offer keeps Review backups and Not now and waits for an action.
+Closing or dragging it away means Not now. Offline stays until the connection
+returns or the user dismisses it; the next connection loss raises it again.
+Microphone feedback keeps its two-second duration. Capacity and passkey notices
+keep their 12-second duration.
 
 The card follows these rules:
 
-- It floats over the top trailing corner of the web content, inset 14 points
-  from the content edges. It never covers the find bar. The card stack moves
-  below the find bar while the find bar is open.
+- It floats over the top trailing corner of the window content, inset 14 points
+  from the content edges, below the header and find bar. On the welcome screen,
+  it clears the 28-point title-bar band and leaves the traffic lights usable.
+  The overlay and shell share the full-window origin; do not add the hidden
+  title bar's safe-area inset to the header height a second time.
 - It keeps a comfortable reading width of 350 points. A narrow window reduces
   the width and keeps the margin on both sides.
-- Two cards stack downward with a 9 point gap. The newest card takes the top
-  place.
+- At most three cards stack downward with a 9 point gap. The newest card takes
+  the top place. Persistent cards keep their places before transient cards;
+  the remaining notices wait until a place is available.
 - It slides in from the trailing edge with a fade, and it leaves the same way.
   Reduce Motion uses a plain fade. The movement stays near 0.3 seconds.
 - A drag to the right dismisses the card, like a macOS notification banner.
@@ -212,7 +214,8 @@ The card follows these rules:
 - It takes no keyboard focus from the page, and it accepts pointer input only
   inside its own frame.
 - VoiceOver reads the title and the explanation as one element and reaches the
-  close button separately. Paguro announces the card when it appears.
+  close button and action buttons separately. Paguro announces the card when
+  it appears. Severity changes the symbol tint and keeps descriptive text.
 
 ## Accessibility
 
