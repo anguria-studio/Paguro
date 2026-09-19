@@ -4,10 +4,6 @@ import SwiftData
 import WebKit
 
 struct WebContentView: View {
-    /// How long a floating notice stays on screen. It matches the capacity
-    /// notice, which `HibernationScheduler` removes on the same schedule.
-    private static let passkeyNoticeSeconds = 12
-
     let selectedServiceID: UUID?
     let sidebarIsCollapsed: Bool
     let collapsedSidebarWidth: CGFloat
@@ -16,9 +12,6 @@ struct WebContentView: View {
     @Query private var services: [ServiceInstance]
     @State private var currentWebView: WKWebView?
     @State private var transitionSnapshot: NSImage?
-    /// The service whose passkey notice is on screen, or nil for none. The
-    /// identifier also restarts the auto-hide when another service raises it.
-    @State private var passkeyNoticeServiceID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -71,25 +64,14 @@ struct WebContentView: View {
                         )
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
-
-                    // The cards float above the page instead of pushing it
-                    // down. The reader gives the stack the web width, so a
-                    // narrow window keeps the card inside the content.
-                    GeometryReader { proxy in
-                        FloatingNoticeStack(
-                            notices: floatingNotices,
-                            availableWidth: proxy.size.width,
-                            findBarIsVisible: appState.findInPageVisible
-                        )
-                    }
                 }
                 .background(
                     PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
                 )
                 // The mark that reports a download start leaves from this area,
                 // on the vertical line of the header control. It reports the
-                // frame only; the layout of the page, the find bar, and the
-                // notice cards stays as it is.
+                // frame only; the layout of the page and the find bar stays as
+                // it is.
                 .downloadFlightOrigin()
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: webViewState.isLoading)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: appState.findInPageVisible)
@@ -102,15 +84,6 @@ struct WebContentView: View {
             } else {
                 emptyState
             }
-        }
-        .task(id: passkeyNoticeServiceID) {
-            // The passkey notice reports a fixed limit, so it leaves on its
-            // own. The "seen" state is already stored, and the card never
-            // returns for this service.
-            guard passkeyNoticeServiceID != nil else { return }
-            try? await Task.sleep(for: .seconds(Self.passkeyNoticeSeconds))
-            guard !Task.isCancelled else { return }
-            passkeyNoticeServiceID = nil
         }
         .onAppear {
             loadWebViewForSelectedService()
@@ -148,6 +121,8 @@ struct WebContentView: View {
             webViewState.detach()
             currentWebView = nil
             transitionSnapshot = nil
+            // The card names one service, so it leaves with the selection.
+            appState.dismissPasskeyNotice()
             return
         }
 
@@ -164,15 +139,9 @@ struct WebContentView: View {
         webViewState.attach(to: webView)
 
         // Passive one-time notice: WKWebView can't use passkeys for sign-in, so
-        // warn the user the first time each service is opened. Gated by the same
-        // capability switch as the Add Service notice, and marked seen as soon
-        // as it's shown so switching away and back doesn't re-trigger it.
-        if !AppCapabilities.passkeysSupported, appState.shouldShowPasskeyNotice(for: service) {
-            passkeyNoticeServiceID = service.id
-            appState.markPasskeyNoticeSeen(for: service.id)
-        } else {
-            passkeyNoticeServiceID = nil
-        }
+        // warn the user the first time each service is opened. `AppState` holds
+        // the notice, because the card host sits at the window level.
+        appState.raisePasskeyNoticeIfNeeded(for: service)
 
         // Once the view is shown its frame settles a render tick later. Some SPAs
         // (Gmail) cache a viewport-height layout and, if it was measured against a
@@ -184,48 +153,6 @@ struct WebContentView: View {
             _ = try? await webView.evaluateJavaScript("window.dispatchEvent(new Event('resize'))")
         }
 
-    }
-
-    /// The transient notices for the service on screen.
-    ///
-    /// Both notices report a fixed Paguro limit, name no action the user must
-    /// take now, and leave on their own. That is the card's purpose. An
-    /// app-level state keeps the full-width strip in `ContentView`.
-    private var floatingNotices: [FloatingNotice] {
-        var notices: [FloatingNotice] = []
-
-        // The pool's own size limit can release a background service while
-        // idle hibernation is off. Say so one time, so the user does not read
-        // the reload as a fault.
-        if let message = appState.hibernationScheduler.capacityEvictionNotice {
-            notices.append(
-                FloatingNotice(
-                    id: .capacityEviction,
-                    systemImage: "moon.zzz.fill",
-                    title: CapacityEvictionNotice.title,
-                    message: message,
-                    dismiss: {
-                        appState.hibernationScheduler.dismissCapacityEvictionNotice()
-                    }
-                )
-            )
-        }
-
-        // WKWebView cannot use passkeys for sign-in, so warn the user the first
-        // time each service is opened.
-        if passkeyNoticeServiceID != nil {
-            notices.append(
-                FloatingNotice(
-                    id: .passkeyUnavailable,
-                    systemImage: "person.badge.key.fill",
-                    title: "Passkeys are not available",
-                    message: AppCapabilities.passkeyUnavailableBanner,
-                    dismiss: { passkeyNoticeServiceID = nil }
-                )
-            )
-        }
-
-        return notices
     }
 
     /// Whether the currently selected space contains any services. Only

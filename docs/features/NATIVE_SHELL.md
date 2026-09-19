@@ -393,26 +393,31 @@ override the browser preference.
 
 ### Floating notices
 
-A transient notice about the active service appears as a floating card over the
-top trailing corner of the web content. The card holds a symbol, a short title,
-an explanation, and a close button. It leaves after 12 seconds, and the close
-button removes it at once. A drag to the right also removes it, with the same
-action as the close button.
+The backup offer, offline status, microphone feedback, capacity notice, and
+passkey notice use floating cards. The store error keeps its full-width strip.
+`ContentView` owns the host above both the shell and first-run screen, below
+the lock overlay. Cards take clicks only inside their frames and do not move
+content or take keyboard focus. Locked windows suppress their announcements.
 
-Two notices use this card. The capacity notice reports the first service that
-the pool released to stay inside its size limit. The passkey notice reports
-that `WKWebView` cannot use a passkey for sign-in. Paguro shows the passkey
-notice one time for each service, and it stores the seen state as the card
-appears.
-The Add Service sheet does not repeat the passkey notice. The card is the one
-place that reports it.
+A card holds a symbol, title, optional explanation, up to two action buttons,
+and a close button. A drag to the right has the same action as the close button.
+The backup offer keeps Review backups and Not now, with no timer. Dismissal
+means Not now. Offline stays until the connection returns or the user dismisses
+it. A new connection loss raises it again. Microphone feedback lasts two
+seconds. Capacity and passkey notices last 12 seconds. Each service gives its
+passkey card a distinct identity, so switching services starts a new timer.
+
+The stack shows at most three cards, newest first, with persistent cards taking
+places before transient cards. Remaining cards wait for a free place. Paguro
+shows the passkey notice once per service and saves its seen state when raised.
+The Add Service sheet does not repeat it.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
-`FloatingNoticeLayout` in `PaguroCore` holds the width, the margins, and the
-gap that keeps the stack clear of the find bar. The card reads the drag from
-`NotificationIslandSwipeRule`, the rule that the island cards already use, so
-both shapes have one dismiss movement. `docs/DESIGN.md` states which notices
-use this shape and which notices use the full-width strip.
+`FloatingNoticeLayout`, `FloatingNoticeStackRule`, and `OfflineNoticeState` in
+PaguroCore hold the layout, visible-card selection, and offline dismissal rules.
+Cards clear the header and find bar; on the welcome screen they clear the
+traffic lights. The card uses `NotificationIslandSwipeRule` for its drag.
+See [Design choices](../DESIGN.md) for glass and accessibility rules.
 
 ### Page history
 

@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Backup offers, offline status, and microphone feedback use floating cards
+  over the window, including the welcome screen. Store errors keep their strip.
+
 - A new setup starts without workspaces. Adding the first service creates Home
   in the same save. The first-run preview ends after a successful add or import.
 

@@ -50,6 +50,12 @@ final class AppState {
     /// Drives the Find-in-Page overlay in WebContentView. Toggled by Cmd-F.
     var findInPageVisible = false
 
+    /// The service whose passkey card is on screen, or nil for none.
+    ///
+    /// The window owns it, because the card host in `ContentView` draws above
+    /// every state the window shows.
+    private(set) var passkeyNoticeServiceID: UUID?
+
     /// Bumped when a service's web view is rebuilt for an edit that only takes
     /// effect at creation time (custom CSS). WebContentView observes this and
     /// re-fetches the active service's web view so the change shows at once.
@@ -1262,6 +1268,28 @@ final class AppState {
     /// until the notice has been seen once for that service.
     func shouldShowPasskeyNotice(for service: ServiceInstance) -> Bool {
         service.needsPasskeyNotice
+    }
+
+    /// Raises the passkey card for a service that opens for the first time.
+    ///
+    /// The card host sits at the window level, above every state the window
+    /// shows, so the window state holds the notice instead of the web content
+    /// view. The seen state is stored as the card appears, so a switch away and
+    /// back does not raise it again. A service that needs no notice clears the
+    /// card of the service before it.
+    func raisePasskeyNoticeIfNeeded(for service: ServiceInstance) {
+        guard !AppCapabilities.passkeysSupported,
+              shouldShowPasskeyNotice(for: service) else {
+            passkeyNoticeServiceID = nil
+            return
+        }
+        passkeyNoticeServiceID = service.id
+        markPasskeyNoticeSeen(for: service.id)
+    }
+
+    /// Removes the passkey card.
+    func dismissPasskeyNotice() {
+        passkeyNoticeServiceID = nil
     }
 
     /// Records that the passkey notice has been shown for the given service so
