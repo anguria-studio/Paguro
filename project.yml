@@ -103,6 +103,15 @@ schemes:
         "--paguro-fake-notch": true
         "--paguro-demo-notifications": true
 
+  Paguro First Run Preview:
+    build:
+      targets:
+        Paguro: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "--paguro-first-run-preview": true
+
   Paguro Notification Probe:
     build:
       targets:

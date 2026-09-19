@@ -14,7 +14,6 @@ enum DefaultsKey {
     static let retiredBackdropFrostIntensity = "Paguro.backdropFrostIntensity"
     static let systemNotificationRouteEnabled = "Paguro.systemNotificationRouteEnabled"
     static let islandNotificationRouteEnabled = "Paguro.islandNotificationRouteEnabled"
-    static let hasSeenWelcome = "Paguro.hasSeenWelcome"
 
     static let recentEmojis = "recentEmojis"
     static let sidebarCollapsed = "Paguro.sidebarCollapsed"

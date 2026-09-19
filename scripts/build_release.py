@@ -26,6 +26,7 @@ DEBUG_ONLY_MARKERS = (
     '--paguro-demo-notifications',
     '--paguro-notification-probe',
     '--paguro-compatibility-fixture',
+    '--paguro-first-run-preview',
     'Are we still on for coffee at 4?',
 )
 MACH_O_MAGIC = (b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe', b'\xca\xfe\xba\xbe',

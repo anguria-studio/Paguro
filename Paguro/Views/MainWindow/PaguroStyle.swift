@@ -192,6 +192,10 @@ enum PaguroMotion {
     static let railReorderDamping = 0.78
     /// One frame of automatic rail scroll during a reorder drag.
     static let railAutoscrollInterval: Duration = .milliseconds(16)
+    /// The swap between the first-run home screen and the shell, which the
+    /// first service starts. It is a fade, plus a slide of the rail in from its
+    /// own edge. Reduce Motion keeps the fade alone.
+    static let firstRunSwapSeconds = 0.3
 }
 
 /// The user-facing transparency scale for the Paguro shell.
