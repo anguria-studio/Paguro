@@ -130,7 +130,7 @@ Version 1.0.1, build 6.
 
 - Added Lock and moved Settings beside notification mute in the menu-bar
   header. Removed the footer; the Paguro name and icon open the main window.
-  Lock appears only when App Lock is enabled and Paguro is unlocked.
+  Lock appears only after you turn on App Lock and unlock Paguro.
 
 ### Fixed
 
@@ -149,8 +149,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Native notifications, unread badges, mute controls, and an optional
   notification island near the notch.
 - Hibernation for idle services, plus ad and tracker blocking.
-- App lock with Touch ID or your Mac password. Notification content stays
-  hidden while the app is locked.
+- App lock with Touch ID or your Mac password. Paguro hides notification
+  content while it stays locked.
 - Camera and microphone controls, keyboard navigation, and service appearance
   settings.
 - Configuration export and import, with options to add to or replace the
