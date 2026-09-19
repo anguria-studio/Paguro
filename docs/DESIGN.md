@@ -185,6 +185,8 @@ The card follows these rules:
 - It floats over the top trailing corner of the window content, inset 14 points
   from the content edges, below the header and find bar. On the welcome screen,
   it clears the 28-point title-bar band and leaves the traffic lights usable.
+  The overlay and shell share the full-window origin; do not add the hidden
+  title bar's safe-area inset to the header height a second time.
 - It keeps a comfortable reading width of 350 points. A narrow window reduces
   the width and keeps the margin on both sides.
 - At most three cards stack downward with a 9 point gap. The newest card takes

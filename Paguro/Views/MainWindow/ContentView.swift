@@ -300,6 +300,9 @@ struct ContentView: View {
                 )
             )
         }
+        // The shell extends into the hidden title bar. Its overlay must use
+        // the same origin, or the safe-area inset is added to the header twice.
+        .ignoresSafeArea(.container, edges: .top)
         .padding(.trailing, contentTrailingInset)
     }
 

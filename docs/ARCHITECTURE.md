@@ -233,6 +233,10 @@ type that writes that row.
 `WorkspaceStore` is the SwiftData facade for spaces, services, links,
 passkey-notice state, favicons, page zoom, and window selection.
 
+The Debug first-run preview uses an in-memory model container and one
+nonpersistent WebKit store per account. It bypasses normal-store recovery and
+persistent session enumeration. The normal app keeps persistent account stores.
+
 Paguro must not store account passwords.
 Paguro must not copy full message history into its data store.
 Paguro must not persist notification bodies by default.

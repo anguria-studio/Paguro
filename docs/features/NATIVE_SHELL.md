@@ -73,11 +73,16 @@ card a full border, and Reduce Transparency gives it an opaque background.
 
 ### Debug preview
 
-Debug builds accept `--paguro-first-run-preview`. It shows the screen although
-services exist, so the screen can be inspected at any time. A successful add or
-import ends the forced preview and shows the normal shell if services exist.
-The argument itself writes nothing; additions and imports save normally. The
-**Paguro First Run Preview** scheme in `project.yml` runs the app with it.
+Debug builds accept `--paguro-first-run-preview`. The **Paguro First Run Preview**
+scheme starts with no workspace or service on every run. Its account graph and
+WebKit sessions stay in memory. Adding a service or importing a configuration
+shows only that run's services and ends the welcome screen. Quitting discards
+those test services and sign-ins. The normal **Paguro** scheme uses the saved setup.
+
+The preview bypasses normal-store restore, snapshots, and recovery history.
+It uses separate recovery defaults and disables persistent-session enumeration,
+so the empty test graph cannot reclaim the normal app's sign-in data. macOS
+notification authorization remains the system decision for the Debug app.
 
 `FirstRunPreviewConfiguration` sits completely inside `#if DEBUG`, so a Release
 build compiles nothing from it. The release script and the direct build check

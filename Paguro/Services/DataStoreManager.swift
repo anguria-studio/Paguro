@@ -7,6 +7,15 @@ import WebKit
 @MainActor
 final class DataStoreManager {
     private var cache: [UUID: WKWebsiteDataStore] = [:]
+    #if DEBUG
+    private let usesTemporaryStores: Bool
+    #endif
+
+    init(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        #if DEBUG
+        usesTemporaryStores = FirstRunPreviewConfiguration.isEnabled(arguments: arguments)
+        #endif
+    }
 
     func dataStore(for instance: ServiceInstance) -> WKWebsiteDataStore {
         dataStore(forIdentifier: instance.dataStoreIdentifier)
@@ -17,7 +26,18 @@ final class DataStoreManager {
             return cached
         }
 
-        let store = WKWebsiteDataStore(forIdentifier: identifier)
+        let store: WKWebsiteDataStore
+        #if DEBUG
+        if usesTemporaryStores {
+            // Keep one session per preview account without leaving sign-in data
+            // on disk after its in-memory service record disappears.
+            store = .nonPersistent()
+        } else {
+            store = WKWebsiteDataStore(forIdentifier: identifier)
+        }
+        #else
+        store = WKWebsiteDataStore(forIdentifier: identifier)
+        #endif
         cache[identifier] = store
         return store
     }

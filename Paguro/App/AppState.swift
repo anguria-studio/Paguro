@@ -190,25 +190,8 @@ final class AppState {
         #else
         let config = ModelConfiguration(schema: schema, url: StoreRelocation.resolveStoreURL())
         #endif
-        // A restore the user picked last session, applied before anything opens
-        // the store.
-        StoreRepair.applyPendingRestore(at: config.url)
-
-        // Snapshot the store before a newly-installed version opens it, so a
-        // migration that loses or reshapes data is always recoverable. No-op
-        // when the running version is unchanged from the last launch. This runs
-        // once here (not inside the open/retry path) so the retry restores from
-        // the snapshot it just took rather than overwriting it.
-        StoreRepair.backupBeforeMigrationIfNeeded(at: config.url)
-
-        // Note the store's condition BEFORE the open path repairs it — once
-        // `tryOpen` has run `repairDanglingLinks`, the damage is gone and the
-        // evidence with it. The recovery coordinator keeps this launch state.
-        let storeWasDamagedAtLaunch = StoreRepair.hasDanglingLinks(at: config.url)
-
-        // Open the store, self-healing an emptied or unusable store from the
-        // newest usable pre-migration snapshot. The outcome drives the banner.
-        let (loadedContainer, outcome) = StoreLoader.load(schema: schema, config: config)
+        let preparedStore = StoreLoader.prepare(schema: schema, config: config)
+        let loadedContainer = preparedStore.container
         self.modelContainer = loadedContainer
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
@@ -226,15 +209,17 @@ final class AppState {
         )
         let storeRecovery = StoreRecoveryCoordinator(
             context: loadedContainer.mainContext,
-            storeURL: config.url,
-            outcome: outcome,
-            wasDamagedAtLaunch: storeWasDamagedAtLaunch
+            storeURL: preparedStore.url,
+            outcome: preparedStore.outcome,
+            wasDamagedAtLaunch: preparedStore.wasDamaged,
+            defaults: preparedStore.defaults
         )
         self.storeRecovery = storeRecovery
         self.websiteDataReclaimer = WebsiteDataReclaimer(
             context: loadedContainer.mainContext,
             dataStoreManager: dataStoreManager,
-            isSafeToReclaim: storeRecovery.isSafeToReclaim
+            isSafeToReclaim: preparedStore.allowsPersistentReclamation && storeRecovery.isSafeToReclaim,
+            defaults: preparedStore.defaults
         )
         self.hibernationScheduler = HibernationScheduler(
             context: loadedContainer.mainContext,

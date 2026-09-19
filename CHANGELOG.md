@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- First Run Preview starts with disposable services and sign-ins on every run.
+  Floating notices sit directly below the header without a second title-bar gap.
+
 - Backup offers, offline status, and microphone feedback use floating cards
   over the window, including the welcome screen. Store errors keep their strip.
 
