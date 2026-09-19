@@ -97,6 +97,15 @@ You do not need Xcode to use a downloaded release.
 4. Open Paguro from Applications and follow the setup prompts.
 5. Add your services and sign in to each account.
 
+Or install with [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask anguria-studio/tap/paguro
+```
+
+The cask installs the same disk image. Use the full name as shown; Homebrew
+then needs no extra step to trust the tap.
+
 Direct releases use Developer ID signing and Apple notarization.
 Allow notifications if you want macOS banners. Services ask for camera or
 microphone access when needed. Paguro itself does not need an account.

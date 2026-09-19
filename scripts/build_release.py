@@ -97,6 +97,42 @@ def notarize(path, profile):
         raise RuntimeError(f'Notarization rejected {path.name}: {result.get("id")}')
 
 
+def homebrew_cask(version, build, sha256):
+    """Return the cask file for the tap anguria-studio/homebrew-tap.
+
+    The cask names the versioned DMG, because a cask needs an address whose
+    content never changes. Sparkle updates the app, so the cask sets
+    auto_updates and Homebrew leaves an installed copy alone.
+    """
+    return f'''cask "paguro" do
+  version "{version},{build}"
+  sha256 "{sha256}"
+
+  url "https://github.com/{REPOSITORY}/releases/download/v#{{version.csv.first}}/Paguro-#{{version.csv.first}}-#{{version.csv.second}}.dmg"
+  name "Paguro"
+  desc "Native workspace for web apps"
+  homepage "https://anguria.studio/paguro"
+
+  livecheck do
+    url "{FEED}"
+    strategy :sparkle do |item|
+      "#{{item.short_version}},#{{item.version}}"
+    end
+  end
+
+  auto_updates true
+  depends_on macos: :sequoia
+
+  app "Paguro.app"
+
+  zap trash: [
+    "~/Library/Application Scripts/{BUNDLE_ID}",
+    "~/Library/Containers/{BUNDLE_ID}",
+  ]
+end
+'''
+
+
 def add_stable_download(dmg):
     """Copy the versioned DMG to the fixed download name and return the copy.
 
@@ -237,6 +273,10 @@ def main():
         checksums = ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
                             for p in sorted(assets.iterdir()) if p.is_file())
         (assets / 'SHA256SUMS').write_text(checksums)
+        if not args.test_feed:
+            # Not a release download: copy it to Casks/paguro.rb in the tap.
+            (output / 'paguro.rb').write_text(homebrew_cask(
+                args.version, args.build, hashlib.sha256(dmg.read_bytes()).hexdigest()))
         (output / 'release.json').write_text(json.dumps(dict(version=args.version,
             build=args.build, repository=REPOSITORY, feed=args.test_feed or FEED,
             test_only=bool(args.test_feed), source_commit=run('git', '-C', ROOT,

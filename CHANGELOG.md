@@ -4,6 +4,12 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+### Added
+
+- You can install Paguro with Homebrew:
+  `brew install --cask anguria-studio/tap/paguro`. The cask installs the same
+  signed and notarized disk image as the download. Paguro still updates itself.
+
 ## [1.0.5] — 2026-09-19
 
 Version 1.0.5, build 14.

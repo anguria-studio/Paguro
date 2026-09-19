@@ -148,6 +148,40 @@ Keep old release downloads available. Do not replace an existing version's DMG.
 Test the public download and feed without GitHub credentials after publication.
 Also test the permanent `Paguro.dmg` address: it must return the new version.
 
+## Homebrew
+
+The tap `anguria-studio/homebrew-tap` holds one cask, `Casks/paguro.rb`. Users
+install with `brew install --cask anguria-studio/tap/paguro`. Homebrew requires
+trust for a tap that is not official, and the full name trusts that one cask
+without an extra step.
+
+The cask is not a separate build. It names the versioned DMG of the GitHub
+release and its SHA-256 value. It sets `auto_updates`, because Sparkle updates
+the app, so `brew upgrade` leaves an installed copy alone. Its `livecheck` block
+reads the signed Sparkle feed. Its `zap` list names the sandbox container and
+the application scripts folder; a sandboxed Paguro stores nothing elsewhere.
+
+The release script writes `paguro.rb` in the output directory, beside
+`release.json`. It is not a release download. After you publish a release, copy
+that file to `Casks/paguro.rb` in the tap, commit it, and push. A late update
+does no harm: a new installation gets the earlier version, and Sparkle updates
+it.
+
+Check a change to the cask before you push it:
+
+```sh
+brew style anguria-studio/tap
+brew audit --cask --strict --online anguria-studio/tap/paguro
+```
+
+To test an installation without a change to `/Applications`, add
+`--appdir=/path/to/a/scratch/folder`. Do not run `brew uninstall --zap` on a Mac
+that you use: it deletes the container with every service session.
+
+The official `homebrew/cask` repository accepts an app only after it meets the
+Homebrew notability rules. Submit the same cask there when the public
+repository qualifies.
+
 ## App Store build
 
 `project-store.yml` adds the `Paguro App Store` scheme to the default project.
