@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -16,6 +17,9 @@ BUNDLE_ID = 'studio.anguria.paguro'
 ACCOUNT = 'com.tommasolaterza.Paguro'
 REPOSITORY = 'anguria-studio/Paguro'
 FEED = f'https://github.com/{REPOSITORY}/releases/latest/download/appcast.xml'
+# A fixed name lets the website use /releases/latest/download/Paguro.dmg, so
+# its download link needs no change for a new release.
+STABLE_DMG_NAME = 'Paguro.dmg'
 # Text that only a Debug build may contain: the launch arguments that enable the
 # development surface, and one sentence from the island demo catalog.
 DEBUG_ONLY_MARKERS = (
@@ -91,6 +95,23 @@ def notarize(path, profile):
                            '--output-format', 'json', capture=True))
     if result.get('status') != 'Accepted':
         raise RuntimeError(f'Notarization rejected {path.name}: {result.get("id")}')
+
+
+def add_stable_download(dmg):
+    """Copy the versioned DMG to the fixed download name and return the copy.
+
+    Call this after generate_appcast. That tool reads every archive in the
+    assets directory, and two archives of one version make it fail. The feed
+    and a Homebrew cask keep the versioned name, because they need an address
+    that never changes its content.
+    """
+    stable = dmg.with_name(STABLE_DMG_NAME)
+    if stable.exists():
+        raise RuntimeError(f'{STABLE_DMG_NAME} already exists in the assets directory')
+    shutil.copy2(dmg, stable)
+    if stable.read_bytes() != dmg.read_bytes():
+        raise RuntimeError(f'{STABLE_DMG_NAME} differs from {dmg.name}')
+    return stable
 
 
 def main():
@@ -211,6 +232,8 @@ def main():
         run(tools / 'generate_appcast', '--account', ACCOUNT, '--download-url-prefix',
             download_url, '--maximum-deltas', '0', assets)
         run(tools / 'sign_update', '--account', ACCOUNT, '--verify', assets / 'appcast.xml')
+        if not args.test_feed:
+            add_stable_download(dmg)
         checksums = ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
                             for p in sorted(assets.iterdir()) if p.is_file())
         (assets / 'SHA256SUMS').write_text(checksums)

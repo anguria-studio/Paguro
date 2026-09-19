@@ -5,7 +5,8 @@ import unittest
 import tempfile
 from pathlib import Path
 from build_release import (validate_app_info, ROOT, FEED, BUNDLE_ID, ACCOUNT, notary_profile,
-                           DEBUG_ONLY_MARKERS, check_debug_markers, debug_markers)
+                           DEBUG_ONLY_MARKERS, check_debug_markers, debug_markers,
+                           STABLE_DMG_NAME, add_stable_download)
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -103,6 +104,31 @@ class DebugMarkerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(RuntimeError):
                 check_debug_markers(Path(directory))
+
+
+
+class StableDownloadTests(unittest.TestCase):
+    def test_copy_has_the_fixed_name_and_the_same_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dmg = Path(directory) / 'Paguro-9.9.9-99.dmg'
+            dmg.write_bytes(b'disk image bytes')
+            stable = add_stable_download(dmg)
+            self.assertEqual(stable.name, STABLE_DMG_NAME)
+            self.assertEqual(stable.parent, dmg.parent)
+            self.assertEqual(stable.read_bytes(), dmg.read_bytes())
+            self.assertTrue(dmg.exists())
+
+    def test_fixed_name_matches_the_public_download_address(self):
+        # The website links to /releases/latest/download/Paguro.dmg.
+        self.assertEqual(STABLE_DMG_NAME, 'Paguro.dmg')
+
+    def test_refuses_to_replace_an_existing_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dmg = Path(directory) / 'Paguro-9.9.9-99.dmg'
+            dmg.write_bytes(b'new')
+            (Path(directory) / STABLE_DMG_NAME).write_bytes(b'old')
+            with self.assertRaises(RuntimeError):
+                add_stable_download(dmg)
 
 
 if __name__ == '__main__':
