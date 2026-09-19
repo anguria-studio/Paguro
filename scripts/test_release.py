@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from build_release import (validate_app_info, ROOT, FEED, BUNDLE_ID, ACCOUNT, notary_profile,
                            DEBUG_ONLY_MARKERS, check_debug_markers, debug_markers,
-                           STABLE_DMG_NAME, add_stable_download)
+                           STABLE_DMG_NAME, add_stable_download, homebrew_cask)
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -129,6 +129,49 @@ class StableDownloadTests(unittest.TestCase):
             (Path(directory) / STABLE_DMG_NAME).write_bytes(b'old')
             with self.assertRaises(RuntimeError):
                 add_stable_download(dmg)
+
+
+
+class HomebrewCaskTests(unittest.TestCase):
+    PUBLISHED = '''cask "paguro" do
+  version "1.0.5,14"
+  sha256 "1be75ec2e2be4e21347a7717b22ca2d6aed9d8ad40b7c0feda171fa770f0988d"
+
+  url "https://github.com/anguria-studio/Paguro/releases/download/v#{version.csv.first}/Paguro-#{version.csv.first}-#{version.csv.second}.dmg"
+  name "Paguro"
+  desc "Native workspace for web apps"
+  homepage "https://anguria.studio/paguro"
+
+  livecheck do
+    url "https://github.com/anguria-studio/Paguro/releases/latest/download/appcast.xml"
+    strategy :sparkle do |item|
+      "#{item.short_version},#{item.version}"
+    end
+  end
+
+  auto_updates true
+  depends_on macos: :sequoia
+
+  app "Paguro.app"
+
+  zap trash: [
+    "~/Library/Application Scripts/studio.anguria.paguro",
+    "~/Library/Containers/studio.anguria.paguro",
+  ]
+end
+'''
+
+    def test_matches_the_cask_published_for_1_0_5(self):
+        # The tap passed brew style and brew audit --strict --online with this text.
+        sha = '1be75ec2e2be4e21347a7717b22ca2d6aed9d8ad40b7c0feda171fa770f0988d'
+        self.assertEqual(homebrew_cask('1.0.5', 14, sha), self.PUBLISHED)
+
+    def test_only_the_version_and_the_hash_change(self):
+        first = homebrew_cask('1.0.5', 14, 'a' * 64).splitlines()
+        second = homebrew_cask('1.0.6', 15, 'b' * 64).splitlines()
+        changed = [i for i, (x, y) in enumerate(zip(first, second)) if x != y]
+        self.assertEqual(changed, [1, 2])
+        self.assertIn('version "1.0.6,15"', second[1])
 
 
 if __name__ == '__main__':
