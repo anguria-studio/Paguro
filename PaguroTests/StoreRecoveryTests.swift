@@ -422,72 +422,7 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(s.label, "Gmail")
     }
 
-    // MARK: - Store content and the default-seed fingerprint
-
-    /// The fingerprint must match the seed exactly and nothing else. The seed
-    /// is the two default workspaces with no service in them.
-    func testUntouchedSeedFingerprint() {
-        let seed = StoreContent(
-            spaces: 2,
-            services: 0,
-            links: 0,
-            spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: []
-        )
-        XCTAssertTrue(seed.looksLikeUntouchedSeed, "the exact seed shape must match")
-
-        let plusOne = StoreContent(
-            spaces: 2, services: 1, links: 1,
-            spaceNames: DefaultSeed.spaces.map(\.name), serviceLabels: ["Notion"]
-        )
-        XCTAssertFalse(plusOne.looksLikeUntouchedSeed, "one added service means the user has touched it")
-
-        let renamed = StoreContent(
-            spaces: 2, services: 0, links: 0,
-            spaceNames: ["Personal", "Clients"], serviceLabels: []
-        )
-        XCTAssertFalse(renamed.looksLikeUntouchedSeed, "a renamed space means the user has touched it")
-
-        let added = StoreContent(
-            spaces: 3, services: 0, links: 0,
-            spaceNames: ["Personal", "Work", "Side"], serviceLabels: []
-        )
-        XCTAssertFalse(added.looksLikeUntouchedSeed, "an added workspace means the user has touched it")
-
-        let empty = StoreContent(spaces: 0, services: 0, links: 0, spaceNames: [], serviceLabels: [])
-        XCTAssertFalse(empty.looksLikeUntouchedSeed, "an empty store is empty, not seeded")
-        XCTAssertTrue(empty.isEmpty)
-    }
-
-    /// The fingerprint must recognize a store built from the seed lists the
-    /// seeder uses. If someone edits one seed list and not the fingerprint, this
-    /// goes red.
-    @MainActor
-    func testSeededStoreIsFingerprintedAsSeed() throws {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("paguro-seedprint-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let storeURL = dir.appendingPathComponent("store.sqlite")
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let config = ModelConfiguration(schema: Self.storeSchema, url: storeURL)
-        let container = try ModelContainer(for: Self.storeSchema, configurations: [config])
-        let ctx = container.mainContext
-        let spaces = DefaultSeed.spaces.enumerated().map { index, entry in
-            Space(name: entry.name, emoji: entry.emoji, sortOrder: index)
-        }
-        for space in spaces { ctx.insert(space) }
-        try ctx.save()
-
-        let content = StoreContent(
-            spaces: try ctx.fetchCount(FetchDescriptor<Space>()),
-            services: try ctx.fetchCount(FetchDescriptor<ServiceInstance>()),
-            links: try ctx.fetchCount(FetchDescriptor<SpaceServiceLink>()),
-            spaceNames: try ctx.fetch(FetchDescriptor<Space>()).map(\.name),
-            serviceLabels: try ctx.fetch(FetchDescriptor<ServiceInstance>()).map(\.label)
-        )
-        XCTAssertTrue(content.looksLikeUntouchedSeed, "a store built from DefaultSeed must fingerprint as the seed")
-    }
+    // MARK: - Store content
 
     /// Reading a store file must report its real counts and return nil
     /// (unknown) rather than zero for anything it cannot read. WAL visibility
@@ -1208,7 +1143,6 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(
             StoreRecoveryPolicy.offer(
                 liveContent: live,
-                liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false,
                 best: best,
                 record: record,
                 declinedKeys: []
@@ -1218,8 +1152,7 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(
             StoreRecoveryPolicy.preselection(
                 among: candidates,
-                liveContent: live,
-                liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false
+                liveContent: live
             )?.content?.spaces,
             4,
             "the 4-space snapshot must be preselected over an emptied live store"

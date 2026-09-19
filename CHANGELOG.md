@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- A new setup starts without workspaces. Adding the first service creates Home
+  in the same save. The first-run preview ends after a successful add or import.
+
 ### Added
 
 - Paguro starts with a welcome screen where you add your first service, instead

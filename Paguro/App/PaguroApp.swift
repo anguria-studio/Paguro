@@ -66,11 +66,7 @@ struct PaguroApp: App {
                     appState.showAddService = true
                 }
                 .keyboardShortcut("n", modifiers: .command)
-                // With no space selected the sheet has nowhere to add the
-                // service and renders empty and un-dismissable, so disable ⌘N
-                // until a space exists (the seeded app always has one; this
-                // covers the transient no-space state).
-                .disabled(appState.selectedSpaceID == nil)
+                .disabled(appState.isLocked)
 
                 Button("Add Workspace…") {
                     appState.showAddSpace = true

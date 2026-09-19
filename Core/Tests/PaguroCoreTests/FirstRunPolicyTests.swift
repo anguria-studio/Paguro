@@ -7,14 +7,14 @@ struct FirstRunPolicyTests {
         isLocked: Bool = false,
         authorization: NotificationAuthorizationState = .authorized,
         islandIsAvailable: Bool = false,
-        forcesPreview: Bool = false
+        previewArgument: Bool = false
     ) -> FirstRunPresentation {
         FirstRunPolicy.presentation(
             serviceCount: serviceCount,
             isLocked: isLocked,
             authorization: authorization,
             islandIsAvailable: islandIsAvailable,
-            forcesPreview: forcesPreview
+            previewArgument: previewArgument
         )
     }
 
@@ -121,11 +121,22 @@ struct FirstRunPolicyTests {
         let preview = presentation(
             serviceCount: 7,
             authorization: .notDetermined,
-            forcesPreview: true
+            previewArgument: true
         )
 
         #expect(preview.showsHome)
         #expect(preview.setup?.showsNotificationRow == true)
+    }
+
+    @Test
+    func successfulActionEndsPreviewButAnEmptyStoreStillShowsHome() {
+        for count in [0, 1, 8] {
+            let result = FirstRunPolicy.presentation(
+                serviceCount: count, isLocked: false, authorization: .authorized,
+                islandIsAvailable: false, previewArgument: true, previewEnded: true
+            )
+            #expect(result.showsHome == (count == 0))
+        }
     }
 
     @Test

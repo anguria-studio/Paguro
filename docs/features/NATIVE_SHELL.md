@@ -10,9 +10,10 @@ It does not change the web content of a service.
 ## First run
 
 The main window shows one welcome screen while no service exists. A new install
-therefore starts on this screen: `WorkspaceStore` seeds the two default
-workspaces, Personal and Work, and no service. A set of example services stood
-between a new user and the service they wanted.
+starts completely empty, with no workspace and no service. Adding the first
+service creates one workspace named Home and the service in one transaction.
+Cancel and a failed save leave the store empty. The Add Service sheet hides the
+workspace picker until more than one workspace exists. Launch never seeds data.
 
 The screen replaces the complete shell: no rail in any of the four layouts, no
 content header, and no top bar. An empty rail beside an empty header said
@@ -73,8 +74,9 @@ card a full border, and Reduce Transparency gives it an opaque background.
 ### Debug preview
 
 Debug builds accept `--paguro-first-run-preview`. It shows the screen although
-services exist, so the screen can be looked at at any time. It writes nothing,
-so the workspaces are unchanged when Paguro starts again without it. The
+services exist, so the screen can be inspected at any time. A successful add or
+import ends the forced preview and shows the normal shell if services exist.
+The argument itself writes nothing; additions and imports save normally. The
 **Paguro First Run Preview** scheme in `project.yml` runs the app with it.
 
 `FirstRunPreviewConfiguration` sits completely inside `#if DEBUG`, so a Release
@@ -688,7 +690,7 @@ Layout and appearance use the transactional app preferences row. Glass,
 icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so
 they remain available while Paguro repairs or restores the content store.
 
-On a fresh install, Paguro creates the workspaces Personal and Work and no
+On a fresh install, Paguro creates no workspace and no
 service, so the window opens on the first-run welcome screen. Paguro follows
 the system appearance, uses the left rail, shows all workspaces, and appears in
 both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a

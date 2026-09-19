@@ -55,15 +55,27 @@ public enum FirstRunPolicy {
     ///   - isLocked: Whether App Lock holds the window.
     ///   - authorization: What macOS currently says about the permission.
     ///   - islandIsAvailable: Whether a notched display is present.
-    ///   - forcesPreview: The Debug preview argument. It shows the screen over
-    ///     a full workspace and changes no stored value.
+    ///   - previewArgument: The Debug preview argument is present. It shows the
+    ///     screen over a full workspace and changes no stored value.
+    ///   - previewEnded: The user did something during this run that ends a
+    ///     real first run, such as adding a service or importing a
+    ///     configuration.
     public static func presentation(
         serviceCount: Int,
         isLocked: Bool,
         authorization: NotificationAuthorizationState,
         islandIsAvailable: Bool,
-        forcesPreview: Bool = false
+        previewArgument: Bool = false,
+        previewEnded: Bool = false
     ) -> FirstRunPresentation {
+        // The preview exists to show the screen and its most important moment,
+        // the change to the shell. An argument that held the screen for the
+        // whole run hid that moment: the add succeeded and the screen stayed,
+        // which reads as a button that does nothing. The preview therefore
+        // lasts until the user does what ends a real first run. The argument
+        // writes nothing, so the next launch forces the screen again.
+        let forcesPreview = previewArgument && !previewEnded
+
         // A user who deletes every service sees the screen again. That is
         // intended: the window is empty again, and the screen is what an empty
         // window says.

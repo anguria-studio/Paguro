@@ -69,7 +69,10 @@ copies. It has no separate database backup or restore control.
 
 Paguro still creates a local database snapshot before a new app version opens
 existing data. These snapshots support automatic recovery from an unusable
-store. If Paguro detects possible data loss and finds a useful backup, the main
+store. A fresh install has no workspace or service. Recovery distinguishes an
+empty fresh install from possible loss through backup availability and the
+saved content record; it never seeds replacement data. Any workspace counts as
+user data when selecting and retaining backups. If Paguro detects possible data loss and finds a useful backup, the main
 window offers backup selection and restore. The snapshots do not copy website
 login storage. See [Application lifecycle](APP-LIFECYCLE.md).
 

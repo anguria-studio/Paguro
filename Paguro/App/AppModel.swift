@@ -61,7 +61,8 @@ final class AppModel {
             isLocked: appState.isLocked,
             authorization: appState.notificationManager.authorizationState,
             islandIsAvailable: islandPanelController.canPresentIsland,
-            forcesPreview: forcesFirstRunPreview
+            previewArgument: forcesFirstRunPreview,
+            previewEnded: appState.hasCompletedFirstRunAction
         )
     }
 

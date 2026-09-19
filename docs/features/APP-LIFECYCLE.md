@@ -105,10 +105,10 @@ services of every workspace together. The screen carries the notification
 permission and the island offers, so Paguro has no separate welcome sheet and
 stores no "seen" state for one.
 
-A new install reaches that screen. `WorkspaceStore.seedDefaultDataIfNeeded`
-writes the two default workspaces and no service. It keeps its
-`hasEverHadData` guard, which stops a seed over a store that was lost, so a
-recovered install never gets fresh workspaces written over it.
+A new install has no workspace and no service. Launch never seeds data.
+`WorkspaceStore.addService` creates Home with the first service in one save.
+Store recovery still uses `hasEverHadData`, snapshots, and the saved content
+record to detect data loss. Any workspace now counts as user data.
 
 The window reads the rule at each render, so the first service ends the screen
 without another signal. `NotificationRuntime.start()` still owns the macOS

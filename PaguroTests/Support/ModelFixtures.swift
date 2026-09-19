@@ -105,22 +105,6 @@ enum ModelFixtures {
         }
     }
 
-    /// Writes the shape of a fresh install: the two default workspaces and no
-    /// service.
-    static func insertSeedShape(_ url: URL) throws {
-        let spaceEntity = try SQLiteHelpers.run(
-            url,
-            "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'Space';"
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-
-        for (index, entry) in DefaultSeed.spaces.enumerated() {
-            _ = try SQLiteHelpers.run(url, """
-                INSERT INTO ZSPACE (Z_PK, Z_ENT, Z_OPT, ZNAME, ZEMOJI, ZSORTORDER)
-                VALUES (\(2000 + index), \(spaceEntity.isEmpty ? "1" : spaceEntity), 1, '\(entry.name)', '\(entry.emoji)', \(index));
-                """)
-        }
-    }
-
     static func copyStoreTriple(from source: URL, to destination: URL) throws {
         let fileManager = FileManager.default
         for suffix in ["", "-wal", "-shm"] {

@@ -2,41 +2,6 @@ import Foundation
 import SQLite3
 import PaguroCore
 
-/// The workspaces `WorkspaceStore` writes on a genuine fresh install. Shared
-/// with `StoreContent.looksLikeUntouchedSeed` so the seeder and the fingerprint
-/// can never drift apart; `testSeededStoreIsFingerprintedAsSeed` fails if they
-/// do.
-///
-/// Paguro seeds no service. A new user reaches the first-run home screen and
-/// adds the service they want. See `docs/features/NATIVE_SHELL.md`.
-enum DefaultSeed {
-    static let spaces: [(name: String, emoji: String)] = [
-        (name: "Personal", emoji: "🏠"),
-        (name: "Work", emoji: "💼"),
-    ]
-}
-
-extension StoreContent {
-    /// True only when the store is exactly what `WorkspaceStore` writes on a
-    /// fresh install: the two seeded workspaces under their own names, and no
-    /// service at all.
-    ///
-    /// The question this answers is "does the store hold anything of the
-    /// user's". One added service and one renamed workspace each make it false,
-    /// so the answer is no only while the store is untouched. That is what
-    /// makes it safe to preselect a backup over the live store, and what keeps
-    /// a snapshot of such a store from being protected from pruning.
-    ///
-    /// An empty store is not this: zero workspaces fails the count, because a
-    /// store that lost its workspaces is a loss and not a fresh install.
-    var looksLikeUntouchedSeed: Bool {
-        matchesUntouchedSeed(
-            spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: []
-        )
-    }
-}
-
 /// Reads store files without opening a `ModelContainer`, so candidates can be
 /// inspected and ranked before anything migrates or locks them. Read-only
 /// throughout: nothing here writes to a store.

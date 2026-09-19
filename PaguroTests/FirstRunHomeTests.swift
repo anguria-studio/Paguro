@@ -88,6 +88,42 @@ final class FirstRunHomeTests: XCTestCase {
         XCTAssertTrue(showsHome(serviceCount: store.allServices().count))
     }
 
+    @MainActor
+    func testFirstAddCreatesHomeAndSecondAddReusesIt() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let store = makeStore(context: context)
+        let first = try XCTUnwrap(store.addService(label: "Mail", url: "https://example.com", to: nil))
+        let second = try XCTUnwrap(store.addService(label: "Chat", url: "https://chat.example", to: nil))
+        let spaces = try context.fetch(FetchDescriptor<Space>())
+        XCTAssertEqual(spaces.count, 1)
+        let home = try XCTUnwrap(spaces.first)
+        XCTAssertEqual(home.name, "Home")
+        XCTAssertEqual(home.emoji, "")
+        XCTAssertEqual(store.servicesForSpace(home.id).map(\.id), [first, second])
+        XCTAssertEqual(store.service(id: first)?.spaceLinks.first?.space?.id, home.id)
+        let selection = store.restoredWindowSelection(fallbackSpaceID: home.id, fallbackServiceID: first)
+        XCTAssertEqual(selection.spaceID, home.id)
+        XCTAssertEqual(selection.serviceID, first)
+    }
+
+    @MainActor
+    func testFailedFirstAddRollsBackHomeAndService() throws {
+        enum Failure: Error { case save }
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let store = makeStore(context: context)
+        XCTAssertThrowsError(try store.addService(
+            label: "Mail", url: "https://example.com", to: nil,
+            save: { _ in throw Failure.save }
+        ))
+        try context.save()
+        let verification = ModelContext(container)
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<Space>()), 0)
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<SpaceServiceLink>()), 0)
+    }
+
     #if DEBUG
     /// The argument is read from the launch arguments alone, so it changes no
     /// stored value. The whole `FirstRunPreviewConfiguration` file sits inside
@@ -109,7 +145,7 @@ final class FirstRunHomeTests: XCTestCase {
             isLocked: false,
             authorization: .authorized,
             islandIsAvailable: false,
-            forcesPreview: true
+            previewArgument: true
         ).showsHome)
     }
     #endif
