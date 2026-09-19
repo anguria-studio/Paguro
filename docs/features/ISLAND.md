@@ -478,7 +478,9 @@ The demo does not read messages, change unread badges, or send macOS alerts.
 App Lock and the island route switch still block the test action. With none of
 these services configured, it falls back to the generic active-service preview.
 Other schemes keep the generic preview. Release builds omit the demo catalog
-and ignore the argument.
+and ignore the argument. The release script and the direct build check scan the
+built app for the demo text and for the argument. They stop the build when
+either one appears.
 
 For screenshots, run `xcodegen generate`, select **Paguro Island Preview** in
 Xcode, and run the app. Open Settings > Notifications and click

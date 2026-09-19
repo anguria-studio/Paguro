@@ -4,7 +4,8 @@ import plistlib
 import unittest
 import tempfile
 from pathlib import Path
-from build_release import validate_app_info, ROOT, FEED, BUNDLE_ID, ACCOUNT, notary_profile
+from build_release import (validate_app_info, ROOT, FEED, BUNDLE_ID, ACCOUNT, notary_profile,
+                           DEBUG_ONLY_MARKERS, check_debug_markers, debug_markers)
 
 
 class ReleaseMetadataTests(unittest.TestCase):
@@ -60,6 +61,48 @@ class ReleaseMetadataTests(unittest.TestCase):
         normal = plistlib.loads((ROOT / 'Paguro/Info.plist').read_bytes())
         self.assertFalse(any(key.startswith('SU') for key in normal))
         self.assertNotIn('Sparkle', (ROOT / 'project.yml').read_text())
+
+
+class DebugMarkerTests(unittest.TestCase):
+    def test_finds_each_debug_only_marker_in_binary_bytes(self):
+        for marker in DEBUG_ONLY_MARKERS:
+            with self.subTest(marker=marker):
+                data = b'\xcf\xfa\xed\xfe binary noise ' + marker.encode() + b'\x00more'
+                self.assertEqual(debug_markers(data), [marker])
+
+    def test_accepts_bytes_without_a_marker(self):
+        # The screen preset argument stays out of the list: released builds
+        # already drop that text, so a match would report an accepted string.
+        self.assertEqual(debug_markers(b'\xcf\xfa\xed\xfe --paguro-island-screen\x00'), [])
+
+    def test_scan_names_the_marker_and_passes_a_clean_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'Paguro'
+            path.write_bytes(b'\xcf\xfa\xed\xfe' + DEBUG_ONLY_MARKERS[0].encode())
+            with self.assertRaises(RuntimeError) as failure:
+                check_debug_markers(path)
+            self.assertIn(DEBUG_ONLY_MARKERS[0], str(failure.exception))
+            path.write_bytes(b'\xcf\xfa\xed\xfe release only')
+            check_debug_markers(path)
+
+    def test_scan_reads_every_mach_o_file_in_an_app_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory) / 'Paguro.app'
+            (app / 'Contents/MacOS').mkdir(parents=True)
+            (app / 'Contents/MacOS/Paguro').write_bytes(b'\xcf\xfa\xed\xfe release only')
+            (app / 'Contents/Resources').mkdir()
+            (app / 'Contents/Resources/notes.txt').write_text(DEBUG_ONLY_MARKERS[3])
+            check_debug_markers(app)
+            (app / 'Contents/MacOS/Helper').write_bytes(
+                b'\xca\xfe\xba\xbe' + DEBUG_ONLY_MARKERS[1].encode())
+            with self.assertRaises(RuntimeError) as failure:
+                check_debug_markers(app)
+            self.assertIn(DEBUG_ONLY_MARKERS[1], str(failure.exception))
+
+    def test_scan_requires_a_mach_o_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(RuntimeError):
+                check_debug_markers(Path(directory))
 
 
 if __name__ == '__main__':

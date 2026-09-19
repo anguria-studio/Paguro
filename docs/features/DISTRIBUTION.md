@@ -102,6 +102,12 @@ python3 scripts/build_release.py \
 The CI workflow `direct-release-check.yml` compiles both architectures without
 signing credentials. The local release script performs signing and notarization.
 
+Both checks then scan every Mach-O file in the built app for Debug-only text.
+The scan looks for the demo notification, notification probe, and compatibility
+fixture launch arguments. It also looks for one sentence from the island demo
+catalog. The build stops and names the text that it found. To check any build,
+run `python3 scripts/build_release.py --scan path/to/Paguro.app`.
+
 The output directory must not exist. The script retains the archive, exported
 app, release manifest, DMG, signed appcast, and checksums. Only files under
 `assets` are release downloads. Increase the build number for each update.
@@ -231,7 +237,8 @@ Test these cases before each public release:
 - app update;
 - damaged update rejection;
 - Gatekeeper verification;
-- notarization verification.
+- notarization verification;
+- the Debug-only text scan of the exported app.
 
 ## Version policy
 
