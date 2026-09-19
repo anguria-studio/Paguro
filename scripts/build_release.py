@@ -139,7 +139,10 @@ def main():
         if not entitlements.get('com.apple.security.app-sandbox', False):
             raise RuntimeError('Export lost its sandbox entitlement')
         run('codesign', '--verify', '--deep', '--strict', app)
-        run('lipo', app / 'Contents/MacOS/Paguro', '-verify_arch', 'arm64', 'x86_64')
+        # One architecture for each call: the lipo in Xcode 27 rejects two
+        # names after -verify_arch, and one name works in every version.
+        for architecture in ('arm64', 'x86_64'):
+            run('lipo', app / 'Contents/MacOS/Paguro', '-verify_arch', architecture)
         app_zip = work / 'Paguro.zip'
         run('ditto', '-c', '-k', '--keepParent', app, app_zip)
         notarize(app_zip, profile)
