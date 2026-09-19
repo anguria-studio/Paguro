@@ -7,11 +7,22 @@ struct ContentView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var collapsedToggleChromeVisible = false
-    /// The first-run welcome, once there is something to ask.
-    @State private var pendingWelcome: FirstRunWelcome?
     @State private var collapsedChromeRevealTask: Task<Void, Never>?
 
+    /// Every service of every workspace.
+    ///
+    /// First run is "no service anywhere", not "no service in this workspace".
+    /// A workspace with nothing in it is still an empty window. The query also
+    /// makes the swap to the shell follow the first service, without a second
+    /// signal to keep in step.
+    @Query private var allServices: [ServiceInstance]
+
     private var sidebarCollapsed: Bool { appState.sidebarCollapsed }
+
+    /// What the window shows: the first-run home screen, or the shell.
+    private var firstRun: FirstRunPresentation {
+        appModel.firstRunPresentation(serviceCount: allServices.count)
+    }
 
     var body: some View {
         @Bindable var state = appState
@@ -99,9 +110,30 @@ struct ContentView: View {
                 .accessibilityLabel(feedback)
             }
 
-            mainLayout(
-                spaceSelection: $state.selectedSpaceID,
-                serviceSelection: $state.selectedServiceID
+            // The home screen replaces the complete shell, so no rail layout
+            // has to answer for it: `mainLayout` builds every rail, and
+            // `WebContentView` builds the content header inside it.
+            Group {
+                if firstRun.showsHome {
+                    FirstRunHomeView(
+                        setup: firstRun.setup,
+                        allowsActions: firstRun.allowsActions
+                    )
+                    .transition(.opacity)
+                } else {
+                    mainLayout(
+                        spaceSelection: $state.selectedSpaceID,
+                        serviceSelection: $state.selectedServiceID
+                    )
+                    .transition(.opacity)
+                }
+            }
+            // The first service ends first run. The swap is a change the user
+            // did not see happen, so it fades; the rail adds a short slide in
+            // from its own edge, which Reduce Motion removes.
+            .animation(
+                .easeInOut(duration: PaguroMotion.firstRunSwapSeconds),
+                value: firstRun.showsHome
             )
             // A minimum height here makes the shell larger than a short
             // window. SwiftUI then centers and clips the complete shell, which
@@ -138,9 +170,13 @@ struct ContentView: View {
         // otherwise move the window instead of reordering) and let the
         // WindowDragHandles move the window instead. The sidebar keeps the
         // normal title-bar drag.
+        //
+        // The first-run home screen has no tabs in the band in any layout, so
+        // it keeps the normal drag. Its own glass handle carries the rest of
+        // the window.
         .background(
             WindowChromeConfigurator(
-                isMovable: !appState.railLayout.servicesInBar,
+                isMovable: firstRun.showsHome || !appState.railLayout.servicesInBar,
                 glassStyle: appState.liquidGlassStyle,
                 glassIntensity: appState.liquidGlassIntensity
             )
@@ -212,48 +248,7 @@ struct ContentView: View {
             appState.rememberSelection(serviceID: newServiceID, in: spaceID)
         }
         .sheet(isPresented: $state.showAddService) {
-            if let spaceID = appState.selectedSpaceID {
-                AddServiceSheet(spaceID: spaceID)
-            } else {
-                // Defensive: ⌘N is disabled without a selected space, but if the
-                // sheet is ever presented in that state, give it a way out rather
-                // than a blank, un-dismissable panel.
-                VStack(spacing: 16) {
-                    Text("Select or create a workspace before adding a service.")
-                        .multilineTextAlignment(.center)
-                    Button("OK") { state.showAddService = false }
-                        .keyboardShortcut(.defaultAction)
-                }
-                .padding(40)
-                .frame(minWidth: 320)
-            }
-        }
-        // The welcome waits for the launch read of the notification
-        // permission. Deciding at first render would see `unknown` and offer
-        // nothing, because Paguro cannot yet tell a refusal from a fresh install.
-        .onChange(
-            of: appState.notificationManager.authorizationState,
-            initial: true
-        ) { _, state in
-            guard state != .unknown,
-                  pendingWelcome == nil,
-                  !appModel.hasSeenWelcome else { return }
-            pendingWelcome = appModel.firstRunWelcome
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { pendingWelcome != nil },
-                set: { if !$0 { pendingWelcome = nil } }
-            )
-        ) {
-            if let welcome = pendingWelcome {
-                WelcomeSheet(welcome: welcome) {
-                    appModel.markWelcomeSeen()
-                    pendingWelcome = nil
-                }
-                .environment(appState)
-                .environment(appModel)
-            }
+            AddServiceSheet(spaceID: appState.selectedSpaceID)
         }
         .sheet(isPresented: $state.showAddSpace) {
             SpaceEditorSheet(
@@ -352,6 +347,7 @@ struct ContentView: View {
                 rail(axis: .horizontal, spaceSelection: spaceSelection, serviceSelection: serviceSelection, contentInset: lightsWidth)
                     // A tab tooltip hangs below the bar, over the web content.
                     .zIndex(1)
+                    .transition(railEntryTransition(from: .top))
                 webContent
                     .padding(.horizontal, PaguroMetric.Sidebar.surfaceInset)
                     .padding(.bottom, PaguroMetric.Sidebar.surfaceInset)
@@ -418,6 +414,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             sideRail()
                 .zIndex(1)
+                .transition(railEntryTransition(from: .leading))
             content()
         }
         .overlay(alignment: .topLeading) {
@@ -439,6 +436,16 @@ struct ContentView: View {
                 value: presentation
             )
         }
+    }
+
+    /// How a rail arrives when the first service ends first run.
+    ///
+    /// The rail slides in from the edge it lives on, under the fade of the
+    /// swap. Reduce Motion keeps the fade alone, because the movement carries
+    /// no information that the fade does not already give.
+    private func railEntryTransition(from edge: Edge) -> AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .move(edge: edge).combined(with: .opacity)
     }
 
     /// What a bar beside the rail leaves clear at its leading end.

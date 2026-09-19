@@ -22,6 +22,14 @@ public struct StoreContent: Hashable, Sendable {
         self.serviceLabels = serviceLabels
     }
 
+    /// The store holds nothing: no workspace and no service.
+    ///
+    /// Paguro writes no seed, so this is exactly the shape of a fresh install
+    /// and exactly the shape of a store that lost everything. The two cases
+    /// look the same in the store, and recovery separates them outside it: a
+    /// backup or a saved record is the evidence that there was something to
+    /// lose. An empty store with neither is a fresh install and nothing is
+    /// offered.
     public var isEmpty: Bool { spaces == 0 && services == 0 }
 
     /// Returns whether this store holds more services, or the same number of
@@ -29,17 +37,6 @@ public struct StoreContent: Hashable, Sendable {
     public func holdsMore(than other: StoreContent) -> Bool {
         if services != other.services { return services > other.services }
         return spaces > other.spaces
-    }
-
-    /// Returns whether this content exactly matches a known initial seed.
-    public func matchesUntouchedSeed(
-        spaceNames seedSpaceNames: [String],
-        serviceLabels seedServiceLabels: [String]
-    ) -> Bool {
-        spaces == seedSpaceNames.count
-            && services == seedServiceLabels.count
-            && spaceNames.sorted() == seedSpaceNames.sorted()
-            && serviceLabels.sorted() == seedServiceLabels.sorted()
     }
 }
 
@@ -160,16 +157,15 @@ public enum StoreRecoveryPolicy {
     }
 
     /// Returns the safe default selection for the recovery picker.
-    /// A default is safe only when the live store is empty, unreadable, or the
-    /// untouched seed. A corrupt-family backup is never selected by default.
+    /// A default is safe only when the live store is empty or unreadable. A corrupt-family backup is never selected by default.
     public static func preselection(
         among candidates: [StoreCandidate],
-        liveContent: StoreContent?,
-        liveMatchesUntouchedSeed: Bool
+        liveContent: StoreContent?
     ) -> StoreCandidate? {
-        let liveHoldsUserData = liveContent.map {
-            !$0.isEmpty && !liveMatchesUntouchedSeed
-        } ?? false
+        // An empty live store holds nothing of the user's, so a backup that
+        // holds something can be preselected over it. A store with a workspace
+        // or a service in it is the user's, and the user picks for themselves.
+        let liveHoldsUserData = liveContent.map { !$0.isEmpty } ?? false
         guard !liveHoldsUserData else { return nil }
         guard let winner = best(among: candidates.filter { $0.kind != .corrupt }) else {
             return nil
@@ -183,12 +179,17 @@ public enum StoreRecoveryPolicy {
     }
 
     /// Returns whether Paguro should offer a restore, and why.
+    ///
     /// The backup must cover the live-store gap and the same pairing must not
-    /// have been declined. A saved record detects later loss. The untouched
-    /// seed also permits an offer when no older record exists.
+    /// have been declined. A saved record detects later loss.
+    ///
+    /// An empty live store is a fresh install or a total loss; the store alone
+    /// cannot say which. The existence of a restorable backup is what separates
+    /// them. A fresh install has none, so `best` is nil and nothing is offered.
+    /// A loss leaves the backups behind, and the offer is made with
+    /// `nothingToLose`, because an empty store has nothing to lose.
     public static func offer(
         liveContent: StoreContent?,
-        liveMatchesUntouchedSeed: Bool,
         best: StoreCandidate?,
         record: StoreContent?,
         declinedKeys: Set<String>
@@ -204,9 +205,7 @@ public enum StoreRecoveryPolicy {
         }
         if let record, liveContent == nil, !record.isEmpty { return .belowRecord }
 
-        let liveHoldsUserData = liveContent.map {
-            !$0.isEmpty && !liveMatchesUntouchedSeed
-        } ?? false
+        let liveHoldsUserData = liveContent.map { !$0.isEmpty } ?? false
         return liveHoldsUserData ? nil : .nothingToLose
     }
 

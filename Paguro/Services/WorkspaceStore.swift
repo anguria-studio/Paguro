@@ -37,11 +37,6 @@ final class WorkspaceStore {
         let serviceID: UUID?
     }
 
-    struct SeedOutcome: Equatable {
-        let didSeed: Bool
-        let selectedSpaceID: UUID?
-    }
-
     struct DefaultZoomOutcome: Equatable {
         let zoom: Double
         let affectedServiceIDs: [UUID]
@@ -166,13 +161,25 @@ final class WorkspaceStore {
         userAgent: String? = nil,
         customIconData: Data? = nil,
         fetchedIconData: Data? = nil,
-        to spaceID: UUID
+        to spaceID: UUID?,
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> UUID? {
-        var descriptor = FetchDescriptor<Space>(predicate: #Predicate { $0.id == spaceID })
-        descriptor.fetchLimit = 1
-        guard let space = try context.fetch(descriptor).first else { return nil }
-        let nextOrder = ((try liveLinks())
-            .filter { $0.space.id == spaceID }
+        let spaces = try context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))
+        let links = try liveLinks()
+        let space: Space
+        if let spaceID {
+            guard let target = spaces.first(where: { $0.id == spaceID }) else { return nil }
+            space = target
+        } else if let existing = spaces.first {
+            space = existing
+        } else {
+            // Create Home only with the first service, in the same transaction.
+            // Cancel and a failed save must not leave an empty workspace behind.
+            space = Space(name: "Home", emoji: "", sortOrder: 0)
+            context.insert(space)
+        }
+        let nextOrder = (links
+            .filter { $0.space.id == space.id }
             .map(\.sortOrder)
             .max() ?? -1) + 1
 
@@ -189,7 +196,12 @@ final class WorkspaceStore {
             service.faviconFetchedAt = Date()
         }
         context.insert(SpaceServiceLink(sortOrder: nextOrder, space: space, service: service))
-        guard context.saveOrRollback(reason: "add service") else { return nil }
+        do {
+            try save(context)
+        } catch {
+            context.rollback()
+            throw error
+        }
         return service.id
     }
 
@@ -460,72 +472,6 @@ final class WorkspaceStore {
             serviceID = services.first?.id
         }
         return WindowSelection(spaceID: spaceID, serviceID: serviceID)
-    }
-
-    func seedDefaultDataIfNeeded(defaults: UserDefaults = .standard) -> SeedOutcome {
-        let descriptor = FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)])
-        let existingSpaces: [Space]
-        do {
-            existingSpaces = try context.fetch(descriptor)
-        } catch {
-            AppLogger.dataStore.error(
-                "Failed to fetch spaces during seeding: \(error.localizedDescription)"
-            )
-            return SeedOutcome(didSeed: false, selectedSpaceID: nil)
-        }
-
-        guard existingSpaces.isEmpty else {
-            return SeedOutcome(didSeed: false, selectedSpaceID: existingSpaces.first?.id)
-        }
-        guard !defaults.bool(forKey: DefaultsKey.hasEverHadData) else {
-            AppLogger.dataStore.error(
-                "Store is empty but this install has had data; skipping seed to avoid overwriting a lost store"
-            )
-            return SeedOutcome(didSeed: false, selectedSpaceID: nil)
-        }
-
-        let personalSpace = Space(
-            name: DefaultSeed.spaces[0].name,
-            emoji: DefaultSeed.spaces[0].emoji,
-            sortOrder: 0
-        )
-        let workSpace = Space(
-            name: DefaultSeed.spaces[1].name,
-            emoji: DefaultSeed.spaces[1].emoji,
-            sortOrder: 1
-        )
-        context.insert(personalSpace)
-        context.insert(workSpace)
-
-        for (index, entry) in DefaultSeed.personalServices.enumerated() {
-            let service = ServiceInstance(
-                label: entry.label,
-                url: entry.url,
-                catalogEntryID: entry.catalogID
-            )
-            context.insert(service)
-            context.insert(
-                SpaceServiceLink(sortOrder: index, space: personalSpace, service: service)
-            )
-        }
-        for (index, entry) in DefaultSeed.workServices.enumerated() {
-            let service = ServiceInstance(
-                label: entry.label,
-                url: entry.url,
-                catalogEntryID: entry.catalogID
-            )
-            context.insert(service)
-            context.insert(
-                SpaceServiceLink(sortOrder: index, space: workSpace, service: service)
-            )
-        }
-
-        guard context.saveOrRollback(reason: "seed default data") else {
-            return SeedOutcome(didSeed: false, selectedSpaceID: nil)
-        }
-        StoreLoader.recordHasData(defaults)
-        AppLogger.dataStore.info("Seeded default spaces: Personal and Work")
-        return SeedOutcome(didSeed: true, selectedSpaceID: personalSpace.id)
     }
 
     func backfillPasskeyNoticeIfNeeded(

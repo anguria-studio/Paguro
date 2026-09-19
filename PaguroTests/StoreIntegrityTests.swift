@@ -560,11 +560,8 @@ final class StoreIntegrityTests: XCTestCase {
         )
     }
 
-    /// Pruning must protect the newest snapshot holding the user's own data, not
-    /// the newest one that merely has rows. A snapshot taken after the loss holds
-    /// the default seed, and treating that as worth keeping let the real backup
-    /// age out of the keep-3 window and be deleted.
-    func testPruneProtectsTheUsersDataNotASeededSnapshot() throws {
+    /// Empty snapshots after a loss must not age out the last usable backup.
+    func testPruneProtectsUserDataOverEmptySnapshots() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("paguro-prune-seed-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -575,10 +572,8 @@ final class StoreIntegrityTests: XCTestCase {
         try ModelFixtures.makePopulatedStore(at: storeURL, spaces: 5)
         StoreRepair.snapshot(at: storeURL, stamp: "1700000000-1.5.11+20")
 
-        // Then four newer snapshots of a seed-shaped store, as four updates
-        // after the loss would produce.
+        // Four updates after a loss keep the live store empty.
         _ = try SQLiteHelpers.run(storeURL, "DELETE FROM ZSPACE;")
-        try ModelFixtures.insertSeedShape(storeURL)
         for (i, version) in ["1.5.12+21", "1.5.13+22", "1.5.14+23", "1.5.15+24"].enumerated() {
             StoreRepair.snapshot(at: storeURL, stamp: "17000005\(i)0-\(version)")
         }

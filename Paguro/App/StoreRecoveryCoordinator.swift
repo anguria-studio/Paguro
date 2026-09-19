@@ -100,12 +100,10 @@ final class StoreRecoveryCoordinator {
         let currentCandidates = StoreInventory.candidates(for: storeURL, liveContent: live)
         let best = StoreRecoveryPolicy.best(among: currentCandidates)
         let declined = Set(defaults.stringArray(forKey: DefaultsKey.declinedRestores) ?? [])
-        let liveMatchesSeed = live?.looksLikeUntouchedSeed ?? false
 
         candidates = currentCandidates
         offer = StoreRecoveryPolicy.offer(
             liveContent: live,
-            liveMatchesUntouchedSeed: liveMatchesSeed,
             best: best,
             record: StoreRecoveryPolicy.decodeRecord(
                 defaults.string(forKey: DefaultsKey.lastKnownContent)
@@ -114,8 +112,7 @@ final class StoreRecoveryCoordinator {
         )
         preselectedCandidate = StoreRecoveryPolicy.preselection(
             among: currentCandidates,
-            liveContent: live,
-            liveMatchesUntouchedSeed: liveMatchesSeed
+            liveContent: live
         )
         if let offer {
             AppLogger.dataStore.notice(
@@ -131,8 +128,7 @@ final class StoreRecoveryCoordinator {
         candidates = currentCandidates
         preselectedCandidate = StoreRecoveryPolicy.preselection(
             among: currentCandidates,
-            liveContent: live,
-            liveMatchesUntouchedSeed: live?.looksLikeUntouchedSeed ?? false
+            liveContent: live
         )
     }
 
