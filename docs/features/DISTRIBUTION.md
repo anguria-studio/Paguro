@@ -111,6 +111,15 @@ run `python3 scripts/build_release.py --scan path/to/Paguro.app`.
 The output directory must not exist. The script retains the archive, exported
 app, release manifest, DMG, signed appcast, and checksums. Only files under
 `assets` are release downloads. Increase the build number for each update.
+
+The `assets` directory holds two copies of the disk image. The versioned name,
+for example `Paguro-1.0.5-14.dmg`, is the address that the update feed and a
+package manager use, because its content never changes. `Paguro.dmg` is the
+same file under a fixed name. It gives the website one permanent link:
+`https://github.com/anguria-studio/Paguro/releases/latest/download/Paguro.dmg`.
+The script makes that copy after it signs the feed, because the feed tool reads
+every archive in the directory. A test-feed build does not get the copy.
+
 The first Sparkle-enabled version requires a manual installation over earlier
 Paguro builds, because those builds have no active updater.
 
@@ -130,12 +139,14 @@ bundle identifier.
 ### Publish after review
 
 Finish the repository review and migration first. Build from a clean release
-commit. Create a draft release for that version in `anguria-studio/Paguro`, attach the DMG,
-`appcast.xml`, and `SHA256SUMS` from the same build, and add release notes.
+commit. Create a draft release for that version in `anguria-studio/Paguro`.
+Attach every file under `assets` from the same build: the versioned DMG,
+`Paguro.dmg`, `appcast.xml`, and `SHA256SUMS`. Add the release notes.
 Verify all enclosure URLs and signatures before publishing the draft as the
 latest stable release. The latest-release URL then exposes the signed feed.
 Keep old release downloads available. Do not replace an existing version's DMG.
 Test the public download and feed without GitHub credentials after publication.
+Also test the permanent `Paguro.dmg` address: it must return the new version.
 
 ## App Store build
 
