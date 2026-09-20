@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Opening the service-selection step no longer highlights the category menu.
+  Initial keyboard focus goes to search after the page appears.
+
 - The setup category selector now fits its selected text and chevron instead
   of reserving a fixed width. Native keyboard navigation stays available.
 

@@ -121,8 +121,9 @@ itself refuses a locked app as well. The catalog and batch save also refuse a
 locked app. Lock disables the custom website sheet and cancels pending icon discovery.
 
 Keyboard focus starts on **Choose your services**. The catalog starts focus in
-search. Tab reaches the workspace name, search, category menu, Custom website,
-service grid, and footer buttons. These controls participate even when macOS
+search after the page enters the focus hierarchy. The category menu does not
+take focus when the page appears. Tab reaches the workspace name, search,
+category menu, Custom website, service grid, and footer buttons. These controls participate even when macOS
 limits its usual Tab navigation to text inputs. Shift-Tab reverses the order.
 The category menu uses a native popup with direct choices and keyboard handling.
 

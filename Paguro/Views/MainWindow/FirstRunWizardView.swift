@@ -53,7 +53,7 @@ private struct FirstRunServicePicker: View {
     @State private var categoryKeyboardControl = SetupCategoryMenu.KeyboardControl()
     @State private var showsCustomWebsite = false
     @State private var saveError: String?
-    private enum InputField: Hashable { case workspaceName, search, services, customWebsite }
+    private enum InputField: Hashable { case workspaceName, search, category, services, customWebsite }
     @State private var activeServiceID: String?
     @State private var showsGridKeyboardFocus = true
     @State private var gridColumnCount = 1
@@ -210,7 +210,12 @@ private struct FirstRunServicePicker: View {
             }
             footer
         }
-        .onAppear { focusedField = .search }
+        .task {
+            // Wait for the new page to enter the focus hierarchy before choosing its input.
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            focusedField = .search
+        }
     }
 
     private var header: some View {
@@ -277,6 +282,7 @@ private struct FirstRunServicePicker: View {
             .padding(.horizontal, 12)
             .frame(height: 36)
             .focusable(interactions: .edit)
+            .focused($focusedField, equals: .category)
             .onKeyPress(keys: [.space, .return, .downArrow, .upArrow]) { key in
                 guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }
                 categoryKeyboardControl.open()
