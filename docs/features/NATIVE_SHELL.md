@@ -11,7 +11,7 @@ It does not change the web content of a service.
 
 The main window shows a two-step setup wizard while no service exists. A new install
 starts completely empty, with no workspace and no service. Finishing setup
-creates Home and all selected services in one transaction.
+creates the named workspace and all selected services in one transaction.
 Cancel and a failed save leave the store empty. The Add Service sheet hides the
 workspace picker until more than one workspace exists. Launch never seeds data.
 
@@ -34,7 +34,16 @@ as the view that no selected service shows. It carries:
 - one prominent button, **Choose your services**;
 - a quiet import line under it.
 
-The second step fills the window with the service catalog. Search and a category
+The second step is titled "Set up your first workspace". It explains that a
+workspace keeps related services together for work, personal use, or a project.
+A Workspace name field sits above search and defaults to Home on a new install.
+If setup appears over existing empty workspaces, it starts with the target
+workspace’s current name. Back and custom website entry keep the typed name.
+The Add button requires a nonblank name and at least one selected service.
+The final save trims outer whitespace and saves the name with the services.
+A failed save also rolls back a changed name on an existing empty workspace.
+
+The service catalog fills the rest of the second step. Search and a category
 filter narrow the grid. Each card toggles its service, with a checkmark and an
 accent border for selection. Filters and Back keep the complete selection.
 `ServiceSetupSelection` in PaguroCore keeps services in selection order.

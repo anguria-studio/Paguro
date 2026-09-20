@@ -293,7 +293,7 @@ final class AppState {
             isLocked: { [weak self] in self?.isLocked ?? true },
             onWebViewRebuilt: { [weak self] in self?.webViewRebuildToken &+= 1 }
         )
-        // Launch only reads selection. The first explicit add creates Home.
+        // Launch only reads selection. The first explicit add creates the workspace.
         websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
         notificationRuntime.start(
@@ -772,10 +772,12 @@ final class AppState {
 
     /// Opens the first chosen service after the complete setup has saved.
     @discardableResult
-    func addSetupServices(_ drafts: [ServiceSetupDraft]) -> Bool {
+    func addSetupServices(_ drafts: [ServiceSetupDraft], workspaceName: String) -> Bool {
         guard !isLocked, !drafts.isEmpty else { return false }
         do {
-            guard let ids = try workspaceStore.addServices(drafts, to: selectedSpaceID),
+            guard let ids = try workspaceStore.addServices(
+                drafts, to: selectedSpaceID, workspaceName: workspaceName
+            ),
                   let firstID = ids.first else { return false }
             showAddService = false
             selectedSpaceID = workspaceStore.service(id: firstID)?.spaceLinks.first?.space?.id

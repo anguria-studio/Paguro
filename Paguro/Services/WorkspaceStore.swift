@@ -177,9 +177,12 @@ final class WorkspaceStore {
     func addServices(
         _ drafts: [ServiceSetupDraft],
         to spaceID: UUID?,
+        workspaceName: String? = nil,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> [UUID]? {
         guard !drafts.isEmpty else { return [] }
+        let normalizedName = workspaceName.flatMap(WorkspaceName.normalized)
+        guard workspaceName == nil || normalizedName != nil else { return nil }
         let spaces = try context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))
         let links = try liveLinks()
         let space: Space
@@ -189,11 +192,11 @@ final class WorkspaceStore {
         } else if let existing = spaces.first {
             space = existing
         } else {
-            // Create Home only with the first service, in the same transaction.
-            // Cancel and a failed save must not leave an empty workspace behind.
-            space = Space(name: "Home", emoji: "", sortOrder: 0)
+            // The workspace and services commit together, so cancel leaves no workspace.
+            space = Space(name: normalizedName ?? WorkspaceName.defaultValue, emoji: "", sortOrder: 0)
             context.insert(space)
         }
+        if let normalizedName { space.name = normalizedName }
         let nextOrder = (links
             .filter { $0.space.id == space.id }
             .map(\.sortOrder)

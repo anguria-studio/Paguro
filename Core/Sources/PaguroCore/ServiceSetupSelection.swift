@@ -31,6 +31,7 @@ public struct ServiceSetupDraft: Equatable, Sendable, Identifiable {
 
 /// Keeps the user's selection order independent of search and category filters.
 public struct ServiceSetupSelection: Equatable, Sendable {
+    public var workspaceName = WorkspaceName.defaultValue
     public private(set) var services: [ServiceSetupDraft] = []
     /// Custom cards remain available after they are unchecked.
     public private(set) var customWebsites: [ServiceSetupDraft] = []

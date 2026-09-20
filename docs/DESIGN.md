@@ -26,7 +26,10 @@ the row spacing.
 A window with no service shows a two-step wizard on the window glass.
 The welcome step explains Paguro and groups notification and island setup.
 Its primary action, "Choose your services", opens a full-page catalog.
-The second step has search, category filtering, and multiple selection.
+The second step is "Set up your first workspace". It explains that a workspace
+keeps related services together and offers a Workspace name field above search.
+The name starts as Home on a new install and survives Back and custom website
+entry. The step has search, category filtering, and multiple selection.
 Selected cards have a checkmark and an accent border. A fixed footer shows
 the selection count and one Add button. Back keeps the selection.
 Custom website entry is a full-page branch of service selection, with Back to

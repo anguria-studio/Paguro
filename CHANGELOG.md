@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Setup introduces workspaces and lets you name the first one, starting with
+  Home. The name and selected services save together when you finish.
+
 - Custom websites now use selectable cards above the catalog during setup.
   Search includes their names and addresses. Unchecking keeps the card available
   to select again.
@@ -25,8 +28,8 @@ Changes that affect Paguro users appear here, with the newest release first.
 - Backup offers, offline status, and microphone feedback use floating cards
   over the window, including the welcome screen. Store errors keep their strip.
 
-- A new setup starts without workspaces. Adding the first service creates Home
-  in the same save. The first-run preview ends after a successful add or import.
+- A new setup starts without workspaces. Adding the first services creates a
+  workspace, named Home by default, in the same save. The first-run preview ends after a successful add or import.
 
 ### Added
 

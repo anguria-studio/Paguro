@@ -1,5 +1,6 @@
 import PaguroCore
 import SwiftUI
+import SwiftData
 
 struct FirstRunWizardView: View {
     let setup: FirstRunSetup?
@@ -7,6 +8,8 @@ struct FirstRunWizardView: View {
 
     @Environment(AppState.self) private var appState
     @State private var selection = ServiceSetupSelection()
+    @State private var hasLoadedWorkspaceName = false
+    @Query(sort: \Space.sortOrder) private var spaces: [Space]
 
     var body: some View {
         Group {
@@ -15,6 +18,12 @@ struct FirstRunWizardView: View {
             } else {
                 FirstRunHomeView(setup: setup, allowsActions: allowsActions)
             }
+        }
+        .onAppear {
+            guard !hasLoadedWorkspaceName else { return }
+            hasLoadedWorkspaceName = true
+            let target = spaces.first { $0.id == appState.selectedSpaceID } ?? spaces.first
+            selection.workspaceName = target?.name ?? WorkspaceName.defaultValue
         }
     }
 }
@@ -76,6 +85,7 @@ private struct FirstRunServicePicker: View {
     private var catalogContent: some View {
         VStack(spacing: 0) {
             header
+            workspaceNameField
             filters
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
@@ -137,9 +147,9 @@ private struct FirstRunServicePicker: View {
                 Text("Step 2 of 2")
                     .font(.paguroCaption)
                     .foregroundStyle(.secondary)
-                Text("Choose your services")
+                Text("Set up your first workspace")
                     .font(.largeTitle.weight(.semibold))
-                Text("Pick the services you use. You’ll sign in to each one after setup.")
+                Text("A workspace keeps related services together—for work, personal use, or a project.")
                     .font(.paguroBody)
                     .foregroundStyle(.secondary)
             }
@@ -147,6 +157,21 @@ private struct FirstRunServicePicker: View {
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 24)
+    }
+
+    private var workspaceNameField: some View {
+        HStack(spacing: 12) {
+            Text("Workspace name")
+                .font(.paguroBody.weight(.medium))
+            TextField("Workspace name", text: $selection.workspaceName)
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.large)
+                .frame(maxWidth: 320)
+                .onChange(of: selection.workspaceName) { saveError = nil }
+            Spacer()
+        }
+        .padding(.horizontal, 32)
+        .padding(.bottom, 20)
     }
 
     private var filters: some View {
@@ -196,7 +221,7 @@ private struct FirstRunServicePicker: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(selection.services.isEmpty)
+                    .disabled(selection.services.isEmpty || WorkspaceName.normalized(selection.workspaceName) == nil)
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 20)
@@ -210,7 +235,7 @@ private struct FirstRunServicePicker: View {
 
     private func finish() {
         guard allowsActions else { return }
-        if !appState.addSetupServices(selection.services) {
+        if !appState.addSetupServices(selection.services, workspaceName: selection.workspaceName) {
             saveError = "Paguro could not save your services. Your selection is ready to try again."
         }
     }

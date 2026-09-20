@@ -195,6 +195,51 @@ final class FirstRunHomeTests: XCTestCase {
         XCTAssertNotNil(verification.service(id: ids[1])?.faviconFetchedAt)
     }
 
+    @MainActor
+    func testSetupSavesTheChosenWorkspaceNameWithItsServices() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let store = makeStore(context: container.mainContext)
+        let ids = try XCTUnwrap(store.addServices([
+            ServiceSetupDraft(label: "Notes", url: "https://notes.example"),
+            ServiceSetupDraft(label: "Mail", url: "https://mail.example")
+        ], to: nil, workspaceName: "  Work projects  "))
+        let verification = ModelContext(container)
+        let spaces = try verification.fetch(FetchDescriptor<Space>())
+        XCTAssertEqual(spaces.count, 1)
+        let space = try XCTUnwrap(spaces.first)
+        XCTAssertEqual(space.name, "Work projects")
+        XCTAssertEqual(makeStore(context: verification).servicesForSpace(space.id).map(\.id), ids)
+    }
+
+    @MainActor
+    func testBlankSetupWorkspaceNameCreatesNothing() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let store = makeStore(context: container.mainContext)
+        XCTAssertNil(try store.addServices([
+            ServiceSetupDraft(label: "Notes", url: "https://notes.example")
+        ], to: nil, workspaceName: " \n ") { _ in XCTFail("No save expected") })
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 0)
+        XCTAssertTrue(store.allServices().isEmpty)
+    }
+
+    @MainActor
+    func testFailedSetupRestoresAnExistingWorkspaceName() throws {
+        enum Failure: Error { case save }
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let space = Space(name: "Personal", emoji: "", sortOrder: 0)
+        context.insert(space)
+        try context.save()
+        let store = makeStore(context: context)
+        XCTAssertThrowsError(try store.addServices([
+            ServiceSetupDraft(label: "Notes", url: "https://notes.example")
+        ], to: space.id, workspaceName: "Work") { _ in throw Failure.save })
+        try context.save()
+        let verification = ModelContext(container)
+        XCTAssertEqual(try verification.fetch(FetchDescriptor<Space>()).first?.name, "Personal")
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
+    }
+
     #if DEBUG
     @MainActor
     func testPreviewStartsEmptyOnEveryLaunchAndNeverOpensNormalStore() throws {
