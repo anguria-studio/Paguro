@@ -219,6 +219,8 @@ private struct DownloadFlightMark: View {
     private var glassSurface: some View {
         let tint = PaguroColor.Fill.glassTint(intensity: appState.liquidGlassIntensity)
         switch appState.liquidGlassStyle {
+        case .system:
+            Circle().fill(.clear).glassEffect(.regular, in: .circle)
         case .clear:
             Circle().fill(.clear).glassEffect(.clear.tint(tint), in: .circle)
         case .off, .regular:

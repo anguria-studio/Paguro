@@ -351,6 +351,8 @@ struct FloatingNoticeCard: View {
     private var glassSurface: some View {
         let tint = PaguroColor.Fill.glassTint(intensity: appState.liquidGlassIntensity)
         switch appState.liquidGlassStyle {
+        case .system:
+            Rectangle().fill(.clear).glassEffect(.regular, in: shape)
         case .clear:
             Rectangle().fill(.clear).glassEffect(.clear.tint(tint), in: shape)
         case .off, .regular:

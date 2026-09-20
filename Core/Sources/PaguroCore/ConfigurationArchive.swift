@@ -157,7 +157,7 @@ public enum ConfigurationArchiveCodec {
         try choice(p.appearanceMode, in: ["system", "light", "dark"])
         try choice(p.defaultCameraPolicy, in: ["ask", "allow", "deny"])
         try choice(p.defaultMicrophonePolicy, in: ["ask", "allow", "deny"])
-        try choice(p.liquidGlassStyle, in: ["off", "clear", "regular"])
+        try choice(p.liquidGlassStyle, in: ShellGlassStyle.allCases.map(\.rawValue))
         try choice(p.iconRailPosition, in: ["top", "center"])
         try choice(p.workspaceViewMode, in: ["current", "all"])
         try number(p.defaultZoom, in: 0.5...3)

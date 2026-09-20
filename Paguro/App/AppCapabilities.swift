@@ -32,7 +32,7 @@ enum AppCapabilities {
 
     /// Liquid Glass arrived in macOS 26. Below that the shell draws the same
     /// material surfaces for every glass style, so the style choice would show
-    /// the user three options where two are identical and none are glass.
+    /// options that cannot change the native glass appearance.
     ///
     /// The transparency slider is a separate matter and stays available: it
     /// feeds the material tint and the window backdrop on every system.

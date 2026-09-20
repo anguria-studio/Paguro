@@ -178,6 +178,35 @@ final class ShellPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testSystemGlassPreservesManualTransparencyAcrossReloadAndExport() throws {
+        let sandbox = try StoreSandbox(testCase: self, label: "shell-system-glass")
+        let fixture = try makePreferencesStore(AppPreferences())
+        defer { withExtendedLifetime(fixture.container) {} }
+        var preferences = ShellPreferences.load(
+            defaults: sandbox.defaults, preferencesStore: fixture.store
+        )
+        XCTAssertEqual(preferences.liquidGlassStyle, .system)
+        preferences.setLiquidGlassStyle(.clear, defaults: sandbox.defaults)
+        preferences.setLiquidGlassIntensity(0.35, defaults: sandbox.defaults)
+        preferences.setLiquidGlassStyle(.system, defaults: sandbox.defaults)
+
+        var reloaded = ShellPreferences.load(
+            defaults: sandbox.defaults, preferencesStore: fixture.store
+        )
+        XCTAssertEqual(reloaded.liquidGlassStyle, .system)
+        XCTAssertEqual(reloaded.liquidGlassIntensity, 0.35)
+        var exported = ConfigurationPreferences()
+        reloaded.addToConfiguration(&exported)
+        XCTAssertEqual(exported.liquidGlassStyle, "system")
+        XCTAssertEqual(exported.liquidGlassIntensity, 0.35)
+        reloaded.setLiquidGlassStyle(.regular, defaults: sandbox.defaults)
+        XCTAssertEqual(reloaded.liquidGlassIntensity, 0.35)
+        reloaded.applyConfiguration(exported, defaults: sandbox.defaults)
+        XCTAssertEqual(reloaded.liquidGlassStyle, .system)
+        XCTAssertEqual(reloaded.liquidGlassIntensity, 0.35)
+    }
+
+    @MainActor
     func testResetGlassRestoresDefaultsAndRemovesOverrides() throws {
         let sandbox = try StoreSandbox(testCase: self, label: "shell-reset")
         let defaults = sandbox.defaults

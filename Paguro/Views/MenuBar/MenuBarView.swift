@@ -88,7 +88,9 @@ struct MenuBarView: View {
             Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
         }
         .buttonStyle(PaguroToolbarButtonStyle(isSelected: appState.doNotDisturb))
-        .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+        .toolbarControlSurface(
+            intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+        )
         .help(appState.doNotDisturb ? "Unmute notifications and media" : "Mute notifications and media")
         .accessibilityLabel(
             appState.doNotDisturb
@@ -106,7 +108,9 @@ struct MenuBarView: View {
             Image(systemName: "lock")
         }
         .buttonStyle(PaguroToolbarButtonStyle())
-        .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+        .toolbarControlSurface(
+            intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+        )
         .help("Lock Paguro (⇧⌘L)")
         .accessibilityLabel("Lock Paguro")
         .accessibilityHint("Lock Paguro (⇧⌘L)")
@@ -122,7 +126,9 @@ struct MenuBarView: View {
             Image(systemName: "gearshape")
         }
         .buttonStyle(PaguroToolbarButtonStyle())
-        .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+        .toolbarControlSurface(
+            intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+        )
         .help("Settings")
         .accessibilityLabel("Open Paguro Settings")
         .accessibilityIdentifier("menuBar.settings")
@@ -351,7 +357,9 @@ private struct MenuBarWindowSurface: View {
             glassLayer
 
             Rectangle()
-                .fill(PaguroColor.shellTint(intensity: transparency))
+                .fill(PaguroColor.shellTint(
+                    intensity: glassStyle.effectiveTransparency(manualValue: transparency)
+                ))
         }
     }
 
@@ -374,7 +382,7 @@ private struct MenuBarWindowSurface: View {
             Rectangle()
                 .fill(.clear)
                 .glassEffect(.clear, in: .rect)
-        case .off, .regular:
+        case .system, .off, .regular:
             Rectangle()
                 .fill(.clear)
                 .glassEffect(.regular, in: .rect)

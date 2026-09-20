@@ -247,13 +247,10 @@ enum GlassIntensityScale {
 }
 
 /// The native glass style behind the main window shell.
-enum ShellGlassStyle: String, CaseIterable {
-    case off
-    case clear
-    case regular
-
+extension ShellGlassStyle {
     var displayName: String {
         switch self {
+        case .system: "Follow system"
         case .off: "Off"
         case .clear: "Clear"
         case .regular: "Regular"
@@ -262,6 +259,8 @@ enum ShellGlassStyle: String, CaseIterable {
 
     var frostOpacity: CGFloat {
         switch self {
+        case .system:
+            if #available(macOS 26, *) { 0 } else { GlassLabDefaults.regularFrost }
         case .clear:
             GlassLabDefaults.regularFrost * 0.7
         case .off, .regular:
@@ -276,7 +275,7 @@ enum ShellGlassStyle: String, CaseIterable {
 
 /// Baseline values for the temporary appearance tuning controls.
 enum GlassLabDefaults {
-    static let style = ShellGlassStyle.regular
+    static let style = ShellGlassStyle.system
     static let transparency = 1.0
     static let regularFrost: CGFloat = 1.0
 }
@@ -896,16 +895,21 @@ struct PaguroMenuRowButtonStyle: ButtonStyle {
 /// appearance slider keeps working below macOS 26.
 private struct ToolbarControlSurfaceModifier: ViewModifier {
     let intensity: Double
+    let glassStyle: ShellGlassStyle
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 26, *) {
-            content.glassEffect(
-                .regular
-                    .tint(PaguroColor.Fill.glassTint(intensity: intensity))
-                    .interactive(),
-                in: .circle
-            )
+            if glassStyle == .system {
+                content.glassEffect(.regular.interactive(), in: .circle)
+            } else {
+                content.glassEffect(
+                    .regular
+                        .tint(PaguroColor.Fill.glassTint(intensity: intensity))
+                        .interactive(),
+                    in: .circle
+                )
+            }
         } else {
             content.background {
                 ZStack {
@@ -921,7 +925,7 @@ private struct ToolbarControlSurfaceModifier: ViewModifier {
 
 extension View {
     /// Applies the toolbar control surface for the running system.
-    func toolbarControlSurface(intensity: Double) -> some View {
-        modifier(ToolbarControlSurfaceModifier(intensity: intensity))
+    func toolbarControlSurface(intensity: Double, glassStyle: ShellGlassStyle) -> some View {
+        modifier(ToolbarControlSurfaceModifier(intensity: intensity, glassStyle: glassStyle))
     }
 }

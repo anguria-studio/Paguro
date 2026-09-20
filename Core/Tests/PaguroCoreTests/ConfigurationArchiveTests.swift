@@ -22,6 +22,14 @@ struct ConfigurationArchiveTests {
         #expect(try ConfigurationArchiveCodec.decode(ConfigurationArchiveCodec.encode(archive)) == archive)
     }
 
+    @Test(arguments: ShellGlassStyle.allCases)
+    func glassModesRoundTrip(_ style: ShellGlassStyle) throws {
+        var archive = fixture()
+        archive.preferences.liquidGlassStyle = style.rawValue
+        archive.preferences.liquidGlassIntensity = 0.35
+        #expect(try ConfigurationArchiveCodec.decode(ConfigurationArchiveCodec.encode(archive)) == archive)
+    }
+
     @Test func unsupportedVersionIsRejected() {
         var archive = fixture()
         archive.version = 2

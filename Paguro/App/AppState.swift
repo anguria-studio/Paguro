@@ -72,7 +72,9 @@ final class AppState {
     var liquidGlassStyle: ShellGlassStyle {
         AppCapabilities.liquidGlassSupported ? shellPreferences.liquidGlassStyle : .off
     }
-    var liquidGlassIntensity: Double { shellPreferences.liquidGlassIntensity }
+    var liquidGlassIntensity: Double {
+        liquidGlassStyle.effectiveTransparency(manualValue: shellPreferences.liquidGlassIntensity)
+    }
     var iconRailBaseSize: Double { shellPreferences.iconRailBaseSize }
     var iconRailMagnificationEnabled: Bool {
         shellPreferences.iconRailMagnificationEnabled

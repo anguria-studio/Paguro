@@ -84,7 +84,7 @@ struct NotificationIslandAppearance: Equatable {
 
     init(glassStyle: ShellGlassStyle, transparency: Double) {
         self.glassStyle = glassStyle
-        self.transparency = GlassIntensityScale.normalized(transparency)
+        self.transparency = glassStyle.effectiveTransparency(manualValue: transparency)
     }
 }
 
@@ -1549,6 +1549,8 @@ struct NotificationIslandPanelView: View {
     @ViewBuilder
     private var glassSurface: some View {
         switch model.appearance.glassStyle {
+        case .system:
+            islandContent.glassEffect(.regular, in: shape)
         case .clear:
             islandContent.glassEffect(.clear.tint(glassTint), in: shape)
         case .off, .regular:

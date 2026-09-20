@@ -4,6 +4,11 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Window glass now has a Follow system option that lets native Liquid Glass
+  use the system appearance without Paguro's extra frost and tint. Fresh
+  installs use it by default. Existing choices and manual transparency values
+  are preserved, including through configuration export and import.
+
 - Interrupted service loads no longer leave the sidebar loading ring stuck.
   Reload retries the service home when the first page never committed.
 

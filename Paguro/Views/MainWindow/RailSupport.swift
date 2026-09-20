@@ -1,4 +1,5 @@
 import AppKit
+import PaguroCore
 import SwiftUI
 
 /// AppKit support for the main window's backdrop, chrome, and drag handle.
@@ -43,7 +44,7 @@ private enum WindowBackdropInstaller {
 ///
 /// The frost view obscures background detail. The glass view changes the
 /// optical style. The tint gives the transparency control exact endpoints.
-private final class WindowBackdropContainerView: NSView {
+final class WindowBackdropContainerView: NSView {
     private let frostView = NSVisualEffectView()
     private let tintView = WindowShellTintView()
     /// The Liquid Glass layer, present only on macOS 26 and later.
@@ -98,13 +99,14 @@ private final class WindowBackdropContainerView: NSView {
             case .clear:
                 glass.isHidden = false
                 glass.style = .clear
-            case .regular:
+            case .system, .regular:
                 glass.isHidden = false
                 glass.style = .regular
             }
         }
 
-        tintView.transparency = GlassIntensityScale.normalized(transparency)
+        tintView.transparency = glassStyle.effectiveTransparency(manualValue: transparency)
+        tintView.isHidden = glassStyle == .system
     }
 
     func install(hostedContent: NSView) {

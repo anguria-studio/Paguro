@@ -73,6 +73,8 @@ The main services and startup adapters are:
 - `ServiceIconDraft` for cancellable icon previews in the add-service form.
 - `PasskeyNoticeController` for the app-wide explanation and its saved seen state.
 - `ShellPreferences` for normalized window appearance and rail settings.
+  `PaguroCore.ShellGlassStyle` defines modes and manual tint resolution; the
+  app maps each mode to native materials.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
 - `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.

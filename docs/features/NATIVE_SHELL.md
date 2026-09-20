@@ -781,8 +781,18 @@ Its host clips all four corners with a 14 point continuous radius.
 
 Each service control uses its own native circular Liquid Glass surface.
 The experimental Glass Lab controls the main window materials.
-The Window glass selector has Off, Clear, and Regular values.
-The shell transparency slider controls the protective tint.
+The Window glass selector has Follow system, Off, Clear, and Regular values.
+Follow system is the default for a fresh install. It uses native Regular glass
+without an app tint or the extra frost layer. Native glass responds to the
+system Liquid Glass appearance. Paguro does not copy the system slider value.
+The same mode applies to toolbar controls, cards, the menu-bar surface, and
+the expanded island. Accessibility appearance settings remain in effect.
+Existing saved glass choices stay unchanged.
+
+The shell transparency slider appears only for a manual glass choice and
+controls the protective tint. Follow system preserves the saved manual value
+for the next time a manual choice is selected. Configuration export and import
+preserve both the mode and that saved value.
 The native visual-effect view uses full strength for Regular and Off. It uses
 70 percent strength for Clear.
 The shell controls update the main window live.
@@ -804,7 +814,9 @@ The opaque dark shell tint uses `#242125`.
 The transparency slider changes its opacity and does not change its RGB values.
 At 0 percent, the protective layer is opaque across the complete window.
 At 100 percent, Paguro adds no protective tint.
-The Reset Glass Lab action restores Regular glass and 100 percent transparency.
+The Reset Glass Lab action restores Follow system and a saved manual
+transparency of 100 percent. On macOS 15, the glass selector is unavailable;
+the native visual-effect material and manual transparency slider remain.
 
 The lock screen uses this same window material and protective tint.
 It hides the underlying shell without unloading service views. Hidden shell

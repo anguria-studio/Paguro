@@ -309,6 +309,41 @@ final class NativeShellTests: XCTestCase {
         XCTAssertEqual(ShellGlassStyle.off.frostOpacity, ShellGlassStyle.regular.frostOpacity)
     }
 
+    @MainActor
+    func testSystemGlassRemovesAppBackdropOverridesAndManualModeRestoresThem() throws {
+        let backdrop = WindowBackdropContainerView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let frost = try XCTUnwrap(backdrop.subviews.first as? NSVisualEffectView)
+        let tint = try XCTUnwrap(backdrop.subviews.last)
+        backdrop.update(glassStyle: .regular, transparency: 0.25)
+        XCTAssertEqual(frost.alphaValue, 1)
+        XCTAssertFalse(tint.isHidden)
+
+        backdrop.update(glassStyle: .system, transparency: 0.25)
+        XCTAssertTrue(tint.isHidden)
+        if #available(macOS 26, *) {
+            let glass = try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first)
+            XCTAssertEqual(frost.alphaValue, 0)
+            XCTAssertFalse(glass.isHidden)
+            XCTAssertEqual(glass.style, .regular)
+            XCTAssertNil(glass.tintColor)
+        } else {
+            XCTAssertEqual(frost.alphaValue, 1)
+        }
+        backdrop.update(glassStyle: .clear, transparency: 0.25)
+        XCTAssertEqual(frost.alphaValue, 0.7, accuracy: 0.000_001)
+        XCTAssertFalse(tint.isHidden)
+        backdrop.update(glassStyle: .off, transparency: 0.25)
+        XCTAssertEqual(frost.alphaValue, 1)
+        if #available(macOS 26, *) {
+            XCTAssertTrue(try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first).isHidden)
+        }
+    }
+
+    func testIslandSystemGlassIgnoresManualTint() {
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .system, transparency: 0.25).transparency, 1)
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .clear, transparency: 0.25).transparency, 0.25)
+    }
+
     func testSidebarPresentationMapsToSharedGeometry() {
         XCTAssertEqual(SidebarPresentation.expanded.width, PaguroMetric.Sidebar.expandedWidth)
         XCTAssertEqual(SidebarPresentation.expanded.serviceRowHeight, PaguroMetric.Sidebar.rowHeight)
