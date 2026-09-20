@@ -27,9 +27,15 @@ struct SetupChoiceMenu: NSViewRepresentable {
     let categories: [String]
     var labels: [String: String] = [:]
     var accessibilityName = "Category"
+    var action: MenuAction? = nil
     let keyboardControl: KeyboardControl
     @Binding var selection: String
     @Environment(\.isEnabled) private var isEnabled
+
+    struct MenuAction {
+        let title: String
+        let perform: () -> Void
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(selection: $selection) }
 
@@ -47,8 +53,9 @@ struct SetupChoiceMenu: NSViewRepresentable {
 
     func updateNSView(_ popup: Popup, context: Context) {
         context.coordinator.selection = $selection
+        context.coordinator.action = action?.perform
         popup.isEnabled = isEnabled
-        popup.setChoices(categories, labels: labels)
+        popup.setChoices(categories, labels: labels, actionTitle: action?.title)
         popup.selectItem(at: categories.firstIndex(of: selection) ?? -1)
     }
 
@@ -72,14 +79,26 @@ struct SetupChoiceMenu: NSViewRepresentable {
     }
 
     final class Popup: NSPopUpButton {
-        func setChoices(_ ids: [String], labels: [String: String]) {
+        static let actionItemTag = 1
+
+        func setChoices(_ ids: [String], labels: [String: String], actionTitle: String? = nil) {
             let titles = ids.map { labels[$0] ?? $0 }
-            guard itemTitles != titles || itemArray.compactMap({ $0.representedObject as? String }) != ids else { return }
+            let items = itemArray.filter { !$0.isSeparatorItem && $0.tag != Self.actionItemTag }
+            let currentActionTitle = itemArray.first { $0.tag == Self.actionItemTag }?.title
+            guard items.map(\.title) != titles
+                || items.compactMap({ $0.representedObject as? String }) != ids
+                || currentActionTitle != actionTitle else { return }
             let choices = NSMenu()
             for (id, title) in zip(ids, titles) {
                 // NSPopUpButton.addItems removes duplicate titles, but workspace names can match.
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
                 item.representedObject = id
+                choices.addItem(item)
+            }
+            if let actionTitle {
+                if !ids.isEmpty { choices.addItem(.separator()) }
+                let item = NSMenuItem(title: actionTitle, action: nil, keyEquivalent: "")
+                item.tag = Self.actionItemTag
                 choices.addItem(item)
             }
             menu = choices
@@ -93,10 +112,19 @@ struct SetupChoiceMenu: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject {
         var selection: Binding<String>
+        var action: (() -> Void)?
         init(selection: Binding<String>) { self.selection = selection }
 
         @objc func selectCategory(_ sender: NSPopUpButton) {
             guard sender.isEnabled, let title = sender.titleOfSelectedItem else { return }
+            if sender.selectedItem?.tag == Popup.actionItemTag {
+                // An action opens an editor; it must not replace the selected workspace.
+                sender.selectItem(at: sender.itemArray.firstIndex {
+                    $0.representedObject as? String == selection.wrappedValue
+                } ?? -1)
+                action?()
+                return
+            }
             selection.wrappedValue = sender.selectedItem?.representedObject as? String ?? title
         }
     }

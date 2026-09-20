@@ -6,9 +6,10 @@ struct SpaceEditorSheet: View {
     let editingSpace: Space?
     @Binding var selectedSpaceID: UUID?
     /// Called with the newly created space right after it's saved and selected.
-    /// Lets a caller act on the new space — e.g. move a service into it. Not
+    /// Lets a caller act on the new space, such as moving a service into it. Not
     /// called when editing an existing space.
     var onCreate: ((Space) -> Void)? = nil
+    var activatesCreatedWorkspace = true
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -88,7 +89,7 @@ struct SpaceEditorSheet: View {
 
     private func saveSpace() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        guard !appState.isLocked, !trimmed.isEmpty else { return }
 
         var createdSpace: Space?
         if let space = editingSpace {
@@ -107,13 +108,11 @@ struct SpaceEditorSheet: View {
 
         guard modelContext.saveOrRollback(reason: "save space") else { return }
 
-        // Switch to a freshly created space. It has no services yet, so clear the
-        // service selection — the content area shows the empty state for it.
-        // A caller can hook `onCreate` to place something in it (e.g. move a
-        // service), which may re-set the service selection.
+        // A catalog destination is local to its draft. Keep the browser selection
+        // until the user commits the selected services.
         if let createdSpace {
             selectedSpaceID = createdSpace.id
-            appState.selectedServiceID = nil
+            if activatesCreatedWorkspace { appState.selectedServiceID = nil }
             onCreate?(createdSpace)
         }
         dismiss()

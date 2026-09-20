@@ -26,7 +26,9 @@ the row spacing.
 Add Service opens the shared selectable catalog in the browser area. Keep the
 rail and native header visible, with a clear Cancel action and Add services in
 the footer. Preserve the current browser session so Cancel returns without a
-reload. Show the destination workspace, with a picker when several exist.
+reload. Show the destination workspace in a text-style picker, even when only one exists.
+Its New workspace action opens the name and emoji editor, then selects the new
+workspace as the destination without changing the checked services or browser.
 Use the same search, category menu, cards, custom website sheet, and keyboard
 behavior as onboarding. Wrap the toolbar when the content pane is narrow.
 Do not show wizard progress or a workspace naming field during ordinary add.

@@ -19,6 +19,7 @@ struct ServicePickerView: View {
     @State private var categoryKeyboardControl = SetupChoiceMenu.KeyboardControl()
     @State private var workspaceKeyboardControl = SetupChoiceMenu.KeyboardControl()
     @State private var showsCustomWebsite = false
+    @State private var showsNewWorkspace = false
     @State private var saveError: String?
     private enum InputField: Hashable { case workspaceName, destination, search, category, services, customWebsite }
     @State private var activeServiceID: String?
@@ -71,6 +72,18 @@ struct ServicePickerView: View {
                 )
             }
             .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
+            .sheet(isPresented: $showsNewWorkspace, onDismiss: {
+                focusedField = .destination
+            }) {
+                if let destination {
+                    SpaceEditorSheet(
+                        editingSpace: nil,
+                        selectedSpaceID: destination,
+                        activatesCreatedWorkspace: false
+                    )
+                    .disabled(!allowsActions)
+                }
+            }
             .onChange(of: focusedField) { _, field in
                 if field == .services {
                     activeServiceID = navigation.retainedID(activeServiceID)
@@ -229,27 +242,28 @@ struct ServicePickerView: View {
             HStack(spacing: 12) {
                 Text("Add to")
                     .font(.paguroBody.weight(.medium))
-                if liveSpaces.count > 1 {
-                    SetupChoiceMenu(
-                        categories: liveSpaces.map { $0.id.uuidString },
-                        labels: Dictionary(uniqueKeysWithValues: liveSpaces.map { ($0.id.uuidString, $0.displayNameWithEmoji) }),
-                        accessibilityName: "Workspace",
-                        keyboardControl: workspaceKeyboardControl,
-                        selection: Binding(
-                            get: { destination.wrappedValue?.uuidString ?? "" },
-                            set: { destination.wrappedValue = UUID(uuidString: $0) }
-                        )
+                SetupChoiceMenu(
+                    categories: liveSpaces.map { $0.id.uuidString },
+                    labels: Dictionary(uniqueKeysWithValues: liveSpaces.map { ($0.id.uuidString, $0.displayNameWithEmoji) }),
+                    accessibilityName: "Workspace",
+                    action: .init(title: "New workspace…", perform: {
+                        guard allowsActions, !appState.isLocked else { return }
+                        focusedField = nil
+                        showsNewWorkspace = true
+                    }),
+                    keyboardControl: workspaceKeyboardControl,
+                    selection: Binding(
+                        get: { destination.wrappedValue?.uuidString ?? "" },
+                        set: { destination.wrappedValue = UUID(uuidString: $0) }
                     )
-                    .fixedSize(horizontal: true, vertical: false)
-                    .focusable(interactions: .edit)
-                    .focused($focusedField, equals: .destination)
-                    .onKeyPress(keys: [.space, .return, .downArrow, .upArrow]) { key in
-                        guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }
-                        workspaceKeyboardControl.open()
-                        return .handled
-                    }
-                } else if let space = liveSpaces.first {
-                    Text(space.displayNameWithEmoji).font(.paguroBody)
+                )
+                .fixedSize(horizontal: true, vertical: false)
+                .focusable(interactions: .edit)
+                .focused($focusedField, equals: .destination)
+                .onKeyPress(keys: [.space, .return, .downArrow, .upArrow]) { key in
+                    guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }
+                    workspaceKeyboardControl.open()
+                    return .handled
                 }
                 Spacer()
             }
@@ -413,7 +427,7 @@ struct ServicePickerView: View {
     }
 
     private func toggleActiveService() {
-        guard allowsActions, !showsCustomWebsite, let id = activeServiceID else { return }
+        guard allowsActions, !showsCustomWebsite, !showsNewWorkspace, let id = activeServiceID else { return }
         showsGridKeyboardFocus = true
         if let draft = customDrafts.first(where: { $0.id == id }) {
             selection.toggle(draft)
@@ -426,7 +440,7 @@ struct ServicePickerView: View {
     }
 
     private func finish() {
-        guard allowsActions, !showsCustomWebsite else { return }
+        guard allowsActions, !showsCustomWebsite, !showsNewWorkspace else { return }
         let saved = onSave?()
             ?? appState.addSetupServices(selection.services, workspaceName: selection.workspaceName)
         if !saved {

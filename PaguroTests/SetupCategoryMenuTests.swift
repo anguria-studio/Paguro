@@ -56,4 +56,32 @@ final class SetupCategoryMenuTests: XCTestCase {
         coordinator.selectCategory(menu)
         XCTAssertEqual(category, "AI")
     }
+
+    func testWorkspaceCreationActionPreservesDestinationAndMenuTitle() {
+        var destination = "personal"
+        var opens = 0
+        let coordinator = SetupChoiceMenu.Coordinator(selection: Binding(
+            get: { destination }, set: { destination = $0 }
+        ))
+        coordinator.action = { opens += 1 }
+        let menu = SetupChoiceMenu.Popup(frame: .zero, pullsDown: false)
+        menu.setChoices(["personal"], labels: ["personal": "Personal"], actionTitle: "New workspace…")
+        XCTAssertEqual(menu.numberOfItems, 3)
+        XCTAssertTrue(menu.item(at: 1)?.isSeparatorItem == true)
+
+        menu.selectItem(at: 2)
+        coordinator.selectCategory(menu)
+        XCTAssertEqual(opens, 1)
+        XCTAssertEqual(destination, "personal")
+        XCTAssertEqual(menu.titleOfSelectedItem, "Personal")
+
+        menu.isEnabled = false
+        menu.selectItem(at: 2)
+        coordinator.selectCategory(menu)
+        XCTAssertEqual(opens, 1)
+        XCTAssertEqual(destination, "personal")
+
+        menu.setChoices(["personal"], labels: ["personal": "Personal"])
+        XCTAssertEqual(menu.numberOfItems, 1)
+    }
 }

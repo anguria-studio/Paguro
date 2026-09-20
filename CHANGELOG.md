@@ -8,6 +8,8 @@ Changes that affect Paguro users appear here, with the newest release first.
   multiple selection, search, categories, and custom website modal as setup.
   Add services saves the batch to the chosen workspace. Cancel returns to the
   current service without reloading it, and the sidebar stays available.
+  The workspace menu can create a new workspace and select it as the destination
+  while keeping the chosen services checked.
 
 - Opening the service-selection step no longer highlights the category menu.
   Initial keyboard focus goes to search after the page appears.

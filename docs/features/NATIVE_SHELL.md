@@ -15,8 +15,12 @@ picker serves onboarding and ordinary add, including search, category filters,
 multiple selection, custom website drafts, icon previews, and keyboard controls.
 The toolbar wraps into two rows in a narrow pane.
 
-The page shows the destination workspace. With several workspaces, a native
-popup changes the destination without renaming a workspace. Switching the
+The page shows the destination workspace in a native popup. It changes the
+destination without renaming a workspace. New workspace opens the name and
+emoji editor, including when only one workspace exists. Create saves an empty
+workspace and selects it as the catalog destination; checked services, filters,
+and the current browser selection stay intact. Cancelling that editor changes
+nothing. Cancelling the catalog afterward keeps the created workspace. Switching the
 workspace in the rail also changes the destination and preserves the draft.
 There is no wizard stepper or workspace name field here. Cancel and Add services
 sit in the footer. Escape cancels; Command-Return adds the selected batch.
@@ -34,14 +38,14 @@ notification mute and downloads remain available. Selecting a rail service,
 a quick-switcher result, a download's service, or a notification returns to
 browsing. Service-switching shortcuts and incoming service links also close
 the catalog. A successful add opens the first new service and closes the catalog.
-Only the custom website editor uses a modal sheet.
+The custom website and new workspace editors use modal sheets over the catalog.
 
 ## First run
 
 The main window shows a two-step setup wizard while no service exists. A new install
 starts completely empty, with no workspace and no service. Finishing setup
 creates the named workspace and all selected services in one transaction.
-Cancel and a failed save leave the store empty. The catalog hides the workspace picker until more than one workspace exists. Launch never seeds data.
+Cancel and a failed save leave the store empty. First run names its first workspace directly, without a destination picker. Launch never seeds data.
 
 The screen replaces the complete shell: no rail in any of the four layouts, no
 content header, and no top bar. An empty rail beside an empty header said
