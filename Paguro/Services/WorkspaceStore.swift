@@ -164,6 +164,22 @@ final class WorkspaceStore {
         to spaceID: UUID?,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> UUID? {
+        try addServices([
+            ServiceSetupDraft(
+                label: label, url: url, catalogEntryID: catalogEntryID,
+                userAgent: userAgent, customIconData: customIconData,
+                fetchedIconData: fetchedIconData
+            )
+        ], to: spaceID, save: save)?.first
+    }
+
+    /// Commits the whole selection, including Home, or rolls everything back.
+    func addServices(
+        _ drafts: [ServiceSetupDraft],
+        to spaceID: UUID?,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> [UUID]? {
+        guard !drafts.isEmpty else { return [] }
         let spaces = try context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))
         let links = try liveLinks()
         let space: Space
@@ -183,26 +199,29 @@ final class WorkspaceStore {
             .map(\.sortOrder)
             .max() ?? -1) + 1
 
-        let service = ServiceInstance(
-            label: label,
-            url: url,
-            customIconData: customIconData,
-            catalogEntryID: catalogEntryID,
-            userAgent: userAgent
-        )
-        context.insert(service)
-        if let fetchedIconData {
-            service.fetchedIconData = fetchedIconData
-            service.faviconFetchedAt = Date()
+        let serviceIDs = drafts.enumerated().map { offset, draft in
+            let service = ServiceInstance(
+                label: draft.label, url: draft.url,
+                customIconData: draft.customIconData,
+                catalogEntryID: draft.catalogEntryID, userAgent: draft.userAgent
+            )
+            context.insert(service)
+            if let icon = draft.fetchedIconData {
+                service.fetchedIconData = icon
+                service.faviconFetchedAt = Date()
+            }
+            context.insert(SpaceServiceLink(
+                sortOrder: nextOrder + offset, space: space, service: service
+            ))
+            return service.id
         }
-        context.insert(SpaceServiceLink(sortOrder: nextOrder, space: space, service: service))
         do {
             try save(context)
         } catch {
             context.rollback()
             throw error
         }
-        return service.id
+        return serviceIDs
     }
 
     func moveService(linkID: UUID, to targetSpaceID: UUID) throws -> ServiceMoveOutcome? {

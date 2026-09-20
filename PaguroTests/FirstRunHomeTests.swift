@@ -124,6 +124,61 @@ final class FirstRunHomeTests: XCTestCase {
         XCTAssertEqual(try verification.fetchCount(FetchDescriptor<SpaceServiceLink>()), 0)
     }
 
+    @MainActor
+    func testBatchCreatesOneHomeWithOrderedSeparateAccountsInOneSave() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let store = makeStore(context: context)
+        let drafts = [
+            ServiceSetupDraft(label: "Work", url: "https://mail.example", catalogEntryID: "gmail", userAgent: "test-agent"),
+            ServiceSetupDraft(label: "Personal", url: "https://mail.example")
+        ]
+        var saves = 0
+        let ids = try XCTUnwrap(store.addServices(drafts, to: nil) {
+            saves += 1
+            try $0.save()
+        })
+        XCTAssertEqual(saves, 1)
+        let home = try XCTUnwrap(context.fetch(FetchDescriptor<Space>()).first)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 1)
+        let services = store.servicesForSpace(home.id)
+        XCTAssertEqual(services.map(\.id), ids)
+        XCTAssertEqual(services.map(\.label), ["Work", "Personal"])
+        XCTAssertEqual(Set(services.map(\.dataStoreIdentifier)).count, 2)
+        XCTAssertEqual(services.first?.catalogEntryID, "gmail")
+        XCTAssertEqual(services.first?.userAgent, "test-agent")
+    }
+
+    @MainActor
+    func testBatchFailureRollsBackEveryServiceAndHome() throws {
+        enum Failure: Error { case save }
+        let container = try ModelFixtures.groupingContainer()
+        let store = makeStore(context: container.mainContext)
+        let drafts = [
+            ServiceSetupDraft(label: "One", url: "https://one.example"),
+            ServiceSetupDraft(label: "Two", url: "https://two.example")
+        ]
+        XCTAssertThrowsError(try store.addServices(drafts, to: nil) { _ in throw Failure.save })
+        try container.mainContext.save()
+        let verification = ModelContext(container)
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<Space>()), 0)
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
+        XCTAssertEqual(try verification.fetchCount(FetchDescriptor<SpaceServiceLink>()), 0)
+        XCTAssertEqual(try store.addServices(drafts, to: nil)?.count, 2)
+    }
+
+    @MainActor
+    func testEmptySelectionAndMissingWorkspaceCreateNothing() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let store = makeStore(context: container.mainContext)
+        XCTAssertEqual(try store.addServices([], to: nil) { _ in XCTFail("No save expected") }, [])
+        XCTAssertNil(try store.addServices([
+            ServiceSetupDraft(label: "One", url: "https://one.example")
+        ], to: UUID()) { _ in XCTFail("No save expected") })
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<Space>()), 0)
+        XCTAssertTrue(store.allServices().isEmpty)
+    }
+
     #if DEBUG
     @MainActor
     func testPreviewStartsEmptyOnEveryLaunchAndNeverOpensNormalStore() throws {

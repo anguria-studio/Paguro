@@ -75,7 +75,7 @@ struct ContentView: View {
             // `WebContentView` builds the content header inside it.
             Group {
                 if firstRun.showsHome {
-                    FirstRunHomeView(
+                    FirstRunWizardView(
                         setup: firstRun.setup,
                         allowsActions: firstRun.allowsActions
                     )
@@ -214,7 +214,10 @@ struct ContentView: View {
             guard let spaceID = appState.selectedSpaceID, let newServiceID else { return }
             appState.rememberSelection(serviceID: newServiceID, in: spaceID)
         }
-        .sheet(isPresented: $state.showAddService) {
+        .sheet(isPresented: Binding(
+            get: { appState.showAddService && !firstRun.showsHome },
+            set: { appState.showAddService = $0 }
+        )) {
             AddServiceSheet(spaceID: appState.selectedSpaceID)
         }
         .sheet(isPresented: $state.showAddSpace) {

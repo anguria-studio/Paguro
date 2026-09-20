@@ -2,15 +2,7 @@ import AppKit
 import PaguroCore
 import SwiftUI
 
-/// The window before the user has a service.
-///
-/// It replaces an empty rail, an empty header, and one line of gray text. The
-/// screen states what Paguro is, carries the two setup decisions that are
-/// otherwise only in System Settings and the Settings window, and offers the
-/// one action that ends first run.
-///
-/// The screen holds one prominent button. A tour, a dashboard, and a carousel
-/// were all considered and left out: the user has one thing to do here.
+/// The welcome and permission step of the first-run wizard.
 struct FirstRunHomeView: View {
     /// Which setup rows apply on this Mac, or nil for none.
     let setup: FirstRunSetup?
@@ -47,6 +39,9 @@ struct FirstRunHomeView: View {
 
     var body: some View {
         VStack(spacing: 22) {
+            Text("Step 1 of 2")
+                .font(.paguroCaption)
+                .foregroundStyle(.secondary)
             header
             if let setup { setupCard(setup) }
             actions
@@ -229,7 +224,7 @@ struct FirstRunHomeView: View {
 
     private var actions: some View {
         VStack(spacing: 10) {
-            Button("Add your first service") {
+            Button("Choose your services") {
                 guard allowsActions else { return }
                 appState.showAddService = true
             }

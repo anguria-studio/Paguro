@@ -23,13 +23,14 @@ the row spacing.
 
 ## First run
 
-A window with no service shows one welcome screen instead of an empty shell.
-The screen keeps the window glass of the view that no selected service shows.
-It hides the rail and the header until the first service exists. It carries
-exactly one prominent action, the first service. There is no tour, no
-permanent dashboard, and no carousel: a new user has one thing to do here.
-The setup decisions that have no other home at first run sit in one grouped
-card above that action. See [Native shell](features/NATIVE_SHELL.md).
+A window with no service shows a two-step wizard on the window glass.
+The welcome step explains Paguro and groups notification and island setup.
+Its primary action, "Choose your services", opens a full-page catalog.
+The second step has search, category filtering, and multiple selection.
+Selected cards have a checkmark and an accent border. A fixed footer shows
+the selection count and one Add button. Back keeps the selection.
+The rail and service header appear only after the complete selection saves.
+See [Native shell](features/NATIVE_SHELL.md).
 
 ## Appearance
 

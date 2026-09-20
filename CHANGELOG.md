@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Setup now has two steps: welcome and service selection. Choose several
+  services from a full-page catalog, then add them together. Search, categories,
+  Back, and custom websites keep the selection until the final Add.
+
 - The welcome screen offers "Turn on" for notifications. When permission is
   off, it opens Paguro’s own notification controls in System Settings.
 
@@ -20,9 +24,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 - Paguro starts with a welcome screen where you add your first service, instead
   of a set of example services. It tells you what Paguro does. It offers
-  notifications and, on a Mac with a notch, island alerts. One button adds your
-  first service, and a quiet line under it imports a configuration from another
-  Mac. The sidebar and the header appear as soon as that first service exists,
+  notifications and, on a Mac with a notch, island alerts. One button opens
+  service selection, and a quiet line under it imports a configuration from
+  another Mac. The sidebar and the header appear as soon as that first service exists,
   and the screen returns if you ever remove every service.
 
 - You can install Paguro with Homebrew:

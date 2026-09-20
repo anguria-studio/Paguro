@@ -769,6 +769,30 @@ final class AppState {
         return serviceID
     }
 
+    /// Opens the first chosen service after the complete setup has saved.
+    @discardableResult
+    func addSetupServices(_ drafts: [ServiceSetupDraft]) -> Bool {
+        guard !isLocked, !drafts.isEmpty else { return false }
+        do {
+            guard let ids = try workspaceStore.addServices(drafts, to: selectedSpaceID),
+                  let firstID = ids.first else { return false }
+            showAddService = false
+            selectedSpaceID = workspaceStore.service(id: firstID)?.spaceLinks.first?.space?.id
+            selectedServiceID = firstID
+            hasCompletedFirstRunAction = true
+            notificationRuntime.refreshMuteState()
+            for id in ids {
+                Task { @MainActor [weak self] in
+                    await self?.refreshFetchedIcon(for: id)
+                }
+            }
+            return true
+        } catch {
+            AppLogger.dataStore.error("Failed to add setup services; rolled back: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func moveService(linkID: UUID, to targetSpaceID: UUID, followToSpace: Bool) {
         defer { notificationRuntime.refreshMuteState() }
         let outcome: WorkspaceStore.ServiceMoveOutcome?

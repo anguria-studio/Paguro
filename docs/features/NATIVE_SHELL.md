@@ -9,9 +9,9 @@ It does not change the web content of a service.
 
 ## First run
 
-The main window shows one welcome screen while no service exists. A new install
-starts completely empty, with no workspace and no service. Adding the first
-service creates one workspace named Home and the service in one transaction.
+The main window shows a two-step setup wizard while no service exists. A new install
+starts completely empty, with no workspace and no service. Finishing setup
+creates Home and all selected services in one transaction.
 Cancel and a failed save leave the store empty. The Add Service sheet hides the
 workspace picker until more than one workspace exists. Launch never seeds data.
 
@@ -31,8 +31,25 @@ as the view that no selected service shows. It carries:
 - the Paguro app icon, the title "Welcome to Paguro", and one sentence about
   what the app does;
 - a grouped card with the setup rows that apply on this Mac;
-- one prominent button, **Add your first service**;
+- one prominent button, **Choose your services**;
 - a quiet import line under it.
+
+The second step fills the window with the service catalog. Search and a category
+filter narrow the grid. Each card toggles its service, with a checkmark and an
+accent border for selection. Filters and Back keep the complete selection.
+`ServiceSetupSelection` in PaguroCore keeps services in selection order.
+
+The fixed footer holds Back, Add a custom website, the count, and "Add N services".
+The Add button stays disabled until a service is selected. The custom website
+form validates the name and HTTP(S) address, then stages the website with the
+other choices. It does not save a service by itself. Custom websites can be
+removed from the selection before finishing.
+
+The final Add saves all services and their workspace links together. A failed
+save rolls back the complete batch and keeps the selection for retry. Each
+account has its own WebKit store identifier. The shell opens on the first chosen
+service. Users sign in as they visit each service. The normal Add Service sheet
+remains available after setup. Command-N opens the catalog step while empty.
 
 The card holds at most two rows. The notification row reports the macOS
 permission. It offers "Turn on" to request permission while macOS holds no
@@ -56,18 +73,21 @@ top bar does. The traffic lights stay visible and uncovered. The menu bar keeps
 every command: Add Service (`Command-N`), Settings, and import all work while
 the screen is up. The quick switcher opens and finds nothing.
 
-The first service ends the screen. The shell fades in over 0.3 seconds and the
+The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
-`PaguroMotion.firstRunSwapSeconds` holds the duration. `AppState.addService`
-selects the new service, so the shell opens on it.
+`PaguroMotion.firstRunSwapSeconds` holds the duration. `AppState.addSetupServices`
+selects the first chosen service, so the shell opens on it.
 
 App Lock wins. A locked launch shows the lock screen, and the welcome screen
 waits under it. None of its actions can run while the window is locked, so the
 import line is closed to a click and to a keyboard activation. The import
-itself refuses a locked app as well.
+itself refuses a locked app as well. The catalog and batch save also refuse a
+locked app. Lock closes the custom website sheet.
 
-Keyboard focus starts on **Add your first service**, and Return activates it.
-VoiceOver reads the title, the sentence, the rows, the button, and the import
+Keyboard focus starts on **Choose your services**, and Return activates it.
+The catalog step starts keyboard focus in search. VoiceOver reads each card’s
+name and selection state. Space toggles a focused card. Return adds the selection.
+On the welcome step, VoiceOver reads the title, the sentence, the rows, the button, and the import
 line in that order. A row is one element with its title and description, and
 its control stays a separate element beside it. Increase Contrast gives the
 card a full border, and Reduce Transparency gives it an opaque background.
