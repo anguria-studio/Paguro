@@ -53,6 +53,15 @@ struct SetupCategoryMenu: NSViewRepresentable {
         popup.selectItem(withTitle: selection)
     }
 
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: Popup, context: Context) -> CGSize? {
+        // Measure one title so longer, unselected menu items do not widen the control.
+        let sizingCell = NSPopUpButtonCell(textCell: nsView.titleOfSelectedItem ?? "", pullsDown: false)
+        sizingCell.isBordered = nsView.isBordered
+        sizingCell.font = nsView.font
+        sizingCell.controlSize = nsView.controlSize
+        return sizingCell.cellSize
+    }
+
     @MainActor
     final class KeyboardControl {
         weak var popup: Popup?

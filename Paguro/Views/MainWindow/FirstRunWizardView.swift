@@ -273,8 +273,9 @@ private struct FirstRunServicePicker: View {
                 keyboardControl: categoryKeyboardControl,
                 selection: $category
             )
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 12)
-            .frame(width: 170, height: 36)
+            .frame(height: 36)
             .focusable(interactions: .edit)
             .onKeyPress(keys: [.space, .return, .downArrow, .upArrow]) { key in
                 guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }

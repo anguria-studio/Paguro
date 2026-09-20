@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The setup category selector now fits its selected text and chevron instead
+  of reserving a fixed width. Native keyboard navigation stays available.
+
 - Clicking a setup service card no longer shows the dotted keyboard focus
   outline. Keyboard navigation restores it without changing the selection.
 

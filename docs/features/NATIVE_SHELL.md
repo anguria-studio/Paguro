@@ -52,7 +52,8 @@ accent border for selection. Filters and Back keep the complete selection.
 
 Search, category, and Custom website sit in one toolbar above the grid. All
 three controls are 36 points high. The category selector shows plain text and
-a chevron without a button background or border. Categories appear directly in the menu,
+a chevron without a button background or border. Its width follows the current
+label, including native chevron spacing. Categories appear directly in the menu,
 with no submenu. Search is compact, and the workspace name
 stays on its own row above the toolbar. The fixed footer holds Back and Create
 workspace, with no selection counter. The primary button stays disabled until
