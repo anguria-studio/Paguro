@@ -238,12 +238,6 @@ private struct FirstRunServicePicker: View {
             .menuStyle(.borderlessButton)
             .padding(.horizontal, 12)
             .frame(width: 170, height: 36)
-            .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
             .accessibilityLabel("Category")
             .accessibilityValue(category)
             .onChange(of: category) { focusedField = nil }

@@ -34,7 +34,8 @@ keeps related services together and offers a Workspace name field above search.
 The name starts as Personal on a new install and survives Back and custom website
 entry. The step has search, category filtering, and multiple selection.
 The service toolbar has a compact search field, category menu, and Custom
-website button, all 36 points high. Keep the workspace name on its own row.
+website button, all 36 points high. The category selector uses plain text and
+a chevron, with no background or border. Keep the workspace name on its own row.
 Selected cards have a checkmark and an accent border. A fixed footer holds
 Back and Create workspace without a selection count. Back keeps the selection.
 All setup pages use the same footer baseline and content margins.
