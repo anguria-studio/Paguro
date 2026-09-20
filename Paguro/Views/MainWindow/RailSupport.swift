@@ -66,7 +66,7 @@ final class WindowBackdropContainerView: NSView {
             let glass = NSGlassEffectView()
             glass.frame = bounds
             glass.autoresizingMask = [.width, .height]
-            glass.style = .clear
+            glass.style = .regular
             glass.tintColor = nil
             glass.cornerRadius = 0
             addSubview(glass, positioned: .above, relativeTo: frostView)
@@ -92,10 +92,7 @@ final class WindowBackdropContainerView: NSView {
             switch glassStyle {
             case .off:
                 glass.isHidden = true
-            case .clear:
-                glass.isHidden = false
-                glass.style = .clear
-            case .system, .regular:
+            case .system, .clear, .regular:
                 glass.isHidden = false
                 glass.style = .regular
             }

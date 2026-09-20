@@ -1544,10 +1544,8 @@ struct NotificationIslandPanelView: View {
     @ViewBuilder
     private var glassSurface: some View {
         switch model.appearance.glassStyle {
-        case .system:
+        case .system, .clear:
             islandContent.glassEffect(.regular, in: shape)
-        case .clear:
-            islandContent.glassEffect(.clear.tint(glassTint), in: shape)
         case .off, .regular:
             islandContent.glassEffect(.regular.tint(glassTint), in: shape)
         }

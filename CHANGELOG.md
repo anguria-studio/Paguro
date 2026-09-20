@@ -8,7 +8,8 @@ Changes that affect Paguro users appear here, with the newest release first.
   Follow system uses native Liquid Glass without extra app frost or tint.
   The other presets use fixed values; the transparency slider and Glass Lab
   reset are removed. Existing choices remain, but old slider values no longer
-  affect the shell. Fresh installs use Follow system.
+  affect the shell. Fresh installs use Follow system. Clear uses the standard
+  frosted material so background text does not compete with shell content.
 
 - Interrupted service loads no longer leave the sidebar loading ring stuck.
   Reload retries the service home when the first page never committed.

@@ -286,10 +286,8 @@ struct FirstRunHomeView: View {
     private var glassCardSurface: some View {
         let tint = PaguroColor.Fill.glassTint(intensity: appState.liquidGlassIntensity)
         switch appState.liquidGlassStyle {
-        case .system:
+        case .system, .clear:
             Rectangle().fill(.clear).glassEffect(.regular, in: cardShape)
-        case .clear:
-            Rectangle().fill(.clear).glassEffect(.clear.tint(tint), in: cardShape)
         case .off, .regular:
             Rectangle().fill(.clear).glassEffect(.regular.tint(tint), in: cardShape)
         }

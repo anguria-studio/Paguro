@@ -786,11 +786,16 @@ The Window glass selector has four presets and no separate transparency slider:
 | --- | --- | --- | --- |
 | Follow system | Untinted Regular glass | None | None |
 | Off | No glass | None | Opaque |
-| Clear | Clear glass | 45 percent | None |
+| Clear | Untinted Regular glass | 45 percent | None |
 | Regular | Regular glass | Full strength | 15 percent |
 
 Follow system is the default for a fresh install. Native glass responds to the
 system Liquid Glass appearance. Paguro does not copy the system slider value.
+Clear also uses the native Regular material, with light extra backdrop frost
+and no protective tint. Do not map this preset to Apple's Clear material:
+that variant leaves background text too visible behind shell content.
+Public glass APIs do not expose a per-app system-slider endpoint override.
+Native glass still adapts to system appearance in all glass presets.
 The same preset applies to toolbar controls, cards, the menu-bar surface, and
 the expanded island. Accessibility appearance settings remain in effect.
 Existing saved glass choices stay unchanged, but each choice now uses fixed

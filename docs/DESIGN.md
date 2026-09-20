@@ -81,7 +81,9 @@ available on macOS 26; macOS 15 uses the fallback surface materials.
 Follow system is the default glass mode. Use untinted native Regular glass
 without extra window frost or protective color. Off, Clear, and Regular use
 fixed tint and frost values, with no separate slider or reset control. Preserve
-the saved preset choice; ignore legacy slider values.
+the saved preset choice; ignore legacy slider values. Clear uses standard
+frosted glass without tint. It must not use Apple's Clear variant, which shows
+too much background detail behind shell text.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 

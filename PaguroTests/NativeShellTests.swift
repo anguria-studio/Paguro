@@ -334,6 +334,14 @@ final class NativeShellTests: XCTestCase {
         backdrop.update(glassStyle: .clear)
         XCTAssertEqual(frost.alphaValue, ShellGlassStyle.clear.frostOpacity, accuracy: 0.000_001)
         XCTAssertFalse(tint.isHidden)
+        if #available(macOS 26, *) {
+            let glass = try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first)
+            // Apple's clear variant exposes background text. Our lighter preset
+            // must keep the standard glass blur, just like Follow system.
+            XCTAssertFalse(glass.isHidden)
+            XCTAssertEqual(glass.style, .regular)
+            XCTAssertNil(glass.tintColor)
+        }
         backdrop.update(glassStyle: .off)
         XCTAssertEqual(frost.alphaValue, ShellGlassStyle.off.frostOpacity)
         if #available(macOS 26, *) {

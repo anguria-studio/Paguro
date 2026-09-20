@@ -482,10 +482,8 @@ private struct DockTooltipSurfaceModifier: ViewModifier {
     private func glassSurface(_ content: Content) -> some View {
         let tint = PaguroColor.Fill.glassTint(intensity: glassIntensity)
         switch glassStyle {
-        case .system:
+        case .system, .clear:
             content.glassEffect(.regular, in: shape)
-        case .clear:
-            content.glassEffect(.clear.tint(tint), in: shape)
         case .off, .regular:
             content.glassEffect(.regular.tint(tint), in: shape)
         }

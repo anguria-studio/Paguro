@@ -261,7 +261,7 @@ extension ShellGlassStyle {
         switch self {
         case .system: "Uses the Liquid Glass appearance selected in System Settings."
         case .off: "A solid shell without glass or transparency."
-        case .clear: "Lighter glass that shows more of the background."
+        case .clear: "Frosted glass without added tint, keeping the background soft."
         case .regular: "More frosted glass for a quieter background."
         }
     }
@@ -904,12 +904,11 @@ private struct ToolbarControlSurfaceModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(macOS 26, *), glassStyle != .off {
-            if glassStyle == .system {
+            if glassStyle == .system || glassStyle == .clear {
                 content.glassEffect(.regular.interactive(), in: .circle)
             } else {
-                let glass: Glass = glassStyle == .clear ? .clear : .regular
                 content.glassEffect(
-                    glass
+                    .regular
                         .tint(PaguroColor.Fill.glassTint(intensity: intensity))
                         .interactive(),
                     in: .circle

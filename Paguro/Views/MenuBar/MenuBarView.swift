@@ -373,18 +373,10 @@ private struct MenuBarWindowSurface: View {
     }
 
     @available(macOS 26, *)
-    @ViewBuilder
     private var availableGlassLayer: some View {
-        switch glassStyle {
-        case .clear:
-            Rectangle()
-                .fill(.clear)
-                .glassEffect(.clear, in: .rect)
-        case .system, .off, .regular:
-            Rectangle()
-                .fill(.clear)
-                .glassEffect(.regular, in: .rect)
-        }
+        Rectangle()
+            .fill(.clear)
+            .glassEffect(.regular, in: .rect)
     }
 }
 
