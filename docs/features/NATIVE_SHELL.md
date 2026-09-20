@@ -25,21 +25,21 @@ workspace. One service ends the screen, and no service brings it back. A user
 who removes every service therefore sees it again, which is correct: the window
 is empty again.
 
-The screen holds one centered column, 380 points wide, on the same window glass
-as the view that no selected service shows. It carries:
+A shared progress indicator sits above both pages. It labels Welcome and
+Your workspace, highlights the current step, and checks the completed step.
+VoiceOver reads the current step number and name. The indicator is informational.
 
-- the Paguro app icon, the title "Welcome to Paguro", and one sentence about
-  what the app does;
-- a grouped card with the setup rows that apply on this Mac;
-- one prominent button, **Choose your services**;
-- a quiet import line under it.
+Welcome centers a 380-point column on the window glass. It carries the Paguro
+icon, title, explanation, and grouped setup card. A fixed footer puts Import
+configuration on the left and Choose your services on the right. Each page
+uses the same footer baseline and side margins.
 
 The second step is titled "Set up your first workspace". It explains that a
 workspace keeps related services together for work, personal use, or a project.
 A Workspace name field sits above search and defaults to Personal on a new install.
 If setup appears over existing empty workspaces, it starts with the target
 workspace’s current name. Back and custom website entry keep the typed name.
-The Add button requires a nonblank name and at least one selected service.
+Create workspace requires a nonblank name and at least one selected service.
 The final save trims outer whitespace and saves the name with the services.
 A failed save also rolls back a changed name on an existing empty workspace.
 
@@ -48,10 +48,12 @@ filter narrow the grid. Each card toggles its service, with a checkmark and an
 accent border for selection. Filters and Back keep the complete selection.
 `ServiceSetupSelection` in PaguroCore keeps services in selection order.
 
-The fixed footer holds Back, Add a custom website, the count, and "Add N services".
-The Add button stays disabled until a service is selected. The custom website
-page validates the name and HTTP(S) address, then stages the website with the
-other choices. It fills the same window rather than opening a sheet. The address
+Search, category, and Custom website sit in one toolbar above the grid. All
+three controls are 36 points high. Search is compact, and the workspace name
+stays on its own row above the toolbar. The fixed footer holds Back and Create
+workspace, with no selection counter. The primary button stays disabled until
+a service is selected. The custom website page validates the name and HTTP(S)
+address, then stages the website with the other choices. It fills the same window rather than opening a sheet. The address
 example is plain, secondary placeholder text. An icon preview and Change Icon
 control sit beside the fields. The draft retains the chosen or discovered icon
 through the final batch save. It does not save a service by itself.
@@ -62,9 +64,12 @@ scrolling list, directly below search and above the catalog. Unchecking a card
 removes it from the batch but keeps the draft available to select again.
 Search matches custom names and addresses, including unchecked drafts.
 The category menu includes Custom websites once a draft exists. Adding a
-custom website clears the filters so the new selected card is visible.
+custom website clears the filters and scrolls to the top so the new selected
+card is visible. The catalog remains mounted while custom entry is open, but
+is disabled and hidden from accessibility. Back to services keeps its scroll
+position and filters. The custom page keeps the indicator on step two.
 
-The final Add saves all services and their workspace links together. A failed
+Create workspace saves all services and their workspace links together. A failed
 save rolls back the complete batch and keeps the selection for retry. Each
 account has its own WebKit store identifier. The shell opens on the first chosen
 service. Users sign in as they visit each service. The normal Add Service sheet
@@ -83,7 +88,7 @@ The two setup decisions have no other place at first run. Settings owns them
 once the first service exists. The screen is the only first-run offer: Paguro
 has no separate welcome sheet.
 
-The import line reads a configuration file and adds it. The Settings import
+The import action reads a configuration file and adds it. The Settings import
 offers an Add or Replace choice; this screen has nothing to replace, so it adds
 the file and reports the result. See [Configuration transfer](CONFIGURATION.md).
 
@@ -91,6 +96,11 @@ The whole glass background moves the window, the way the reserved gap in the
 top bar does. The traffic lights stay visible and uncovered. The menu bar keeps
 every command: Add Service (`Command-N`), Settings, and import all work while
 the screen is up. The quick switcher opens and finds nothing.
+
+Moving between setup pages uses a 0.22-second fade and 24 points of horizontal
+travel. Forward enters from the right; Back enters from the left. The custom
+website form follows the same direction. Reduce Motion uses a fade with no
+travel. Card selection fades its checkmark and border over 0.14 seconds.
 
 The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
@@ -108,9 +118,9 @@ The catalog step starts keyboard focus in search. Clicking the background or
 service grid releases text-field focus. Return finishes editing the workspace
 name. Window dragging still works after ending text editing. VoiceOver reads each card’s
 name and selection state. Space toggles a focused card. Return adds the selection.
-On the welcome step, VoiceOver reads the title, the sentence, the rows, the button, and the import
-line in that order. A row is one element with its title and description, and
-its control stays a separate element beside it. Increase Contrast gives the
+On the welcome step, VoiceOver reads the title, explanation, setup rows, import
+action, and primary button in that order. A row is one element with its title
+and description. Its control stays a separate element beside it. Increase Contrast gives the
 card a full border, and Reduce Transparency gives it an opaque background.
 
 ### Debug preview

@@ -196,6 +196,8 @@ enum PaguroMotion {
     /// first service starts. It is a fade, plus a slide of the rail in from its
     /// own edge. Reduce Motion keeps the fade alone.
     static let firstRunSwapSeconds = 0.3
+    static let setupStepSeconds = 0.22
+    static let setupSelectionSeconds = 0.14
 }
 
 /// The user-facing transparency scale for the Paguro shell.

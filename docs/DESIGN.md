@@ -24,20 +24,30 @@ the row spacing.
 ## First run
 
 A window with no service shows a two-step wizard on the window glass.
+A shared progress indicator shows Welcome and Your workspace. It stays in
+place across pages, highlights the current step, and checks the completed step.
 The welcome step explains Paguro and groups notification and island setup.
-Its primary action, "Choose your services", opens a full-page catalog.
+Its fixed footer offers import on the left and "Choose your services" on the
+right. The primary action opens a full-page catalog.
 The second step is "Set up your first workspace". It explains that a workspace
 keeps related services together and offers a Workspace name field above search.
 The name starts as Personal on a new install and survives Back and custom website
 entry. The step has search, category filtering, and multiple selection.
-Selected cards have a checkmark and an accent border. A fixed footer shows
-the selection count and one Add button. Back keeps the selection.
+The service toolbar has a compact search field, category menu, and Custom
+website button, all 36 points high. Keep the workspace name on its own row.
+Selected cards have a checkmark and an accent border. A fixed footer holds
+Back and Create workspace without a selection count. Back keeps the selection.
+All setup pages use the same footer baseline and content margins.
+Page changes use a 0.22-second fade with 24 points of horizontal travel.
+Back reverses the movement. Reduce Motion keeps only the fade. Card selection
+fades its checkmark and border over 0.14 seconds, without scaling or bouncing.
 Custom website entry is a full-page branch of service selection, with Back to
 services and Select website. Its name and address fields sit beside the icon
 preview and Change Icon control. URL examples are plain secondary placeholder
 text, without link styling. Custom websites use the same cards as the catalog,
 with their section first below search. Unchecked custom cards stay available.
-Search includes their names and addresses.
+Search includes their names and addresses. Returning from custom entry keeps
+the catalog scroll position; selecting a new website shows its card at the top.
 The rail and service header appear only after the complete selection saves.
 See [Native shell](features/NATIVE_SHELL.md).
 

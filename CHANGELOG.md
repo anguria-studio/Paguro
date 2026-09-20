@@ -4,6 +4,12 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Setup now shows a shared progress indicator and subtle page transitions.
+  Search and category controls have matching heights, Custom website sits
+  above the grid, and a simpler footer offers Create workspace without a
+  selection counter. Back from custom entry keeps the catalog scroll position.
+  Reduce Motion keeps transitions to a fade.
+
 - Setup starts with Personal as the workspace name. Clicking outside its name
   field or pressing Return ends editing. The workspace description uses plain
   sentence punctuation.

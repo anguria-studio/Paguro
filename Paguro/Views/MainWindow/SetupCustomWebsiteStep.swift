@@ -17,9 +17,6 @@ struct SetupCustomWebsiteStep: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Step 2 of 2 · Custom website")
-                    .font(.paguroCaption)
-                    .foregroundStyle(.secondary)
                 Text("Add a custom website")
                     .font(.largeTitle.weight(.semibold))
                 Text("Give it a name and choose the icon you’ll see in Paguro.")
@@ -65,11 +62,10 @@ struct SetupCustomWebsiteStep: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
-            HStack {
+            FirstRunFooter {
                 Button("Back to services", action: onBack)
                     .keyboardShortcut(.cancelAction)
-                Spacer()
+            } trailing: {
                 Button("Select website", action: selectWebsite)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -77,8 +73,6 @@ struct SetupCustomWebsiteStep: View {
                     .disabled(label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 20)
         }
         .disabled(!allowsActions)
         .onAppear { nameIsFocused = true }

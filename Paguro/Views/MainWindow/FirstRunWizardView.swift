@@ -7,24 +7,42 @@ struct FirstRunWizardView: View {
     let allowsActions: Bool
 
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection = ServiceSetupSelection()
     @State private var hasLoadedWorkspaceName = false
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
 
     var body: some View {
-        Group {
-            if appState.showAddService {
-                FirstRunServicePicker(selection: $selection, allowsActions: allowsActions)
-            } else {
-                FirstRunHomeView(setup: setup, allowsActions: allowsActions)
+        VStack(spacing: 24) {
+            FirstRunProgress(isChoosingServices: appState.showAddService)
+                .padding(.horizontal, 32)
+            ZStack {
+                if appState.showAddService {
+                    FirstRunServicePicker(selection: $selection, allowsActions: allowsActions)
+                        .transition(pageTransition(from: 24))
+                } else {
+                    FirstRunHomeView(setup: setup, allowsActions: allowsActions)
+                        .transition(pageTransition(from: -24))
+                }
             }
+            .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: appState.showAddService)
+            .clipped()
         }
+        .padding(.top, 52)
+        .frame(maxWidth: 1040)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(WindowDragHandle(endsEditingOnPress: true))
+        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
         .onAppear {
             guard !hasLoadedWorkspaceName else { return }
             hasLoadedWorkspaceName = true
             let target = spaces.first { $0.id == appState.selectedSpaceID } ?? spaces.first
             selection.workspaceName = target?.name ?? WorkspaceName.defaultValue
         }
+    }
+
+    private func pageTransition(from offset: CGFloat) -> AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .offset(x: offset))
     }
 }
 
@@ -33,6 +51,8 @@ private struct FirstRunServicePicker: View {
     let allowsActions: Bool
 
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var scrollToCustomWebsite = 0
     @State private var search = ""
     @State private var category = "All services"
     @State private var showsCustomWebsite = false
@@ -58,7 +78,15 @@ private struct FirstRunServicePicker: View {
     }
 
     var body: some View {
-        Group {
+        ZStack {
+            // Keep the catalog alive so returning from custom entry retains its scroll position.
+            catalogContent
+                .opacity(showsCustomWebsite ? 0 : 1)
+                .offset(x: showsCustomWebsite && !reduceMotion ? -24 : 0)
+                .allowsHitTesting(!showsCustomWebsite)
+                .accessibilityElement(children: .contain)
+                .accessibilityHidden(showsCustomWebsite)
+                .disabled(showsCustomWebsite)
             if showsCustomWebsite {
                 SetupCustomWebsiteStep(
                     allowsActions: allowsActions,
@@ -68,19 +96,18 @@ private struct FirstRunServicePicker: View {
                         selection.toggle(draft)
                         search = ""
                         category = "All services"
+                        scrollToCustomWebsite += 1
                         showsCustomWebsite = false
                     }
                 )
-            } else {
-                catalogContent
+                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(x: 24)))
             }
         }
-        .frame(maxWidth: 1040)
-        .padding(.top, 52)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WindowDragHandle(endsEditingOnPress: true))
-        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
+        .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: showsCustomWebsite)
         .disabled(!allowsActions)
+        .onChange(of: showsCustomWebsite) { _, isShowing in
+            focusedField = isShowing ? nil : .search
+        }
     }
 
     private var catalogContent: some View {
@@ -88,56 +115,60 @@ private struct FirstRunServicePicker: View {
             header
             workspaceNameField
             filters
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    if !customDrafts.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Custom websites")
-                                .font(.headline)
-                            LazyVGrid(columns: columns, spacing: 14) {
-                                ForEach(customDrafts) { draft in
-                                    ServiceSetupTile(
-                                        draft: draft, subtitle: "Custom website",
-                                        isSelected: selection.contains(draft.id)
-                                    ) {
-                                        selection.toggle(draft)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        if !customDrafts.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Custom websites")
+                                    .font(.headline)
+                                LazyVGrid(columns: columns, spacing: 14) {
+                                    ForEach(customDrafts) { draft in
+                                        ServiceSetupTile(
+                                            draft: draft, subtitle: "Custom website",
+                                            isSelected: selection.contains(draft.id)
+                                        ) {
+                                            selection.toggle(draft)
+                                        }
+                                        .help(draft.url)
                                     }
-                                    .help(draft.url)
                                 }
                             }
                         }
-                    }
-                    if !entries.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            if !customDrafts.isEmpty {
-                                Text("Catalog").font(.headline)
-                            }
-                            LazyVGrid(columns: columns, spacing: 14) {
-                                ForEach(entries) { entry in
-                                    let draft = ServiceSetupDraft(
-                                        id: entry.id, label: entry.name, url: entry.url,
-                                        catalogEntryID: entry.id, userAgent: entry.userAgent
-                                    )
-                                    ServiceSetupTile(
-                                        draft: draft, subtitle: entry.category,
-                                        isSelected: selection.contains(entry.id)
-                                    ) {
-                                        selection.toggle(draft)
+                        if !entries.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if !customDrafts.isEmpty {
+                                    Text("Catalog").font(.headline)
+                                }
+                                LazyVGrid(columns: columns, spacing: 14) {
+                                    ForEach(entries) { entry in
+                                        let draft = ServiceSetupDraft(
+                                            id: entry.id, label: entry.name, url: entry.url,
+                                            catalogEntryID: entry.id, userAgent: entry.userAgent
+                                        )
+                                        ServiceSetupTile(
+                                            draft: draft, subtitle: entry.category,
+                                            isSelected: selection.contains(entry.id)
+                                        ) {
+                                            selection.toggle(draft)
+                                        }
+                                        .help(entry.description)
                                     }
-                                    .help(entry.description)
                                 }
                             }
                         }
+                        if entries.isEmpty && customDrafts.isEmpty {
+                            ContentUnavailableView.search(text: search)
+                                .frame(maxWidth: .infinity)
+                        }
                     }
-                    if entries.isEmpty && customDrafts.isEmpty {
-                        ContentUnavailableView.search(text: search)
-                            .frame(maxWidth: .infinity)
-                    }
+                    .id("service-list-top")
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 32)
-                .padding(.bottom, 20)
+                .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
+                .onChange(of: scrollToCustomWebsite) { proxy.scrollTo("service-list-top", anchor: .top) }
             }
-            .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
             footer
         }
         .onAppear { focusedField = .search }
@@ -146,9 +177,6 @@ private struct FirstRunServicePicker: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Step 2 of 2")
-                    .font(.paguroCaption)
-                    .foregroundStyle(.secondary)
                 Text("Set up your first workspace")
                     .font(.largeTitle.weight(.semibold))
                 Text("A workspace keeps related services together for work, personal use, or a project.")
@@ -179,63 +207,84 @@ private struct FirstRunServicePicker: View {
     }
 
     private var filters: some View {
-        HStack(spacing: 14) {
-            HStack {
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Search services", text: $search)
                     .textFieldStyle(.plain)
                     .focused($focusedField, equals: .search)
             }
-            .padding(10)
+            .padding(.horizontal, 12)
+            .frame(width: 256, height: 36)
             .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
-            Picker("Category", selection: $category) {
-                Text("All services").tag("All services")
-                if !selection.customWebsites.isEmpty {
-                    Text("Custom websites").tag("Custom websites")
-                }
-                ForEach(catalog.categories, id: \.self) { Text($0).tag($0) }
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
             }
-            .labelsHidden()
-            .frame(width: 170)
+            Menu {
+                Picker("Category", selection: $category) {
+                    Text("All services").tag("All services")
+                    if !selection.customWebsites.isEmpty {
+                        Text("Custom websites").tag("Custom websites")
+                    }
+                    ForEach(catalog.categories, id: \.self) { Text($0).tag($0) }
+                }
+            } label: {
+                Text(category)
+            }
+            .menuStyle(.borderlessButton)
+            .padding(.horizontal, 12)
+            .frame(width: 170, height: 36)
+            .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .accessibilityLabel("Category")
+            .accessibilityValue(category)
             .onChange(of: category) { focusedField = nil }
+            Spacer(minLength: 0)
+            Button {
+                focusedField = nil
+                showsCustomWebsite = true
+            } label: {
+                Label("Custom website", systemImage: "plus")
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
+            }
         }
+        .font(.paguroBody)
         .padding(.horizontal, 32)
         .padding(.bottom, 20)
     }
 
     private var footer: some View {
         VStack(spacing: 0) {
-            Divider()
             if let saveError {
                 Text(saveError)
                     .font(.paguroCaption)
                     .foregroundStyle(.red)
-                    .padding(.top, 12)
+                    .padding(.vertical, 12)
             }
-            HStack(spacing: 16) {
+            FirstRunFooter {
                 Button("Back") { appState.showAddService = false }
                     .keyboardShortcut(.cancelAction)
-                Button("Add a custom website") { showsCustomWebsite = true }
-                    .buttonStyle(.link)
-                Spacer()
-                Text("\(selection.services.count) selected")
-                    .font(.paguroCaption)
-                    .foregroundStyle(.secondary)
-                Button(addTitle) { finish() }
+            } trailing: {
+                Button("Create workspace") { finish() }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
                     .disabled(selection.services.isEmpty || WorkspaceName.normalized(selection.workspaceName) == nil)
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 20)
         }
-    }
-
-    private var addTitle: String {
-        let count = selection.services.count
-        return count == 1 ? "Add 1 service" : "Add \(count) services"
     }
 
     private func finish() {
@@ -301,12 +350,14 @@ private struct ServiceSetupTile: View {
             }
             .overlay(alignment: .topLeading) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .contentTransition(.opacity)
                     .font(.system(size: 20))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
                     .padding(12)
                     .accessibilityHidden(true)
             }
             .contentShape(shape)
+            .animation(.easeInOut(duration: PaguroMotion.setupSelectionSeconds), value: isSelected)
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }

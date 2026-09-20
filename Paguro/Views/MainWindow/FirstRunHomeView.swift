@@ -38,27 +38,23 @@ struct FirstRunHomeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 22) {
-            Text("Step 1 of 2")
-                .font(.paguroCaption)
-                .foregroundStyle(.secondary)
-            header
-            if let setup { setupCard(setup) }
+        VStack(spacing: 0) {
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 22) {
+                        header
+                        if let setup { setupCard(setup) }
+                    }
+                    .padding(.vertical, 24)
+                    .frame(maxWidth: Self.columnWidth)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+                }
+            }
             actions
         }
-        .padding(32)
-        .frame(width: Self.columnWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // VoiceOver reads the title, the sentence, the rows, the primary
-        // button, and the import line in that order, which is the order they
-        // are written in.
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome to Paguro")
-        // A drag anywhere on the glass moves the window. The handle sits behind
-        // the content and in front of the fill, so every control keeps its own
-        // clicks. `NoticeStrip` uses the same order.
-        .background(WindowDragHandle())
-        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
         .onAppear { primaryActionIsFocused = true }
         .alert("Import Configuration", isPresented: Binding(
             get: { importMessage != nil },
@@ -223,24 +219,19 @@ struct FirstRunHomeView: View {
     // MARK: - Actions
 
     private var actions: some View {
-        VStack(spacing: 10) {
+        FirstRunFooter {
+            Button("Import configuration…") { importConfiguration() }
+                .buttonStyle(.link)
+                .help("Import a configuration from another Mac")
+                .disabled(!allowsActions)
+        } trailing: {
             Button("Choose your services") {
                 guard allowsActions else { return }
                 appState.showAddService = true
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            // Return activates it, and keyboard focus starts here. Command-N
-            // stays with the File menu item, which works from any window state.
             .keyboardShortcut(.defaultAction)
             .focused($primaryActionIsFocused)
-            .disabled(!allowsActions)
-
-            Button("Or import a configuration from another Mac") {
-                importConfiguration()
-            }
-            .buttonStyle(.link)
-            .font(.paguroCaption)
             .disabled(!allowsActions)
         }
     }
