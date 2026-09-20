@@ -64,11 +64,13 @@ struct SetupCustomWebsiteStep: View {
             }
             FirstRunFooter {
                 Button("Back to services", action: onBack)
+                    .modifier(SetupKeyboardActivation(action: onBack))
                     .keyboardShortcut(.cancelAction)
             } trailing: {
                 Button("Select website", action: selectWebsite)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+                    .modifier(SetupKeyboardActivation(action: selectWebsite))
                     .keyboardShortcut(.defaultAction)
                     .disabled(label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

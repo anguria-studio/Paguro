@@ -1,0 +1,82 @@
+import AppKit
+import SwiftUI
+
+/// Setup remains keyboard accessible even when macOS limits Tab to text inputs.
+struct SetupKeyboardActivation: ViewModifier {
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    // Arrow keys can carry numeric-pad and function flags without a held modifier.
+    static func accepts(_ modifiers: EventModifiers) -> Bool {
+        modifiers.intersection([.command, .control, .option, .shift]).isEmpty
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .focusable(interactions: .edit)
+            .onKeyPress(keys: [.space, .return]) { key in
+                guard isEnabled, Self.accepts(key.modifiers) else { return .ignored }
+                action()
+                return .handled
+            }
+    }
+}
+
+/// A native popup keeps menu keyboard handling and opts into the wizard's Tab order.
+struct SetupCategoryMenu: NSViewRepresentable {
+    let categories: [String]
+    let keyboardControl: KeyboardControl
+    @Binding var selection: String
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeCoordinator() -> Coordinator { Coordinator(selection: $selection) }
+
+    func makeNSView(context: Context) -> Popup {
+        let popup = Popup(frame: .zero, pullsDown: false)
+        popup.isBordered = false
+        popup.font = .systemFont(ofSize: PaguroTypeSize.body)
+        popup.focusRingType = .exterior
+        popup.setAccessibilityLabel("Category")
+        popup.target = context.coordinator
+        popup.action = #selector(Coordinator.selectCategory(_:))
+        keyboardControl.popup = popup
+        return popup
+    }
+
+    func updateNSView(_ popup: Popup, context: Context) {
+        context.coordinator.selection = $selection
+        popup.isEnabled = isEnabled
+        if popup.itemTitles != categories {
+            popup.removeAllItems()
+            popup.addItems(withTitles: categories)
+        }
+        popup.selectItem(withTitle: selection)
+    }
+
+    @MainActor
+    final class KeyboardControl {
+        weak var popup: Popup?
+
+        func open() {
+            guard let popup, popup.isEnabled else { return }
+            popup.performClick(nil)
+        }
+    }
+
+    final class Popup: NSPopUpButton {
+        override var acceptsFirstResponder: Bool { isEnabled }
+        // The SwiftUI wrapper supplies one Tab stop and forwards menu activation.
+        override var canBecomeKeyView: Bool { false }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var selection: Binding<String>
+        init(selection: Binding<String>) { self.selection = selection }
+
+        @objc func selectCategory(_ sender: NSPopUpButton) {
+            guard sender.isEnabled, let title = sender.titleOfSelectedItem else { return }
+            selection.wrappedValue = title
+        }
+    }
+}

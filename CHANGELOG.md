@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Keyboard navigation in setup now reaches the category selector, buttons,
+  and service grid. Use arrow keys to move between cards and Space or Return
+  to select. Command-Return creates the workspace.
+
 - Setup now shows a shared progress indicator and subtle page transitions.
   Search and category controls have matching heights, Custom website sits
   above the grid, and a simpler footer offers Create workspace without a

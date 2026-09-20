@@ -55,9 +55,13 @@ private struct FirstRunServicePicker: View {
     @State private var scrollToCustomWebsite = 0
     @State private var search = ""
     @State private var category = "All services"
+    @State private var categoryKeyboardControl = SetupCategoryMenu.KeyboardControl()
     @State private var showsCustomWebsite = false
     @State private var saveError: String?
-    private enum InputField: Hashable { case workspaceName, search }
+    private enum InputField: Hashable { case workspaceName, search, services, customWebsite }
+    @State private var activeServiceID: String?
+    @State private var gridColumnCount = 1
+    @State private var focusAfterCustom: InputField = .customWebsite
     @FocusState private var focusedField: InputField?
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 190), spacing: 14)]
@@ -75,6 +79,12 @@ private struct FirstRunServicePicker: View {
     private var customDrafts: [ServiceSetupDraft] {
         guard category == "All services" || category == "Custom websites" else { return [] }
         return selection.matchingCustomWebsites(search: search)
+    }
+
+    private var navigation: SetupGridNavigation {
+        SetupGridNavigation(
+            sections: [customDrafts.map(\.id), entries.map(\.id)], columns: gridColumnCount
+        )
     }
 
     var body: some View {
@@ -97,6 +107,8 @@ private struct FirstRunServicePicker: View {
                         search = ""
                         category = "All services"
                         scrollToCustomWebsite += 1
+                        activeServiceID = draft.id
+                        focusAfterCustom = .services
                         showsCustomWebsite = false
                     }
                 )
@@ -106,7 +118,11 @@ private struct FirstRunServicePicker: View {
         .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: showsCustomWebsite)
         .disabled(!allowsActions)
         .onChange(of: showsCustomWebsite) { _, isShowing in
-            focusedField = isShowing ? nil : .search
+            focusedField = isShowing ? nil : focusAfterCustom
+        }
+        .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
+        .onChange(of: focusedField) { _, field in
+            if field == .services { activeServiceID = navigation.retainedID(activeServiceID) }
         }
     }
 
@@ -126,10 +142,14 @@ private struct FirstRunServicePicker: View {
                                     ForEach(customDrafts) { draft in
                                         ServiceSetupTile(
                                             draft: draft, subtitle: "Custom website",
-                                            isSelected: selection.contains(draft.id)
+                                            isSelected: selection.contains(draft.id),
+                                            isKeyboardFocused: focusedField == .services && activeServiceID == draft.id
                                         ) {
+                                            activeServiceID = draft.id
+                                            focusedField = .services
                                             selection.toggle(draft)
                                         }
+                                        .id(draft.id)
                                         .help(draft.url)
                                     }
                                 }
@@ -148,10 +168,14 @@ private struct FirstRunServicePicker: View {
                                         )
                                         ServiceSetupTile(
                                             draft: draft, subtitle: entry.category,
-                                            isSelected: selection.contains(entry.id)
+                                            isSelected: selection.contains(entry.id),
+                                            isKeyboardFocused: focusedField == .services && activeServiceID == entry.id
                                         ) {
+                                            activeServiceID = entry.id
+                                            focusedField = .services
                                             selection.toggle(draft)
                                         }
+                                        .id(entry.id)
                                         .help(entry.description)
                                     }
                                 }
@@ -166,7 +190,31 @@ private struct FirstRunServicePicker: View {
                     .padding(.horizontal, 32)
                     .padding(.bottom, 20)
                 }
-                .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
+                .focusable(navigation.firstID != nil, interactions: .edit)
+                .focused($focusedField, equals: .services)
+                .focusEffectDisabled()
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Services")
+                .accessibilityHint("Use arrow keys to move between services. Press Space or Return to select.")
+                .onGeometryChange(for: Int.self) { geometry in
+                    max(1, Int((geometry.size.width - 64 + 14) / (140 + 14)))
+                } action: { gridColumnCount = $0 }
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) { key in
+                    guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }
+                    moveGridFocus(key.key)
+                    return .handled
+                }
+                .onKeyPress(keys: [.space, .return]) { key in
+                    guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }
+                    toggleActiveService()
+                    return .handled
+                }
+                .onChange(of: activeServiceID) { _, id in
+                    if focusedField == .services, let id { proxy.scrollTo(id) }
+                }
+                .onChange(of: focusedField) { _, field in
+                    if field == .services, let id = activeServiceID { proxy.scrollTo(id) }
+                }
                 .onChange(of: scrollToCustomWebsite) { proxy.scrollTo("service-list-top", anchor: .top) }
             }
             footer
@@ -214,6 +262,11 @@ private struct FirstRunServicePicker: View {
                 TextField("Search services", text: $search)
                     .textFieldStyle(.plain)
                     .focused($focusedField, equals: .search)
+                    .onSubmit { enterGrid() }
+                    .onKeyPress(.downArrow) {
+                        enterGrid()
+                        return .handled
+                    }
             }
             .padding(.horizontal, 12)
             .frame(width: 256, height: 36)
@@ -222,36 +275,33 @@ private struct FirstRunServicePicker: View {
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
             }
-            Menu {
-                Picker("Category", selection: $category) {
-                    Text("All services").tag("All services")
-                    if !selection.customWebsites.isEmpty {
-                        Text("Custom websites").tag("Custom websites")
-                    }
-                    ForEach(catalog.categories, id: \.self) { Text($0).tag($0) }
-                }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            } label: {
-                Text(category)
-            }
-            .menuStyle(.borderlessButton)
+            SetupCategoryMenu(
+                categories: ["All services"]
+                    + (selection.customWebsites.isEmpty ? [] : ["Custom websites"])
+                    + catalog.categories,
+                keyboardControl: categoryKeyboardControl,
+                selection: $category
+            )
             .padding(.horizontal, 12)
             .frame(width: 170, height: 36)
-            .accessibilityLabel("Category")
-            .accessibilityValue(category)
+            .focusable(interactions: .edit)
+            .onKeyPress(keys: [.space, .return, .downArrow, .upArrow]) { key in
+                guard SetupKeyboardActivation.accepts(key.modifiers) else { return .ignored }
+                categoryKeyboardControl.open()
+                return .handled
+            }
             .onChange(of: category) { focusedField = nil }
             Spacer(minLength: 0)
-            Button {
-                focusedField = nil
-                showsCustomWebsite = true
-            } label: {
+            Button(action: openCustomWebsite) {
                 Label("Custom website", systemImage: "plus")
                     .padding(.horizontal, 12)
                     .frame(height: 36)
                     .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
+            .modifier(SetupKeyboardActivation(action: openCustomWebsite))
+            .focused($focusedField, equals: .customWebsite)
+            .keyboardShortcut("n", modifiers: [.command, .shift])
             .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             .overlay {
                 RoundedRectangle(cornerRadius: 8)
@@ -273,13 +323,51 @@ private struct FirstRunServicePicker: View {
             }
             FirstRunFooter {
                 Button("Back") { appState.showAddService = false }
+                    .modifier(SetupKeyboardActivation { appState.showAddService = false })
                     .keyboardShortcut(.cancelAction)
             } trailing: {
                 Button("Create workspace") { finish() }
                     .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
+                    .modifier(SetupKeyboardActivation(action: finish))
+                    .keyboardShortcut(.return, modifiers: .command)
                     .disabled(selection.services.isEmpty || WorkspaceName.normalized(selection.workspaceName) == nil)
             }
+        }
+    }
+
+    private func openCustomWebsite() {
+        guard allowsActions else { return }
+        focusedField = nil
+        focusAfterCustom = .customWebsite
+        showsCustomWebsite = true
+    }
+
+    private func enterGrid() {
+        guard let first = navigation.firstID else { return }
+        activeServiceID = first
+        focusedField = .services
+    }
+
+    private func moveGridFocus(_ key: KeyEquivalent) {
+        let direction: SetupGridNavigation.Direction
+        switch key {
+        case .leftArrow: direction = .left
+        case .rightArrow: direction = .right
+        case .upArrow: direction = .up
+        default: direction = .down
+        }
+        activeServiceID = navigation.destination(from: activeServiceID, direction: direction)
+    }
+
+    private func toggleActiveService() {
+        guard allowsActions, !showsCustomWebsite, let id = activeServiceID else { return }
+        if let draft = customDrafts.first(where: { $0.id == id }) {
+            selection.toggle(draft)
+        } else if let entry = entries.first(where: { $0.id == id }) {
+            selection.toggle(ServiceSetupDraft(
+                id: entry.id, label: entry.name, url: entry.url,
+                catalogEntryID: entry.id, userAgent: entry.userAgent
+            ))
         }
     }
 
@@ -295,6 +383,7 @@ private struct ServiceSetupTile: View {
     let draft: ServiceSetupDraft
     let subtitle: String
     let isSelected: Bool
+    let isKeyboardFocused: Bool
     let action: () -> Void
 
     @Environment(\.colorSchemeContrast) private var contrast
@@ -344,6 +433,13 @@ private struct ServiceSetupTile: View {
                     lineWidth: isSelected ? 2 : 1
                 )
             }
+            .overlay {
+                if isKeyboardFocused {
+                    shape.inset(by: 5)
+                        .strokeBorder(Color.primary.opacity(0.85), style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                        .allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .contentTransition(.opacity)
@@ -356,6 +452,7 @@ private struct ServiceSetupTile: View {
             .animation(.easeInOut(duration: PaguroMotion.setupSelectionSeconds), value: isSelected)
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .onHover { isHovering = $0 }
         .accessibilityLabel(draft.label)
         .accessibilityValue(isSelected ? "Selected" : "Not selected")

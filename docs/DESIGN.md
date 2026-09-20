@@ -40,7 +40,11 @@ Selected cards have a checkmark and an accent border. A fixed footer holds
 Back and Create workspace without a selection count. Back keeps the selection.
 All setup pages use the same footer baseline and content margins.
 Page changes use a 0.22-second fade with 24 points of horizontal travel.
-Back reverses the movement. Reduce Motion keeps only the fade. Card selection
+Back reverses the movement. Reduce Motion keeps only the fade. Tab reaches all
+setup controls without changing the system's keyboard preferences. The grid is
+one Tab stop with arrow-key movement and a dashed inset focus outline, separate
+from the selection border. Space or Return toggles a card; Command-Return
+finishes setup. Card selection
 fades its checkmark and border over 0.14 seconds, without scaling or bouncing.
 Custom website entry is a full-page branch of service selection, with Back to
 services and Select website. Its name and address fields sit beside the icon

@@ -115,11 +115,30 @@ import line is closed to a click and to a keyboard activation. The import
 itself refuses a locked app as well. The catalog and batch save also refuse a
 locked app. Lock disables the custom website page and cancels pending icon discovery.
 
-Keyboard focus starts on **Choose your services**, and Return activates it.
-The catalog step starts keyboard focus in search. Clicking the background or
-service grid releases text-field focus. Return finishes editing the workspace
-name. Window dragging still works after ending text editing. VoiceOver reads each card’s
-name and selection state. Space toggles a focused card. Return adds the selection.
+Keyboard focus starts on **Choose your services**. The catalog starts focus in
+search. Tab reaches the workspace name, search, category menu, Custom website,
+service grid, and footer buttons. These controls participate even when macOS
+limits its usual Tab navigation to text inputs. Shift-Tab reverses the order.
+The category menu uses a native popup with direct choices and keyboard handling.
+
+The grid is one Tab stop. Arrow keys move a visible focus outline between cards;
+Space or Return toggles the focused card. The outline differs from a selected
+card's checkmark and accent border. Moving focus scrolls the card into view.
+`SetupGridNavigation` in PaguroCore follows the current column count and keeps
+custom and catalog sections on separate rows. Filters retain a visible target
+or choose the first result; empty results have no card target.
+
+Down Arrow or Return from search enters the results. Return does not create a
+workspace while browsing cards. Command-Return creates the workspace, or Tab to
+Create workspace and press Space or Return. Command-Shift-N opens custom entry.
+Back from custom entry restores its opener's focus. Selecting a custom website
+returns focus to its new card. Hidden catalog controls remain disabled.
+
+Clicking the background releases text-field focus. Clicking a service moves
+focus to the grid. Return finishes editing the workspace name. Window dragging
+still works after ending text editing. VoiceOver reads each card's name and
+selection state and keeps its select action.
+
 On the welcome step, VoiceOver reads the title, explanation, setup rows, import
 action, and primary button in that order. A row is one element with its title
 and description. Its control stays a separate element beside it. Increase Contrast gives the
