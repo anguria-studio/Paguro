@@ -9,7 +9,7 @@ struct CatalogGridView: View {
 
     private let catalog = ServiceCatalog.shared
     private let columns = [
-        GridItem(.adaptive(minimum: 100, maximum: 120), spacing: 12)
+        GridItem(.adaptive(minimum: 110, maximum: 150), spacing: 12)
     ]
 
     private var filteredEntries: [ServiceCatalogEntry] {
@@ -78,12 +78,17 @@ private struct CatalogEntryButton: View {
     let entry: ServiceCatalogEntry
     let action: () -> Void
 
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @State private var isHovering = false
     @State private var icon: NSImage?
 
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: PaguroRadius.surface, style: .continuous)
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: 10) {
                 iconView
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: PaguroRadius.control))
@@ -95,11 +100,16 @@ private struct CatalogEntryButton: View {
                     .foregroundStyle(.primary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: PaguroRadius.control)
-                    .fill(isHovering ? Color.primary.opacity(0.06) : .clear)
-            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 16)
+            .background(cardShape.fill(Color.primary.opacity(isHovering ? 0.09 : 0.045)))
+            .overlay {
+                cardShape.strokeBorder(
+                    colorSchemeContrast == .increased ? PaguroColor.shellBorder : PaguroColor.hairline,
+                    lineWidth: colorSchemeContrast == .increased ? 1 : 0.5
+                )
+            }
+            .contentShape(cardShape)
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
