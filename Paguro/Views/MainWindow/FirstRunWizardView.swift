@@ -55,6 +55,7 @@ private struct FirstRunServicePicker: View {
     @State private var saveError: String?
     private enum InputField: Hashable { case workspaceName, search, services, customWebsite }
     @State private var activeServiceID: String?
+    @State private var showsGridKeyboardFocus = true
     @State private var gridColumnCount = 1
     @State private var focusAfterCustom: InputField = .customWebsite
     @FocusState private var focusedField: InputField?
@@ -104,7 +105,11 @@ private struct FirstRunServicePicker: View {
             }
             .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
             .onChange(of: focusedField) { _, field in
-                if field == .services { activeServiceID = navigation.retainedID(activeServiceID) }
+                if field == .services {
+                    activeServiceID = navigation.retainedID(activeServiceID)
+                } else {
+                    showsGridKeyboardFocus = true
+                }
             }
     }
 
@@ -125,8 +130,10 @@ private struct FirstRunServicePicker: View {
                                         ServiceSetupTile(
                                             draft: draft, subtitle: "Custom website",
                                             isSelected: selection.contains(draft.id),
-                                            isKeyboardFocused: focusedField == .services && activeServiceID == draft.id
+                                            isKeyboardFocused: showsGridKeyboardFocus
+                                                && focusedField == .services && activeServiceID == draft.id
                                         ) {
+                                            showsGridKeyboardFocus = false
                                             activeServiceID = draft.id
                                             focusedField = .services
                                             selection.toggle(draft)
@@ -151,8 +158,10 @@ private struct FirstRunServicePicker: View {
                                         ServiceSetupTile(
                                             draft: draft, subtitle: entry.category,
                                             isSelected: selection.contains(entry.id),
-                                            isKeyboardFocused: focusedField == .services && activeServiceID == entry.id
+                                            isKeyboardFocused: showsGridKeyboardFocus
+                                                && focusedField == .services && activeServiceID == entry.id
                                         ) {
+                                            showsGridKeyboardFocus = false
                                             activeServiceID = entry.id
                                             focusedField = .services
                                             selection.toggle(draft)
@@ -326,11 +335,13 @@ private struct FirstRunServicePicker: View {
 
     private func enterGrid() {
         guard let first = navigation.firstID else { return }
+        showsGridKeyboardFocus = true
         activeServiceID = first
         focusedField = .services
     }
 
     private func moveGridFocus(_ key: KeyEquivalent) {
+        showsGridKeyboardFocus = true
         let direction: SetupGridNavigation.Direction
         switch key {
         case .leftArrow: direction = .left
@@ -343,6 +354,7 @@ private struct FirstRunServicePicker: View {
 
     private func toggleActiveService() {
         guard allowsActions, !showsCustomWebsite, let id = activeServiceID else { return }
+        showsGridKeyboardFocus = true
         if let draft = customDrafts.first(where: { $0.id == id }) {
             selection.toggle(draft)
         } else if let entry = entries.first(where: { $0.id == id }) {
