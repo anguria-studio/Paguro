@@ -367,12 +367,11 @@ struct ContentView: View {
             )
         }
 
-        // WKWebView cannot use passkeys for sign-in, so warn the user the first
-        // time each service is opened.
-        if let serviceID = appState.passkeyNoticeServiceID {
+        // One stable identity keeps the timer independent of service switches.
+        if appState.passkeyNotice.state.isVisible {
             notices.append(
                 FloatingNotice(
-                    id: .passkeyUnavailable(serviceID),
+                    id: .passkeyUnavailable,
                     systemImage: "person.badge.key.fill",
                     title: "Passkeys are not available",
                     message: AppCapabilities.passkeyUnavailableBanner,

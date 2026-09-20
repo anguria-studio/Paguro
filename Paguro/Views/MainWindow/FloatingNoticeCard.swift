@@ -12,7 +12,7 @@ struct FloatingNotice: Identifiable {
         /// The pool released a background service to stay inside its limit.
         case capacityEviction
         /// The web view cannot use a passkey for sign-in.
-        case passkeyUnavailable(UUID)
+        case passkeyUnavailable
         /// A backup holds more workspaces and services than the store.
         case backupOffer
         /// The Mac has no network connection.

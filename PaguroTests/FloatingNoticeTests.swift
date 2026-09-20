@@ -68,12 +68,6 @@ final class FloatingNoticeTests: XCTestCase {
         XCTAssertFalse(monitor.showsOfflineNotice)
     }
 
-    func testEachServicesPasskeyNoticeHasItsOwnTimerIdentity() {
-        let first = FloatingNotice.ID.passkeyUnavailable(UUID())
-        let second = FloatingNotice.ID.passkeyUnavailable(UUID())
-        XCTAssertNotEqual(first, second)
-    }
-
     /// VoiceOver reads a card with no explanation as its title alone, so the
     /// microphone card does not speak an empty second line.
     func testACardWithoutAnExplanationSpeaksItsTitleAlone() {

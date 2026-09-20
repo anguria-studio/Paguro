@@ -493,33 +493,7 @@ final class WorkspaceStore {
         return WindowSelection(spaceID: spaceID, serviceID: serviceID)
     }
 
-    func backfillPasskeyNoticeIfNeeded(
-        freshInstall: Bool,
-        defaults: UserDefaults = .standard
-    ) {
-        guard !defaults.bool(forKey: DefaultsKey.passkeyNoticeBackfilled) else { return }
-        defaults.set(true, forKey: DefaultsKey.passkeyNoticeBackfilled)
-        guard !freshInstall else { return }
 
-        let services = allServices()
-        var changed = false
-        for service in services where service.hasSeenPasskeyNotice == nil {
-            service.hasSeenPasskeyNotice = true
-            changed = true
-        }
-        guard changed else { return }
-        if context.saveOrRollback(reason: "backfill passkey notice") {
-            AppLogger.dataStore.info(
-                "Backfilled passkey notice for \(services.count) existing service(s)"
-            )
-        }
-    }
-
-    func markPasskeyNoticeSeen(for serviceID: UUID) {
-        guard let service = service(id: serviceID), service.needsPasskeyNotice else { return }
-        service.hasSeenPasskeyNotice = true
-        context.saveOrRollback(reason: "persist passkey notice dismissal")
-    }
 }
 
 extension WorkspaceStore {

@@ -25,5 +25,6 @@ enum DefaultsKey {
     static let declinedRestores = "paguro.declinedRestores"
     static let hasEverHadData = "paguro.hasEverHadData"
     static let lastRunAppVersion = "paguro.lastRunAppVersion"
+    static let passkeyNoticeSeen = "Paguro.passkeyNoticeSeen"
     static let passkeyNoticeBackfilled = "passkeyNoticeBackfilled"
 }

@@ -47,6 +47,30 @@ private struct FirstRunServicePicker: View {
     }
 
     var body: some View {
+        Group {
+            if showsCustomWebsite {
+                SetupCustomWebsiteStep(
+                    allowsActions: allowsActions,
+                    onBack: { showsCustomWebsite = false },
+                    onChoose: { draft in
+                        guard allowsActions else { return }
+                        selection.toggle(draft)
+                        showsCustomWebsite = false
+                    }
+                )
+            } else {
+                catalogContent
+            }
+        }
+        .frame(maxWidth: 1040)
+        .padding(.top, 52)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(WindowDragHandle())
+        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
+        .disabled(!allowsActions)
+    }
+
+    private var catalogContent: some View {
         VStack(spacing: 0) {
             header
             filters
@@ -77,7 +101,8 @@ private struct FirstRunServicePicker: View {
                         Text("Custom websites")
                             .font(.headline)
                         ForEach(customDrafts) { draft in
-                            HStack {
+                            HStack(spacing: 12) {
+                                customIcon(for: draft)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(draft.label)
                                     Text(draft.url)
@@ -97,21 +122,24 @@ private struct FirstRunServicePicker: View {
             }
             footer
         }
-        .frame(maxWidth: 1040)
-        .padding(.top, 52)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WindowDragHandle())
-        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
-        .disabled(!allowsActions)
         .onAppear { searchIsFocused = true }
-        .onChange(of: allowsActions) { _, allowed in
-            if !allowed { showsCustomWebsite = false }
-        }
-        .sheet(isPresented: $showsCustomWebsite) {
-            SetupCustomWebsiteSheet { draft in
-                guard allowsActions else { return }
-                selection.toggle(draft)
-            }
+    }
+
+    @ViewBuilder
+    private func customIcon(for draft: ServiceSetupDraft) -> some View {
+        if let data = draft.customIconData ?? draft.fetchedIconData,
+           let image = ServiceIconImageProcessor.displayImage(from: data) {
+            Image(nsImage: image)
+                .resizable().scaledToFit()
+                .frame(width: 36, height: 36)
+                .accessibilityHidden(true)
+        } else {
+            Text(ServiceIconPalette.initial(for: draft.label))
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(ServiceIconPalette.color(for: draft.label), in: RoundedRectangle(cornerRadius: 8))
+                .accessibilityHidden(true)
         }
     }
 
@@ -262,45 +290,5 @@ private struct ServiceSetupTile: View {
                 icon = await CatalogIconCache.shared.icon(for: id)
             }
         }
-    }
-}
-
-private struct SetupCustomWebsiteSheet: View {
-    let onChoose: (ServiceSetupDraft) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
-    @State private var label = ""
-    @State private var url = ""
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Add a custom website").font(.headline)
-            TextField("Name", text: $label)
-            TextField("https://example.com", text: $url)
-                .accessibilityLabel("Website address")
-            if let error {
-                Text(error).font(.paguroCaption).foregroundStyle(.red)
-            }
-            HStack {
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Select website") {
-                    guard !appState.isLocked else { return }
-                    switch CustomServiceInputValidator.validate(label: label, url: url) {
-                    case .invalid(let message): error = message
-                    case .valid(let label, let url):
-                        onChoose(ServiceSetupDraft(label: label, url: url))
-                        dismiss()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(appState.isLocked)
-            }
-        }
-        .textFieldStyle(.roundedBorder)
-        .padding(24)
-        .frame(width: 420)
     }
 }

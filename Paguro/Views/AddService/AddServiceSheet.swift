@@ -124,7 +124,7 @@ struct AddServiceSheet: View {
                         Text("Address")
                             .font(.paguroCaption)
                             .foregroundStyle(.secondary)
-                        TextField("Service address", text: $customURL, prompt: Text("https://example.com"))
+                        TextField("Service address", text: $customURL, prompt: Text(verbatim: "https://example.com").foregroundStyle(.secondary))
                             .textFieldStyle(.roundedBorder)
                             .onChange(of: customURL) {
                                 urlError = nil

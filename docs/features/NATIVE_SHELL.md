@@ -41,8 +41,11 @@ accent border for selection. Filters and Back keep the complete selection.
 
 The fixed footer holds Back, Add a custom website, the count, and "Add N services".
 The Add button stays disabled until a service is selected. The custom website
-form validates the name and HTTP(S) address, then stages the website with the
-other choices. It does not save a service by itself. Custom websites can be
+page validates the name and HTTP(S) address, then stages the website with the
+other choices. It fills the same window rather than opening a sheet. The address
+example is plain, secondary placeholder text. An icon preview and Change Icon
+control sit beside the fields. The draft retains the chosen or discovered icon
+through the final batch save. It does not save a service by itself. Custom websites can be
 removed from the selection before finishing.
 
 The final Add saves all services and their workspace links together. A failed
@@ -82,7 +85,7 @@ App Lock wins. A locked launch shows the lock screen, and the welcome screen
 waits under it. None of its actions can run while the window is locked, so the
 import line is closed to a click and to a keyboard activation. The import
 itself refuses a locked app as well. The catalog and batch save also refuse a
-locked app. Lock closes the custom website sheet.
+locked app. Lock disables the custom website page and cancels pending icon discovery.
 
 Keyboard focus starts on **Choose your services**, and Return activates it.
 The catalog step starts keyboard focus in search. VoiceOver reads each card’s
@@ -430,13 +433,15 @@ and a close button. A drag to the right has the same action as the close button.
 The backup offer keeps Review backups and Not now, with no timer. Dismissal
 means Not now. Offline stays until the connection returns or the user dismisses
 it. A new connection loss raises it again. Microphone feedback lasts two
-seconds. Capacity and passkey notices last 12 seconds. Each service gives its
-passkey card a distinct identity, so switching services starts a new timer.
+seconds. Capacity and passkey notices last 12 seconds. The passkey card has one
+app-wide identity. Switching services neither restarts its timer nor removes it.
 
 The stack shows at most three cards, newest first, with persistent cards taking
 places before transient cards. Remaining cards wait for a free place. Paguro
-shows the passkey notice once per service and saves its seen state when raised.
-The Add Service sheet does not repeat it.
+shows the passkey notice once for the app and saves its seen state when raised.
+Later services and launches do not repeat it. A stored seen flag from any older
+service also counts as seen. The Debug preview uses its own resettable defaults.
+A locked window cannot consume the notice. The Add Service sheet does not repeat it.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
 `FloatingNoticeLayout`, `FloatingNoticeStackRule`, and `OfflineNoticeState` in

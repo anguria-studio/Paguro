@@ -23,6 +23,13 @@ A completed preview is saved as an automatic website icon, with its fetch time.
 If the user adds the service before discovery finishes, normal background
 discovery starts for the saved service.
 
+During onboarding, the custom website form fills the main window inside the
+service-selection step. It uses the same preview and Change Icon control.
+Select website copies the chosen or discovered icon into the pending selection.
+The catalog shows that preview beside the custom website. The final Add saves
+it with the account. Choosing a website before discovery finishes remains valid;
+normal discovery runs after the batch saves if no icon is available.
+
 The service editor keeps the detailed website and direct-image address controls.
 A blank icon address uses the service address. An address without a scheme uses
 HTTPS.

@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The custom website page in setup now includes an icon preview and image
+  picker. Address examples use plain placeholder text. The passkey explanation
+  appears once for the app instead of repeating for each service.
+
 - Setup now has two steps: welcome and service selection. Choose several
   services from a full-page catalog, then add them together. Search, categories,
   Back, and custom websites keep the selection until the final Add.

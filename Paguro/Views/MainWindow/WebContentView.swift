@@ -91,6 +91,11 @@ struct WebContentView: View {
         .onChange(of: selectedServiceID) {
             loadWebViewForSelectedService()
         }
+        .onChange(of: appState.isLocked) { _, locked in
+            if !locked, selectedService != nil {
+                appState.raisePasskeyNoticeIfNeeded()
+            }
+        }
         .onChange(of: appState.webViewRebuildToken) {
             // A service's web view was rebuilt (e.g. custom CSS edit). Re-fetch
             // so the active service picks up the freshly created view.
@@ -121,8 +126,6 @@ struct WebContentView: View {
             webViewState.detach()
             currentWebView = nil
             transitionSnapshot = nil
-            // The card names one service, so it leaves with the selection.
-            appState.dismissPasskeyNotice()
             return
         }
 
@@ -138,10 +141,8 @@ struct WebContentView: View {
         currentWebView = webView
         webViewState.attach(to: webView)
 
-        // Passive one-time notice: WKWebView can't use passkeys for sign-in, so
-        // warn the user the first time each service is opened. `AppState` holds
-        // the notice, because the card host sits at the window level.
-        appState.raisePasskeyNoticeIfNeeded(for: service)
+        // The shell explanation belongs to the app and survives service switches.
+        appState.raisePasskeyNoticeIfNeeded()
 
         // Once the view is shown its frame settles a render tick later. Some SPAs
         // (Gmail) cache a viewport-height layout and, if it was measured against a

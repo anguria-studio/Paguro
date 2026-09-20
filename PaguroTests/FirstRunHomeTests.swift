@@ -179,6 +179,22 @@ final class FirstRunHomeTests: XCTestCase {
         XCTAssertTrue(store.allServices().isEmpty)
     }
 
+    @MainActor
+    func testBatchRetainsChosenAndDiscoveredCustomIcons() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let store = makeStore(context: container.mainContext)
+        let chosen = Data([1, 2, 3])
+        let discovered = Data([4, 5, 6])
+        let ids = try XCTUnwrap(store.addServices([
+            ServiceSetupDraft(label: "Chosen", url: "https://one.example", customIconData: chosen),
+            ServiceSetupDraft(label: "Discovered", url: "https://two.example", fetchedIconData: discovered)
+        ], to: nil))
+        let verification = makeStore(context: ModelContext(container))
+        XCTAssertEqual(verification.service(id: ids[0])?.customIconData, chosen)
+        XCTAssertEqual(verification.service(id: ids[1])?.fetchedIconData, discovered)
+        XCTAssertNotNil(verification.service(id: ids[1])?.faviconFetchedAt)
+    }
+
     #if DEBUG
     @MainActor
     func testPreviewStartsEmptyOnEveryLaunchAndNeverOpensNormalStore() throws {

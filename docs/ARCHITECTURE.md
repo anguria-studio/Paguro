@@ -71,6 +71,7 @@ The main services and startup adapters are:
 - `PreferencesStore` for the single loaded preferences row and typed commits.
 - `WorkspaceStore` for workspace and service queries, mutations and selection persistence.
 - `ServiceIconDraft` for cancellable icon previews in the add-service form.
+- `PasskeyNoticeController` for the app-wide explanation and its saved seen state.
 - `ShellPreferences` for normalized window appearance and rail settings.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
@@ -231,7 +232,9 @@ WebKit stores service cookies, caches, and local storage.
 `PreferencesStore` loads or creates one `AppPreferences` row. It is the only
 type that writes that row.
 `WorkspaceStore` is the SwiftData facade for spaces, services, links,
-passkey-notice state, favicons, page zoom, and window selection.
+favicons, page zoom, and window selection. `PasskeyNoticeController` saves the
+app-wide seen state in UserDefaults. Existing per-service seen fields remain
+for schema compatibility and seed the app-wide value during migration.
 
 The Debug first-run preview uses an in-memory model container and one
 nonpersistent WebKit store per account. It bypasses normal-store recovery and

@@ -50,11 +50,8 @@ final class AppState {
     /// Drives the Find-in-Page overlay in WebContentView. Toggled by Cmd-F.
     var findInPageVisible = false
 
-    /// The service whose passkey card is on screen, or nil for none.
-    ///
-    /// The window owns it, because the card host in `ContentView` draws above
-    /// every state the window shows.
-    private(set) var passkeyNoticeServiceID: UUID?
+    /// The shell owns one passkey explanation for the app.
+    let passkeyNotice: PasskeyNoticeController
 
     /// Bumped when a service's web view is rebuilt for an edit that only takes
     /// effect at creation time (custom CSS). WebContentView observes this and
@@ -195,9 +192,14 @@ final class AppState {
         self.modelContainer = loadedContainer
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
-        self.workspaceStore = WorkspaceStore(
+        let workspaceStore = WorkspaceStore(
             context: loadedContainer.mainContext,
             preferencesStore: preferencesStore
+        )
+        self.workspaceStore = workspaceStore
+        self.passkeyNotice = PasskeyNoticeController(
+            defaults: preparedStore.defaults,
+            hasLegacySeenNotice: workspaceStore.allServices().contains { $0.hasSeenPasskeyNotice == true }
         )
         self.shellPreferences = ShellPreferences.load(
             preferencesStore: preferencesStore
@@ -292,7 +294,6 @@ final class AppState {
             onWebViewRebuilt: { [weak self] in self?.webViewRebuildToken &+= 1 }
         )
         // Launch only reads selection. The first explicit add creates Home.
-        workspaceStore.backfillPasskeyNoticeIfNeeded(freshInstall: workspaceStore.allServices().isEmpty)
         websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
         notificationRuntime.start(
@@ -781,7 +782,8 @@ final class AppState {
             selectedServiceID = firstID
             hasCompletedFirstRunAction = true
             notificationRuntime.refreshMuteState()
-            for id in ids {
+            for (id, draft) in zip(ids, drafts)
+                where draft.customIconData == nil && draft.fetchedIconData == nil {
                 Task { @MainActor [weak self] in
                     await self?.refreshFetchedIcon(for: id)
                 }
@@ -1273,39 +1275,15 @@ final class AppState {
         }
     }
 
-    /// Whether the passkey-limitation banner should show for `service` — true
-    /// until the notice has been seen once for that service.
-    func shouldShowPasskeyNotice(for service: ServiceInstance) -> Bool {
-        service.needsPasskeyNotice
+    /// A service becoming visible offers the app explanation without restarting it.
+    func raisePasskeyNoticeIfNeeded() {
+        passkeyNotice.present(isLocked: isLocked, passkeysSupported: AppCapabilities.passkeysSupported)
     }
 
-    /// Raises the passkey card for a service that opens for the first time.
-    ///
-    /// The card host sits at the window level, above every state the window
-    /// shows, so the window state holds the notice instead of the web content
-    /// view. The seen state is stored as the card appears, so a switch away and
-    /// back does not raise it again. A service that needs no notice clears the
-    /// card of the service before it.
-    func raisePasskeyNoticeIfNeeded(for service: ServiceInstance) {
-        guard !AppCapabilities.passkeysSupported,
-              shouldShowPasskeyNotice(for: service) else {
-            passkeyNoticeServiceID = nil
-            return
-        }
-        passkeyNoticeServiceID = service.id
-        markPasskeyNoticeSeen(for: service.id)
-    }
-
-    /// Removes the passkey card.
     func dismissPasskeyNotice() {
-        passkeyNoticeServiceID = nil
+        passkeyNotice.dismiss()
     }
 
-    /// Records that the passkey notice has been shown for the given service so
-    /// it never appears again for it.
-    func markPasskeyNoticeSeen(for serviceID: UUID) {
-        workspaceStore.markPasskeyNoticeSeen(for: serviceID)
-    }
 }
 
 extension AppState {

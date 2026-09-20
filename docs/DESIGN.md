@@ -29,6 +29,10 @@ Its primary action, "Choose your services", opens a full-page catalog.
 The second step has search, category filtering, and multiple selection.
 Selected cards have a checkmark and an accent border. A fixed footer shows
 the selection count and one Add button. Back keeps the selection.
+Custom website entry is a full-page branch of service selection, with Back to
+services and Select website. Its name and address fields sit beside the icon
+preview and Change Icon control. URL examples are plain secondary placeholder
+text, without link styling.
 The rail and service header appear only after the complete selection saves.
 See [Native shell](features/NATIVE_SHELL.md).
 
@@ -250,3 +254,6 @@ preference in About settings. Development builds omit update controls.
 
 Feature documents describe the behavior and constraints for each component.
 Update this overview when a shared design rule changes.
+
+The passkey explanation belongs to the app shell. It appears once for the app,
+and service changes do not replace the card or restart its timer.
