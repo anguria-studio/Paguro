@@ -38,6 +38,11 @@ public struct ServiceSetupSelection: Equatable, Sendable {
 
     public init() {}
 
+    /// Continue and final save share the same draft requirements.
+    public var canCreateWorkspace: Bool {
+        !services.isEmpty && WorkspaceName.normalized(workspaceName) != nil
+    }
+
     public func contains(_ id: String) -> Bool {
         services.contains { $0.id == id }
     }

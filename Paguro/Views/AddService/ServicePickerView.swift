@@ -7,6 +7,7 @@ struct ServicePickerView: View {
     let allowsActions: Bool
     var destination: Binding<UUID?>? = nil
     var onSave: (() -> Bool)? = nil
+    var onContinue: (() -> Void)? = nil
 
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
     private var isFirstWorkspace: Bool { destination == nil }
@@ -71,6 +72,7 @@ struct ServicePickerView: View {
                     }
                 )
             }
+            .onChange(of: allowsActions) { _, allowed in focusedField = allowed ? .search : nil }
             .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
             .sheet(isPresented: $showsNewWorkspace, onDismiss: {
                 focusedField = .destination
@@ -364,7 +366,7 @@ struct ServicePickerView: View {
                     .padding(.vertical, 12)
             }
             if isFirstWorkspace {
-                FirstRunFooter(isChoosingServices: true) {
+                FirstRunFooter(currentStep: .workspace) {
                     cancelButton
                 } trailing: {
                     saveButton
@@ -391,13 +393,12 @@ struct ServicePickerView: View {
     }
 
     private var saveButton: some View {
-        Button(isFirstWorkspace ? "Create workspace" : "Add services", action: finish)
+        Button(isFirstWorkspace ? "Continue" : "Add services", action: finish)
             .buttonStyle(.borderedProminent)
             .modifier(SetupKeyboardActivation(action: finish))
             .keyboardShortcut(.return, modifiers: .command)
-            .disabled(selection.services.isEmpty || (isFirstWorkspace
-                ? WorkspaceName.normalized(selection.workspaceName) == nil
-                : !liveSpaces.contains { $0.id == destination?.wrappedValue }))
+            .disabled(isFirstWorkspace ? !selection.canCreateWorkspace
+                : selection.services.isEmpty || !liveSpaces.contains { $0.id == destination?.wrappedValue })
     }
 
     private func openCustomWebsite() {
@@ -440,7 +441,13 @@ struct ServicePickerView: View {
     }
 
     private func finish() {
-        guard allowsActions, !showsCustomWebsite, !showsNewWorkspace else { return }
+        guard allowsActions, !appState.isLocked, !showsCustomWebsite, !showsNewWorkspace else { return }
+        if isFirstWorkspace, let onContinue {
+            guard selection.canCreateWorkspace else { return }
+            focusedField = nil
+            onContinue()
+            return
+        }
         let saved = onSave?()
             ?? appState.addSetupServices(selection.services, workspaceName: selection.workspaceName)
         if !saved {

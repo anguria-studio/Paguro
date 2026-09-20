@@ -2,6 +2,21 @@ import XCTest
 @testable import PaguroCore
 
 final class ServiceSetupSelectionTests: XCTestCase {
+    func testAppearanceRequiresAWorkspaceNameAndSelectionWithoutConsumingDraft() {
+        var selection = ServiceSetupSelection()
+        XCTAssertFalse(selection.canCreateWorkspace)
+        let draft = ServiceSetupDraft(label: "Mail", url: "https://mail.example")
+        selection.toggle(draft)
+        XCTAssertTrue(selection.canCreateWorkspace)
+        selection.workspaceName = " \n "
+        XCTAssertFalse(selection.canCreateWorkspace)
+        selection.workspaceName = "Personal"
+        XCTAssertTrue(selection.canCreateWorkspace)
+        XCTAssertEqual(selection.services, [draft])
+        selection.toggle(draft)
+        XCTAssertFalse(selection.canCreateWorkspace)
+    }
+
     func testTogglingPreservesSelectionOrderWithoutDuplicates() {
         let mail = ServiceSetupDraft(id: "mail", label: "Mail", url: "https://mail.example")
         let chat = ServiceSetupDraft(id: "chat", label: "Chat", url: "https://chat.example")

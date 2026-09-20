@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Setup now ends with an Appearance step for theme and Liquid Glass presets,
+  with a live shell preview. Back preserves service choices and catalog filters;
+  Create workspace saves the selected services only on the final step.
+
 - Window glass now offers four presets: Follow system, Off, Clear, and Regular.
   Follow system uses native Liquid Glass without extra app frost or tint.
   The other presets use fixed values; the transparency slider and Glass Lab

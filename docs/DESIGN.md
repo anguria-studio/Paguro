@@ -35,9 +35,9 @@ Do not show wizard progress or a workspace naming field during ordinary add.
 
 ## First run
 
-A window with no service shows a two-step wizard on the window glass.
-A shared progress indicator sits between the footer actions and shows Welcome
-and Your workspace. It stays at the same position across pages, highlights the
+A window with no service shows a three-step wizard on the window glass.
+A shared progress indicator sits between the footer actions and shows Welcome,
+Your workspace, and Appearance. It stays at the same position across pages, highlights the
 current step, and checks the completed step. Content starts below the traffic
 lights without a separate progress row above it.
 The welcome step explains Paguro and groups notification and island setup.
@@ -53,7 +53,16 @@ a chevron, with no background or border. Its width fits the selected label and
 native chevron; unselected categories do not reserve space. Keep the workspace
 name on its own row.
 Selected cards have a checkmark and an accent border. A fixed footer holds
-Back and Create workspace without a selection count. Back keeps the selection.
+Back and Continue without a selection count. Back keeps the selection.
+Continue opens Appearance without saving any workspace or service. The third
+step offers Follow System, Light, and Dark themes and the four Liquid Glass
+presets. Choices update the shell live and persist as normal preferences.
+Back keeps the catalog filters, scroll position, workspace name, and draft.
+Create workspace on Appearance saves the complete service selection. A failed
+save keeps the user on this step with Back and retry available. Hide the glass
+selector below macOS 26. Keep appearance choices available later in Settings.
+The footer puts progress above the actions when the window is too narrow for
+all three steps on one row.
 All setup pages use the same footer baseline and content margins.
 Page changes use a 0.22-second fade with 24 points of horizontal travel.
 Back reverses the movement. Reduce Motion keeps only the fade. Tab reaches all
@@ -61,7 +70,7 @@ setup controls without changing the system's keyboard preferences. The grid is
 one Tab stop with arrow-key movement and a dashed inset focus outline, separate
 from the selection border. Clicking a card hides that outline; keyboard
 navigation restores it. Space or Return toggles a card; Command-Return
-finishes setup. Card selection
+advances from service selection and finishes setup on Appearance. Card selection
 fades its checkmark and border over 0.14 seconds, without scaling or bouncing.
 Custom website entry opens a native modal sheet over service selection, with
 Cancel and Add website. It has no stepper because it is an optional editor,

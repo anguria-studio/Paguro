@@ -42,7 +42,7 @@ The custom website and new workspace editors use modal sheets over the catalog.
 
 ## First run
 
-The main window shows a two-step setup wizard while no service exists. A new install
+The main window shows a three-step setup wizard while no service exists. A new install
 starts completely empty, with no workspace and no service. Finishing setup
 creates the named workspace and all selected services in one transaction.
 Cancel and a failed save leave the store empty. First run names its first workspace directly, without a destination picker. Launch never seeds data.
@@ -58,7 +58,7 @@ who removes every service therefore sees it again, which is correct: the window
 is empty again.
 
 A shared progress indicator sits in the center of the footer, between its
-actions. It labels Welcome and Your workspace, highlights the current step,
+actions. It labels Welcome, Your workspace, and Appearance, highlights the current step,
 and checks the completed step. Removing the top progress row brings page
 content 50 points higher, with 52 points still reserved for the traffic lights.
 VoiceOver reads the current step number and name. The indicator is informational.
@@ -73,7 +73,7 @@ workspace keeps related services together for work, personal use, or a project.
 A Workspace name field sits above search and defaults to Personal on a new install.
 If setup appears over existing empty workspaces, it starts with the target
 workspace’s current name. Back and custom website entry keep the typed name.
-Create workspace requires a nonblank name and at least one selected service.
+Continue requires a nonblank name and at least one selected service.
 The final save trims outer whitespace and saves the name with the services.
 A failed save also rolls back a changed name on an existing empty workspace.
 
@@ -87,8 +87,8 @@ three controls are 36 points high. The category selector shows plain text and
 a chevron without a button background or border. Its width follows the current
 label, including native chevron spacing. Categories appear directly in the menu,
 with no submenu. Search is compact, and the workspace name
-stays on its own row above the toolbar. The fixed footer holds Back and Create
-workspace, with no selection counter. The primary button stays disabled until
+stays on its own row above the toolbar. The fixed footer holds Back and Continue,
+with no selection counter. The primary button stays disabled until
 a service is selected. The custom website sheet validates the name and HTTP(S)
 address, then stages the website with the other choices. It opens as a native
 modal over the catalog, with Cancel and Add website actions and no stepper.
@@ -141,6 +141,20 @@ entry uses the native sheet transition. Reduce Motion uses a fade with no
 travel for the wizard pages. Card selection fades its checkmark and border
 over 0.14 seconds.
 
+Continue opens the third step, Appearance, without creating any services.
+Theme offers Follow System, Light, and Dark. Liquid Glass offers Follow system,
+Off, Clear, and Regular on macOS 26 or later. Choices update the shell live
+through the same preference actions as Settings and persist immediately.
+They do not change the workspace draft or sign in to services. The website
+still owns its own appearance. Theme remains available on macOS 15.
+Back returns to the mounted catalog with filters, scroll position, custom
+icons, name, and selection intact. Create workspace performs the existing
+atomic batch save. A failure keeps the appearance page and draft available.
+Command-Return continues from the catalog and saves from Appearance. Hidden
+catalog controls cannot receive input or appear in the accessibility tree.
+The footer moves progress above the actions when three steps cannot fit across
+the available width. Reduce Motion preserves the fade between pages.
+
 The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
 `PaguroMotion.firstRunSwapSeconds` holds the duration. `AppState.addSetupServices`
@@ -169,8 +183,9 @@ custom and catalog sections on separate rows. Filters retain a visible target
 or choose the first result; empty results have no card target.
 
 Down Arrow or Return from search enters the results. Return does not create a
-workspace while browsing cards. Command-Return creates the workspace, or Tab to
-Create workspace and press Space or Return. Command-Shift-N opens custom entry.
+workspace while browsing cards. Command-Return advances to Appearance, or Tab
+to Continue and press Space or Return. On Appearance, Command-Return creates
+the workspace. Command-Shift-N opens custom entry from the catalog.
 Dismissing custom entry restores its opener's focus. Adding a custom website
 returns focus to its new card after the sheet closes. The sheet cannot create
 the workspace through the underlying Command-Return shortcut.
