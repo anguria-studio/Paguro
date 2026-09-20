@@ -56,9 +56,10 @@ a chevron without a button background or border. Categories appear directly in t
 with no submenu. Search is compact, and the workspace name
 stays on its own row above the toolbar. The fixed footer holds Back and Create
 workspace, with no selection counter. The primary button stays disabled until
-a service is selected. The custom website page validates the name and HTTP(S)
-address, then stages the website with the other choices. It fills the same window rather than opening a sheet. The address
-example is plain, secondary placeholder text. An icon preview and Change Icon
+a service is selected. The custom website sheet validates the name and HTTP(S)
+address, then stages the website with the other choices. It opens as a native
+modal over the catalog, with Cancel and Add website actions and no stepper.
+The address example is plain, secondary placeholder text. An icon preview and Change Icon
 control sit beside the fields. The draft retains the chosen or discovered icon
 through the final batch save. It does not save a service by itself.
 
@@ -69,9 +70,9 @@ removes it from the batch but keeps the draft available to select again.
 Search matches custom names and addresses, including unchecked drafts.
 The category menu includes Custom websites once a draft exists. Adding a
 custom website clears the filters and scrolls to the top so the new selected
-card is visible. The catalog remains mounted while custom entry is open, but
-is disabled and hidden from accessibility. Back to services keeps its scroll
-position and filters. The custom page keeps the indicator on step two.
+card is visible. The catalog stays in place behind the sheet. Native modal
+behavior keeps keyboard interaction in the sheet. Cancel or Escape keeps the catalog scroll
+position, filters, workspace name, and selection. Setup stays on step two.
 
 Create workspace saves all services and their workspace links together. A failed
 save rolls back the complete batch and keeps the selection for retry. Each
@@ -102,9 +103,10 @@ every command: Add Service (`Command-N`), Settings, and import all work while
 the screen is up. The quick switcher opens and finds nothing.
 
 Moving between setup pages uses a 0.22-second fade and 24 points of horizontal
-travel. Forward enters from the right; Back enters from the left. The custom
-website form follows the same direction. Reduce Motion uses a fade with no
-travel. Card selection fades its checkmark and border over 0.14 seconds.
+travel. Forward enters from the right; Back enters from the left. Custom website
+entry uses the native sheet transition. Reduce Motion uses a fade with no
+travel for the wizard pages. Card selection fades its checkmark and border
+over 0.14 seconds.
 
 The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
@@ -115,7 +117,7 @@ App Lock wins. A locked launch shows the lock screen, and the welcome screen
 waits under it. None of its actions can run while the window is locked, so the
 import line is closed to a click and to a keyboard activation. The import
 itself refuses a locked app as well. The catalog and batch save also refuse a
-locked app. Lock disables the custom website page and cancels pending icon discovery.
+locked app. Lock disables the custom website sheet and cancels pending icon discovery.
 
 Keyboard focus starts on **Choose your services**. The catalog starts focus in
 search. Tab reaches the workspace name, search, category menu, Custom website,
@@ -133,8 +135,9 @@ or choose the first result; empty results have no card target.
 Down Arrow or Return from search enters the results. Return does not create a
 workspace while browsing cards. Command-Return creates the workspace, or Tab to
 Create workspace and press Space or Return. Command-Shift-N opens custom entry.
-Back from custom entry restores its opener's focus. Selecting a custom website
-returns focus to its new card. Hidden catalog controls remain disabled.
+Dismissing custom entry restores its opener's focus. Adding a custom website
+returns focus to its new card after the sheet closes. The sheet cannot create
+the workspace through the underlying Command-Return shortcut.
 
 Clicking the background releases text-field focus. Clicking a service moves
 focus to the grid. Return finishes editing the workspace name. Window dragging

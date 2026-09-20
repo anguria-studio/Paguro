@@ -47,7 +47,6 @@ private struct FirstRunServicePicker: View {
     let allowsActions: Bool
 
     @Environment(AppState.self) private var appState
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scrollToCustomWebsite = 0
     @State private var search = ""
     @State private var category = "All services"
@@ -84,21 +83,15 @@ private struct FirstRunServicePicker: View {
     }
 
     var body: some View {
-        ZStack {
-            // Keep the catalog alive so returning from custom entry retains its scroll position.
-            catalogContent
-                .opacity(showsCustomWebsite ? 0 : 1)
-                .offset(x: showsCustomWebsite && !reduceMotion ? -24 : 0)
-                .allowsHitTesting(!showsCustomWebsite)
-                .accessibilityElement(children: .contain)
-                .accessibilityHidden(showsCustomWebsite)
-                .disabled(showsCustomWebsite)
-            if showsCustomWebsite {
-                SetupCustomWebsiteStep(
+        catalogContent
+            .disabled(!allowsActions)
+            .sheet(isPresented: $showsCustomWebsite, onDismiss: {
+                focusedField = focusAfterCustom
+            }) {
+                SetupCustomWebsiteSheet(
                     allowsActions: allowsActions,
-                    onBack: { showsCustomWebsite = false },
                     onChoose: { draft in
-                        guard allowsActions else { return }
+                        guard allowsActions, !appState.isLocked else { return }
                         selection.toggle(draft)
                         search = ""
                         category = "All services"
@@ -108,18 +101,11 @@ private struct FirstRunServicePicker: View {
                         showsCustomWebsite = false
                     }
                 )
-                .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(x: 24)))
             }
-        }
-        .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: showsCustomWebsite)
-        .disabled(!allowsActions)
-        .onChange(of: showsCustomWebsite) { _, isShowing in
-            focusedField = isShowing ? nil : focusAfterCustom
-        }
-        .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
-        .onChange(of: focusedField) { _, field in
-            if field == .services { activeServiceID = navigation.retainedID(activeServiceID) }
-        }
+            .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
+            .onChange(of: focusedField) { _, field in
+                if field == .services { activeServiceID = navigation.retainedID(activeServiceID) }
+            }
     }
 
     private var catalogContent: some View {
@@ -368,7 +354,7 @@ private struct FirstRunServicePicker: View {
     }
 
     private func finish() {
-        guard allowsActions else { return }
+        guard allowsActions, !showsCustomWebsite else { return }
         if !appState.addSetupServices(selection.services, workspaceName: selection.workspaceName) {
             saveError = "Paguro could not save your services. Your selection is ready to try again."
         }

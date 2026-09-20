@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Custom website entry now opens in a modal over the service picker, with
+  Cancel and Add website actions, icon preview, and image choice. The wizard
+  stays on step two, and Cancel preserves the catalog position and selection.
+
 - The setup progress indicator now sits in the footer between the navigation
   actions, giving the page content more room above it.
 

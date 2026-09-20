@@ -48,8 +48,9 @@ one Tab stop with arrow-key movement and a dashed inset focus outline, separate
 from the selection border. Space or Return toggles a card; Command-Return
 finishes setup. Card selection
 fades its checkmark and border over 0.14 seconds, without scaling or bouncing.
-Custom website entry is a full-page branch of service selection, with Back to
-services and Select website. Its name and address fields sit beside the icon
+Custom website entry opens a native modal sheet over service selection, with
+Cancel and Add website. It has no stepper because it is an optional editor,
+not another wizard step. Its name and address fields sit beside the icon
 preview and Change Icon control. URL examples are plain secondary placeholder
 text, without link styling. Custom websites use the same cards as the catalog,
 with their section first below search. Unchecked custom cards stay available.
