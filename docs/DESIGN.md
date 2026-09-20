@@ -32,7 +32,9 @@ the selection count and one Add button. Back keeps the selection.
 Custom website entry is a full-page branch of service selection, with Back to
 services and Select website. Its name and address fields sit beside the icon
 preview and Change Icon control. URL examples are plain secondary placeholder
-text, without link styling.
+text, without link styling. Custom websites use the same cards as the catalog,
+with their section first below search. Unchecked custom cards stay available.
+Search includes their names and addresses.
 The rail and service header appear only after the complete selection saves.
 See [Native shell](features/NATIVE_SHELL.md).
 

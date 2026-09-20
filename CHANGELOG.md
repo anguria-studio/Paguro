@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Custom websites now use selectable cards above the catalog during setup.
+  Search includes their names and addresses. Unchecking keeps the card available
+  to select again.
+
 - The custom website page in setup now includes an icon preview and image
   picker. Address examples use plain placeholder text. The passkey explanation
   appears once for the app instead of repeating for each service.

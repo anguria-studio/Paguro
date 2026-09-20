@@ -45,8 +45,15 @@ page validates the name and HTTP(S) address, then stages the website with the
 other choices. It fills the same window rather than opening a sheet. The address
 example is plain, secondary placeholder text. An icon preview and Change Icon
 control sit beside the fields. The draft retains the chosen or discovered icon
-through the final batch save. It does not save a service by itself. Custom websites can be
-removed from the selection before finishing.
+through the final batch save. It does not save a service by itself.
+
+Custom websites use the same selectable cards as catalog services, including
+the icon, border, and top-left checkmark. Their section comes first in the
+scrolling list, directly below search and above the catalog. Unchecking a card
+removes it from the batch but keeps the draft available to select again.
+Search matches custom names and addresses, including unchecked drafts.
+The category menu includes Custom websites once a draft exists. Adding a
+custom website clears the filters so the new selected card is visible.
 
 The final Add saves all services and their workspace links together. A failed
 save rolls back the complete batch and keeps the selection for retry. Each

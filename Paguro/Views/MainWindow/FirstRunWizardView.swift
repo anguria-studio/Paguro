@@ -43,7 +43,8 @@ private struct FirstRunServicePicker: View {
     }
 
     private var customDrafts: [ServiceSetupDraft] {
-        selection.services.filter { $0.catalogEntryID == nil }
+        guard category == "All services" || category == "Custom websites" else { return [] }
+        return selection.matchingCustomWebsites(search: search)
     }
 
     var body: some View {
@@ -55,6 +56,8 @@ private struct FirstRunServicePicker: View {
                     onChoose: { draft in
                         guard allowsActions else { return }
                         selection.toggle(draft)
+                        search = ""
+                        category = "All services"
                         showsCustomWebsite = false
                     }
                 )
@@ -75,72 +78,57 @@ private struct FirstRunServicePicker: View {
             header
             filters
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(entries) { entry in
-                        let draft = ServiceSetupDraft(
-                            id: entry.id, label: entry.name, url: entry.url,
-                            catalogEntryID: entry.id, userAgent: entry.userAgent
-                        )
-                        ServiceSetupTile(
-                            draft: draft, subtitle: entry.category,
-                            isSelected: selection.contains(entry.id)
-                        ) {
-                            selection.toggle(draft)
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    if !customDrafts.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Custom websites")
+                                .font(.headline)
+                            LazyVGrid(columns: columns, spacing: 14) {
+                                ForEach(customDrafts) { draft in
+                                    ServiceSetupTile(
+                                        draft: draft, subtitle: "Custom website",
+                                        isSelected: selection.contains(draft.id)
+                                    ) {
+                                        selection.toggle(draft)
+                                    }
+                                    .help(draft.url)
+                                }
+                            }
                         }
-                        .help(entry.description)
+                    }
+                    if !entries.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if !customDrafts.isEmpty {
+                                Text("Catalog").font(.headline)
+                            }
+                            LazyVGrid(columns: columns, spacing: 14) {
+                                ForEach(entries) { entry in
+                                    let draft = ServiceSetupDraft(
+                                        id: entry.id, label: entry.name, url: entry.url,
+                                        catalogEntryID: entry.id, userAgent: entry.userAgent
+                                    )
+                                    ServiceSetupTile(
+                                        draft: draft, subtitle: entry.category,
+                                        isSelected: selection.contains(entry.id)
+                                    ) {
+                                        selection.toggle(draft)
+                                    }
+                                    .help(entry.description)
+                                }
+                            }
+                        }
+                    }
+                    if entries.isEmpty && customDrafts.isEmpty {
+                        ContentUnavailableView.search(text: search)
+                            .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 20)
-
-                if entries.isEmpty {
-                    ContentUnavailableView.search(text: search)
-                }
-                if !customDrafts.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Custom websites")
-                            .font(.headline)
-                        ForEach(customDrafts) { draft in
-                            HStack(spacing: 12) {
-                                customIcon(for: draft)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(draft.label)
-                                    Text(draft.url)
-                                        .font(.paguroCaption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                Button("Remove") { selection.toggle(draft) }
-                                    .accessibilityLabel("Remove \(draft.label)")
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 20)
-                }
             }
             footer
         }
         .onAppear { searchIsFocused = true }
-    }
-
-    @ViewBuilder
-    private func customIcon(for draft: ServiceSetupDraft) -> some View {
-        if let data = draft.customIconData ?? draft.fetchedIconData,
-           let image = ServiceIconImageProcessor.displayImage(from: data) {
-            Image(nsImage: image)
-                .resizable().scaledToFit()
-                .frame(width: 36, height: 36)
-                .accessibilityHidden(true)
-        } else {
-            Text(ServiceIconPalette.initial(for: draft.label))
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(ServiceIconPalette.color(for: draft.label), in: RoundedRectangle(cornerRadius: 8))
-                .accessibilityHidden(true)
-        }
     }
 
     private var header: some View {
@@ -174,6 +162,9 @@ private struct FirstRunServicePicker: View {
             .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             Picker("Category", selection: $category) {
                 Text("All services").tag("All services")
+                if !selection.customWebsites.isEmpty {
+                    Text("Custom websites").tag("Custom websites")
+                }
                 ForEach(catalog.categories, id: \.self) { Text($0).tag($0) }
             }
             .labelsHidden()
@@ -241,8 +232,14 @@ private struct ServiceSetupTile: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Group {
-                    if let brand = NSImage(named: "brand-\(draft.catalogEntryID ?? "")") {
+                    if let data = draft.customIconData,
+                       let image = ServiceIconImageProcessor.displayImage(from: data) {
+                        Image(nsImage: image).resizable().scaledToFit()
+                    } else if let brand = NSImage(named: "brand-\(draft.catalogEntryID ?? "")") {
                         Image(nsImage: brand).resizable().scaledToFit()
+                    } else if let data = draft.fetchedIconData,
+                              let image = ServiceIconImageProcessor.displayImage(from: data) {
+                        Image(nsImage: image).resizable().scaledToFit()
                     } else if let icon {
                         Image(nsImage: icon).resizable().scaledToFit()
                     } else {
@@ -258,6 +255,7 @@ private struct ServiceSetupTile: View {
                     .font(.paguroBody.weight(.semibold))
                     .lineLimit(1)
                 Text(subtitle)
+                    .lineLimit(1)
                     .font(.paguroCaption)
                     .foregroundStyle(.secondary)
             }

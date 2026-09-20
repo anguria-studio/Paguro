@@ -26,7 +26,8 @@ discovery starts for the saved service.
 During onboarding, the custom website form fills the main window inside the
 service-selection step. It uses the same preview and Change Icon control.
 Select website copies the chosen or discovered icon into the pending selection.
-The catalog shows that preview beside the custom website. The final Add saves
+The custom website card shows that preview with the same size and selection
+style as the catalog cards. The final Add saves
 it with the account. Choosing a website before discovery finishes remains valid;
 normal discovery runs after the batch saves if no icon is available.
 

@@ -25,4 +25,35 @@ final class ServiceSetupSelectionTests: XCTestCase {
         selection.toggle(personal)
         XCTAssertEqual(selection.services, [work])
     }
+    func testUncheckedCustomCardRemainsAvailableWithItsIcon() {
+        let draft = ServiceSetupDraft(label: "Notes", url: "https://notes.example", customIconData: Data([1, 2]))
+        var selection = ServiceSetupSelection()
+        selection.toggle(draft)
+        selection.toggle(draft)
+        XCTAssertTrue(selection.services.isEmpty)
+        XCTAssertEqual(selection.customWebsites, [draft])
+        selection.toggle(draft)
+        XCTAssertEqual(selection.services, [draft])
+        XCTAssertEqual(selection.customWebsites, [draft])
+    }
+
+    func testCustomSearchMatchesNamesAndAddressesEvenWhenUnchecked() {
+        let draft = ServiceSetupDraft(label: "Café Work", url: "https://portal.example/team")
+        var selection = ServiceSetupSelection()
+        selection.toggle(draft)
+        selection.toggle(draft)
+        XCTAssertEqual(selection.matchingCustomWebsites(search: "  CAFE  "), [draft])
+        XCTAssertEqual(selection.matchingCustomWebsites(search: "PORTAL.EXAMPLE"), [draft])
+        XCTAssertEqual(selection.matchingCustomWebsites(search: "team"), [draft])
+        XCTAssertEqual(selection.matchingCustomWebsites(search: "  "), [draft])
+        XCTAssertTrue(selection.matchingCustomWebsites(search: "absent").isEmpty)
+        XCTAssertTrue(selection.services.isEmpty)
+    }
+
+    func testCatalogSelectionsDoNotBecomeCustomCards() {
+        var selection = ServiceSetupSelection()
+        selection.toggle(ServiceSetupDraft(id: "gmail", label: "Gmail", url: "https://mail.google.com", catalogEntryID: "gmail"))
+        XCTAssertTrue(selection.customWebsites.isEmpty)
+        XCTAssertEqual(selection.services.count, 1)
+    }
 }

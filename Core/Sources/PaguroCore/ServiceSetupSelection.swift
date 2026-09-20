@@ -32,6 +32,8 @@ public struct ServiceSetupDraft: Equatable, Sendable, Identifiable {
 /// Keeps the user's selection order independent of search and category filters.
 public struct ServiceSetupSelection: Equatable, Sendable {
     public private(set) var services: [ServiceSetupDraft] = []
+    /// Custom cards remain available after they are unchecked.
+    public private(set) var customWebsites: [ServiceSetupDraft] = []
 
     public init() {}
 
@@ -39,7 +41,17 @@ public struct ServiceSetupSelection: Equatable, Sendable {
         services.contains { $0.id == id }
     }
 
+    public func matchingCustomWebsites(search: String) -> [ServiceSetupDraft] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return customWebsites.filter {
+            query.isEmpty || "\($0.label) \($0.url) Custom websites".localizedStandardContains(query)
+        }
+    }
+
     public mutating func toggle(_ draft: ServiceSetupDraft) {
+        if draft.catalogEntryID == nil && !customWebsites.contains(where: { $0.id == draft.id }) {
+            customWebsites.append(draft)
+        }
         if contains(draft.id) {
             services.removeAll { $0.id == draft.id }
         } else {
