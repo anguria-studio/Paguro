@@ -19,7 +19,7 @@ public enum ShellGlassStyle: String, CaseIterable, Sendable {
     public var backdropFrostOpacity: Double {
         switch self {
         case .system, .off: 0
-        case .clear: 0.35
+        case .clear: 0.45
         case .regular: 1
         }
     }

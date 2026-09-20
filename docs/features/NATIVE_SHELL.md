@@ -786,7 +786,7 @@ The Window glass selector has four presets and no separate transparency slider:
 | --- | --- | --- | --- |
 | Follow system | Untinted Regular glass | None | None |
 | Off | No glass | None | Opaque |
-| Clear | Clear glass | 35 percent | None |
+| Clear | Clear glass | 45 percent | None |
 | Regular | Regular glass | Full strength | 15 percent |
 
 Follow system is the default for a fresh install. Native glass responds to the
