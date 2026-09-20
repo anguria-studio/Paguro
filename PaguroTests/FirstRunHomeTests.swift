@@ -240,6 +240,57 @@ final class FirstRunHomeTests: XCTestCase {
         XCTAssertEqual(try verification.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
     }
 
+    @MainActor
+    func testBatchAppendsToExistingWorkspaceWithoutRenamingOrChangingOtherAccounts() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let store = makeStore(context: context)
+        let target = Space(name: "Work", emoji: "", sortOrder: 1)
+        let other = Space(name: "Personal", emoji: "", sortOrder: 0)
+        context.insert(target)
+        context.insert(other)
+        try context.save()
+        let resident = try XCTUnwrap(store.addService(label: "Original", url: "https://one.example", to: target.id))
+        let untouched = try XCTUnwrap(store.addService(label: "Other", url: "https://two.example", to: other.id))
+        var saves = 0
+        let added = try XCTUnwrap(store.addServices([
+            ServiceSetupDraft(label: "Mail", url: "https://mail.example"),
+            ServiceSetupDraft(label: "Notes", url: "https://notes.example")
+        ], to: target.id) {
+            saves += 1
+            try $0.save()
+        })
+        let verification = makeStore(context: ModelContext(container))
+        XCTAssertEqual(saves, 1)
+        XCTAssertEqual(verification.servicesForSpace(target.id).map(\.id), [resident] + added)
+        XCTAssertEqual(verification.servicesForSpace(other.id).map(\.id), [untouched])
+        XCTAssertEqual(target.name, "Work")
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 2)
+        XCTAssertEqual(Set(verification.servicesForSpace(target.id).map(\.dataStoreIdentifier)).count, 3)
+    }
+
+    @MainActor
+    func testFailedExistingWorkspaceBatchLeavesSavedAccountsIntact() throws {
+        enum Failure: Error { case save }
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let store = makeStore(context: context)
+        let target = Space(name: "Work", emoji: "")
+        context.insert(target)
+        try context.save()
+        let resident = try XCTUnwrap(store.addService(label: "Original", url: "https://one.example", to: target.id))
+        XCTAssertThrowsError(try store.addServices([
+            ServiceSetupDraft(label: "Mail", url: "https://mail.example"),
+            ServiceSetupDraft(label: "Notes", url: "https://notes.example")
+        ], to: target.id) { _ in throw Failure.save })
+        try context.save()
+        let verification = makeStore(context: ModelContext(container))
+        XCTAssertEqual(verification.servicesForSpace(target.id).map(\.id), [resident])
+        XCTAssertEqual(verification.allServices().count, 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 1)
+        XCTAssertEqual(target.name, "Work")
+    }
+
     #if DEBUG
     @MainActor
     func testPreviewStartsEmptyOnEveryLaunchAndNeverOpensNormalStore() throws {

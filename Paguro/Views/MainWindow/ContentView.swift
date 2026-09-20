@@ -83,7 +83,13 @@ struct ContentView: View {
                 } else {
                     mainLayout(
                         spaceSelection: $state.selectedSpaceID,
-                        serviceSelection: $state.selectedServiceID
+                        serviceSelection: Binding(
+                            get: { appState.selectedServiceID },
+                            set: {
+                                appState.showAddService = false
+                                appState.selectedServiceID = $0
+                            }
+                        )
                     )
                     .transition(.opacity)
                 }
@@ -213,12 +219,6 @@ struct ContentView: View {
         .onChange(of: appState.selectedServiceID) { _, newServiceID in
             guard let spaceID = appState.selectedSpaceID, let newServiceID else { return }
             appState.rememberSelection(serviceID: newServiceID, in: spaceID)
-        }
-        .sheet(isPresented: Binding(
-            get: { appState.showAddService && !firstRun.showsHome },
-            set: { appState.showAddService = $0 }
-        )) {
-            AddServiceSheet(spaceID: appState.selectedSpaceID)
         }
         .sheet(isPresented: $state.showAddSpace) {
             SpaceEditorSheet(

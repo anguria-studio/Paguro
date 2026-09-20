@@ -109,7 +109,10 @@ struct PaguroApp: App {
             KeyboardShortcutCommands(
                 selectedServiceID: Binding(
                     get: { appState.selectedServiceID },
-                    set: { appState.selectedServiceID = $0 }
+                    set: {
+                        appState.showAddService = false
+                        appState.selectedServiceID = $0
+                    }
                 ),
                 selectedSpaceID: Binding(
                     get: { appState.selectedSpaceID },

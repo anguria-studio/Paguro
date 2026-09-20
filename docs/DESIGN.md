@@ -21,6 +21,16 @@ Service rows draw the bundled Paguro tile 10 percent larger for optical
 balance with flat logos. Scale the square and shell together, without changing
 the row spacing.
 
+## Adding services
+
+Add Service opens the shared selectable catalog in the browser area. Keep the
+rail and native header visible, with a clear Cancel action and Add services in
+the footer. Preserve the current browser session so Cancel returns without a
+reload. Show the destination workspace, with a picker when several exist.
+Use the same search, category menu, cards, custom website sheet, and keyboard
+behavior as onboarding. Wrap the toolbar when the content pane is narrow.
+Do not show wizard progress or a workspace naming field during ordinary add.
+
 ## First run
 
 A window with no service shows a two-step wizard on the window glass.

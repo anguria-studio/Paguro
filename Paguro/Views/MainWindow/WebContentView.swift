@@ -28,7 +28,7 @@ struct WebContentView: View {
             if appState.railLayout == .sidebar {
                 WebContentHeader(
                     webViewState: webViewState,
-                    title: selectedService?.label ?? "Paguro",
+                    title: appState.showAddService ? "Add services" : (selectedService?.label ?? "Paguro"),
                     reservesSidebarToggleSpace: sidebarIsCollapsed,
                     sidebarToggleLeadingInset: PaguroMetric.Toolbar.collapsedLeadingInset(
                         sidebarWidth: collapsedSidebarWidth
@@ -36,54 +36,19 @@ struct WebContentView: View {
                 )
             }
 
-            if selectedService != nil, let webView = currentWebView {
-                ZStack(alignment: .topTrailing) {
-                    WebViewContainer(webView: webView)
-
-                    // Show cached snapshot as instant visual feedback while page loads.
-                    // Fades out once the web view finishes loading. It fills the
-                    // web view's frame (rather than aspect-fill, which cropped or
-                    // stretched it); since the snapshot was taken at this frame it
-                    // lines up without distortion.
-                    if let snapshot = transitionSnapshot, webViewState.isLoading {
-                        Image(nsImage: snapshot)
-                            .resizable()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipped()
-                            .transition(.opacity)
-                            .accessibilityHidden(true)
-                    }
-
-                    if appState.findInPageVisible {
-                        FindInPageBar(
-                            isVisible: Binding(
-                                get: { appState.findInPageVisible },
-                                set: { appState.findInPageVisible = $0 }
-                            ),
-                            webView: webView
-                        )
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
+            ZStack {
+                browserContent
+                    .opacity(appState.showAddService ? 0 : 1)
+                    .allowsHitTesting(!appState.showAddService)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityHidden(appState.showAddService)
+                    .disabled(appState.showAddService)
+                if appState.showAddService {
+                    AddServicesPage()
+                        .transition(.opacity)
                 }
-                .background(
-                    PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
-                )
-                // The mark that reports a download start leaves from this area,
-                // on the vertical line of the header control. It reports the
-                // frame only; the layout of the page and the find bar stays as
-                // it is.
-                .downloadFlightOrigin()
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: webViewState.isLoading)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: appState.findInPageVisible)
-            } else if selectedService != nil {
-                ProgressView("Loading service…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(
-                        PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
-                    )
-            } else {
-                emptyState
             }
+            .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: appState.showAddService)
         }
         .onAppear {
             loadWebViewForSelectedService()
@@ -113,6 +78,58 @@ struct WebContentView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 if !webViewState.isLoading { transitionSnapshot = nil }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var browserContent: some View {
+        if selectedService != nil, let webView = currentWebView {
+            ZStack(alignment: .topTrailing) {
+                WebViewContainer(webView: webView)
+
+                // Show cached snapshot as instant visual feedback while page loads.
+                // Fades out once the web view finishes loading. It fills the
+                // web view's frame (rather than aspect-fill, which cropped or
+                // stretched it); since the snapshot was taken at this frame it
+                // lines up without distortion.
+                if let snapshot = transitionSnapshot, webViewState.isLoading {
+                    Image(nsImage: snapshot)
+                        .resizable()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                }
+
+                if appState.findInPageVisible {
+                    FindInPageBar(
+                        isVisible: Binding(
+                            get: { appState.findInPageVisible },
+                            set: { appState.findInPageVisible = $0 }
+                        ),
+                        webView: webView
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .background(
+                PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
+            )
+            // The mark that reports a download start leaves from this area,
+            // on the vertical line of the header control. It reports the
+            // frame only; the layout of the page and the find bar stays as
+            // it is.
+            .downloadFlightOrigin()
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: webViewState.isLoading)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: appState.findInPageVisible)
+        } else if selectedService != nil {
+            ProgressView("Loading service…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity)
+                )
+        } else {
+            emptyState
         }
     }
 

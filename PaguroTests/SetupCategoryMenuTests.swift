@@ -9,7 +9,7 @@ final class SetupCategoryMenuTests: XCTestCase {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 100),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        let menu = SetupCategoryMenu.Popup(frame: NSRect(x: 10, y: 10, width: 170, height: 36), pullsDown: false)
+        let menu = SetupChoiceMenu.Popup(frame: NSRect(x: 10, y: 10, width: 170, height: 36), pullsDown: false)
         window.contentView?.addSubview(menu)
         XCTAssertFalse(menu.canBecomeKeyView)
         XCTAssertTrue(window.makeFirstResponder(menu))
@@ -32,10 +32,21 @@ final class SetupCategoryMenuTests: XCTestCase {
         }
     }
 
+    func testWorkspaceChoicesUseIDsWhenNamesMatch() {
+        var selectedID = "first"
+        let coordinator = SetupChoiceMenu.Coordinator(selection: Binding(get: { selectedID }, set: { selectedID = $0 }))
+        let menu = SetupChoiceMenu.Popup(frame: .zero, pullsDown: false)
+        menu.setChoices(["first", "second"], labels: ["first": "Personal", "second": "Personal"])
+        XCTAssertEqual(menu.numberOfItems, 2)
+        menu.selectItem(at: 1)
+        coordinator.selectCategory(menu)
+        XCTAssertEqual(selectedID, "second")
+    }
+
     func testMenuSelectionUpdatesBindingAndRejectsDisabledAction() {
         var category = "All services"
-        let coordinator = SetupCategoryMenu.Coordinator(selection: Binding(get: { category }, set: { category = $0 }))
-        let menu = SetupCategoryMenu.Popup(frame: .zero, pullsDown: false)
+        let coordinator = SetupChoiceMenu.Coordinator(selection: Binding(get: { category }, set: { category = $0 }))
+        let menu = SetupChoiceMenu.Popup(frame: .zero, pullsDown: false)
         menu.addItems(withTitles: ["All services", "AI", "Custom websites"])
         menu.selectItem(withTitle: "AI")
         coordinator.selectCategory(menu)

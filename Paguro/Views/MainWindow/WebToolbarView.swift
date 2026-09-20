@@ -110,7 +110,7 @@ struct WebContentActions: View {
             }
             .buttonStyle(PaguroToolbarButtonStyle())
             .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .disabled(!webViewState.canGoBack)
+            .disabled(appState.showAddService || !webViewState.canGoBack)
             .help("Back")
             .accessibilityLabel("Go back")
             .accessibilityIdentifier("web.goBack")
@@ -122,7 +122,7 @@ struct WebContentActions: View {
             }
             .buttonStyle(PaguroToolbarButtonStyle())
             .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .disabled(!webViewState.canGoForward)
+            .disabled(appState.showAddService || !webViewState.canGoForward)
             .help("Forward")
             .accessibilityLabel("Go forward")
             .accessibilityIdentifier("web.goForward")
@@ -138,7 +138,7 @@ struct WebContentActions: View {
             }
             .buttonStyle(PaguroToolbarButtonStyle())
             .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .disabled(webViewState.webView == nil)
+            .disabled(appState.showAddService || webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
 

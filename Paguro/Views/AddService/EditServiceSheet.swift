@@ -4,7 +4,7 @@ import PaguroCore
 
 /// Edits an existing service: rename, change its URL, toggle keep-loaded
 /// (never hibernate), and clear its session (log out). Validation is shared
-/// with AddServiceSheet so the same rules apply to created and edited services.
+/// with the custom website sheet so the same rules apply to created and edited services.
 struct EditServiceSheet: View {
     let service: ServiceInstance
 

@@ -299,6 +299,7 @@ final class AppState {
         notificationRuntime.start(
             currentSpaceID: { [weak self] in self?.selectedSpaceID },
             selectService: { [weak self] spaceID, serviceID in
+                self?.showAddService = false
                 if let spaceID { self?.selectedSpaceID = spaceID }
                 self?.selectedServiceID = serviceID
             },
@@ -401,6 +402,7 @@ final class AppState {
     }
 
     private func switchToService(_ service: ServiceInstance, navigateTo url: URL) {
+        showAddService = false
         // Make sure we're in a space that contains this service so the
         // sidebar selection becomes visible. If the service lives in
         // multiple spaces, pick the first.
@@ -773,10 +775,26 @@ final class AppState {
     /// Opens the first chosen service after the complete setup has saved.
     @discardableResult
     func addSetupServices(_ drafts: [ServiceSetupDraft], workspaceName: String) -> Bool {
+        saveServiceSelection(drafts, to: selectedSpaceID, workspaceName: workspaceName)
+    }
+
+    /// Adds accounts to an existing workspace without changing its name.
+    @discardableResult
+    func addServices(_ drafts: [ServiceSetupDraft], to spaceID: UUID) -> Bool {
+        guard saveServiceSelection(drafts, to: spaceID), let id = selectedServiceID else { return false }
+        mediaPermissions.offerPresenceActivationIfNeeded(
+            serviceID: id, catalogEntryID: drafts.first?.catalogEntryID
+        )
+        return true
+    }
+
+    private func saveServiceSelection(
+        _ drafts: [ServiceSetupDraft], to spaceID: UUID?, workspaceName: String? = nil
+    ) -> Bool {
         guard !isLocked, !drafts.isEmpty else { return false }
         do {
             guard let ids = try workspaceStore.addServices(
-                drafts, to: selectedSpaceID, workspaceName: workspaceName
+                drafts, to: spaceID, workspaceName: workspaceName
             ),
                   let firstID = ids.first else { return false }
             showAddService = false
@@ -792,7 +810,7 @@ final class AppState {
             }
             return true
         } catch {
-            AppLogger.dataStore.error("Failed to add setup services; rolled back: \(error.localizedDescription)")
+            AppLogger.dataStore.error("Failed to add services; rolled back: \(error.localizedDescription)")
             return false
         }
     }
@@ -1026,6 +1044,7 @@ final class AppState {
     /// workspace that the window does not show.
     func selectService(id: UUID) {
         guard let service = fetchService(id: id) else { return }
+        showAddService = false
         if let firstSpace = service.spaceLinks.compactMap(\.liveSpace).first?.id {
             selectedSpaceID = firstSpace
         }

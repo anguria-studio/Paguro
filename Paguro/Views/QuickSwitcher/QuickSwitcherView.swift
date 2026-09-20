@@ -173,6 +173,7 @@ struct QuickSwitcherView: View {
     }
 
     private func selectResult(_ result: QuickSwitcherResult) {
+        appState.showAddService = false
         appState.selectedSpaceID = result.spaceID
         appState.selectedServiceID = result.serviceID
         dismiss()

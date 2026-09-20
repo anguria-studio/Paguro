@@ -7,13 +7,41 @@ Status: active
 The native shell gives each web service a consistent Mac interface.
 It does not change the web content of a service.
 
+## Adding services
+
+After setup, Add Service and Command-N open a full-page catalog in the browser
+area. The rail, workspace controls, and native header stay available. The same
+picker serves onboarding and ordinary add, including search, category filters,
+multiple selection, custom website drafts, icon previews, and keyboard controls.
+The toolbar wraps into two rows in a narrow pane.
+
+The page shows the destination workspace. With several workspaces, a native
+popup changes the destination without renaming a workspace. Switching the
+workspace in the rail also changes the destination and preserves the draft.
+There is no wizard stepper or workspace name field here. Cancel and Add services
+sit in the footer. Escape cancels; Command-Return adds the selected batch.
+
+The batch saves all accounts and links in one transaction, appending them to
+the destination in selection order. Existing services and workspace names stay
+intact. A failed save retains the draft and changes no stored accounts. A
+missing destination disables Add services. Choosing an already configured
+catalog service creates a separate account with its own session.
+
+Cancel returns to the previous service without reloading it. The web view stays
+mounted beneath the catalog, hidden from pointer input and accessibility.
+Browser navigation buttons are disabled while the catalog is open. The global
+notification mute and downloads remain available. Selecting a rail service,
+a quick-switcher result, a download's service, or a notification returns to
+browsing. Service-switching shortcuts and incoming service links also close
+the catalog. A successful add opens the first new service and closes the catalog.
+Only the custom website editor uses a modal sheet.
+
 ## First run
 
 The main window shows a two-step setup wizard while no service exists. A new install
 starts completely empty, with no workspace and no service. Finishing setup
 creates the named workspace and all selected services in one transaction.
-Cancel and a failed save leave the store empty. The Add Service sheet hides the
-workspace picker until more than one workspace exists. Launch never seeds data.
+Cancel and a failed save leave the store empty. The catalog hides the workspace picker until more than one workspace exists. Launch never seeds data.
 
 The screen replaces the complete shell: no rail in any of the four layouts, no
 content header, and no top bar. An empty rail beside an empty header said
@@ -78,8 +106,8 @@ position, filters, workspace name, and selection. Setup stays on step two.
 Create workspace saves all services and their workspace links together. A failed
 save rolls back the complete batch and keeps the selection for retry. Each
 account has its own WebKit store identifier. The shell opens on the first chosen
-service. Users sign in as they visit each service. The normal Add Service sheet
-remains available after setup. Command-N opens the catalog step while empty.
+service. Users sign in as they visit each service. After setup, Add Service opens the same catalog in the browser area.
+Command-N opens the catalog step while empty.
 
 The card holds at most two rows. The notification row reports the macOS
 permission. It offers "Turn on" to request permission while macOS holds no

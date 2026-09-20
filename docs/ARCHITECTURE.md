@@ -99,7 +99,7 @@ The main services and startup adapters are:
 `AppModel` connects island alert actions to the notification navigation path.
 The island controller does not fetch or select service models directly.
 
-The main rail and service-add sheets send model mutation intents to `AppState`.
+The main rail and shared service catalog send model mutation intents to `AppState`.
 `WorkspaceStore` owns their SwiftData queries, commits, and rollback.
 `AppState` owns selection updates and post-save runtime work. Destructive
 WebKit cleanup starts only after `WorkspaceStore` returns a saved outcome.
