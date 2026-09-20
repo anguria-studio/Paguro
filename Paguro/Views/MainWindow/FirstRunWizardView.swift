@@ -230,6 +230,8 @@ private struct FirstRunServicePicker: View {
                     }
                     ForEach(catalog.categories, id: \.self) { Text($0).tag($0) }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
                 Text(category)
             }

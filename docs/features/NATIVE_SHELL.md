@@ -49,7 +49,8 @@ accent border for selection. Filters and Back keep the complete selection.
 `ServiceSetupSelection` in PaguroCore keeps services in selection order.
 
 Search, category, and Custom website sit in one toolbar above the grid. All
-three controls are 36 points high. Search is compact, and the workspace name
+three controls are 36 points high. Categories appear directly in the menu,
+with no submenu. Search is compact, and the workspace name
 stays on its own row above the toolbar. The fixed footer holds Back and Create
 workspace, with no selection counter. The primary button stays disabled until
 a service is selected. The custom website page validates the name and HTTP(S)
