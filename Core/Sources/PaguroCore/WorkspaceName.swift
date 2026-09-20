@@ -2,7 +2,7 @@ import Foundation
 
 /// Names entered during setup must contain visible text.
 public enum WorkspaceName {
-    public static let defaultValue = "Home"
+    public static let defaultValue = "Personal"
 
     public static func normalized(_ value: String) -> String? {
         let name = value.trimmingCharacters(in: .whitespacesAndNewlines)

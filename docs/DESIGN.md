@@ -28,7 +28,7 @@ The welcome step explains Paguro and groups notification and island setup.
 Its primary action, "Choose your services", opens a full-page catalog.
 The second step is "Set up your first workspace". It explains that a workspace
 keeps related services together and offers a Workspace name field above search.
-The name starts as Home on a new install and survives Back and custom website
+The name starts as Personal on a new install and survives Back and custom website
 entry. The step has search, category filtering, and multiple selection.
 Selected cards have a checkmark and an accent border. A fixed footer shows
 the selection count and one Add button. Back keeps the selection.
@@ -262,3 +262,9 @@ Update this overview when a shared design rule changes.
 
 The passkey explanation belongs to the app shell. It appears once for the app,
 and service changes do not replace the card or restart its timer.
+
+Use periods, commas, colons, or parentheses in UI copy. Never use em dashes.
+
+Onboarding text fields release focus when the user clicks the background or
+service grid. Return finishes editing the workspace name. Background dragging
+continues to move the window.

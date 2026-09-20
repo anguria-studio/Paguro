@@ -26,6 +26,12 @@ Do not add private WebKit selectors.
 Do not add a hidden browser or an automation browser.
 Do not add a remote script system.
 
+## Writing rule
+
+Never use em dashes (U+2014) in UI text, comments, documentation,
+commit messages, pull request descriptions, or messages to the user.
+Use a period, comma, colon, or parentheses instead.
+
 ## Write clear code
 
 - Use Swift 6 strict concurrency.

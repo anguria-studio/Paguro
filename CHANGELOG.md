@@ -4,8 +4,12 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Setup starts with Personal as the workspace name. Clicking outside its name
+  field or pressing Return ends editing. The workspace description uses plain
+  sentence punctuation.
+
 - Setup introduces workspaces and lets you name the first one, starting with
-  Home. The name and selected services save together when you finish.
+  Personal. The name and selected services save together when you finish.
 
 - Custom websites now use selectable cards above the catalog during setup.
   Search includes their names and addresses. Unchecking keeps the card available
@@ -29,7 +33,7 @@ Changes that affect Paguro users appear here, with the newest release first.
   over the window, including the welcome screen. Store errors keep their strip.
 
 - A new setup starts without workspaces. Adding the first services creates a
-  workspace, named Home by default, in the same save. The first-run preview ends after a successful add or import.
+  workspace, named Personal by default, in the same save. The first-run preview ends after a successful add or import.
 
 ### Added
 

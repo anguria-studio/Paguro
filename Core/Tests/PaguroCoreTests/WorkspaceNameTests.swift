@@ -13,7 +13,7 @@ final class WorkspaceNameTests: XCTestCase {
 
     func testSelectionChangesKeepTheWorkspaceName() {
         var selection = ServiceSetupSelection()
-        XCTAssertEqual(selection.workspaceName, "Home")
+        XCTAssertEqual(selection.workspaceName, "Personal")
         selection.workspaceName = "Work"
         selection.toggle(ServiceSetupDraft(label: "Notes", url: "https://notes.example"))
         XCTAssertEqual(selection.workspaceName, "Work")

@@ -89,7 +89,7 @@ final class FirstRunHomeTests: XCTestCase {
     }
 
     @MainActor
-    func testFirstAddCreatesHomeAndSecondAddReusesIt() throws {
+    func testFirstAddCreatesPersonalAndSecondAddReusesIt() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext
         let store = makeStore(context: context)
@@ -98,7 +98,7 @@ final class FirstRunHomeTests: XCTestCase {
         let spaces = try context.fetch(FetchDescriptor<Space>())
         XCTAssertEqual(spaces.count, 1)
         let home = try XCTUnwrap(spaces.first)
-        XCTAssertEqual(home.name, "Home")
+        XCTAssertEqual(home.name, "Personal")
         XCTAssertEqual(home.emoji, "")
         XCTAssertEqual(store.servicesForSpace(home.id).map(\.id), [first, second])
         XCTAssertEqual(store.service(id: first)?.spaceLinks.first?.space?.id, home.id)

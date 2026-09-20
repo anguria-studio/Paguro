@@ -36,7 +36,7 @@ as the view that no selected service shows. It carries:
 
 The second step is titled "Set up your first workspace". It explains that a
 workspace keeps related services together for work, personal use, or a project.
-A Workspace name field sits above search and defaults to Home on a new install.
+A Workspace name field sits above search and defaults to Personal on a new install.
 If setup appears over existing empty workspaces, it starts with the target
 workspace’s current name. Back and custom website entry keep the typed name.
 The Add button requires a nonblank name and at least one selected service.
@@ -104,7 +104,9 @@ itself refuses a locked app as well. The catalog and batch save also refuse a
 locked app. Lock disables the custom website page and cancels pending icon discovery.
 
 Keyboard focus starts on **Choose your services**, and Return activates it.
-The catalog step starts keyboard focus in search. VoiceOver reads each card’s
+The catalog step starts keyboard focus in search. Clicking the background or
+service grid releases text-field focus. Return finishes editing the workspace
+name. Window dragging still works after ending text editing. VoiceOver reads each card’s
 name and selection state. Space toggles a focused card. Return adds the selection.
 On the welcome step, VoiceOver reads the title, the sentence, the rows, the button, and the import
 line in that order. A row is one element with its title and description, and

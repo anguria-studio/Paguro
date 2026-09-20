@@ -315,12 +315,30 @@ struct WindowChromeConfigurator: NSViewRepresentable {
 /// the top bar, where the OS window drag is off (see
 /// `WindowChromeConfigurator`). A double-click zooms, matching a title bar.
 struct WindowDragHandle: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { DragView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    var endsEditingOnPress = false
 
-    private final class DragView: NSView {
+    func makeNSView(context: Context) -> DragView {
+        let view = DragView()
+        view.endsEditingOnPress = endsEditingOnPress
+        return view
+    }
+
+    func updateNSView(_ nsView: DragView, context: Context) {
+        nsView.endsEditingOnPress = endsEditingOnPress
+    }
+
+    final class DragView: NSView {
+        var endsEditingOnPress = false
+
+        /// Onboarding lets a background click finish editing before a window drag.
+        /// Other drag surfaces keep the current responder, such as a web page.
+        func endEditingIfNeeded() {
+            if endsEditingOnPress { window?.makeFirstResponder(nil) }
+        }
+
         override func mouseDown(with event: NSEvent) {
             guard let window else { return }
+            endEditingIfNeeded()
             if event.clickCount == 2 {
                 window.performZoom(nil)
             } else {

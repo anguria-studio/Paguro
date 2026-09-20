@@ -37,7 +37,8 @@ private struct FirstRunServicePicker: View {
     @State private var category = "All services"
     @State private var showsCustomWebsite = false
     @State private var saveError: String?
-    @FocusState private var searchIsFocused: Bool
+    private enum InputField: Hashable { case workspaceName, search }
+    @FocusState private var focusedField: InputField?
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 190), spacing: 14)]
     private let catalog = ServiceCatalog.shared
@@ -77,7 +78,7 @@ private struct FirstRunServicePicker: View {
         .frame(maxWidth: 1040)
         .padding(.top, 52)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WindowDragHandle())
+        .background(WindowDragHandle(endsEditingOnPress: true))
         .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
         .disabled(!allowsActions)
     }
@@ -136,9 +137,10 @@ private struct FirstRunServicePicker: View {
                 .padding(.horizontal, 32)
                 .padding(.bottom, 20)
             }
+            .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
             footer
         }
-        .onAppear { searchIsFocused = true }
+        .onAppear { focusedField = .search }
     }
 
     private var header: some View {
@@ -149,7 +151,7 @@ private struct FirstRunServicePicker: View {
                     .foregroundStyle(.secondary)
                 Text("Set up your first workspace")
                     .font(.largeTitle.weight(.semibold))
-                Text("A workspace keeps related services together—for work, personal use, or a project.")
+                Text("A workspace keeps related services together for work, personal use, or a project.")
                     .font(.paguroBody)
                     .foregroundStyle(.secondary)
             }
@@ -167,6 +169,8 @@ private struct FirstRunServicePicker: View {
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.large)
                 .frame(maxWidth: 320)
+                .focused($focusedField, equals: .workspaceName)
+                .onSubmit { focusedField = nil }
                 .onChange(of: selection.workspaceName) { saveError = nil }
             Spacer()
         }
@@ -181,7 +185,7 @@ private struct FirstRunServicePicker: View {
                     .foregroundStyle(.secondary)
                 TextField("Search services", text: $search)
                     .textFieldStyle(.plain)
-                    .focused($searchIsFocused)
+                    .focused($focusedField, equals: .search)
             }
             .padding(10)
             .background(.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
@@ -194,6 +198,7 @@ private struct FirstRunServicePicker: View {
             }
             .labelsHidden()
             .frame(width: 170)
+            .onChange(of: category) { focusedField = nil }
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 20)
