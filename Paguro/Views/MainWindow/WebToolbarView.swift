@@ -131,7 +131,7 @@ struct WebContentActions: View {
                 if webViewState.isLoading {
                     webViewState.webView?.stopLoading()
                 } else {
-                    webViewState.webView?.reload()
+                    appState.reloadActiveService()
                 }
             } label: {
                 Image(systemName: webViewState.isLoading ? "xmark" : "arrow.clockwise")

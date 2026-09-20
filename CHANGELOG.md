@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Interrupted service loads no longer leave the sidebar loading ring stuck.
+  Reload retries the service home when the first page never committed.
+
 - Add Service now opens the full catalog in the browser area, using the same
   multiple selection, search, categories, and custom website modal as setup.
   Add services saves the batch to the chosen workspace. Cancel returns to the

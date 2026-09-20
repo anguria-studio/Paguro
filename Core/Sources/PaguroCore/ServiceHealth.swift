@@ -9,6 +9,7 @@ public enum ServiceHealth: Equatable, CaseIterable, Sendable {
     public enum Event: CaseIterable, Sendable {
         case startedLoading
         case finishedLoading
+        case stoppedLoading
         case failed
     }
 
@@ -17,6 +18,7 @@ public enum ServiceHealth: Equatable, CaseIterable, Sendable {
         switch event {
         case .startedLoading: return .loading
         case .finishedLoading: return .live
+        case .stoppedLoading: return self == .loading ? .live : self
         case .failed: return .failed
         }
     }

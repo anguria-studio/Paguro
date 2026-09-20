@@ -115,6 +115,13 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: - Navigation Delegate
 
+    /// The first load can stop before WebKit has a history item to reload.
+    static func reload(_ webView: WKWebView, fallbackURL: URL?) {
+        if webView.reload() == nil, let fallbackURL {
+            webView.load(URLRequest(url: fallbackURL))
+        }
+    }
+
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction
@@ -299,7 +306,17 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         if authPopupController.isPopup(webView) { return }
 
         let nsError = error as NSError
-        guard !Self.keepsCurrentPage(afterProvisionalFailure: nsError) else { return }
+        guard !Self.keepsCurrentPage(afterProvisionalFailure: nsError) else {
+            // A replacement navigation can cancel the old one. Wait for WebKit
+            // to settle and keep the ring if another load is still running.
+            Task { @MainActor [weak self, weak webView] in
+                await Task.yield()
+                guard let self, let webView, !webView.isLoading,
+                      let instanceID = self.instanceID else { return }
+                self.onHealthEvent?(instanceID, .stoppedLoading)
+            }
+            return
+        }
 
         // Same page the generic error page below is about, reported to the rail
         // so a service that failed while you were looking at another one still

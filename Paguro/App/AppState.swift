@@ -429,7 +429,7 @@ final class AppState {
     func reloadActiveService() {
         guard let id = webViewPool.activeServiceID,
               let webView = webViewPool.liveWebView(for: id) else { return }
-        webView.reload()
+        WebViewCoordinator.reload(webView, fallbackURL: workspaceStore.service(id: id).flatMap { URL(string: $0.url) })
     }
 
     /// Go back one page in the displayed service. Triggered by Cmd-[.
