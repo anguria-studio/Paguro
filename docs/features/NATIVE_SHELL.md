@@ -25,8 +25,10 @@ workspace. One service ends the screen, and no service brings it back. A user
 who removes every service therefore sees it again, which is correct: the window
 is empty again.
 
-A shared progress indicator sits above both pages. It labels Welcome and
-Your workspace, highlights the current step, and checks the completed step.
+A shared progress indicator sits in the center of the footer, between its
+actions. It labels Welcome and Your workspace, highlights the current step,
+and checks the completed step. Removing the top progress row brings page
+content 50 points higher, with 52 points still reserved for the traffic lights.
 VoiceOver reads the current step number and name. The indicator is informational.
 
 Welcome centers a 380-point column on the window glass. It carries the Paguro

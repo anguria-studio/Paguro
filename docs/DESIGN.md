@@ -24,8 +24,10 @@ the row spacing.
 ## First run
 
 A window with no service shows a two-step wizard on the window glass.
-A shared progress indicator shows Welcome and Your workspace. It stays in
-place across pages, highlights the current step, and checks the completed step.
+A shared progress indicator sits between the footer actions and shows Welcome
+and Your workspace. It stays at the same position across pages, highlights the
+current step, and checks the completed step. Content starts below the traffic
+lights without a separate progress row above it.
 The welcome step explains Paguro and groups notification and island setup.
 Its fixed footer offers import on the left and "Choose your services" on the
 right. The primary action opens a full-page catalog.

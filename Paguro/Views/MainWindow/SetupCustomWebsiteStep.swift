@@ -62,7 +62,7 @@ struct SetupCustomWebsiteStep: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            FirstRunFooter {
+            FirstRunFooter(isChoosingServices: true) {
                 Button("Back to services", action: onBack)
                     .modifier(SetupKeyboardActivation(action: onBack))
                     .keyboardShortcut(.cancelAction)

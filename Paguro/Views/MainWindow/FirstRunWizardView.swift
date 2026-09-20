@@ -13,21 +13,17 @@ struct FirstRunWizardView: View {
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
 
     var body: some View {
-        VStack(spacing: 24) {
-            FirstRunProgress(isChoosingServices: appState.showAddService)
-                .padding(.horizontal, 32)
-            ZStack {
-                if appState.showAddService {
-                    FirstRunServicePicker(selection: $selection, allowsActions: allowsActions)
-                        .transition(pageTransition(from: 24))
-                } else {
-                    FirstRunHomeView(setup: setup, allowsActions: allowsActions)
-                        .transition(pageTransition(from: -24))
-                }
+        ZStack {
+            if appState.showAddService {
+                FirstRunServicePicker(selection: $selection, allowsActions: allowsActions)
+                    .transition(pageTransition(from: 24))
+            } else {
+                FirstRunHomeView(setup: setup, allowsActions: allowsActions)
+                    .transition(pageTransition(from: -24))
             }
-            .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: appState.showAddService)
-            .clipped()
         }
+        .animation(.easeInOut(duration: PaguroMotion.setupStepSeconds), value: appState.showAddService)
+        .clipped()
         .padding(.top, 52)
         .frame(maxWidth: 1040)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -321,7 +317,7 @@ private struct FirstRunServicePicker: View {
                     .foregroundStyle(.red)
                     .padding(.vertical, 12)
             }
-            FirstRunFooter {
+            FirstRunFooter(isChoosingServices: true) {
                 Button("Back") { appState.showAddService = false }
                     .modifier(SetupKeyboardActivation { appState.showAddService = false })
                     .keyboardShortcut(.cancelAction)

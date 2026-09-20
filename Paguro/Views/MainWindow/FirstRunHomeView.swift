@@ -219,7 +219,7 @@ struct FirstRunHomeView: View {
     // MARK: - Actions
 
     private var actions: some View {
-        FirstRunFooter {
+        FirstRunFooter(isChoosingServices: false) {
             Button("Import configuration…") { importConfiguration() }
                 .buttonStyle(.link)
                 .help("Import a configuration from another Mac")

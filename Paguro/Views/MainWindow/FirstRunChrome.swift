@@ -13,7 +13,6 @@ struct FirstRunProgress: View {
                 .accessibilityHidden(true)
             step(number: 2, title: "Your workspace", isCurrent: isChoosingServices, isComplete: false)
         }
-        .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: PaguroMotion.setupSelectionSeconds), value: isChoosingServices)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Setup progress")
@@ -45,16 +44,20 @@ struct FirstRunProgress: View {
 
 /// Navigation keeps the same baseline on every setup page.
 struct FirstRunFooter<Leading: View, Trailing: View>: View {
+    let isChoosingServices: Bool
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            HStack {
+            HStack(spacing: 16) {
                 leading()
-                Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                FirstRunProgress(isChoosingServices: isChoosingServices)
+                    .fixedSize()
                 trailing()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .controlSize(.large)
             .frame(minHeight: 36)

@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The setup progress indicator now sits in the footer between the navigation
+  actions, giving the page content more room above it.
+
 - Keyboard navigation in setup now reaches the category selector, buttons,
   and service grid. Use arrow keys to move between cards and Space or Return
   to select. Command-Return creates the workspace.
