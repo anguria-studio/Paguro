@@ -180,8 +180,7 @@ final class AppModel {
         withObservationTracking {
             islandPanelController.updateAppearance(
                 NotificationIslandAppearance(
-                    glassStyle: appState.liquidGlassStyle,
-                    transparency: appState.liquidGlassIntensity
+                    glassStyle: appState.liquidGlassStyle
                 )
             )
         } onChange: { [weak self] in

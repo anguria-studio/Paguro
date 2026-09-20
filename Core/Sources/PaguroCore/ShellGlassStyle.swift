@@ -5,9 +5,22 @@ public enum ShellGlassStyle: String, CaseIterable, Sendable {
     case clear
     case regular
 
-    /// System mode leaves tint strength to the native material. Keep the saved
-    /// manual value separate so selecting an override restores it.
-    public func effectiveTransparency(manualValue: Double) -> Double {
-        self == .system ? 1 : min(1, max(0, manualValue))
+    /// Fixed app tint strength. Native glass still responds to accessibility
+    /// preferences; system mode adds no tint of its own.
+    public var transparency: Double {
+        switch self {
+        case .system, .clear: 1
+        case .off: 0
+        case .regular: 0.85
+        }
+    }
+
+    /// Extra backdrop frost, separate from the native glass material.
+    public var backdropFrostOpacity: Double {
+        switch self {
+        case .system, .off: 0
+        case .clear: 0.35
+        case .regular: 1
+        }
     }
 }

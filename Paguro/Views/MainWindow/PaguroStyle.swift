@@ -237,7 +237,7 @@ enum GlassIntensityScale {
 
     /// Changes a selected sidebar row from the solid source-list fill to a
     /// translucent, adaptive highlight. The smooth curve prevents a visible
-    /// jump when the slider crosses the start value.
+    /// jump when the transparency crosses the start value.
     static func adaptiveSelectionProgress(_ value: Double) -> Double {
         let range = 1 - adaptiveSelectionStart
         let position = (normalized(value) - adaptiveSelectionStart) / range
@@ -257,27 +257,31 @@ extension ShellGlassStyle {
         }
     }
 
-    var frostOpacity: CGFloat {
+    var explanation: String {
         switch self {
-        case .system:
-            if #available(macOS 26, *) { 0 } else { GlassLabDefaults.regularFrost }
-        case .clear:
-            GlassLabDefaults.regularFrost * 0.7
-        case .off, .regular:
-            GlassLabDefaults.regularFrost
+        case .system: "Uses the Liquid Glass appearance selected in System Settings."
+        case .off: "A solid shell without glass or transparency."
+        case .clear: "Lighter glass that shows more of the background."
+        case .regular: "More frosted glass for a quieter background."
+        }
+    }
+
+    var frostOpacity: CGFloat {
+        if #available(macOS 26, *) {
+            CGFloat(backdropFrostOpacity)
+        } else {
+            1
         }
     }
 
     static func resolving(_ storedValue: String?) -> Self {
-        storedValue.flatMap(Self.init(rawValue:)) ?? GlassLabDefaults.style
+        storedValue.flatMap(Self.init(rawValue:)) ?? ShellGlassDefaults.style
     }
 }
 
-/// Baseline values for the temporary appearance tuning controls.
-enum GlassLabDefaults {
+/// Default preset for a new installation.
+enum ShellGlassDefaults {
     static let style = ShellGlassStyle.system
-    static let transparency = 1.0
-    static let regularFrost: CGFloat = 1.0
 }
 
 enum DockRailPosition: String, CaseIterable {
@@ -892,19 +896,20 @@ struct PaguroMenuRowButtonStyle: ButtonStyle {
 /// macOS 26 draws it with interactive Liquid Glass. Earlier systems have no
 /// such API, so they get the material capsule that stands in for glass
 /// everywhere else in the shell. Both forms read the same intensity, so the
-/// appearance slider keeps working below macOS 26.
+/// preset also supplies the fallback tint below macOS 26.
 private struct ToolbarControlSurfaceModifier: ViewModifier {
     let intensity: Double
     let glassStyle: ShellGlassStyle
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), glassStyle != .off {
             if glassStyle == .system {
                 content.glassEffect(.regular.interactive(), in: .circle)
             } else {
+                let glass: Glass = glassStyle == .clear ? .clear : .regular
                 content.glassEffect(
-                    .regular
+                    glass
                         .tint(PaguroColor.Fill.glassTint(intensity: intensity))
                         .interactive(),
                     in: .circle

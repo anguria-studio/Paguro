@@ -57,7 +57,8 @@ final class ShellPreferencesTests: XCTestCase {
         )
 
         XCTAssertEqual(preferences.liquidGlassStyle, .clear)
-        XCTAssertEqual(preferences.liquidGlassIntensity, 0.4)
+        XCTAssertEqual(preferences.liquidGlassIntensity, ShellGlassStyle.clear.transparency)
+        XCTAssertNil(defaults.object(forKey: DefaultsKey.liquidGlassIntensity))
         XCTAssertEqual(preferences.iconRailBaseSize, 30)
         XCTAssertTrue(preferences.iconRailMagnificationEnabled)
         XCTAssertEqual(preferences.iconRailMagnifiedSize, 68)
@@ -88,7 +89,7 @@ final class ShellPreferencesTests: XCTestCase {
             preferencesStore: store
         )
 
-        XCTAssertEqual(preferences.liquidGlassStyle, GlassLabDefaults.style)
+        XCTAssertEqual(preferences.liquidGlassStyle, ShellGlassDefaults.style)
         XCTAssertEqual(preferences.liquidGlassIntensity, 1)
         XCTAssertEqual(preferences.iconRailBaseSize, DockIconSizing.minimumBaseSize)
         XCTAssertEqual(
@@ -114,7 +115,6 @@ final class ShellPreferencesTests: XCTestCase {
         )
 
         preferences.setLiquidGlassStyle(.clear, defaults: defaults)
-        preferences.setLiquidGlassIntensity(-1, defaults: defaults)
         preferences.setIconRailBaseSize(30, defaults: defaults)
         XCTAssertEqual(
             preferences.iconRailMagnification,
@@ -143,7 +143,7 @@ final class ShellPreferencesTests: XCTestCase {
             preferencesStore: store
         )
         XCTAssertEqual(reloaded, preferences)
-        XCTAssertEqual(defaults.double(forKey: DefaultsKey.liquidGlassIntensity), 0)
+        XCTAssertNil(defaults.object(forKey: DefaultsKey.liquidGlassIntensity))
         XCTAssertEqual(
             defaults.double(forKey: DefaultsKey.iconRailMagnifiedSize),
             DockIconSizing.peakSize(baseSize: 30, magnification: 0.5),
@@ -178,54 +178,38 @@ final class ShellPreferencesTests: XCTestCase {
     }
 
     @MainActor
-    func testSystemGlassPreservesManualTransparencyAcrossReloadAndExport() throws {
-        let sandbox = try StoreSandbox(testCase: self, label: "shell-system-glass")
+    func testGlassPresetsIgnoreLegacySliderAcrossReloadAndImport() throws {
+        let sandbox = try StoreSandbox(testCase: self, label: "shell-glass-presets")
         let fixture = try makePreferencesStore(AppPreferences())
         defer { withExtendedLifetime(fixture.container) {} }
-        var preferences = ShellPreferences.load(
-            defaults: sandbox.defaults, preferencesStore: fixture.store
-        )
-        XCTAssertEqual(preferences.liquidGlassStyle, .system)
-        preferences.setLiquidGlassStyle(.clear, defaults: sandbox.defaults)
-        preferences.setLiquidGlassIntensity(0.35, defaults: sandbox.defaults)
-        preferences.setLiquidGlassStyle(.system, defaults: sandbox.defaults)
+        for style in ShellGlassStyle.allCases {
+            for legacyValue in [0.0, 0.35, 1.0] {
+                sandbox.defaults.set(style.rawValue, forKey: DefaultsKey.liquidGlassStyle)
+                sandbox.defaults.set(legacyValue, forKey: DefaultsKey.liquidGlassIntensity)
+                var preferences = ShellPreferences.load(
+                    defaults: sandbox.defaults, preferencesStore: fixture.store
+                )
+                XCTAssertEqual(preferences.liquidGlassStyle, style)
+                XCTAssertEqual(preferences.liquidGlassIntensity, style.transparency)
+                XCTAssertNil(sandbox.defaults.object(forKey: DefaultsKey.liquidGlassIntensity))
 
-        var reloaded = ShellPreferences.load(
-            defaults: sandbox.defaults, preferencesStore: fixture.store
-        )
-        XCTAssertEqual(reloaded.liquidGlassStyle, .system)
-        XCTAssertEqual(reloaded.liquidGlassIntensity, 0.35)
-        var exported = ConfigurationPreferences()
-        reloaded.addToConfiguration(&exported)
-        XCTAssertEqual(exported.liquidGlassStyle, "system")
-        XCTAssertEqual(exported.liquidGlassIntensity, 0.35)
-        reloaded.setLiquidGlassStyle(.regular, defaults: sandbox.defaults)
-        XCTAssertEqual(reloaded.liquidGlassIntensity, 0.35)
-        reloaded.applyConfiguration(exported, defaults: sandbox.defaults)
-        XCTAssertEqual(reloaded.liquidGlassStyle, .system)
-        XCTAssertEqual(reloaded.liquidGlassIntensity, 0.35)
-    }
+                var imported = ConfigurationPreferences()
+                imported.liquidGlassStyle = style.rawValue
+                imported.liquidGlassIntensity = legacyValue
+                preferences.applyConfiguration(imported, defaults: sandbox.defaults)
+                var exported = ConfigurationPreferences()
+                preferences.addToConfiguration(&exported)
+                XCTAssertEqual(exported.liquidGlassStyle, style.rawValue)
+                XCTAssertEqual(exported.liquidGlassIntensity, style.transparency)
 
-    @MainActor
-    func testResetGlassRestoresDefaultsAndRemovesOverrides() throws {
-        let sandbox = try StoreSandbox(testCase: self, label: "shell-reset")
-        let defaults = sandbox.defaults
-        let fixture = try makePreferencesStore(AppPreferences())
-        defer { withExtendedLifetime(fixture.container) {} }
-        let store = fixture.store
-        var preferences = ShellPreferences.load(
-            defaults: defaults,
-            preferencesStore: store
-        )
-        preferences.setLiquidGlassStyle(.off, defaults: defaults)
-        preferences.setLiquidGlassIntensity(0.25, defaults: defaults)
-
-        preferences.resetGlass(defaults: defaults)
-
-        XCTAssertEqual(preferences.liquidGlassStyle, GlassLabDefaults.style)
-        XCTAssertEqual(preferences.liquidGlassIntensity, GlassLabDefaults.transparency)
-        XCTAssertNil(defaults.object(forKey: DefaultsKey.liquidGlassStyle))
-        XCTAssertNil(defaults.object(forKey: DefaultsKey.liquidGlassIntensity))
+                preferences.setLiquidGlassStyle(.off, defaults: sandbox.defaults)
+                preferences.setLiquidGlassStyle(style, defaults: sandbox.defaults)
+                let reloaded = ShellPreferences.load(
+                    defaults: sandbox.defaults, preferencesStore: fixture.store
+                )
+                XCTAssertEqual(reloaded.liquidGlassIntensity, style.transparency)
+            }
+        }
     }
 
     @MainActor

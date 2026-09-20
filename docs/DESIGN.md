@@ -79,8 +79,9 @@ See [Native shell](features/NATIVE_SHELL.md).
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is
 available on macOS 26; macOS 15 uses the fallback surface materials.
 Follow system is the default glass mode. Use untinted native Regular glass
-without extra window frost or protective color. Keep manual glass choices and
-their transparency control as explicit overrides. Preserve saved choices.
+without extra window frost or protective color. Off, Clear, and Regular use
+fixed tint and frost values, with no separate slider or reset control. Preserve
+the saved preset choice; ignore legacy slider values.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 

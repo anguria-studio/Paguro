@@ -139,7 +139,7 @@ final class IslandClearAllRenderingTests: XCTestCase {
         let height = empty ? 38.0 : 274.0
         renderer.show(
             state: state, content: contents.first, recentContents: contents,
-            appearance: NotificationIslandAppearance(glassStyle: .off, transparency: 1),
+            appearance: NotificationIslandAppearance(glassStyle: .off),
             cameraHousingSize: IslandScreenSize(width: 164, height: 38),
             placement: NotificationIslandPlacement(
                 screenIdentifier: "offscreen-test", style: .cameraHousing,

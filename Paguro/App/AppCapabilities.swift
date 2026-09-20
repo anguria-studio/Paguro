@@ -34,8 +34,7 @@ enum AppCapabilities {
     /// material surfaces for every glass style, so the style choice would show
     /// options that cannot change the native glass appearance.
     ///
-    /// The transparency slider is a separate matter and stays available: it
-    /// feeds the material tint and the window backdrop on every system.
+    /// Earlier systems use the solid shell fallback without glass controls.
     static var liquidGlassSupported: Bool {
         if #available(macOS 26, *) { true } else { false }
     }

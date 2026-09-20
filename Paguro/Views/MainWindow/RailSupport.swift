@@ -4,7 +4,7 @@ import SwiftUI
 
 /// AppKit support for the main window's backdrop, chrome, and drag handle.
 
-/// Wraps a SwiftUI hosting view in the main-window appearance experiment.
+/// Wraps a SwiftUI hosting view in the main-window preset materials.
 ///
 /// The order is backdrop frost, optional Liquid Glass, protective tint, then
 /// SwiftUI content. `WKWebView` stays opaque in the top content layer.
@@ -12,16 +12,14 @@ import SwiftUI
 private enum WindowBackdropInstaller {
     static func install(
         in window: NSWindow,
-        glassStyle: ShellGlassStyle,
-        transparency: Double
+        glassStyle: ShellGlassStyle
     ) {
         window.isOpaque = false
         window.backgroundColor = .clear
 
         if let container = window.contentView as? WindowBackdropContainerView {
             container.update(
-                glassStyle: glassStyle,
-                transparency: transparency
+                glassStyle: glassStyle
             )
             return
         }
@@ -34,16 +32,15 @@ private enum WindowBackdropInstaller {
         window.contentView = container
         container.install(hostedContent: hostedContent)
         container.update(
-            glassStyle: glassStyle,
-            transparency: transparency
+            glassStyle: glassStyle
         )
     }
 }
 
-/// The native full-window layers that the Glass Lab controls.
+/// The native full-window layers that the glass preset controls.
 ///
 /// The frost view obscures background detail. The glass view changes the
-/// optical style. The tint gives the transparency control exact endpoints.
+/// optical style. The tint gives each preset its fixed opacity.
 final class WindowBackdropContainerView: NSView {
     private let frostView = NSVisualEffectView()
     private let tintView = WindowShellTintView()
@@ -62,7 +59,7 @@ final class WindowBackdropContainerView: NSView {
         frostView.material = .underWindowBackground
         frostView.blendingMode = .behindWindow
         frostView.state = .followsWindowActiveState
-        frostView.alphaValue = GlassLabDefaults.regularFrost
+        frostView.alphaValue = 1
         addSubview(frostView)
 
         if #available(macOS 26, *) {
@@ -87,8 +84,7 @@ final class WindowBackdropContainerView: NSView {
     }
 
     func update(
-        glassStyle: ShellGlassStyle,
-        transparency: Double
+        glassStyle: ShellGlassStyle
     ) {
         frostView.alphaValue = glassStyle.frostOpacity
 
@@ -105,7 +101,7 @@ final class WindowBackdropContainerView: NSView {
             }
         }
 
-        tintView.transparency = glassStyle.effectiveTransparency(manualValue: transparency)
+        tintView.transparency = glassStyle.transparency
         tintView.isHidden = glassStyle == .system
     }
 
@@ -118,12 +114,12 @@ final class WindowBackdropContainerView: NSView {
     }
 }
 
-/// Draws a fixed RGB tint whose opacity is the user-controlled value.
+/// Draws a fixed RGB tint whose opacity comes from the preset.
 ///
-/// Use a layer background so a live slider change redraws this AppKit view.
+/// Use a layer background so a preset change redraws this AppKit view.
 /// The explicit layer also keeps the 0 percent endpoint opaque.
 private final class WindowShellTintView: NSView {
-    var transparency = GlassLabDefaults.transparency {
+    var transparency = ShellGlassDefaults.style.transparency {
         didSet { needsDisplay = true }
     }
 
@@ -186,7 +182,6 @@ private final class WindowShellTintView: NSView {
 struct WindowChromeConfigurator: NSViewRepresentable {
     let isMovable: Bool
     let glassStyle: ShellGlassStyle
-    let glassIntensity: Double
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -205,14 +200,12 @@ struct WindowChromeConfigurator: NSViewRepresentable {
     private func applyWhenAttached(to view: NSView, coordinator: Coordinator) {
         let isMovable = isMovable
         let glassStyle = glassStyle
-        let glassIntensity = glassIntensity
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             coordinator.configure(
                 window: window,
                 isMovable: isMovable,
-                glassStyle: glassStyle,
-                glassIntensity: glassIntensity
+                glassStyle: glassStyle
             )
         }
     }
@@ -229,14 +222,12 @@ struct WindowChromeConfigurator: NSViewRepresentable {
         func configure(
             window: NSWindow,
             isMovable: Bool,
-            glassStyle: ShellGlassStyle,
-            glassIntensity: Double
+            glassStyle: ShellGlassStyle
         ) {
             window.isMovable = isMovable
             WindowBackdropInstaller.install(
                 in: window,
-                glassStyle: glassStyle,
-                transparency: glassIntensity
+                glassStyle: glassStyle
             )
             WindowChromeConfigurator.applyReferenceTrafficLightGeometry(to: window)
             // The SwiftUI minimum width does not reach the window, which a

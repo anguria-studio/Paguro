@@ -73,7 +73,7 @@ final class AppState {
         AppCapabilities.liquidGlassSupported ? shellPreferences.liquidGlassStyle : .off
     }
     var liquidGlassIntensity: Double {
-        liquidGlassStyle.effectiveTransparency(manualValue: shellPreferences.liquidGlassIntensity)
+        liquidGlassStyle.transparency
     }
     var iconRailBaseSize: Double { shellPreferences.iconRailBaseSize }
     var iconRailMagnificationEnabled: Bool {
@@ -468,16 +468,8 @@ final class AppState {
         webViewPool.applyShellAppearance(isDark: isDark, services: workspaceStore.allServices())
     }
 
-    func setLiquidGlassIntensity(_ value: Double) {
-        shellPreferences.setLiquidGlassIntensity(value)
-    }
-
     func setLiquidGlassStyle(_ style: ShellGlassStyle) {
         shellPreferences.setLiquidGlassStyle(style)
-    }
-
-    func resetGlassLab() {
-        shellPreferences.resetGlass()
     }
 
     func setIconRailBaseSize(_ value: Double) {

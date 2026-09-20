@@ -75,17 +75,12 @@ struct NotificationIslandPanelContent: Equatable {
 /// The shared Paguro appearance values that apply to the island surface.
 struct NotificationIslandAppearance: Equatable {
     let glassStyle: ShellGlassStyle
-    let transparency: Double
+    var transparency: Double { glassStyle.transparency }
 
     static let defaultValue = NotificationIslandAppearance(
-        glassStyle: GlassLabDefaults.style,
-        transparency: GlassLabDefaults.transparency
+        glassStyle: ShellGlassDefaults.style
     )
 
-    init(glassStyle: ShellGlassStyle, transparency: Double) {
-        self.glassStyle = glassStyle
-        self.transparency = glassStyle.effectiveTransparency(manualValue: transparency)
-    }
 }
 
 /// Runs the one pointer action that the current island state permits.

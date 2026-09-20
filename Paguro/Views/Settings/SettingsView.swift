@@ -96,40 +96,13 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .help("Changes the native Liquid Glass style behind the main window shell.")
+                    .help("Choose a preset for the Paguro shell. Web pages stay unchanged.")
                 }
 
-                if appState.liquidGlassStyle == .system {
-                    Text("Uses the Liquid Glass appearance selected in System Settings.")
+                if AppCapabilities.liquidGlassSupported {
+                    Text(appState.liquidGlassStyle.explanation)
                         .font(.paguroCaption)
                         .foregroundStyle(.secondary)
-                } else {
-                    HStack(spacing: 12) {
-                        Slider(
-                            value: Binding(
-                                get: { appState.liquidGlassIntensity },
-                                set: { appState.setLiquidGlassIntensity($0) }
-                            ),
-                            in: 0...1
-                        ) {
-                            Text("Shell transparency")
-                        }
-
-                        Text("\(Int((appState.liquidGlassIntensity * 100).rounded()))%")
-                            .font(.paguroCaption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            // The readout holds "100%" at the readable size, so the
-                            // slider beside it keeps the same width at every value.
-                            .frame(width: 44, alignment: .trailing)
-                    }
-                    .help("Controls how much of the desktop appears through the Paguro shell. This control does not change web pages.")
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Reset Glass Lab") {
-                        appState.resetGlassLab()
-                    }
                 }
 
                 Picker("Layout", selection: Binding(

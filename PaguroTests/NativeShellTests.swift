@@ -303,10 +303,12 @@ final class NativeShellTests: XCTestCase {
 
     func testGlassStyleResolutionAndFrostRelationships() {
         XCTAssertEqual(ShellGlassStyle.resolving(ShellGlassStyle.clear.rawValue), .clear)
-        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), GlassLabDefaults.style)
-        XCTAssertEqual(ShellGlassStyle.resolving(nil), GlassLabDefaults.style)
+        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), ShellGlassDefaults.style)
+        XCTAssertEqual(ShellGlassStyle.resolving(nil), ShellGlassDefaults.style)
         XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
-        XCTAssertEqual(ShellGlassStyle.off.frostOpacity, ShellGlassStyle.regular.frostOpacity)
+        if #available(macOS 26, *) {
+            XCTAssertEqual(ShellGlassStyle.off.frostOpacity, 0)
+        }
     }
 
     @MainActor
@@ -314,11 +316,11 @@ final class NativeShellTests: XCTestCase {
         let backdrop = WindowBackdropContainerView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
         let frost = try XCTUnwrap(backdrop.subviews.first as? NSVisualEffectView)
         let tint = try XCTUnwrap(backdrop.subviews.last)
-        backdrop.update(glassStyle: .regular, transparency: 0.25)
+        backdrop.update(glassStyle: .regular)
         XCTAssertEqual(frost.alphaValue, 1)
         XCTAssertFalse(tint.isHidden)
 
-        backdrop.update(glassStyle: .system, transparency: 0.25)
+        backdrop.update(glassStyle: .system)
         XCTAssertTrue(tint.isHidden)
         if #available(macOS 26, *) {
             let glass = try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first)
@@ -329,19 +331,20 @@ final class NativeShellTests: XCTestCase {
         } else {
             XCTAssertEqual(frost.alphaValue, 1)
         }
-        backdrop.update(glassStyle: .clear, transparency: 0.25)
-        XCTAssertEqual(frost.alphaValue, 0.7, accuracy: 0.000_001)
+        backdrop.update(glassStyle: .clear)
+        XCTAssertEqual(frost.alphaValue, ShellGlassStyle.clear.frostOpacity, accuracy: 0.000_001)
         XCTAssertFalse(tint.isHidden)
-        backdrop.update(glassStyle: .off, transparency: 0.25)
-        XCTAssertEqual(frost.alphaValue, 1)
+        backdrop.update(glassStyle: .off)
+        XCTAssertEqual(frost.alphaValue, ShellGlassStyle.off.frostOpacity)
         if #available(macOS 26, *) {
             XCTAssertTrue(try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first).isHidden)
         }
     }
 
-    func testIslandSystemGlassIgnoresManualTint() {
-        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .system, transparency: 0.25).transparency, 1)
-        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .clear, transparency: 0.25).transparency, 0.25)
+    func testIslandUsesPresetTransparency() {
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .system).transparency, 1)
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .clear).transparency, 1)
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .off).transparency, 0)
     }
 
     func testSidebarPresentationMapsToSharedGeometry() {

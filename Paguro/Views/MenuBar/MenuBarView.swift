@@ -27,8 +27,7 @@ struct MenuBarView: View {
         .frame(width: 340)
         .containerBackground(for: .window) {
             MenuBarWindowSurface(
-                glassStyle: appState.liquidGlassStyle,
-                transparency: appState.liquidGlassIntensity
+                glassStyle: appState.liquidGlassStyle
             )
         }
         .accessibilityElement(children: .contain)
@@ -346,7 +345,6 @@ struct MenuBarServiceList<Content: View>: View {
 /// protective tint. The system still owns the window shape and shadow.
 private struct MenuBarWindowSurface: View {
     let glassStyle: ShellGlassStyle
-    let transparency: Double
 
     var body: some View {
         ZStack {
@@ -358,7 +356,7 @@ private struct MenuBarWindowSurface: View {
 
             Rectangle()
                 .fill(PaguroColor.shellTint(
-                    intensity: glassStyle.effectiveTransparency(manualValue: transparency)
+                    intensity: glassStyle.transparency
                 ))
         }
     }

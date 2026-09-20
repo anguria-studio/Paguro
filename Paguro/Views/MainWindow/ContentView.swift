@@ -150,8 +150,7 @@ struct ContentView: View {
         .background(
             WindowChromeConfigurator(
                 isMovable: firstRun.showsHome || !appState.railLayout.servicesInBar,
-                glassStyle: appState.liquidGlassStyle,
-                glassIntensity: appState.liquidGlassIntensity
+                glassStyle: appState.liquidGlassStyle
             )
         )
         .containerBackground(.clear, for: .window)

@@ -2,15 +2,16 @@ import Testing
 @testable import PaguroCore
 
 struct ShellGlassStyleTests {
-    @Test(arguments: [0.0, 0.35, 1.0])
-    func systemIgnoresManualTint(_ value: Double) {
-        #expect(ShellGlassStyle.system.effectiveTransparency(manualValue: value) == 1)
+    @Test func systemAddsNoAppTintOrFrost() {
+        #expect(ShellGlassStyle.system.transparency == 1)
+        #expect(ShellGlassStyle.system.backdropFrostOpacity == 0)
     }
 
-    @Test(arguments: [ShellGlassStyle.off, .clear, .regular])
-    func overridesRetainAndClampManualTint(_ style: ShellGlassStyle) {
-        #expect(style.effectiveTransparency(manualValue: 0.35) == 0.35)
-        #expect(style.effectiveTransparency(manualValue: -1) == 0)
-        #expect(style.effectiveTransparency(manualValue: 2) == 1)
+    @Test func offIsSolidAndClearIsLighterThanRegular() {
+        #expect(ShellGlassStyle.off.transparency == 0)
+        #expect(ShellGlassStyle.off.backdropFrostOpacity == 0)
+        #expect(ShellGlassStyle.clear.transparency > ShellGlassStyle.regular.transparency)
+        #expect(ShellGlassStyle.clear.backdropFrostOpacity < ShellGlassStyle.regular.backdropFrostOpacity)
+        #expect(ShellGlassStyle.regular.transparency > 0)
     }
 }

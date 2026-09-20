@@ -380,7 +380,7 @@ Icons grow toward the right and can extend over the web content edge.
 Paguro hides dock selection and hover tiles while magnification is active.
 Hovering an icon shows its service name in a material label on the right.
 The label keeps a 12 point gap after the rail or the magnified icon.
-It uses the current Window glass style and shell transparency tint.
+It uses the current Window glass preset.
 It does not take pointer events or replace the VoiceOver service name.
 Hover entry is immediate. Hover exit has a short delay so a changing pointer
 target does not make the icon and label flicker.
@@ -779,44 +779,43 @@ The Paguro header is part of the shell and has no browser outline or corner mask
 The native web view is the browser surface.
 Its host clips all four corners with a 14 point continuous radius.
 
-Each service control uses its own native circular Liquid Glass surface.
-The experimental Glass Lab controls the main window materials.
-The Window glass selector has Follow system, Off, Clear, and Regular values.
-Follow system is the default for a fresh install. It uses native Regular glass
-without an app tint or the extra frost layer. Native glass responds to the
-system Liquid Glass appearance. Paguro does not copy the system slider value.
-The same mode applies to toolbar controls, cards, the menu-bar surface, and
-the expanded island. Accessibility appearance settings remain in effect.
-Existing saved glass choices stay unchanged.
+Each service control uses its own native circular surface.
+The Window glass selector has four presets and no separate transparency slider:
 
-The shell transparency slider appears only for a manual glass choice and
-controls the protective tint. Follow system preserves the saved manual value
-for the next time a manual choice is selected. Configuration export and import
-preserve both the mode and that saved value.
-The native visual-effect view uses full strength for Regular and Off. It uses
-70 percent strength for Clear.
-The shell controls update the main window live.
-They do not change the Settings window, system-owned surfaces, or web pages.
+| Preset | Native material | Extra backdrop frost | Protective tint |
+| --- | --- | --- | --- |
+| Follow system | Untinted Regular glass | None | None |
+| Off | No glass | None | Opaque |
+| Clear | Clear glass | 35 percent | None |
+| Regular | Regular glass | Full strength | 15 percent |
+
+Follow system is the default for a fresh install. Native glass responds to the
+system Liquid Glass appearance. Paguro does not copy the system slider value.
+The same preset applies to toolbar controls, cards, the menu-bar surface, and
+the expanded island. Accessibility appearance settings remain in effect.
+Existing saved glass choices stay unchanged, but each choice now uses fixed
+opacity and frost values. Loading preferences removes the old slider setting.
+Configuration import accepts the legacy opacity field but uses the preset;
+export writes the preset's opacity for compatibility with older versions.
+
+The presets update the main window live. They do not change the Settings
+window, system-owned surfaces, or web pages. Selecting Follow system restores
+the default behavior, so there is no separate Reset Glass Lab action.
+On macOS 15, the glass selector is unavailable and the shell uses a solid tint
+over the native visual-effect fallback.
 The sidebar button uses a 32 point target.
 Paguro removes its permanent surface in the expanded state.
 Paguro gives it a circular material, border, and hover fill in the collapsed
 state.
 The service list does not use strong glass because it contains dense text.
-At 60 percent shell transparency, the sidebar selection starts to change from
-the solid source-list fill to a translucent neutral highlight.
-The transition is continuous and reaches the adaptive highlight at 100 percent.
+Off uses a solid source-list selection and a blue selected service name.
+The glass presets use a translucent neutral selection with black text in
+light appearance and white text in dark appearance. The fixed tint strength
+controls the blend, so Regular retains more selection fill than Clear.
 The same rule applies to expanded rows and collapsed dock items.
-The expanded selected service name is blue below this boundary. From 60 percent
-upward, it is black in light appearance and white in dark appearance. This rule
-keeps contrast against the frosted highlight.
 The web page stays on an opaque or quiet semantic background.
-The opaque dark shell tint uses `#242125`.
-The transparency slider changes its opacity and does not change its RGB values.
-At 0 percent, the protective layer is opaque across the complete window.
-At 100 percent, Paguro adds no protective tint.
-The Reset Glass Lab action restores Follow system and a saved manual
-transparency of 100 percent. On macOS 15, the glass selector is unavailable;
-the native visual-effect material and manual transparency slider remain.
+The opaque dark shell tint uses `#242125`. Presets change its opacity, not its
+RGB values.
 
 The lock screen uses this same window material and protective tint.
 It hides the underlying shell without unloading service views. Hidden shell
@@ -859,8 +858,8 @@ Lock closes the menu and uses the same app-lock route as File > Lock Now. It
 is hidden when App Lock is off or Paguro is already locked.
 The app name and shell mark open the main window, including
 when no services exist. The window has no footer. These routes remain available
-in Menu bar only mode. The complete window follows the Window glass and Shell
-transparency settings. The content also follows the selected Paguro appearance.
+in Menu bar only mode. The complete window follows the Window glass
+preset. The content also follows the selected Paguro appearance.
 
 The selected service uses a light fill and an accent-colored checkmark. In
 light appearance, the fill is 55 percent white, or opaque white with Reduce
