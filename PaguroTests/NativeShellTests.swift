@@ -305,9 +305,14 @@ final class NativeShellTests: XCTestCase {
         XCTAssertEqual(ShellGlassStyle.resolving(ShellGlassStyle.clear.rawValue), .clear)
         XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), ShellGlassDefaults.style)
         XCTAssertEqual(ShellGlassStyle.resolving(nil), ShellGlassDefaults.style)
-        XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
         if #available(macOS 26, *) {
+            XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
             XCTAssertEqual(ShellGlassStyle.off.frostOpacity, 0)
+        } else {
+            // Every preset uses the same full-frost fallback before Liquid Glass.
+            for style in ShellGlassStyle.allCases {
+                XCTAssertEqual(style.frostOpacity, 1, "Unexpected fallback for \(style)")
+            }
         }
     }
 
