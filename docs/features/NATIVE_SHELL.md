@@ -7,13 +7,45 @@ Status: active
 The native shell gives each web service a consistent Mac interface.
 It does not change the web content of a service.
 
+## Adding services
+
+After setup, Add Service and Command-N open a full-page catalog in the browser
+area. The rail, workspace controls, and native header stay available. The same
+picker serves onboarding and ordinary add, including search, category filters,
+multiple selection, custom website drafts, icon previews, and keyboard controls.
+The toolbar wraps into two rows in a narrow pane.
+
+The page shows the destination workspace in a native popup. It changes the
+destination without renaming a workspace. New workspace opens the name and
+emoji editor, including when only one workspace exists. Create saves an empty
+workspace and selects it as the catalog destination; checked services, filters,
+and the current browser selection stay intact. Cancelling that editor changes
+nothing. Cancelling the catalog afterward keeps the created workspace. Switching the
+workspace in the rail also changes the destination and preserves the draft.
+There is no wizard stepper or workspace name field here. Cancel and Add services
+sit in the footer. Escape cancels; Command-Return adds the selected batch.
+
+The batch saves all accounts and links in one transaction, appending them to
+the destination in selection order. Existing services and workspace names stay
+intact. A failed save retains the draft and changes no stored accounts. A
+missing destination disables Add services. Choosing an already configured
+catalog service creates a separate account with its own session.
+
+Cancel returns to the previous service without reloading it. The web view stays
+mounted beneath the catalog, hidden from pointer input and accessibility.
+Browser navigation buttons are disabled while the catalog is open. The global
+notification mute and downloads remain available. Selecting a rail service,
+a quick-switcher result, a download's service, or a notification returns to
+browsing. Service-switching shortcuts and incoming service links also close
+the catalog. A successful add opens the first new service and closes the catalog.
+The custom website and new workspace editors use modal sheets over the catalog.
+
 ## First run
 
-The main window shows one welcome screen while no service exists. A new install
-starts completely empty, with no workspace and no service. Adding the first
-service creates one workspace named Home and the service in one transaction.
-Cancel and a failed save leave the store empty. The Add Service sheet hides the
-workspace picker until more than one workspace exists. Launch never seeds data.
+The main window shows a three-step setup wizard while no service exists. A new install
+starts completely empty, with no workspace and no service. Finishing setup
+creates the named workspace and all selected services in one transaction.
+Cancel and a failed save leave the store empty. First run names its first workspace directly, without a destination picker. Launch never seeds data.
 
 The screen replaces the complete shell: no rail in any of the four layouts, no
 content header, and no top bar. An empty rail beside an empty header said
@@ -25,18 +57,68 @@ workspace. One service ends the screen, and no service brings it back. A user
 who removes every service therefore sees it again, which is correct: the window
 is empty again.
 
-The screen holds one centered column, 380 points wide, on the same window glass
-as the view that no selected service shows. It carries:
+A shared progress indicator sits in the center of the footer, between its
+actions. It labels Welcome, Your workspace, and Appearance, highlights the current step,
+and checks the completed step. Removing the top progress row brings page
+content 50 points higher, with 52 points still reserved for the traffic lights.
+VoiceOver reads the current step number and name. The indicator is informational.
 
-- the Paguro app icon, the title "Welcome to Paguro", and one sentence about
-  what the app does;
-- a grouped card with the setup rows that apply on this Mac;
-- one prominent button, **Add your first service**;
-- a quiet import line under it.
+Welcome centers a 380-point column on the window glass. It carries the Paguro
+icon, title, explanation, and grouped setup card. A fixed footer puts Import
+configuration on the left and Choose your services on the right. Each page
+uses the same footer baseline and side margins.
+
+The second step is titled "Set up your first workspace". It explains that a
+workspace keeps related services together for work, personal use, or a project.
+Workspace name defaults to Personal on a new install. At widths of 900 points
+or more, the field sits beside the introduction. Below that width, it moves
+below the introduction, above search. AnyLayout keeps the same editor and focus
+when the window resizes.
+If setup appears over existing empty workspaces, it starts with the target
+workspace’s current name. Back and custom website entry keep the typed name.
+Continue requires a nonblank name and at least one selected service.
+The final save trims outer whitespace and saves the name with the services.
+A failed save also rolls back a changed name on an existing empty workspace.
+
+The service catalog fills the rest of the second step. Search and a category
+filter narrow the grid. Each card toggles its service, with a checkmark and an
+accent border for selection. Filters and Back keep the complete selection.
+`ServiceSetupSelection` in PaguroCore keeps services in selection order.
+
+Search, category, and Custom website sit in one toolbar above the grid. All
+three controls are 36 points high. The category selector shows plain text and
+a chevron without a button background or border. Its width follows the current
+label, including native chevron spacing. Categories appear directly in the menu,
+with no submenu. Search is compact. The fixed footer holds Back and Continue,
+with no selection counter. The primary button stays disabled until
+a service is selected. The custom website sheet validates the name and HTTP(S)
+address, then stages the website with the other choices. It opens as a native
+modal over the catalog, with Cancel and Add website actions and no stepper.
+The address example is plain, secondary placeholder text. An icon preview and Change Icon
+control sit beside the fields. The draft retains the chosen or discovered icon
+through the final batch save. It does not save a service by itself.
+
+Custom websites use the same selectable cards as catalog services, including
+the icon, border, and top-left checkmark. Their section comes first in the
+scrolling list, directly below search and above the catalog. Unchecking a card
+removes it from the batch but keeps the draft available to select again.
+Search matches custom names and addresses, including unchecked drafts.
+The category menu includes Custom websites once a draft exists. Adding a
+custom website clears the filters and scrolls to the top so the new selected
+card is visible. The catalog stays in place behind the sheet. Native modal
+behavior keeps keyboard interaction in the sheet. Cancel or Escape keeps the catalog scroll
+position, filters, workspace name, and selection. Setup stays on step two.
+
+Create workspace saves all services and their workspace links together. A failed
+save rolls back the complete batch and keeps the selection for retry. Each
+account has its own WebKit store identifier. The shell opens on the first chosen
+service. Users sign in as they visit each service. After setup, Add Service opens the same catalog in the browser area.
+Command-N opens the catalog step while empty.
 
 The card holds at most two rows. The notification row reports the macOS
-permission. It offers Allow while macOS holds no decision. It reports "On", or
-it routes to System Settings, once macOS has decided. The island row appears
+permission. It offers "Turn on" to request permission while macOS holds no
+decision. For a stored refusal, "Turn on" opens Paguro’s own notification page
+in System Settings. The enabled state reads "On". The island row appears
 only on a display with a camera housing, with a switch for the island route.
 A permission that Paguro has not read yet shows no notification row, because
 the state would change under the user. The card is left out when neither row
@@ -46,7 +128,7 @@ The two setup decisions have no other place at first run. Settings owns them
 once the first service exists. The screen is the only first-run offer: Paguro
 has no separate welcome sheet.
 
-The import line reads a configuration file and adds it. The Settings import
+The import action reads a configuration file and adds it. The Settings import
 offers an Add or Replace choice; this screen has nothing to replace, so it adds
 the file and reports the result. See [Configuration transfer](CONFIGURATION.md).
 
@@ -55,29 +137,107 @@ top bar does. The traffic lights stay visible and uncovered. The menu bar keeps
 every command: Add Service (`Command-N`), Settings, and import all work while
 the screen is up. The quick switcher opens and finds nothing.
 
-The first service ends the screen. The shell fades in over 0.3 seconds and the
+Moving between setup page contents uses a 0.22-second fade and 24 points of horizontal
+travel. Forward enters from the right; Back enters from the left. Custom website
+entry uses the native sheet transition. Reduce Motion uses a fade with no
+travel for the wizard pages. Card selection fades its checkmark and border
+over 0.14 seconds.
+
+Continue opens the third step, Appearance, without creating any services.
+Theme offers Follow System, Light, and Dark. Liquid Glass offers Follow system,
+Off, Clear, and Regular on macOS 26 or later. Choices update the shell live
+through the same preference actions as Settings and persist immediately.
+Theme cards show miniature windows, with a split light/dark preview for Follow
+System. Glass cards use one sample backdrop to illustrate the relative density
+of each choice. These are illustrations, not exact material measurements. The
+full shell remains the live preview. Preview shapes are hidden from VoiceOver.
+They do not change the workspace draft or sign in to services. The website
+still owns its own appearance. Theme remains available on macOS 15.
+Back returns to the mounted catalog with filters, scroll position, custom
+icons, name, and selection intact. Create workspace performs the existing
+atomic batch save. A failure keeps the appearance page and draft available.
+Command-Return continues from the catalog and saves from Appearance. Hidden
+catalog controls cannot receive input or appear in the accessibility tree.
+The footer moves progress above the actions when three steps cannot fit across
+the available width. The wizard owns one persistent footer outside the animated
+page container. It has no separate background fill and never slides or fades
+with page changes. The footer owns import feedback and primary-action focus;
+the catalog keeps search focus and reports modal presentation to disable wizard
+navigation while an editor is open. Reduce Motion preserves the content fade.
+
+The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
-`PaguroMotion.firstRunSwapSeconds` holds the duration. `AppState.addService`
-selects the new service, so the shell opens on it.
+`PaguroMotion.firstRunSwapSeconds` holds the duration. `AppState.addSetupServices`
+selects the first chosen service, so the shell opens on it.
 
 App Lock wins. A locked launch shows the lock screen, and the welcome screen
 waits under it. None of its actions can run while the window is locked, so the
 import line is closed to a click and to a keyboard activation. The import
-itself refuses a locked app as well.
+itself refuses a locked app as well. The catalog and batch save also refuse a
+locked app. Lock disables the custom website sheet and cancels pending icon discovery.
 
-Keyboard focus starts on **Add your first service**, and Return activates it.
-VoiceOver reads the title, the sentence, the rows, the button, and the import
-line in that order. A row is one element with its title and description, and
-its control stays a separate element beside it. Increase Contrast gives the
+Keyboard focus starts on **Choose your services**. The catalog starts focus in
+search after the page enters the focus hierarchy. The category menu does not
+take focus when the page appears. Tab reaches the workspace name, search,
+category menu, Custom website, service grid, and footer buttons. These controls participate even when macOS
+limits its usual Tab navigation to text inputs. Shift-Tab reverses the order.
+The category menu uses a native popup with direct choices and keyboard handling.
+
+The grid is one Tab stop. Arrow keys move a visible focus outline between cards;
+Space or Return toggles the focused card. The outline differs from a selected
+card's checkmark and accent border. Clicking a card hides the dotted outline
+while keeping it ready for keyboard input. A window-scoped local event observer
+records mouse-down before AppKit assigns focus, rather than waiting for the
+button action on mouse-up. It passes events through unchanged and ignores
+hidden or modal-covered catalogs and events from other windows. Tab entry, arrow movement, and
+Space or Return restore the outline. Moving focus scrolls the card into view.
+`SetupGridNavigation` in PaguroCore follows the current column count and keeps
+custom and catalog sections on separate rows. Filters retain a visible target
+or choose the first result; empty results have no card target.
+
+Down Arrow or Return from search enters the results. Return does not create a
+workspace while browsing cards. Command-Return advances to Appearance, or Tab
+to Continue and press Space or Return. On Appearance, Command-Return creates
+the workspace. Command-Shift-N opens custom entry from the catalog.
+Dismissing custom entry restores its opener's focus. Adding a custom website
+returns focus to its new card after the sheet closes. The sheet cannot create
+the workspace through the underlying Command-Return shortcut.
+
+Clicking the background releases text-field focus. Clicking a service moves
+focus to the grid. Return finishes editing the workspace name. Window dragging
+still works after ending text editing. VoiceOver reads each card's name and
+selection state and keeps its select action.
+
+On the welcome step, VoiceOver reads the title, explanation, setup rows, import
+action, and primary button in that order. A row is one element with its title
+and description. Its control stays a separate element beside it. Increase Contrast gives the
 card a full border, and Reduce Transparency gives it an opaque background.
+Without Liquid Glass, the setup card uses a one-point border with 18 percent
+ink in light mode and 20 percent in dark mode. This keeps its edge visible on
+a solid shell. Glass keeps the lighter half-point hairline.
+
+The Off preset uses a solid charcoal canvas with a subtle violet undertone,
+slightly lighter grouped surfaces and sidebar, and raised card fills. Light
+appearance uses an off-white canvas, a pale grouped surface, and white cards.
+The native backdrop and SwiftUI canvas share the same opaque color. Welcome,
+service-selection, appearance, and floating notice cards share the card fill.
+Selected service names use white in dark mode and black in light mode with
+the existing subtle row highlight. The footer has no separate fill.
+Other glass presets and website colors keep
+their existing behavior. The older-system solid fallback uses the same palette.
 
 ### Debug preview
 
-Debug builds accept `--paguro-first-run-preview`. It shows the screen although
-services exist, so the screen can be inspected at any time. A successful add or
-import ends the forced preview and shows the normal shell if services exist.
-The argument itself writes nothing; additions and imports save normally. The
-**Paguro First Run Preview** scheme in `project.yml` runs the app with it.
+Debug builds accept `--paguro-first-run-preview`. The **Paguro First Run Preview**
+scheme starts with no workspace or service on every run. Its account graph and
+WebKit sessions stay in memory. Adding a service or importing a configuration
+shows only that run's services and ends the welcome screen. Quitting discards
+those test services and sign-ins. The normal **Paguro** scheme uses the saved setup.
+
+The preview bypasses normal-store restore, snapshots, and recovery history.
+It uses separate recovery defaults and disables persistent-session enumeration,
+so the empty test graph cannot reclaim the normal app's sign-in data. macOS
+notification authorization remains the system decision for the Debug app.
 
 `FirstRunPreviewConfiguration` sits completely inside `#if DEBUG`, so a Release
 build compiles nothing from it. The release script and the direct build check
@@ -261,7 +421,7 @@ Icons grow toward the right and can extend over the web content edge.
 Paguro hides dock selection and hover tiles while magnification is active.
 Hovering an icon shows its service name in a material label on the right.
 The label keeps a 12 point gap after the rail or the magnified icon.
-It uses the current Window glass style and shell transparency tint.
+It uses the current Window glass preset.
 It does not take pointer events or replace the VoiceOver service name.
 Hover entry is immediate. Hover exit has a short delay so a changing pointer
 target does not make the icon and label flicker.
@@ -393,26 +553,33 @@ override the browser preference.
 
 ### Floating notices
 
-A transient notice about the active service appears as a floating card over the
-top trailing corner of the web content. The card holds a symbol, a short title,
-an explanation, and a close button. It leaves after 12 seconds, and the close
-button removes it at once. A drag to the right also removes it, with the same
-action as the close button.
+The backup offer, offline status, microphone feedback, capacity notice, and
+passkey notice use floating cards. The store error keeps its full-width strip.
+`ContentView` owns the host above both the shell and first-run screen, below
+the lock overlay. Cards take clicks only inside their frames and do not move
+content or take keyboard focus. Locked windows suppress their announcements.
 
-Two notices use this card. The capacity notice reports the first service that
-the pool released to stay inside its size limit. The passkey notice reports
-that `WKWebView` cannot use a passkey for sign-in. Paguro shows the passkey
-notice one time for each service, and it stores the seen state as the card
-appears.
-The Add Service sheet does not repeat the passkey notice. The card is the one
-place that reports it.
+A card holds a symbol, title, optional explanation, up to two action buttons,
+and a close button. A drag to the right has the same action as the close button.
+The backup offer keeps Review backups and Not now, with no timer. Dismissal
+means Not now. Offline stays until the connection returns or the user dismisses
+it. A new connection loss raises it again. Microphone feedback lasts two
+seconds. Capacity and passkey notices last 12 seconds. The passkey card has one
+app-wide identity. Switching services neither restarts its timer nor removes it.
+
+The stack shows at most three cards, newest first, with persistent cards taking
+places before transient cards. Remaining cards wait for a free place. Paguro
+shows the passkey notice once for the app and saves its seen state when raised.
+Later services and launches do not repeat it. A stored seen flag from any older
+service also counts as seen. The Debug preview uses its own resettable defaults.
+A locked window cannot consume the notice. The Add Service sheet does not repeat it.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
-`FloatingNoticeLayout` in `PaguroCore` holds the width, the margins, and the
-gap that keeps the stack clear of the find bar. The card reads the drag from
-`NotificationIslandSwipeRule`, the rule that the island cards already use, so
-both shapes have one dismiss movement. `docs/DESIGN.md` states which notices
-use this shape and which notices use the full-width strip.
+`FloatingNoticeLayout`, `FloatingNoticeStackRule`, and `OfflineNoticeState` in
+PaguroCore hold the layout, visible-card selection, and offline dismissal rules.
+Cards clear the header and find bar; on the welcome screen they clear the
+traffic lights. The card uses `NotificationIslandSwipeRule` for its drag.
+See [Design choices](../DESIGN.md) for glass and accessibility rules.
 
 ### Page history
 
@@ -653,32 +820,48 @@ The Paguro header is part of the shell and has no browser outline or corner mask
 The native web view is the browser surface.
 Its host clips all four corners with a 14 point continuous radius.
 
-Each service control uses its own native circular Liquid Glass surface.
-The experimental Glass Lab controls the main window materials.
-The Window glass selector has Off, Clear, and Regular values.
-The shell transparency slider controls the protective tint.
-The native visual-effect view uses full strength for Regular and Off. It uses
-70 percent strength for Clear.
-The shell controls update the main window live.
-They do not change the Settings window, system-owned surfaces, or web pages.
+Each service control uses its own native circular surface.
+The Window glass selector has four presets and no separate transparency slider:
+
+| Preset | Native material | Extra backdrop frost | Protective tint |
+| --- | --- | --- | --- |
+| Follow system | Untinted Regular glass | None | None |
+| Off | No glass | None | Opaque |
+| Clear | Untinted Regular glass | 45 percent | None |
+| Regular | Regular glass | Full strength | 15 percent |
+
+Follow system is the default for a fresh install. Native glass responds to the
+system Liquid Glass appearance. Paguro does not copy the system slider value.
+Clear also uses the native Regular material, with light extra backdrop frost
+and no protective tint. Do not map this preset to Apple's Clear material:
+that variant leaves background text too visible behind shell content.
+Public glass APIs do not expose a per-app system-slider endpoint override.
+Native glass still adapts to system appearance in all glass presets.
+The same preset applies to toolbar controls, cards, the menu-bar surface, and
+the expanded island. Accessibility appearance settings remain in effect.
+Existing saved glass choices stay unchanged, but each choice now uses fixed
+opacity and frost values. Loading preferences removes the old slider setting.
+Configuration import accepts the legacy opacity field but uses the preset;
+export writes the preset's opacity for compatibility with older versions.
+
+The presets update the main window live. They do not change the Settings
+window, system-owned surfaces, or web pages. Selecting Follow system restores
+the default behavior, so there is no separate Reset Glass Lab action.
+On macOS 15, the glass selector is unavailable and the shell uses a solid tint
+over the native visual-effect fallback.
 The sidebar button uses a 32 point target.
 Paguro removes its permanent surface in the expanded state.
 Paguro gives it a circular material, border, and hover fill in the collapsed
 state.
 The service list does not use strong glass because it contains dense text.
-At 60 percent shell transparency, the sidebar selection starts to change from
-the solid source-list fill to a translucent neutral highlight.
-The transition is continuous and reaches the adaptive highlight at 100 percent.
+Off uses a solid source-list selection and a blue selected service name.
+The glass presets use a translucent neutral selection with black text in
+light appearance and white text in dark appearance. The fixed tint strength
+controls the blend, so Regular retains more selection fill than Clear.
 The same rule applies to expanded rows and collapsed dock items.
-The expanded selected service name is blue below this boundary. From 60 percent
-upward, it is black in light appearance and white in dark appearance. This rule
-keeps contrast against the frosted highlight.
 The web page stays on an opaque or quiet semantic background.
-The opaque dark shell tint uses `#242125`.
-The transparency slider changes its opacity and does not change its RGB values.
-At 0 percent, the protective layer is opaque across the complete window.
-At 100 percent, Paguro adds no protective tint.
-The Reset Glass Lab action restores Regular glass and 100 percent transparency.
+The opaque dark shell tint uses `#242125`. Presets change its opacity, not its
+RGB values.
 
 The lock screen uses this same window material and protective tint.
 It hides the underlying shell without unloading service views. Hidden shell
@@ -721,8 +904,8 @@ Lock closes the menu and uses the same app-lock route as File > Lock Now. It
 is hidden when App Lock is off or Paguro is already locked.
 The app name and shell mark open the main window, including
 when no services exist. The window has no footer. These routes remain available
-in Menu bar only mode. The complete window follows the Window glass and Shell
-transparency settings. The content also follows the selected Paguro appearance.
+in Menu bar only mode. The complete window follows the Window glass
+preset. The content also follows the selected Paguro appearance.
 
 The selected service uses a light fill and an accent-colored checkmark. In
 light appearance, the fill is 55 percent white, or opaque white with Reduce

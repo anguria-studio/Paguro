@@ -25,7 +25,7 @@ final class IslandRenderingTests: XCTestCase {
                 model.update(
                     state: state, content: state.currentEvent == nil ? nil : content,
                     recentContents: [content],
-                    appearance: NotificationIslandAppearance(glassStyle: .off, transparency: 1),
+                    appearance: NotificationIslandAppearance(glassStyle: .off),
                     cameraHousingSize: IslandScreenSize(width: 164, height: 38),
                     actions: .none
                 )

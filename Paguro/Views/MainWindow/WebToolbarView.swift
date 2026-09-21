@@ -109,8 +109,10 @@ struct WebContentActions: View {
                 Image(systemName: "chevron.left")
             }
             .buttonStyle(PaguroToolbarButtonStyle())
-            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .disabled(!webViewState.canGoBack)
+            .toolbarControlSurface(
+                intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+            )
+            .disabled(appState.showAddService || !webViewState.canGoBack)
             .help("Back")
             .accessibilityLabel("Go back")
             .accessibilityIdentifier("web.goBack")
@@ -121,8 +123,10 @@ struct WebContentActions: View {
                 Image(systemName: "chevron.right")
             }
             .buttonStyle(PaguroToolbarButtonStyle())
-            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .disabled(!webViewState.canGoForward)
+            .toolbarControlSurface(
+                intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+            )
+            .disabled(appState.showAddService || !webViewState.canGoForward)
             .help("Forward")
             .accessibilityLabel("Go forward")
             .accessibilityIdentifier("web.goForward")
@@ -131,14 +135,16 @@ struct WebContentActions: View {
                 if webViewState.isLoading {
                     webViewState.webView?.stopLoading()
                 } else {
-                    webViewState.webView?.reload()
+                    appState.reloadActiveService()
                 }
             } label: {
                 Image(systemName: webViewState.isLoading ? "xmark" : "arrow.clockwise")
             }
             .buttonStyle(PaguroToolbarButtonStyle())
-            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
-            .disabled(webViewState.webView == nil)
+            .toolbarControlSurface(
+                intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+            )
+            .disabled(appState.showAddService || webViewState.webView == nil)
             .help(webViewState.isLoading ? "Stop" : "Reload")
             .accessibilityLabel(webViewState.isLoading ? "Stop loading" : "Reload page")
 
@@ -148,7 +154,9 @@ struct WebContentActions: View {
                 Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
             }
             .buttonStyle(PaguroToolbarButtonStyle(isSelected: appState.doNotDisturb))
-            .toolbarControlSurface(intensity: appState.liquidGlassIntensity)
+            .toolbarControlSurface(
+                intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
+            )
             .help(appState.doNotDisturb ? "Unmute notifications and media" : "Mute notifications and media")
             .accessibilityLabel(
                 appState.doNotDisturb
@@ -212,7 +220,7 @@ struct DownloadIndicatorButton: View {
             }
         }
         .buttonStyle(PaguroToolbarButtonStyle(isSelected: showsList))
-        .toolbarControlSurface(intensity: glassIntensity)
+        .toolbarControlSurface(intensity: glassIntensity, glassStyle: appState.liquidGlassStyle)
         .scaleEffect(completionScale)
         .opacity(completionOpacity)
         // The mark that reports a download start lands here, so the window

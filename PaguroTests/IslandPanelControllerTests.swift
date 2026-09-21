@@ -1033,8 +1033,7 @@ final class IslandPanelControllerTests: XCTestCase {
         let renderer = RecordingIslandPanelRenderer()
         let controller = makeController(renderer: renderer)
         let appearance = NotificationIslandAppearance(
-            glassStyle: .clear,
-            transparency: 0.4
+            glassStyle: .clear
         )
 
         controller.showCollapsed()

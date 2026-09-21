@@ -292,9 +292,19 @@ final class MediaPermissionCoordinator {
             } catch {
                 return
             }
-            guard self?.microphoneActionFeedback == feedback else { return }
+            guard !Task.isCancelled, self?.microphoneActionFeedback == feedback else { return }
             self?.microphoneActionFeedback = nil
         }
+    }
+
+    /// Removes the microphone feedback before its own time ends.
+    ///
+    /// The notice is a card now, and a card carries a close button and a drag
+    /// that the user can reach at any moment.
+    func clearMicrophoneActionFeedback() {
+        microphoneFeedbackTask?.cancel()
+        microphoneFeedbackTask = nil
+        microphoneActionFeedback = nil
     }
 
     private func presentNextRequest() {

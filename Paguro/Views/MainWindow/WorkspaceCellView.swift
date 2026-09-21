@@ -12,7 +12,7 @@ struct WorkspaceCellView: View {
     var sidebarPresentation: SidebarPresentation = .expanded
     var badgeCount: Int = 0
     var isMuted: Bool = false
-    var glassStyle = GlassLabDefaults.style
+    var glassStyle = ShellGlassDefaults.style
     var glassIntensity = GlassIntensityScale.defaultValue
     var dockIconSize = PaguroMetric.Sidebar.collapsedIconSize
     var dockItemSize = PaguroMetric.Sidebar.dockItemSize

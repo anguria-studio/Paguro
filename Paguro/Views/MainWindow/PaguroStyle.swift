@@ -196,6 +196,8 @@ enum PaguroMotion {
     /// first service starts. It is a fade, plus a slide of the rail in from its
     /// own edge. Reduce Motion keeps the fade alone.
     static let firstRunSwapSeconds = 0.3
+    static let setupStepSeconds = 0.22
+    static let setupSelectionSeconds = 0.14
 }
 
 /// The user-facing transparency scale for the Paguro shell.
@@ -235,7 +237,7 @@ enum GlassIntensityScale {
 
     /// Changes a selected sidebar row from the solid source-list fill to a
     /// translucent, adaptive highlight. The smooth curve prevents a visible
-    /// jump when the slider crosses the start value.
+    /// jump when the transparency crosses the start value.
     static func adaptiveSelectionProgress(_ value: Double) -> Double {
         let range = 1 - adaptiveSelectionStart
         let position = (normalized(value) - adaptiveSelectionStart) / range
@@ -245,38 +247,41 @@ enum GlassIntensityScale {
 }
 
 /// The native glass style behind the main window shell.
-enum ShellGlassStyle: String, CaseIterable {
-    case off
-    case clear
-    case regular
-
+extension ShellGlassStyle {
     var displayName: String {
         switch self {
+        case .system: "Follow system"
         case .off: "Off"
         case .clear: "Clear"
         case .regular: "Regular"
         }
     }
 
-    var frostOpacity: CGFloat {
+    var explanation: String {
         switch self {
-        case .clear:
-            GlassLabDefaults.regularFrost * 0.7
-        case .off, .regular:
-            GlassLabDefaults.regularFrost
+        case .system: "Uses the Liquid Glass appearance selected in System Settings."
+        case .off: "A solid shell without glass or transparency."
+        case .clear: "Frosted glass without added tint, keeping the background soft."
+        case .regular: "More frosted glass for a quieter background."
+        }
+    }
+
+    var frostOpacity: CGFloat {
+        if #available(macOS 26, *) {
+            CGFloat(backdropFrostOpacity)
+        } else {
+            1
         }
     }
 
     static func resolving(_ storedValue: String?) -> Self {
-        storedValue.flatMap(Self.init(rawValue:)) ?? GlassLabDefaults.style
+        storedValue.flatMap(Self.init(rawValue:)) ?? ShellGlassDefaults.style
     }
 }
 
-/// Baseline values for the temporary appearance tuning controls.
-enum GlassLabDefaults {
-    static let style = ShellGlassStyle.regular
-    static let transparency = 1.0
-    static let regularFrost: CGFloat = 1.0
+/// Default preset for a new installation.
+enum ShellGlassDefaults {
+    static let style = ShellGlassStyle.system
 }
 
 enum DockRailPosition: String, CaseIterable {
@@ -405,6 +410,27 @@ enum PaguroColor {
         })
     }
 
+    /// Opaque shell surfaces share a restrained violet undertone.
+    enum Solid {
+        static func canvasColor(isDark: Bool) -> NSColor {
+            isDark
+                ? NSColor(srgbRed: 24 / 255, green: 24 / 255, blue: 29 / 255, alpha: 1)
+                : NSColor(srgbRed: 245 / 255, green: 244 / 255, blue: 247 / 255, alpha: 1)
+        }
+
+        static let canvas = PaguroColor.dynamic(
+            light: canvasColor(isDark: false), dark: canvasColor(isDark: true)
+        )
+        static let surface = PaguroColor.dynamic(
+            light: NSColor(srgbRed: 236 / 255, green: 235 / 255, blue: 240 / 255, alpha: 1),
+            dark: NSColor(srgbRed: 32 / 255, green: 32 / 255, blue: 38 / 255, alpha: 1)
+        )
+        static let card = PaguroColor.dynamic(
+            light: .white,
+            dark: NSColor(srgbRed: 40 / 255, green: 40 / 255, blue: 48 / 255, alpha: 1)
+        )
+    }
+
     enum Text {
         static let primary = Color(nsColor: .labelColor)
         static let secondary = PaguroColor.ink(light: 0.60, dark: 0.62)
@@ -469,7 +495,8 @@ enum PaguroColor {
         /// A protective tint over Paguro-owned transient material surfaces. It
         /// becomes transparent as the user increases glass intensity.
         static func shellMaterialTint(intensity: Double) -> Color {
-            PaguroColor.dynamic(
+            if intensity == 0 { return PaguroColor.Solid.surface }
+            return PaguroColor.dynamic(
                 light: NSColor(
                     srgbRed: 0.95,
                     green: 0.95,
@@ -507,7 +534,8 @@ enum PaguroColor {
 
     /// The full protective tint used above the native window material.
     static func shellTint(intensity: Double) -> Color {
-        PaguroColor.dynamic(
+        if intensity == 0 { return PaguroColor.Solid.canvas }
+        return PaguroColor.dynamic(
             light: NSColor(
                 srgbRed: 0.95,
                 green: 0.95,
@@ -525,10 +553,11 @@ enum PaguroColor {
 
     /// The protective tint over the window material.
     ///
-    /// The RGB value stays stable. Only its opacity changes, so the setting
-    /// reveals the desktop instead of turning the app gray.
+    /// Off uses the opaque palette. Glass presets keep their existing tint
+    /// and opacity so the desktop remains visible through the native material.
     static func shellCanvas(intensity: Double) -> Color {
-        PaguroColor.dynamic(
+        if intensity == 0 { return PaguroColor.Solid.canvas }
+        return PaguroColor.dynamic(
             light: NSColor(
                 srgbRed: 0.95,
                 green: 0.95,
@@ -547,7 +576,8 @@ enum PaguroColor {
     /// The sidebar keeps slightly more tint than the surrounding canvas so
     /// labels stay legible over a bright or detailed wallpaper.
     static func sidebarCanvas(intensity: Double) -> Color {
-        PaguroColor.dynamic(
+        if intensity == 0 { return PaguroColor.Solid.surface }
+        return PaguroColor.dynamic(
             light: NSColor(
                 srgbRed: 0.96,
                 green: 0.96,
@@ -634,6 +664,9 @@ enum PaguroRadius {
 /// the tone is carried by the icon and the rule under the strip, not by shouting
 /// with the background. This replaces two raw SwiftUI yellows and a solid red
 /// bar that read as three unrelated designs.
+///
+/// Both notice shapes read the tint. The strip adds the rule under it, and a
+/// floating card carries the tone in its symbol tile alone.
 enum NoticeSeverity: CaseIterable {
     /// Something is offered, and nothing is wrong.
     case info
@@ -662,27 +695,27 @@ enum NoticeSeverity: CaseIterable {
     var fillOpacity: Double { 0.12 }
 }
 
-/// The one notice strip: a tinted band with a rule under it.
+/// The store-error strip: a tinted band with a rule under it.
+///
+/// Storage failures and recovery outcomes need a distinct window-level notice.
+/// Other notices use `FloatingNoticeCard` without moving the content.
 ///
 /// The window-drag handle is part of the shape rather than left to each caller.
-/// A notice sits at the very top of the window, inside the title-bar drag band,
+/// The strip sits at the very top of the window, inside the title-bar drag band,
 /// and the bar layout turns the OS window drag off (see
 /// `WindowChromeConfigurator`). Without a handle the strip is dead to dragging,
 /// and because it also pushes the rail's own handle down out of the band, the
-/// window could not be moved by its top edge at all while a notice was up. The
+/// window could not be moved by its top edge at all while the strip was up. The
 /// handle goes behind the content and in front of the fill, so buttons still
 /// take their own clicks.
 struct NoticeStrip<Content: View>: View {
     let severity: NoticeSeverity
-    /// Overrides the severity's own icon where a notice is about something more
-    /// specific than its seriousness.
-    var systemImage: String?
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: systemImage ?? severity.systemImage)
+                Image(systemName: severity.systemImage)
                     .foregroundStyle(severity.tint)
                     .accessibilityHidden(true)
 
@@ -888,19 +921,24 @@ struct PaguroMenuRowButtonStyle: ButtonStyle {
 /// macOS 26 draws it with interactive Liquid Glass. Earlier systems have no
 /// such API, so they get the material capsule that stands in for glass
 /// everywhere else in the shell. Both forms read the same intensity, so the
-/// appearance slider keeps working below macOS 26.
+/// preset also supplies the fallback tint below macOS 26.
 private struct ToolbarControlSurfaceModifier: ViewModifier {
     let intensity: Double
+    let glassStyle: ShellGlassStyle
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content.glassEffect(
-                .regular
-                    .tint(PaguroColor.Fill.glassTint(intensity: intensity))
-                    .interactive(),
-                in: .circle
-            )
+        if #available(macOS 26, *), glassStyle != .off {
+            if glassStyle == .system || glassStyle == .clear {
+                content.glassEffect(.regular.interactive(), in: .circle)
+            } else {
+                content.glassEffect(
+                    .regular
+                        .tint(PaguroColor.Fill.glassTint(intensity: intensity))
+                        .interactive(),
+                    in: .circle
+                )
+            }
         } else {
             content.background {
                 ZStack {
@@ -916,7 +954,7 @@ private struct ToolbarControlSurfaceModifier: ViewModifier {
 
 extension View {
     /// Applies the toolbar control surface for the running system.
-    func toolbarControlSurface(intensity: Double) -> some View {
-        modifier(ToolbarControlSurfaceModifier(intensity: intensity))
+    func toolbarControlSurface(intensity: Double, glassStyle: ShellGlassStyle) -> some View {
+        modifier(ToolbarControlSurfaceModifier(intensity: intensity, glassStyle: glassStyle))
     }
 }

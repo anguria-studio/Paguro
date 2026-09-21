@@ -164,6 +164,25 @@ final class WorkspaceStore {
         to spaceID: UUID?,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> UUID? {
+        try addServices([
+            ServiceSetupDraft(
+                label: label, url: url, catalogEntryID: catalogEntryID,
+                userAgent: userAgent, customIconData: customIconData,
+                fetchedIconData: fetchedIconData
+            )
+        ], to: spaceID, save: save)?.first
+    }
+
+    /// Commits the whole selection, including Home, or rolls everything back.
+    func addServices(
+        _ drafts: [ServiceSetupDraft],
+        to spaceID: UUID?,
+        workspaceName: String? = nil,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> [UUID]? {
+        guard !drafts.isEmpty else { return [] }
+        let normalizedName = workspaceName.flatMap(WorkspaceName.normalized)
+        guard workspaceName == nil || normalizedName != nil else { return nil }
         let spaces = try context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))
         let links = try liveLinks()
         let space: Space
@@ -173,36 +192,39 @@ final class WorkspaceStore {
         } else if let existing = spaces.first {
             space = existing
         } else {
-            // Create Home only with the first service, in the same transaction.
-            // Cancel and a failed save must not leave an empty workspace behind.
-            space = Space(name: "Home", emoji: "", sortOrder: 0)
+            // The workspace and services commit together, so cancel leaves no workspace.
+            space = Space(name: normalizedName ?? WorkspaceName.defaultValue, emoji: "", sortOrder: 0)
             context.insert(space)
         }
+        if let normalizedName { space.name = normalizedName }
         let nextOrder = (links
             .filter { $0.space.id == space.id }
             .map(\.sortOrder)
             .max() ?? -1) + 1
 
-        let service = ServiceInstance(
-            label: label,
-            url: url,
-            customIconData: customIconData,
-            catalogEntryID: catalogEntryID,
-            userAgent: userAgent
-        )
-        context.insert(service)
-        if let fetchedIconData {
-            service.fetchedIconData = fetchedIconData
-            service.faviconFetchedAt = Date()
+        let serviceIDs = drafts.enumerated().map { offset, draft in
+            let service = ServiceInstance(
+                label: draft.label, url: draft.url,
+                customIconData: draft.customIconData,
+                catalogEntryID: draft.catalogEntryID, userAgent: draft.userAgent
+            )
+            context.insert(service)
+            if let icon = draft.fetchedIconData {
+                service.fetchedIconData = icon
+                service.faviconFetchedAt = Date()
+            }
+            context.insert(SpaceServiceLink(
+                sortOrder: nextOrder + offset, space: space, service: service
+            ))
+            return service.id
         }
-        context.insert(SpaceServiceLink(sortOrder: nextOrder, space: space, service: service))
         do {
             try save(context)
         } catch {
             context.rollback()
             throw error
         }
-        return service.id
+        return serviceIDs
     }
 
     func moveService(linkID: UUID, to targetSpaceID: UUID) throws -> ServiceMoveOutcome? {
@@ -474,33 +496,7 @@ final class WorkspaceStore {
         return WindowSelection(spaceID: spaceID, serviceID: serviceID)
     }
 
-    func backfillPasskeyNoticeIfNeeded(
-        freshInstall: Bool,
-        defaults: UserDefaults = .standard
-    ) {
-        guard !defaults.bool(forKey: DefaultsKey.passkeyNoticeBackfilled) else { return }
-        defaults.set(true, forKey: DefaultsKey.passkeyNoticeBackfilled)
-        guard !freshInstall else { return }
 
-        let services = allServices()
-        var changed = false
-        for service in services where service.hasSeenPasskeyNotice == nil {
-            service.hasSeenPasskeyNotice = true
-            changed = true
-        }
-        guard changed else { return }
-        if context.saveOrRollback(reason: "backfill passkey notice") {
-            AppLogger.dataStore.info(
-                "Backfilled passkey notice for \(services.count) existing service(s)"
-            )
-        }
-    }
-
-    func markPasskeyNoticeSeen(for serviceID: UUID) {
-        guard let service = service(id: serviceID), service.needsPasskeyNotice else { return }
-        service.hasSeenPasskeyNotice = true
-        context.saveOrRollback(reason: "persist passkey notice dismissal")
-    }
 }
 
 extension WorkspaceStore {

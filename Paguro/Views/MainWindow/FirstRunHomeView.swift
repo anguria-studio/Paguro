@@ -2,15 +2,7 @@ import AppKit
 import PaguroCore
 import SwiftUI
 
-/// The window before the user has a service.
-///
-/// It replaces an empty rail, an empty header, and one line of gray text. The
-/// screen states what Paguro is, carries the two setup decisions that are
-/// otherwise only in System Settings and the Settings window, and offers the
-/// one action that ends first run.
-///
-/// The screen holds one prominent button. A tour, a dashboard, and a carousel
-/// were all considered and left out: the user has one thing to do here.
+/// The welcome and permission step of the first-run wizard.
 struct FirstRunHomeView: View {
     /// Which setup rows apply on this Mac, or nil for none.
     let setup: FirstRunSetup?
@@ -22,12 +14,9 @@ struct FirstRunHomeView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-    @FocusState private var primaryActionIsFocused: Bool
 
     /// True while macOS is deciding, so the button cannot be pressed twice.
     @State private var isRequestingPermission = false
-    /// The result of an import, or nil when none has run.
-    @State private var importMessage: String?
 
     /// The reading width of the column. A wider column makes the sentence run
     /// across the window and separates the title from the button under it.
@@ -46,33 +35,22 @@ struct FirstRunHomeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 22) {
-            header
-            if let setup { setupCard(setup) }
-            actions
+        VStack(spacing: 0) {
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 22) {
+                        header
+                        if let setup { setupCard(setup) }
+                    }
+                    .padding(.vertical, 24)
+                    .frame(maxWidth: Self.columnWidth)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+                }
+            }
         }
-        .padding(32)
-        .frame(width: Self.columnWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // VoiceOver reads the title, the sentence, the rows, the primary
-        // button, and the import line in that order, which is the order they
-        // are written in.
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome to Paguro")
-        // A drag anywhere on the glass moves the window. The handle sits behind
-        // the content and in front of the fill, so every control keeps its own
-        // clicks. `NoticeStrip` uses the same order.
-        .background(WindowDragHandle())
-        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
-        .onAppear { primaryActionIsFocused = true }
-        .alert("Import Configuration", isPresented: Binding(
-            get: { importMessage != nil },
-            set: { if !$0 { importMessage = nil } }
-        )) {
-            Button("OK") { importMessage = nil }
-        } message: {
-            Text(importMessage ?? "")
-        }
     }
 
     private var header: some View {
@@ -136,7 +114,7 @@ struct FirstRunHomeView: View {
             // A permission macOS has never been asked about can still be asked
             // for in the app. Once macOS holds a decision it never asks again,
             // so the only way back is System Settings.
-            Button("Allow") {
+            Button("Turn on") {
                 Task {
                     isRequestingPermission = true
                     await appState.notificationManager.requestAuthorization()
@@ -151,11 +129,13 @@ struct FirstRunHomeView: View {
             // switch complete.
             EmptyView()
         case .denied, .provisional, .unavailable:
-            Button("Off in System Settings") {
+            Button("Turn on") {
                 openNotificationSettings()
             }
             .buttonStyle(.link)
             .font(.paguroCaption)
+            .help("Open Paguro’s notification settings")
+            .accessibilityHint("Opens Paguro’s notification settings in System Settings")
             .disabled(!allowsActions)
         }
     }
@@ -223,54 +203,9 @@ struct FirstRunHomeView: View {
             .foregroundStyle(PaguroColor.Text.secondary)
     }
 
-    // MARK: - Actions
-
-    private var actions: some View {
-        VStack(spacing: 10) {
-            Button("Add your first service") {
-                guard allowsActions else { return }
-                appState.showAddService = true
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            // Return activates it, and keyboard focus starts here. Command-N
-            // stays with the File menu item, which works from any window state.
-            .keyboardShortcut(.defaultAction)
-            .focused($primaryActionIsFocused)
-            .disabled(!allowsActions)
-
-            Button("Or import a configuration from another Mac") {
-                importConfiguration()
-            }
-            .buttonStyle(.link)
-            .font(.paguroCaption)
-            .disabled(!allowsActions)
-        }
-    }
-
-    /// Reads a configuration file and adds it.
-    ///
-    /// The Settings import offers a preview with an Add or Replace choice. This
-    /// screen has nothing to replace, because it appears only when no service
-    /// exists, so the file is added and the result is reported. The model owns
-    /// the import, so the view reaches no store.
-    private func importConfiguration() {
-        // The lock screen draws over this screen and takes its clicks already.
-        // `AppModel.importConfiguration` refuses a locked app as well. This
-        // guard keeps the third route, a keyboard activation, closed too.
-        guard allowsActions else { return }
-        do {
-            guard let archive = try ConfigurationFileAccess.chooseImport() else { return }
-            try appModel.importConfiguration(archive, applyPreferences: true, mode: .add)
-            importMessage = "Imported \(archive.workspaces.count) workspaces and \(archive.services.count) services. Sign in to each imported service to use it."
-        } catch {
-            importMessage = error.localizedDescription
-        }
-    }
-
     private func openNotificationSettings() {
-        guard let url = URL(
-            string: NotificationAuthorizationPresentation.systemSettingsURLString
+        guard let url = NotificationAuthorizationPresentation.systemSettingsURL(
+            bundleIdentifier: Bundle.main.bundleIdentifier
         ) else { return }
         NSWorkspace.shared.open(url)
     }
@@ -284,7 +219,9 @@ struct FirstRunHomeView: View {
     /// opaque window background under Reduce Transparency.
     @ViewBuilder
     private var cardSurface: some View {
-        if reduceTransparency {
+        if appState.liquidGlassStyle == .off {
+            cardShape.fill(PaguroColor.Solid.card)
+        } else if reduceTransparency {
             cardShape.fill(Color(nsColor: .windowBackgroundColor))
         } else if #available(macOS 26, *), appState.liquidGlassStyle != .off {
             glassCardSurface
@@ -298,8 +235,8 @@ struct FirstRunHomeView: View {
     private var glassCardSurface: some View {
         let tint = PaguroColor.Fill.glassTint(intensity: appState.liquidGlassIntensity)
         switch appState.liquidGlassStyle {
-        case .clear:
-            Rectangle().fill(.clear).glassEffect(.clear.tint(tint), in: cardShape)
+        case .system, .clear:
+            Rectangle().fill(.clear).glassEffect(.regular, in: cardShape)
         case .off, .regular:
             Rectangle().fill(.clear).glassEffect(.regular.tint(tint), in: cardShape)
         }
@@ -316,13 +253,17 @@ struct FirstRunHomeView: View {
         }
     }
 
-    /// A hairline lifts the card off the glass. Increase Contrast makes it a
-    /// full border, because the hairline can disappear over a bright desktop.
+    private var usesGlassSurface: Bool {
+        AppCapabilities.liquidGlassSupported && appState.liquidGlassStyle != .off && !reduceTransparency
+    }
+
+    /// Solid surfaces need a stronger edge because they have no glass highlight.
     private var borderColor: Color {
-        colorSchemeContrast == .increased ? PaguroColor.shellBorder : PaguroColor.hairline
+        if colorSchemeContrast == .increased { return PaguroColor.shellBorder }
+        return usesGlassSurface ? PaguroColor.hairline : PaguroColor.ink(light: 0.18, dark: 0.20)
     }
 
     private var borderWidth: CGFloat {
-        colorSchemeContrast == .increased ? 1 : 0.5
+        usesGlassSurface && colorSchemeContrast != .increased ? 0.5 : 1
     }
 }

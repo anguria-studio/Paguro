@@ -50,6 +50,9 @@ final class AppState {
     /// Drives the Find-in-Page overlay in WebContentView. Toggled by Cmd-F.
     var findInPageVisible = false
 
+    /// The shell owns one passkey explanation for the app.
+    let passkeyNotice: PasskeyNoticeController
+
     /// Bumped when a service's web view is rebuilt for an edit that only takes
     /// effect at creation time (custom CSS). WebContentView observes this and
     /// re-fetches the active service's web view so the change shows at once.
@@ -69,7 +72,9 @@ final class AppState {
     var liquidGlassStyle: ShellGlassStyle {
         AppCapabilities.liquidGlassSupported ? shellPreferences.liquidGlassStyle : .off
     }
-    var liquidGlassIntensity: Double { shellPreferences.liquidGlassIntensity }
+    var liquidGlassIntensity: Double {
+        liquidGlassStyle.transparency
+    }
     var iconRailBaseSize: Double { shellPreferences.iconRailBaseSize }
     var iconRailMagnificationEnabled: Bool {
         shellPreferences.iconRailMagnificationEnabled
@@ -184,31 +189,19 @@ final class AppState {
         #else
         let config = ModelConfiguration(schema: schema, url: StoreRelocation.resolveStoreURL())
         #endif
-        // A restore the user picked last session, applied before anything opens
-        // the store.
-        StoreRepair.applyPendingRestore(at: config.url)
-
-        // Snapshot the store before a newly-installed version opens it, so a
-        // migration that loses or reshapes data is always recoverable. No-op
-        // when the running version is unchanged from the last launch. This runs
-        // once here (not inside the open/retry path) so the retry restores from
-        // the snapshot it just took rather than overwriting it.
-        StoreRepair.backupBeforeMigrationIfNeeded(at: config.url)
-
-        // Note the store's condition BEFORE the open path repairs it — once
-        // `tryOpen` has run `repairDanglingLinks`, the damage is gone and the
-        // evidence with it. The recovery coordinator keeps this launch state.
-        let storeWasDamagedAtLaunch = StoreRepair.hasDanglingLinks(at: config.url)
-
-        // Open the store, self-healing an emptied or unusable store from the
-        // newest usable pre-migration snapshot. The outcome drives the banner.
-        let (loadedContainer, outcome) = StoreLoader.load(schema: schema, config: config)
+        let preparedStore = StoreLoader.prepare(schema: schema, config: config)
+        let loadedContainer = preparedStore.container
         self.modelContainer = loadedContainer
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
-        self.workspaceStore = WorkspaceStore(
+        let workspaceStore = WorkspaceStore(
             context: loadedContainer.mainContext,
             preferencesStore: preferencesStore
+        )
+        self.workspaceStore = workspaceStore
+        self.passkeyNotice = PasskeyNoticeController(
+            defaults: preparedStore.defaults,
+            hasLegacySeenNotice: workspaceStore.allServices().contains { $0.hasSeenPasskeyNotice == true }
         )
         self.shellPreferences = ShellPreferences.load(
             preferencesStore: preferencesStore
@@ -220,15 +213,17 @@ final class AppState {
         )
         let storeRecovery = StoreRecoveryCoordinator(
             context: loadedContainer.mainContext,
-            storeURL: config.url,
-            outcome: outcome,
-            wasDamagedAtLaunch: storeWasDamagedAtLaunch
+            storeURL: preparedStore.url,
+            outcome: preparedStore.outcome,
+            wasDamagedAtLaunch: preparedStore.wasDamaged,
+            defaults: preparedStore.defaults
         )
         self.storeRecovery = storeRecovery
         self.websiteDataReclaimer = WebsiteDataReclaimer(
             context: loadedContainer.mainContext,
             dataStoreManager: dataStoreManager,
-            isSafeToReclaim: storeRecovery.isSafeToReclaim
+            isSafeToReclaim: preparedStore.allowsPersistentReclamation && storeRecovery.isSafeToReclaim,
+            defaults: preparedStore.defaults
         )
         self.hibernationScheduler = HibernationScheduler(
             context: loadedContainer.mainContext,
@@ -300,13 +295,13 @@ final class AppState {
             isLocked: { [weak self] in self?.isLocked ?? true },
             onWebViewRebuilt: { [weak self] in self?.webViewRebuildToken &+= 1 }
         )
-        // Launch only reads selection. The first explicit add creates Home.
-        workspaceStore.backfillPasskeyNoticeIfNeeded(freshInstall: workspaceStore.allServices().isEmpty)
+        // Launch only reads selection. The first explicit add creates the workspace.
         websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
         notificationRuntime.start(
             currentSpaceID: { [weak self] in self?.selectedSpaceID },
             selectService: { [weak self] spaceID, serviceID in
+                self?.showAddService = false
                 if let spaceID { self?.selectedSpaceID = spaceID }
                 self?.selectedServiceID = serviceID
             },
@@ -409,6 +404,7 @@ final class AppState {
     }
 
     private func switchToService(_ service: ServiceInstance, navigateTo url: URL) {
+        showAddService = false
         // Make sure we're in a space that contains this service so the
         // sidebar selection becomes visible. If the service lives in
         // multiple spaces, pick the first.
@@ -435,7 +431,7 @@ final class AppState {
     func reloadActiveService() {
         guard let id = webViewPool.activeServiceID,
               let webView = webViewPool.liveWebView(for: id) else { return }
-        webView.reload()
+        WebViewCoordinator.reload(webView, fallbackURL: workspaceStore.service(id: id).flatMap { URL(string: $0.url) })
     }
 
     /// Go back one page in the displayed service. Triggered by Cmd-[.
@@ -472,16 +468,8 @@ final class AppState {
         webViewPool.applyShellAppearance(isDark: isDark, services: workspaceStore.allServices())
     }
 
-    func setLiquidGlassIntensity(_ value: Double) {
-        shellPreferences.setLiquidGlassIntensity(value)
-    }
-
     func setLiquidGlassStyle(_ style: ShellGlassStyle) {
         shellPreferences.setLiquidGlassStyle(style)
-    }
-
-    func resetGlassLab() {
-        shellPreferences.resetGlass()
     }
 
     func setIconRailBaseSize(_ value: Double) {
@@ -778,6 +766,49 @@ final class AppState {
         return serviceID
     }
 
+    /// Opens the first chosen service after the complete setup has saved.
+    @discardableResult
+    func addSetupServices(_ drafts: [ServiceSetupDraft], workspaceName: String) -> Bool {
+        saveServiceSelection(drafts, to: selectedSpaceID, workspaceName: workspaceName)
+    }
+
+    /// Adds accounts to an existing workspace without changing its name.
+    @discardableResult
+    func addServices(_ drafts: [ServiceSetupDraft], to spaceID: UUID) -> Bool {
+        guard saveServiceSelection(drafts, to: spaceID), let id = selectedServiceID else { return false }
+        mediaPermissions.offerPresenceActivationIfNeeded(
+            serviceID: id, catalogEntryID: drafts.first?.catalogEntryID
+        )
+        return true
+    }
+
+    private func saveServiceSelection(
+        _ drafts: [ServiceSetupDraft], to spaceID: UUID?, workspaceName: String? = nil
+    ) -> Bool {
+        guard !isLocked, !drafts.isEmpty else { return false }
+        do {
+            guard let ids = try workspaceStore.addServices(
+                drafts, to: spaceID, workspaceName: workspaceName
+            ),
+                  let firstID = ids.first else { return false }
+            showAddService = false
+            selectedSpaceID = workspaceStore.service(id: firstID)?.spaceLinks.first?.space?.id
+            selectedServiceID = firstID
+            hasCompletedFirstRunAction = true
+            notificationRuntime.refreshMuteState()
+            for (id, draft) in zip(ids, drafts)
+                where draft.customIconData == nil && draft.fetchedIconData == nil {
+                Task { @MainActor [weak self] in
+                    await self?.refreshFetchedIcon(for: id)
+                }
+            }
+            return true
+        } catch {
+            AppLogger.dataStore.error("Failed to add services; rolled back: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func moveService(linkID: UUID, to targetSpaceID: UUID, followToSpace: Bool) {
         defer { notificationRuntime.refreshMuteState() }
         let outcome: WorkspaceStore.ServiceMoveOutcome?
@@ -1007,6 +1038,7 @@ final class AppState {
     /// workspace that the window does not show.
     func selectService(id: UUID) {
         guard let service = fetchService(id: id) else { return }
+        showAddService = false
         if let firstSpace = service.spaceLinks.compactMap(\.liveSpace).first?.id {
             selectedSpaceID = firstSpace
         }
@@ -1258,17 +1290,15 @@ final class AppState {
         }
     }
 
-    /// Whether the passkey-limitation banner should show for `service` — true
-    /// until the notice has been seen once for that service.
-    func shouldShowPasskeyNotice(for service: ServiceInstance) -> Bool {
-        service.needsPasskeyNotice
+    /// A service becoming visible offers the app explanation without restarting it.
+    func raisePasskeyNoticeIfNeeded() {
+        passkeyNotice.present(isLocked: isLocked, passkeysSupported: AppCapabilities.passkeysSupported)
     }
 
-    /// Records that the passkey notice has been shown for the given service so
-    /// it never appears again for it.
-    func markPasskeyNoticeSeen(for serviceID: UUID) {
-        workspaceStore.markPasskeyNoticeSeen(for: serviceID)
+    func dismissPasskeyNotice() {
+        passkeyNotice.dismiss()
     }
+
 }
 
 extension AppState {

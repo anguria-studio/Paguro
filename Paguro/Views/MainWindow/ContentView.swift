@@ -3,6 +3,10 @@ import SwiftData
 import PaguroCore
 
 struct ContentView: View {
+    /// How long the passkey card stays on screen. It matches the capacity
+    /// notice, which `HibernationScheduler` removes on the same schedule.
+    private static let passkeyNoticeSeconds = 12
+
     @Environment(AppState.self) private var appState
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -29,10 +33,8 @@ struct ContentView: View {
         @Bindable var recovery = appState.storeRecovery
 
         VStack(spacing: 0) {
-            // Every app-level notice shares one shape. `NoticeStrip` carries
-            // severity in the icon and lower rule, plus the window-drag handle
-            // each notice needs. A transient, service-scoped notice uses the
-            // floating card above the web content instead (`FloatingNoticeCard`).
+            // Store failures and recovery outcomes keep their full-width strip.
+            // The other notices float over the window content.
             if let banner = recovery.banner {
                 NoticeStrip(severity: .error) {
                     Text(banner.message)
@@ -68,54 +70,12 @@ struct ContentView: View {
                 .accessibilityLabel("Warning: \(banner.message)")
             }
 
-            if recovery.banner == nil, recovery.offer != nil {
-                NoticeStrip(severity: .info) {
-                    Text("Paguro has a backup with more of your workspaces and services than it can see now.")
-                        .font(.paguroCaption)
-                        .lineLimit(2)
-                    Spacer()
-                    Button("Review backups…") {
-                        recovery.isShowingPicker = true
-                    }
-                    .font(.paguroCaption)
-                    Button("Not now") { recovery.declineOffer() }
-                        .font(.paguroCaption)
-                }
-                // No accessibility-label override here, unlike the warning
-                // banner above: an explicit label replaces what `.combine`
-                // would otherwise speak, and on this banner the buttons ARE
-                // the point — overriding would drop "Review backups…" and
-                // "Not now" from VoiceOver's reading, leaving them reachable
-                // only as custom actions.
-                .accessibilityElement(children: .combine)
-            }
-
-            if !appState.networkMonitor.isOnline {
-                NoticeStrip(severity: .warning) {
-                    Text("You're offline. Services won't load new content until your connection returns.")
-                        .font(.paguroCaption)
-                    Spacer()
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Offline")
-            }
-
-            if let feedback = appState.mediaPermissions.microphoneActionFeedback {
-                NoticeStrip(severity: .info, systemImage: "mic.slash.fill") {
-                    Text(feedback)
-                        .font(.paguroCaption)
-                    Spacer()
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(feedback)
-            }
-
             // The home screen replaces the complete shell, so no rail layout
             // has to answer for it: `mainLayout` builds every rail, and
             // `WebContentView` builds the content header inside it.
             Group {
                 if firstRun.showsHome {
-                    FirstRunHomeView(
+                    FirstRunWizardView(
                         setup: firstRun.setup,
                         allowsActions: firstRun.allowsActions
                     )
@@ -123,7 +83,13 @@ struct ContentView: View {
                 } else {
                     mainLayout(
                         spaceSelection: $state.selectedSpaceID,
-                        serviceSelection: $state.selectedServiceID
+                        serviceSelection: Binding(
+                            get: { appState.selectedServiceID },
+                            set: {
+                                appState.showAddService = false
+                                appState.selectedServiceID = $0
+                            }
+                        )
                     )
                     .transition(.opacity)
                 }
@@ -157,6 +123,13 @@ struct ContentView: View {
                     )
                 }
             }
+            // The notice cards float over whatever the window shows: a service
+            // page, the two empty states, and the first-run screen. The host
+            // sits here, at the one level that holds all of them, so a card no
+            // longer needs a web view on screen. It stays inside this stack, so
+            // the lock overlay draws above it and the locked window takes its
+            // clicks and its place in the accessibility tree away.
+            .overlay(alignment: .topTrailing) { floatingNoticeHost }
         }
         // Keep service views mounted, but hide their content before revealing
         // the behind-window glass on the lock screen.
@@ -177,8 +150,7 @@ struct ContentView: View {
         .background(
             WindowChromeConfigurator(
                 isMovable: firstRun.showsHome || !appState.railLayout.servicesInBar,
-                glassStyle: appState.liquidGlassStyle,
-                glassIntensity: appState.liquidGlassIntensity
+                glassStyle: appState.liquidGlassStyle
             )
         )
         .containerBackground(.clear, for: .window)
@@ -247,9 +219,6 @@ struct ContentView: View {
             guard let spaceID = appState.selectedSpaceID, let newServiceID else { return }
             appState.rememberSelection(serviceID: newServiceID, in: spaceID)
         }
-        .sheet(isPresented: $state.showAddService) {
-            AddServiceSheet(spaceID: appState.selectedSpaceID)
-        }
         .sheet(isPresented: $state.showAddSpace) {
             SpaceEditorSheet(
                 editingSpace: nil,
@@ -311,6 +280,158 @@ struct ContentView: View {
                 .transition(.identity)
             }
         }
+    }
+
+    // MARK: - Floating notices
+
+    /// The window-level host for the notice cards.
+    ///
+    /// The reader gives the stack the width it may use. The host draws nothing
+    /// of its own, so every click outside a card reaches the page, the rail, or
+    /// the header below it.
+    private var floatingNoticeHost: some View {
+        GeometryReader { proxy in
+            FloatingNoticeStack(
+                notices: floatingNotices,
+                availableWidth: proxy.size.width,
+                topInset: CGFloat(
+                    FloatingNoticeLayout.topInset(
+                        chromeHeight: Double(chromeHeightAboveContent),
+                        findBarIsVisible: !firstRun.showsHome && appState.selectedServiceID != nil && appState.findInPageVisible
+                    )
+                )
+            )
+        }
+        // The shell extends into the hidden title bar. Its overlay must use
+        // the same origin, or the safe-area inset is added to the header twice.
+        .ignoresSafeArea(.container, edges: .top)
+        .padding(.trailing, contentTrailingInset)
+    }
+
+    /// What the window draws above the content at the top trailing corner.
+    ///
+    /// The stack starts below it, so a card keeps the place it has over the web
+    /// content in every layout. The sidebar layout draws the content header
+    /// there, and the three layouts with a rail along the top draw a bar of the
+    /// same height. The first-run screen draws neither, so its cards clear the
+    /// title-bar band alone.
+    private var chromeHeightAboveContent: CGFloat {
+        guard !firstRun.showsHome else {
+            return CGFloat(FloatingNoticeLayout.titleBarBand)
+        }
+        switch appState.railLayout {
+        case .sidebar:
+            return PaguroMetric.Toolbar.height
+        case .topBars, .workspacesLeft, .servicesLeft:
+            return PaguroMetric.Sidebar.topBarHeight
+        }
+    }
+
+    /// The window gutter that every rail layout keeps beside its content. The
+    /// first-run screen fills the window, so it has none.
+    private var contentTrailingInset: CGFloat {
+        firstRun.showsHome ? 0 : PaguroMetric.Sidebar.surfaceInset
+    }
+
+    /// Every notice that the window shows as a card.
+    ///
+    /// The stack gives the top place to the card that arrived last. Cards that
+    /// arrive in one render take their places from this order, so the last entry
+    /// here is the top one.
+    ///
+    /// A locked window shows none of them: the lock screen draws over the host,
+    /// and an empty list also keeps the VoiceOver announcement of a card that
+    /// arrives while the window is locked. The cards return with the content
+    /// when the user unlocks Paguro.
+    private var floatingNotices: [FloatingNotice] {
+        guard !appState.isLocked else { return [] }
+
+        let recovery = appState.storeRecovery
+        var notices: [FloatingNotice] = []
+
+        // The pool's own size limit can release a background service while
+        // idle hibernation is off. Say so one time, so the user does not read
+        // the reload as a fault. `HibernationScheduler` owns its 12 seconds.
+        if let message = appState.hibernationScheduler.capacityEvictionNotice {
+            notices.append(
+                FloatingNotice(
+                    id: .capacityEviction,
+                    systemImage: "moon.zzz.fill",
+                    title: CapacityEvictionNotice.title,
+                    message: message,
+                    dismiss: {
+                        appState.hibernationScheduler.dismissCapacityEvictionNotice()
+                    }
+                )
+            )
+        }
+
+        // One stable identity keeps the timer independent of service switches.
+        if appState.passkeyNotice.state.isVisible {
+            notices.append(
+                FloatingNotice(
+                    id: .passkeyUnavailable,
+                    systemImage: "person.badge.key.fill",
+                    title: "Passkeys are not available",
+                    message: AppCapabilities.passkeyUnavailableBanner,
+                    dismissal: .transient(seconds: Self.passkeyNoticeSeconds),
+                    dismiss: { appState.dismissPasskeyNotice() }
+                )
+            )
+        }
+
+        // The store error states the same problem and carries the same picker,
+        // so the offer waits for the strip to go.
+        if recovery.banner == nil, recovery.offer != nil {
+            notices.append(
+                FloatingNotice(
+                    id: .backupOffer,
+                    systemImage: "clock.arrow.circlepath",
+                    title: "A backup has more of your data",
+                    message: "Paguro has a backup with more of your workspaces and services than it can see now.",
+                    actions: [
+                        FloatingNoticeAction(title: "Not now") { recovery.declineOffer() },
+                        FloatingNoticeAction(title: "Review backups…") {
+                            recovery.isShowingPicker = true
+                        }
+                    ],
+                    // The offer asks a question, so it waits for the answer. The
+                    // close button and a drag both mean Not now.
+                    dismissal: .untilActed,
+                    dismiss: { recovery.declineOffer() }
+                )
+            )
+        }
+
+        if appState.networkMonitor.showsOfflineNotice {
+            notices.append(
+                FloatingNotice(
+                    id: .offline,
+                    systemImage: "wifi.slash",
+                    severity: .warning,
+                    title: "You're offline",
+                    message: "Services won't load new content until your connection returns.",
+                    dismissal: .untilActed,
+                    dismiss: { appState.networkMonitor.dismissOfflineNotice() }
+                )
+            )
+        }
+
+        // The coordinator writes the sentence and clears it after two seconds.
+        // The sentence is the complete notice, so the card carries no second
+        // line under it.
+        if let feedback = appState.mediaPermissions.microphoneActionFeedback {
+            notices.append(
+                FloatingNotice(
+                    id: .microphoneFeedback,
+                    systemImage: "mic.slash.fill",
+                    title: feedback,
+                    dismiss: { appState.mediaPermissions.clearMicrophoneActionFeedback() }
+                )
+            )
+        }
+
+        return notices
     }
 
     /// Arranges the rail and the web content per the chosen layout: the rail

@@ -21,20 +21,95 @@ Service rows draw the bundled Paguro tile 10 percent larger for optical
 balance with flat logos. Scale the square and shell together, without changing
 the row spacing.
 
+## Adding services
+
+Add Service opens the shared selectable catalog in the browser area. Keep the
+rail and native header visible, with a clear Cancel action and Add services in
+the footer. Preserve the current browser session so Cancel returns without a
+reload. Show the destination workspace in a text-style picker, even when only one exists.
+Its New workspace action opens the name and emoji editor, then selects the new
+workspace as the destination without changing the checked services or browser.
+Use the same search, category menu, cards, custom website sheet, and keyboard
+behavior as onboarding. Wrap the toolbar when the content pane is narrow.
+Do not show wizard progress or a workspace naming field during ordinary add.
+
 ## First run
 
-A window with no service shows one welcome screen instead of an empty shell.
-The screen keeps the window glass of the view that no selected service shows.
-It hides the rail and the header until the first service exists. It carries
-exactly one prominent action, the first service. There is no tour, no
-permanent dashboard, and no carousel: a new user has one thing to do here.
-The setup decisions that have no other home at first run sit in one grouped
-card above that action. See [Native shell](features/NATIVE_SHELL.md).
+A window with no service shows a three-step wizard on the window glass.
+A shared progress indicator sits between the footer actions and shows Welcome,
+Your workspace, and Appearance. It stays at the same position across pages, highlights the
+current step, and checks the completed step. Content starts below the traffic
+lights without a separate progress row above it.
+The welcome step explains Paguro and groups notification and island setup.
+The setup card uses a stronger one-point border without glass, including
+Reduce Transparency and the older-system fallback. Glass keeps its light hairline.
+Its fixed footer offers import on the left and "Choose your services" on the
+right. The primary action opens a full-page catalog.
+The second step is "Set up your first workspace". It explains that a workspace
+keeps related services together. On wide windows, Workspace name sits beside
+the introduction. On narrow windows, it sits below the introduction, above search.
+The name starts as Personal on a new install and survives Back and custom website
+entry. The step has search, category filtering, and multiple selection.
+The service toolbar has a compact search field, category menu, and Custom
+website button, all 36 points high. The category selector uses plain text and
+a chevron, with no background or border. Its width fits the selected label and
+native chevron; unselected categories do not reserve space. Resizing preserves
+the same workspace editor and keyboard focus.
+Selected cards have a checkmark and an accent border. A fixed footer holds
+Back and Continue without a selection count. Back keeps the selection.
+Continue opens Appearance without saving any workspace or service. The third
+step offers Follow System, Light, and Dark themes and the four Liquid Glass
+presets. Small window illustrations show light and dark themes and differences
+in glass density. Use the same sample backdrop for every glass choice. These
+are illustrations; the full shell previews the actual preference live. Keep
+preview shapes out of the accessibility tree. Choices persist as normal preferences.
+Back keeps the catalog filters, scroll position, workspace name, and draft.
+Create workspace on Appearance saves the complete service selection. A failed
+save keeps the user on this step with Back and retry available. Hide the glass
+selector below macOS 26. Keep appearance choices available later in Settings.
+The footer puts progress above the actions when the window is too narrow for
+all three steps on one row.
+All setup pages share one footer outside the animated page container. It has
+no separate background fill and stays stationary across steps. Only its actions
+and progress state change. Keep the same content margins on every page.
+Page content changes use a 0.22-second fade with 24 points of horizontal travel.
+Back reverses the movement. Reduce Motion keeps only the fade. Tab reaches all
+setup controls without changing the system's keyboard preferences. The grid is
+one Tab stop with arrow-key movement and a dashed inset focus outline, separate
+from the selection border. Mouse-down hides the outline before the grid takes
+focus, so clicking never flashes it on the first card. Keyboard navigation
+restores it. Space or Return toggles a card; Command-Return
+advances from service selection and finishes setup on Appearance. Card selection
+fades its checkmark and border over 0.14 seconds, without scaling or bouncing.
+Custom website entry opens a native modal sheet over service selection, with
+Cancel and Add website. It has no stepper because it is an optional editor,
+not another wizard step. Its name and address fields sit beside the icon
+preview and Change Icon control. URL examples are plain secondary placeholder
+text, without link styling. Custom websites use the same cards as the catalog,
+with their section first below search. Unchecked custom cards stay available.
+Search includes their names and addresses. Returning from custom entry keeps
+the catalog scroll position; selecting a new website shows its card at the top.
+The rail and service header appear only after the complete selection saves.
+See [Native shell](features/NATIVE_SHELL.md).
 
 ## Appearance
 
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is
 available on macOS 26; macOS 15 uses the fallback surface materials.
+Follow system is the default glass mode. Use untinted native Regular glass
+without extra window frost or protective color. Off, Clear, and Regular use
+fixed tint and frost values, with no separate slider or reset control. Preserve
+the saved preset choice; ignore legacy slider values. Clear uses standard
+frosted glass without tint. It must not use Apple's Clear variant, which shows
+too much background detail behind shell text.
+Off uses a solid palette with a subtle violet undertone. The dark canvas is
+`#18181D`, grouped surfaces and sidebar are `#202026`, and cards are `#282830`.
+The light palette uses `#F5F4F7`, `#ECEBF0`, and white respectively. Apply these
+colors only to the opaque preset and the older-system solid fallback. Selected
+service names use white in dark mode and black in light mode, with the existing
+subtle row highlight instead of a blue label. Keep
+glass tint, system accent colors, and website colors unchanged. Onboarding
+keeps a uniform canvas through the footer; cards provide the surface contrast.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
@@ -169,27 +244,29 @@ The count in the header stays the source of truth for how many downloads exist.
 
 ## Notices
 
-Paguro has two notice shapes. Choose the shape from what the notice reports,
-not from how important it feels.
+Use floating cards for the backup offer, offline status, microphone feedback,
+capacity notice, and passkey notice. Keep the store error as a full-width strip.
+The card host belongs to the window, so notices also appear over the welcome
+screen and empty states. A locked window hides the cards and their announcements.
 
-Use the full-width strip at the top of the window for an app-level state. The
-strip suits a notice that needs an action, or that stays until the state
-changes. Store recovery, the backup offer, the offline state, and the
-microphone feedback use this shape.
-
-Use the floating card above the web content for a transient, informational,
-notice about one service. The card suits a notice that reports a fact and then
-leaves on its own. The capacity release and the passkey limit use this shape.
+The backup offer keeps Review backups and Not now and waits for an action.
+Closing or dragging it away means Not now. Offline stays until the connection
+returns or the user dismisses it; the next connection loss raises it again.
+Microphone feedback keeps its two-second duration. Capacity and passkey notices
+keep their 12-second duration.
 
 The card follows these rules:
 
-- It floats over the top trailing corner of the web content, inset 14 points
-  from the content edges. It never covers the find bar. The card stack moves
-  below the find bar while the find bar is open.
+- It floats over the top trailing corner of the window content, inset 14 points
+  from the content edges, below the header and find bar. On the welcome screen,
+  it clears the 28-point title-bar band and leaves the traffic lights usable.
+  The overlay and shell share the full-window origin; do not add the hidden
+  title bar's safe-area inset to the header height a second time.
 - It keeps a comfortable reading width of 350 points. A narrow window reduces
   the width and keeps the margin on both sides.
-- Two cards stack downward with a 9 point gap. The newest card takes the top
-  place.
+- At most three cards stack downward with a 9 point gap. The newest card takes
+  the top place. Persistent cards keep their places before transient cards;
+  the remaining notices wait until a place is available.
 - It slides in from the trailing edge with a fade, and it leaves the same way.
   Reduce Motion uses a plain fade. The movement stays near 0.3 seconds.
 - A drag to the right dismisses the card, like a macOS notification banner.
@@ -212,7 +289,8 @@ The card follows these rules:
 - It takes no keyboard focus from the page, and it accepts pointer input only
   inside its own frame.
 - VoiceOver reads the title and the explanation as one element and reaches the
-  close button separately. Paguro announces the card when it appears.
+  close button and action buttons separately. Paguro announces the card when
+  it appears. Severity changes the symbol tint and keeps descriptive text.
 
 ## Accessibility
 
@@ -246,3 +324,12 @@ preference in About settings. Development builds omit update controls.
 
 Feature documents describe the behavior and constraints for each component.
 Update this overview when a shared design rule changes.
+
+The passkey explanation belongs to the app shell. It appears once for the app,
+and service changes do not replace the card or restart its timer.
+
+Use periods, commas, colons, or parentheses in UI copy. Never use em dashes.
+
+Onboarding text fields release focus when the user clicks the background or
+service grid. Return finishes editing the workspace name. Background dragging
+continues to move the window.

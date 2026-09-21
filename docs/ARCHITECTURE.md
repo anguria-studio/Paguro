@@ -71,7 +71,10 @@ The main services and startup adapters are:
 - `PreferencesStore` for the single loaded preferences row and typed commits.
 - `WorkspaceStore` for workspace and service queries, mutations and selection persistence.
 - `ServiceIconDraft` for cancellable icon previews in the add-service form.
+- `PasskeyNoticeController` for the app-wide explanation and its saved seen state.
 - `ShellPreferences` for normalized window appearance and rail settings.
+  `PaguroCore.ShellGlassStyle` defines presets and their fixed tint and frost values; the
+  app maps each mode to native materials.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
 - `DataStoreManager` for WebKit data stores.
 - `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.
@@ -98,7 +101,7 @@ The main services and startup adapters are:
 `AppModel` connects island alert actions to the notification navigation path.
 The island controller does not fetch or select service models directly.
 
-The main rail and service-add sheets send model mutation intents to `AppState`.
+The main rail and shared service catalog send model mutation intents to `AppState`.
 `WorkspaceStore` owns their SwiftData queries, commits, and rollback.
 `AppState` owns selection updates and post-save runtime work. Destructive
 WebKit cleanup starts only after `WorkspaceStore` returns a saved outcome.
@@ -231,7 +234,13 @@ WebKit stores service cookies, caches, and local storage.
 `PreferencesStore` loads or creates one `AppPreferences` row. It is the only
 type that writes that row.
 `WorkspaceStore` is the SwiftData facade for spaces, services, links,
-passkey-notice state, favicons, page zoom, and window selection.
+favicons, page zoom, and window selection. `PasskeyNoticeController` saves the
+app-wide seen state in UserDefaults. Existing per-service seen fields remain
+for schema compatibility and seed the app-wide value during migration.
+
+The Debug first-run preview uses an in-memory model container and one
+nonpersistent WebKit store per account. It bypasses normal-store recovery and
+persistent session enumeration. The normal app keeps persistent account stores.
 
 Paguro must not store account passwords.
 Paguro must not copy full message history into its data store.

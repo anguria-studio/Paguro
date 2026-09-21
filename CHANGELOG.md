@@ -4,18 +4,105 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
-- A new setup starts without workspaces. Adding the first service creates Home
-  in the same save. The first-run preview ends after a successful add or import.
+- Solid windows now use a subtly violet charcoal palette in dark mode and a
+  soft off-white palette in light mode, with distinct sidebar and card surfaces.
+  Selected service names use neutral text instead of blue on solid backgrounds.
+
+- The welcome notification card has a clearer border when window glass is off
+  or unavailable, including Reduce Transparency.
+
+- Clicking a service card no longer briefly flashes the keyboard focus outline
+  on the first card. Tab and arrow-key navigation still show the outline.
+
+- Setup now ends with an Appearance step for theme and Liquid Glass presets,
+  with miniature window illustrations and a live shell preview. The workspace
+  name sits beside the introduction on wide windows. The shared footer has no
+  background fill and stays still while page content transitions. Back preserves
+  service choices and catalog filters;
+  Create workspace saves the selected services only on the final step.
+
+- Window glass now offers four presets: Follow system, Off, Clear, and Regular.
+  Follow system uses native Liquid Glass without extra app frost or tint.
+  The other presets use fixed values; the transparency slider and Glass Lab
+  reset are removed. Existing choices remain, but old slider values no longer
+  affect the shell. Fresh installs use Follow system. Clear uses the standard
+  frosted material so background text does not compete with shell content.
+
+- Interrupted service loads no longer leave the sidebar loading ring stuck.
+  Reload retries the service home when the first page never committed.
+
+- Add Service now opens the full catalog in the browser area, using the same
+  multiple selection, search, categories, and custom website modal as setup.
+  Add services saves the batch to the chosen workspace. Cancel returns to the
+  current service without reloading it, and the sidebar stays available.
+  The workspace menu can create a new workspace and select it as the destination
+  while keeping the chosen services checked.
+
+- Opening the service-selection step no longer highlights the category menu.
+  Initial keyboard focus goes to search after the page appears.
+
+- The setup category selector now fits its selected text and chevron instead
+  of reserving a fixed width. Native keyboard navigation stays available.
+
+- Clicking a setup service card no longer shows the dotted keyboard focus
+  outline. Keyboard navigation restores it without changing the selection.
+
+- Custom website entry now opens in a modal over the service picker, with
+  Cancel and Add website actions, icon preview, and image choice. The wizard
+  stays on step two, and Cancel preserves the catalog position and selection.
+
+- The setup progress indicator now sits in the footer between the navigation
+  actions, giving the page content more room above it.
+
+- Keyboard navigation in setup now reaches the category selector, buttons,
+  and service grid. Use arrow keys to move between cards and Space or Return
+  to select. Command-Return creates the workspace.
+
+- Setup now shows a shared progress indicator and subtle page transitions.
+  Search and category controls have matching heights, Custom website sits
+  above the grid, and a simpler footer offers Create workspace without a
+  selection counter. Back from custom entry keeps the catalog scroll position.
+  Reduce Motion keeps transitions to a fade.
+
+- Setup starts with Personal as the workspace name. Clicking outside its name
+  field or pressing Return ends editing. The workspace description uses plain
+  sentence punctuation.
+
+- Setup introduces workspaces and lets you name the first one, starting with
+  Personal. The name and selected services save together when you finish.
+
+- Custom websites now use selectable cards above the catalog during setup.
+  Search includes their names and addresses. Unchecking keeps the card available
+  to select again.
+
+- The custom website page in setup now includes an icon preview and image
+  picker. Address examples use plain placeholder text. The passkey explanation
+  appears once for the app instead of repeating for each service.
+
+- Setup now has two steps: welcome and service selection. Choose several
+  services from a full-page catalog, then add them together. Search, categories,
+  Back, and custom websites keep the selection until the final Add.
+
+- The welcome screen offers "Turn on" for notifications. When permission is
+  off, it opens Paguro’s own notification controls in System Settings.
+
+- First Run Preview starts with disposable services and sign-ins on every run.
+  Floating notices sit directly below the header without a second title-bar gap.
+
+- Backup offers, offline status, and microphone feedback use floating cards
+  over the window, including the welcome screen. Store errors keep their strip.
+
+- A new setup starts without workspaces. Adding the first services creates a
+  workspace, named Personal by default, in the same save. The first-run preview ends after a successful add or import.
 
 ### Added
 
 - Paguro starts with a welcome screen where you add your first service, instead
   of a set of example services. It tells you what Paguro does. It offers
-  notifications and, on a Mac with a notch, island alerts. One button adds your
-  first service, and a quiet line under it imports a configuration from another
-  Mac. The sidebar and the header appear as soon as that first service exists,
-  and the screen returns if you ever remove every service. Paguro still starts
-  with the two workspaces Personal and Work, now empty.
+  notifications and, on a Mac with a notch, island alerts. One button opens
+  service selection, and a quiet line under it imports a configuration from
+  another Mac. The sidebar and the header appear as soon as that first service exists,
+  and the screen returns if you ever remove every service.
 
 - You can install Paguro with Homebrew:
   `brew install --cask anguria-studio/tap/paguro`. The cask installs the same

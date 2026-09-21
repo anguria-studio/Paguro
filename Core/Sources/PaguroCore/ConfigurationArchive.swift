@@ -68,6 +68,7 @@ public struct ConfigurationPreferences: Codable, Equatable, Sendable {
     public var autoHibernateIdleEnabled: Bool = false
     public var autoHibernateIdleMinutes: Int = 10
     public var liquidGlassStyle: String = "regular"
+    /// Kept for archive compatibility. The app derives opacity from the preset.
     public var liquidGlassIntensity: Double = 1
     public var iconRailBaseSize: Double = 22
     public var iconRailMagnification: Double = 0.26
@@ -157,7 +158,7 @@ public enum ConfigurationArchiveCodec {
         try choice(p.appearanceMode, in: ["system", "light", "dark"])
         try choice(p.defaultCameraPolicy, in: ["ask", "allow", "deny"])
         try choice(p.defaultMicrophonePolicy, in: ["ask", "allow", "deny"])
-        try choice(p.liquidGlassStyle, in: ["off", "clear", "regular"])
+        try choice(p.liquidGlassStyle, in: ShellGlassStyle.allCases.map(\.rawValue))
         try choice(p.iconRailPosition, in: ["top", "center"])
         try choice(p.workspaceViewMode, in: ["current", "all"])
         try number(p.defaultZoom, in: 0.5...3)

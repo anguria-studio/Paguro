@@ -1,35 +1,78 @@
 import PaguroCore
 import SwiftUI
 
-/// One transient, service-scoped notice.
+/// One in-window notice.
 ///
-/// The card shape suits a notice that reports a fact about the service the user
-/// is looking at and then leaves. An app-level state that needs action, or that
-/// stays until something changes, keeps the full-width `NoticeStrip`.
+/// The card is the shape of every notice inside the window. It reports a fact,
+/// it can carry up to two buttons, and it either leaves on its own or waits for
+/// the user. The one exception is the store error, which keeps the full-width
+/// `NoticeStrip`, which reports a storage failure or recovery outcome.
 struct FloatingNotice: Identifiable {
     enum ID: Hashable {
         /// The pool released a background service to stay inside its limit.
         case capacityEviction
         /// The web view cannot use a passkey for sign-in.
         case passkeyUnavailable
+        /// A backup holds more workspaces and services than the store.
+        case backupOffer
+        /// The Mac has no network connection.
+        case offline
+        /// Paguro muted the microphones that were capturing.
+        case microphoneFeedback
+    }
+
+    /// When the notice leaves the screen.
+    enum Dismissal: Equatable {
+        /// The notice reports a fact and then goes. `seconds` is the card's own
+        /// timer. A `nil` value leaves the removal to the rule that raised the
+        /// notice, which already owns a schedule of its own.
+        case transient(seconds: Int?)
+        /// The notice waits for the user, or for the state that raised it to
+        /// end. The stack never holds it back for a notice that leaves on its
+        /// own, because the user would then never reach its buttons.
+        case untilActed
     }
 
     let id: ID
     let systemImage: String
+    /// The tone of the notice. A card has no lower rule like the strip, so the
+    /// symbol tile tint is the one place the tone can show.
+    var severity: NoticeSeverity = .info
     let title: String
-    let message: String
+    /// The explanation under the title, or `nil` when the title says everything.
+    var message: String?
+    /// At most two buttons under the text, in reading order. Put the action that
+    /// Paguro suggests last, where macOS places a default button.
+    var actions: [FloatingNoticeAction] = []
+    var dismissal: Dismissal = .transient(seconds: nil)
     /// Removes the notice. The owner of the state does the removal, so the card
-    /// stays free of the rule that produced it.
+    /// stays free of the rule that produced it. The close button and a drag to
+    /// the right both call it.
     let dismiss: () -> Void
+
+    /// What VoiceOver reads for the notice itself.
+    var spokenText: String {
+        guard let message else { return title }
+        return "\(title). \(message)"
+    }
 }
 
-/// A notification-style card above the web content.
+/// One button on a floating notice card.
+struct FloatingNoticeAction: Identifiable {
+    /// A card carries at most two buttons and never repeats a title, so the
+    /// title is also the identity.
+    var id: String { title }
+    let title: String
+    let perform: () -> Void
+}
+
+/// A notification-style card above the window content.
 ///
 /// It copies the shape of a macOS notification banner: a tinted symbol tile, a
-/// short title, a secondary explanation, a close button that stays quiet until
-/// the pointer arrives, and a drag to the right that dismisses the card. The
-/// web page below keeps its keyboard focus and its clicks, because the card
-/// takes no focus and covers only its own frame.
+/// short title, a secondary explanation, up to two buttons, a close button that
+/// stays quiet until the pointer arrives, and a drag to the right that dismisses
+/// the card. The content below keeps its keyboard focus and its clicks, because
+/// the card takes no focus and covers only its own frame.
 struct FloatingNoticeCard: View {
     let notice: FloatingNotice
     /// The width the stack gives this card. The swipe rule needs it for its
@@ -77,7 +120,16 @@ struct FloatingNoticeCard: View {
             .onAppear {
                 // The card carries no sound and takes no focus, so VoiceOver
                 // needs the announcement to report it.
-                AccessibilityNotification.Announcement("\(notice.title). \(notice.message)").post()
+                AccessibilityNotification.Announcement(notice.spokenText).post()
+            }
+            // A notice that leaves on its own and owns no other schedule keeps
+            // its time here, beside the card that the time belongs to.
+            .task(id: notice.id) {
+                guard case .transient(let seconds) = notice.dismissal,
+                      let seconds else { return }
+                try? await Task.sleep(for: .seconds(seconds))
+                guard !Task.isCancelled else { return }
+                notice.dismiss()
             }
     }
 
@@ -85,26 +137,14 @@ struct FloatingNoticeCard: View {
         HStack(alignment: .top, spacing: 10) {
             symbolTile
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(notice.title)
-                    .font(.system(size: PaguroTypeSize.body, weight: .semibold))
-                    .foregroundStyle(PaguroColor.Text.primary)
+            VStack(alignment: .leading, spacing: 8) {
+                text
 
-                Text(notice.message)
-                    .font(.system(size: PaguroTypeSize.body))
-                    .foregroundStyle(PaguroColor.Text.secondary)
-                    .lineLimit(Self.messageLineLimit)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !notice.actions.isEmpty {
+                    actionRow
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // VoiceOver reads the title and the explanation as one notice. The
-            // close button stays a separate element, so it keeps its own label
-            // and its own action.
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(notice.title). \(notice.message)")
-            // The drag is a pointer action. VoiceOver reaches the same result
-            // through this action and through the close button.
-            .accessibilityAction(named: "Dismiss") { notice.dismiss() }
 
             closeButton
         }
@@ -116,6 +156,48 @@ struct FloatingNoticeCard: View {
         // on the card never reaches the web page below it.
         .contentShape(shape)
         .shadow(color: shadowColor, radius: 12, y: 4)
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(notice.title)
+                .font(.system(size: PaguroTypeSize.body, weight: .semibold))
+                .foregroundStyle(PaguroColor.Text.primary)
+
+            if let message = notice.message {
+                Text(message)
+                    .font(.system(size: PaguroTypeSize.body))
+                    .foregroundStyle(PaguroColor.Text.secondary)
+                    .lineLimit(Self.messageLineLimit)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // VoiceOver reads the title and the explanation as one notice. The
+        // buttons and the close button stay separate elements after it, so each
+        // keeps its own label and its own action.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(notice.spokenText)
+        // The drag is a pointer action. VoiceOver reaches the same result
+        // through this action and through the close button.
+        .accessibilityAction(named: "Dismiss") { notice.dismiss() }
+    }
+
+    /// The buttons of the notice, at the trailing end under the text.
+    ///
+    /// They keep the quiet bordered control of the shell. A card reports
+    /// something; it does not shout with an accent-filled button over a page
+    /// that Paguro does not own.
+    private var actionRow: some View {
+        HStack(spacing: 8) {
+            ForEach(notice.actions) { action in
+                Button(action.title) { action.perform() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.paguroCaption)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     /// Moves the card to the right and dismisses it.
@@ -213,14 +295,20 @@ struct FloatingNoticeCard: View {
         )
     }
 
+    /// The symbol, in the tint of the severity.
+    ///
+    /// The strip carries its severity in a lower rule as well. A card has no
+    /// rule, so the tile is the one place the tone shows. An informational card
+    /// keeps the accent tint, and a warning takes the warning tint.
     private var symbolTile: some View {
-        RoundedRectangle(cornerRadius: PaguroRadius.icon, style: .continuous)
-            .fill(Color.accentColor.opacity(0.16))
+        let tint = notice.severity.tint
+        return RoundedRectangle(cornerRadius: PaguroRadius.icon, style: .continuous)
+            .fill(tint.opacity(0.16))
             .frame(width: Self.symbolTileSize, height: Self.symbolTileSize)
             .overlay {
                 Image(systemName: notice.systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(tint)
             }
             .accessibilityHidden(true)
     }
@@ -249,7 +337,9 @@ struct FloatingNoticeCard: View {
     /// above a web page that Paguro does not control.
     @ViewBuilder
     private var surface: some View {
-        if reduceTransparency {
+        if appState.liquidGlassStyle == .off {
+            shape.fill(PaguroColor.Solid.card)
+        } else if reduceTransparency {
             shape.fill(Color(nsColor: .windowBackgroundColor))
         } else if #available(macOS 26, *), appState.liquidGlassStyle != .off {
             glassSurface
@@ -263,8 +353,8 @@ struct FloatingNoticeCard: View {
     private var glassSurface: some View {
         let tint = PaguroColor.Fill.glassTint(intensity: appState.liquidGlassIntensity)
         switch appState.liquidGlassStyle {
-        case .clear:
-            Rectangle().fill(.clear).glassEffect(.clear.tint(tint), in: shape)
+        case .system, .clear:
+            Rectangle().fill(.clear).glassEffect(.regular, in: shape)
         case .off, .regular:
             Rectangle().fill(.clear).glassEffect(.regular.tint(tint), in: shape)
         }
@@ -299,11 +389,15 @@ struct FloatingNoticeCard: View {
 ///
 /// It owns the order of the cards and their movement. The newest card takes the
 /// top place, like a macOS notification, and the older cards move down.
+/// `FloatingNoticeStackRule` decides which cards fit.
 struct FloatingNoticeStack: View {
     let notices: [FloatingNotice]
-    /// The width of the web content below, which the card must not exceed.
+    /// The width of the content below, which the card must not exceed.
     let availableWidth: CGFloat
-    let findBarIsVisible: Bool
+    /// The gap above the first card. `ContentView` reads it from
+    /// `FloatingNoticeLayout`, because the chrome above the cards belongs to the
+    /// window layout and not to this stack.
+    let topInset: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var order: [FloatingNotice.ID] = []
@@ -312,13 +406,18 @@ struct FloatingNoticeStack: View {
         CGFloat(FloatingNoticeLayout.width(availableWidth: Double(availableWidth)))
     }
 
-    private var topInset: CGFloat {
-        CGFloat(FloatingNoticeLayout.topInset(findBarIsVisible: findBarIsVisible))
-    }
-
     /// The visible cards, newest first.
     private var orderedNotices: [FloatingNotice] {
-        order.compactMap { id in notices.first { $0.id == id } }
+        let newestFirst = order.compactMap { id in notices.first { $0.id == id } }
+        let visible = Set(
+            FloatingNoticeStackRule.visible(
+                newestFirst: newestFirst.map(\.id),
+                staysUntilActed: Set(
+                    newestFirst.filter { $0.dismissal == .untilActed }.map(\.id)
+                )
+            )
+        )
+        return newestFirst.filter { visible.contains($0.id) }
     }
 
     var body: some View {
@@ -333,7 +432,7 @@ struct FloatingNoticeStack: View {
         .padding(.horizontal, CGFloat(FloatingNoticeLayout.edgeInset))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         .animation(motion, value: order)
-        .animation(motion, value: findBarIsVisible)
+        .animation(motion, value: topInset)
         .onAppear { updateOrder() }
         .onChange(of: notices.map(\.id)) { updateOrder() }
     }

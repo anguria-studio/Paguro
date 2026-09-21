@@ -38,7 +38,7 @@ struct ServiceRowView: View {
     /// switch to another service.
     var isPlayingAudio: Bool = false
     var health: ServiceHealth = .live
-    var glassStyle = GlassLabDefaults.style
+    var glassStyle = ShellGlassDefaults.style
     var glassIntensity = GlassIntensityScale.defaultValue
     /// The resting size the Dock item lays out at. The pointer changes what it
     /// draws through `dockTransform`, never this.
@@ -292,6 +292,7 @@ struct ServiceRowView: View {
 
     private var serviceNameColor: Color {
         guard isSelected else { return PaguroColor.Text.primary }
+        if glassStyle == .off { return PaguroColor.Text.selectedOnGlass }
         return SidebarSelectionContrastPolicy.usesHighContrastText(
             shellTransparency: glassIntensity
         )
@@ -413,7 +414,7 @@ struct ServiceRowView: View {
 /// puts it beside the icon; the top bar puts it under the tab.
 struct RailTooltipView: View {
     let text: String
-    var glassStyle = GlassLabDefaults.style
+    var glassStyle = ShellGlassDefaults.style
     var glassIntensity = GlassIntensityScale.defaultValue
 
     var body: some View {
@@ -482,8 +483,8 @@ private struct DockTooltipSurfaceModifier: ViewModifier {
     private func glassSurface(_ content: Content) -> some View {
         let tint = PaguroColor.Fill.glassTint(intensity: glassIntensity)
         switch glassStyle {
-        case .clear:
-            content.glassEffect(.clear.tint(tint), in: shape)
+        case .system, .clear:
+            content.glassEffect(.regular, in: shape)
         case .off, .regular:
             content.glassEffect(.regular.tint(tint), in: shape)
         }

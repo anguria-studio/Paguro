@@ -5,7 +5,7 @@ import PaguroCore
 @MainActor
 struct ShellPreferences: Equatable {
     private(set) var liquidGlassStyle: ShellGlassStyle
-    private(set) var liquidGlassIntensity: Double
+    var liquidGlassIntensity: Double { liquidGlassStyle.transparency }
     private(set) var iconRailBaseSize: Double
     private(set) var iconRailMagnificationEnabled: Bool
     private(set) var iconRailMagnifiedSize: Double
@@ -31,9 +31,6 @@ struct ShellPreferences: Equatable {
         defaults: UserDefaults = .standard,
         preferencesStore: PreferencesStore
     ) -> Self {
-        let storedIntensity = defaults.object(forKey: DefaultsKey.liquidGlassIntensity) != nil
-            ? defaults.double(forKey: DefaultsKey.liquidGlassIntensity)
-            : GlassLabDefaults.transparency
         let storedBaseSize = defaults.object(forKey: DefaultsKey.iconRailBaseSize) != nil
             ? defaults.double(forKey: DefaultsKey.iconRailBaseSize)
             : DockIconSizing.defaultBaseSize
@@ -47,15 +44,15 @@ struct ShellPreferences: Equatable {
             ? defaults.double(forKey: DefaultsKey.iconRailMagnifiedSize)
             : DockIconSizing.defaultMagnifiedSize
 
-        // Frost now has one fixed rule. Remove the retired experimental value
-        // so it cannot affect a future setting.
+        // Presets replace the experimental sliders. Old slider values must
+        // not change a preset after loading or importing preferences.
+        defaults.removeObject(forKey: DefaultsKey.liquidGlassIntensity)
         defaults.removeObject(forKey: DefaultsKey.retiredBackdropFrostIntensity)
 
         return Self(
             liquidGlassStyle: ShellGlassStyle.resolving(
                 defaults.string(forKey: DefaultsKey.liquidGlassStyle)
             ),
-            liquidGlassIntensity: GlassIntensityScale.normalized(storedIntensity),
             iconRailBaseSize: baseSize,
             iconRailMagnificationEnabled: magnificationEnabled,
             iconRailMagnifiedSize: DockIconSizing.magnifiedSize(
@@ -88,7 +85,7 @@ struct ShellPreferences: Equatable {
 
     mutating func applyConfiguration(_ value: ConfigurationPreferences, defaults: UserDefaults = .standard) {
         setLiquidGlassStyle(ShellGlassStyle.resolving(value.liquidGlassStyle), defaults: defaults)
-        setLiquidGlassIntensity(value.liquidGlassIntensity, defaults: defaults)
+        defaults.removeObject(forKey: DefaultsKey.liquidGlassIntensity)
         setIconRailBaseSize(value.iconRailBaseSize, defaults: defaults)
         setIconRailMagnification(value.iconRailMagnification, defaults: defaults)
         setIconRailPosition(DockRailPosition(rawValue: value.iconRailPosition) ?? .top, defaults: defaults)
@@ -97,27 +94,12 @@ struct ShellPreferences: Equatable {
         setSidebarCollapsed(value.sidebarCollapsed, defaults: defaults)
     }
 
-    mutating func setLiquidGlassIntensity(
-        _ value: Double,
-        defaults: UserDefaults = .standard
-    ) {
-        liquidGlassIntensity = GlassIntensityScale.normalized(value)
-        defaults.set(liquidGlassIntensity, forKey: DefaultsKey.liquidGlassIntensity)
-    }
-
     mutating func setLiquidGlassStyle(
         _ style: ShellGlassStyle,
         defaults: UserDefaults = .standard
     ) {
         liquidGlassStyle = style
         defaults.set(style.rawValue, forKey: DefaultsKey.liquidGlassStyle)
-    }
-
-    mutating func resetGlass(defaults: UserDefaults = .standard) {
-        liquidGlassStyle = GlassLabDefaults.style
-        liquidGlassIntensity = GlassLabDefaults.transparency
-        defaults.removeObject(forKey: DefaultsKey.liquidGlassStyle)
-        defaults.removeObject(forKey: DefaultsKey.liquidGlassIntensity)
     }
 
     mutating func setIconRailBaseSize(

@@ -303,10 +303,61 @@ final class NativeShellTests: XCTestCase {
 
     func testGlassStyleResolutionAndFrostRelationships() {
         XCTAssertEqual(ShellGlassStyle.resolving(ShellGlassStyle.clear.rawValue), .clear)
-        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), GlassLabDefaults.style)
-        XCTAssertEqual(ShellGlassStyle.resolving(nil), GlassLabDefaults.style)
-        XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
-        XCTAssertEqual(ShellGlassStyle.off.frostOpacity, ShellGlassStyle.regular.frostOpacity)
+        XCTAssertEqual(ShellGlassStyle.resolving("unsupported"), ShellGlassDefaults.style)
+        XCTAssertEqual(ShellGlassStyle.resolving(nil), ShellGlassDefaults.style)
+        if #available(macOS 26, *) {
+            XCTAssertLessThan(ShellGlassStyle.clear.frostOpacity, ShellGlassStyle.regular.frostOpacity)
+            XCTAssertEqual(ShellGlassStyle.off.frostOpacity, 0)
+        } else {
+            // Every preset uses the same full-frost fallback before Liquid Glass.
+            for style in ShellGlassStyle.allCases {
+                XCTAssertEqual(style.frostOpacity, 1, "Unexpected fallback for \(style)")
+            }
+        }
+    }
+
+    @MainActor
+    func testSystemGlassRemovesAppBackdropOverridesAndManualModeRestoresThem() throws {
+        let backdrop = WindowBackdropContainerView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let frost = try XCTUnwrap(backdrop.subviews.first as? NSVisualEffectView)
+        let tint = try XCTUnwrap(backdrop.subviews.last)
+        backdrop.update(glassStyle: .regular)
+        XCTAssertEqual(frost.alphaValue, 1)
+        XCTAssertFalse(tint.isHidden)
+
+        backdrop.update(glassStyle: .system)
+        XCTAssertTrue(tint.isHidden)
+        if #available(macOS 26, *) {
+            let glass = try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first)
+            XCTAssertEqual(frost.alphaValue, 0)
+            XCTAssertFalse(glass.isHidden)
+            XCTAssertEqual(glass.style, .regular)
+            XCTAssertNil(glass.tintColor)
+        } else {
+            XCTAssertEqual(frost.alphaValue, 1)
+        }
+        backdrop.update(glassStyle: .clear)
+        XCTAssertEqual(frost.alphaValue, ShellGlassStyle.clear.frostOpacity, accuracy: 0.000_001)
+        XCTAssertFalse(tint.isHidden)
+        if #available(macOS 26, *) {
+            let glass = try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first)
+            // Apple's clear variant exposes background text. Our lighter preset
+            // must keep the standard glass blur, just like Follow system.
+            XCTAssertFalse(glass.isHidden)
+            XCTAssertEqual(glass.style, .regular)
+            XCTAssertNil(glass.tintColor)
+        }
+        backdrop.update(glassStyle: .off)
+        XCTAssertEqual(frost.alphaValue, ShellGlassStyle.off.frostOpacity)
+        if #available(macOS 26, *) {
+            XCTAssertTrue(try XCTUnwrap(backdrop.subviews.compactMap { $0 as? NSGlassEffectView }.first).isHidden)
+        }
+    }
+
+    func testIslandUsesPresetTransparency() {
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .system).transparency, 1)
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .clear).transparency, 1)
+        XCTAssertEqual(NotificationIslandAppearance(glassStyle: .off).transparency, 0)
     }
 
     func testSidebarPresentationMapsToSharedGeometry() {

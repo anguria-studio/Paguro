@@ -69,12 +69,8 @@ final class ServiceInstance {
     /// desktop notifications Paguro forwards — an opt-in trade.
     var stayActiveInBackground: Bool?
 
-    /// Whether the one-time "Passkeys aren't available for sign-in" notice has
-    /// been shown for this service. Optional for SwiftData lightweight
-    /// migration; nil is treated as "not yet seen" (see `needsPasskeyNotice`).
-    /// A one-time launch backfill marks the services of a pre-existing install
-    /// as seen, so the notice only appears for services added after this
-    /// shipped — not retroactively for every service the user already had.
+    /// Legacy per-service state retained for store migration. The shell now
+    /// records the explanation once for the whole app.
     var hasSeenPasskeyNotice: Bool?
 
     /// Per-service hibernation policy, stored raw for SwiftData lightweight
@@ -108,8 +104,7 @@ final class ServiceInstance {
         )
     }
 
-    /// Whether the passkey-limitation notice still needs to be shown for this
-    /// service (nil or false → not yet seen).
+    /// Legacy state used by compatibility tests for older stored records.
     var needsPasskeyNotice: Bool { !(hasSeenPasskeyNotice ?? false) }
 
     /// Materialises the storage-optional OS-notification flag (nil → true), so

@@ -162,6 +162,7 @@ final class ConfigurationTransferTests: XCTestCase {
         let reloaded = ShellPreferences.load(defaults: defaults, preferencesStore: preferences)
         var exported = ConfigurationPreferences()
         reloaded.addToConfiguration(&exported)
+        value.liquidGlassIntensity = ShellGlassStyle.clear.transparency
         XCTAssertEqual(exported, value)
     }
 

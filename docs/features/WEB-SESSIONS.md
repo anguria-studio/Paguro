@@ -301,6 +301,10 @@ A failed page load shows the error page with a retry action.
 Three failures keep the current page instead.
 They are a load that the user cancelled, a URL that WebKit cannot show, and a
 load that WebKit interrupted to start a download.
+Once an interrupted load stops, its loading ring clears. A replacement load
+keeps the ring, and stopping does not clear an existing failure mark.
+The header Reload action and Command-R share one retry path. If WebKit has no
+committed page to reload, retry the service home URL in the same account view.
 
 ## Popups
 

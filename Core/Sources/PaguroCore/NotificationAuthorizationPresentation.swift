@@ -1,3 +1,5 @@
+import Foundation
+
 /// The macOS notification permission, held without a platform API.
 ///
 /// The app maps `UNAuthorizationStatus` to this value at the platform
@@ -40,9 +42,17 @@ public struct NotificationAuthorizationWarning: Equatable, Sendable {
 /// app still adds each request, and `UNUserNotificationCenter` still accepts
 /// it, so nothing else reports the loss. Settings must therefore name it.
 public enum NotificationAuthorizationPresentation {
-    /// The System Settings pane that holds the per-app notification controls.
-    public static let systemSettingsURLString =
-        "x-apple.systempreferences:com.apple.preference.notifications"
+    /// Opens the notification controls for the running app, including Debug builds.
+    /// System Settings can show its main notification pane if the app is not registered.
+    public static func systemSettingsURL(bundleIdentifier: String?) -> URL? {
+        var components = URLComponents()
+        components.scheme = "x-apple.systempreferences"
+        components.path = "com.apple.Notifications-Settings.extension"
+        if let bundleIdentifier, !bundleIdentifier.isEmpty {
+            components.queryItems = [URLQueryItem(name: "id", value: bundleIdentifier)]
+        }
+        return components.url
+    }
 
     /// Tells whether macOS shows a banner for a Paguro notification.
     public static func showsSystemBanners(

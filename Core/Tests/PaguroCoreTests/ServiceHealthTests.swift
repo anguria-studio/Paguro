@@ -12,12 +12,20 @@ struct ServiceHealthTests {
     }
 
     @Test
-    func navigationEventsNeverProduceSignedOut() {
+    func navigationEventsDoNotIntroduceSignedOut() {
         for state in ServiceHealth.allCases {
             for event in ServiceHealth.Event.allCases {
-                #expect(state.next(event) != .signedOut)
+                #expect(state.next(event) != .signedOut || (state == .signedOut && event == .stoppedLoading))
             }
         }
+    }
+
+    @Test
+    func stoppingClearsOnlyTheLoadingMark() {
+        #expect(ServiceHealth.loading.next(.stoppedLoading) == .live)
+        #expect(ServiceHealth.failed.next(.stoppedLoading) == .failed)
+        #expect(ServiceHealth.signedOut.next(.stoppedLoading) == .signedOut)
+        #expect(ServiceHealth.live.next(.stoppedLoading) == .live)
     }
 
     @Test

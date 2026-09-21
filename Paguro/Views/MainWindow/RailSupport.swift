@@ -1,9 +1,10 @@
 import AppKit
+import PaguroCore
 import SwiftUI
 
 /// AppKit support for the main window's backdrop, chrome, and drag handle.
 
-/// Wraps a SwiftUI hosting view in the main-window appearance experiment.
+/// Wraps a SwiftUI hosting view in the main-window preset materials.
 ///
 /// The order is backdrop frost, optional Liquid Glass, protective tint, then
 /// SwiftUI content. `WKWebView` stays opaque in the top content layer.
@@ -11,16 +12,14 @@ import SwiftUI
 private enum WindowBackdropInstaller {
     static func install(
         in window: NSWindow,
-        glassStyle: ShellGlassStyle,
-        transparency: Double
+        glassStyle: ShellGlassStyle
     ) {
         window.isOpaque = false
         window.backgroundColor = .clear
 
         if let container = window.contentView as? WindowBackdropContainerView {
             container.update(
-                glassStyle: glassStyle,
-                transparency: transparency
+                glassStyle: glassStyle
             )
             return
         }
@@ -33,17 +32,16 @@ private enum WindowBackdropInstaller {
         window.contentView = container
         container.install(hostedContent: hostedContent)
         container.update(
-            glassStyle: glassStyle,
-            transparency: transparency
+            glassStyle: glassStyle
         )
     }
 }
 
-/// The native full-window layers that the Glass Lab controls.
+/// The native full-window layers that the glass preset controls.
 ///
 /// The frost view obscures background detail. The glass view changes the
-/// optical style. The tint gives the transparency control exact endpoints.
-private final class WindowBackdropContainerView: NSView {
+/// optical style. The tint gives each preset its fixed opacity.
+final class WindowBackdropContainerView: NSView {
     private let frostView = NSVisualEffectView()
     private let tintView = WindowShellTintView()
     /// The Liquid Glass layer, present only on macOS 26 and later.
@@ -61,14 +59,14 @@ private final class WindowBackdropContainerView: NSView {
         frostView.material = .underWindowBackground
         frostView.blendingMode = .behindWindow
         frostView.state = .followsWindowActiveState
-        frostView.alphaValue = GlassLabDefaults.regularFrost
+        frostView.alphaValue = 1
         addSubview(frostView)
 
         if #available(macOS 26, *) {
             let glass = NSGlassEffectView()
             glass.frame = bounds
             glass.autoresizingMask = [.width, .height]
-            glass.style = .clear
+            glass.style = .regular
             glass.tintColor = nil
             glass.cornerRadius = 0
             addSubview(glass, positioned: .above, relativeTo: frostView)
@@ -86,8 +84,7 @@ private final class WindowBackdropContainerView: NSView {
     }
 
     func update(
-        glassStyle: ShellGlassStyle,
-        transparency: Double
+        glassStyle: ShellGlassStyle
     ) {
         frostView.alphaValue = glassStyle.frostOpacity
 
@@ -95,16 +92,14 @@ private final class WindowBackdropContainerView: NSView {
             switch glassStyle {
             case .off:
                 glass.isHidden = true
-            case .clear:
-                glass.isHidden = false
-                glass.style = .clear
-            case .regular:
+            case .system, .clear, .regular:
                 glass.isHidden = false
                 glass.style = .regular
             }
         }
 
-        tintView.transparency = GlassIntensityScale.normalized(transparency)
+        tintView.transparency = glassStyle.transparency
+        tintView.isHidden = glassStyle == .system
     }
 
     func install(hostedContent: NSView) {
@@ -116,12 +111,12 @@ private final class WindowBackdropContainerView: NSView {
     }
 }
 
-/// Draws a fixed RGB tint whose opacity is the user-controlled value.
+/// Draws the opaque canvas for Off and the protective tint for glass presets.
 ///
-/// Use a layer background so a live slider change redraws this AppKit view.
+/// Use a layer background so a preset change redraws this AppKit view.
 /// The explicit layer also keeps the 0 percent endpoint opaque.
 private final class WindowShellTintView: NSView {
-    var transparency = GlassLabDefaults.transparency {
+    var transparency = ShellGlassDefaults.style.transparency {
         didSet { needsDisplay = true }
     }
 
@@ -149,7 +144,9 @@ private final class WindowShellTintView: NSView {
     override func updateLayer() {
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let opacity = GlassIntensityScale.shellOpacity(transparency)
-        let color = if isDark {
+        let color = if transparency == 0 {
+            PaguroColor.Solid.canvasColor(isDark: isDark)
+        } else if isDark {
             NSColor(
                 srgbRed: CGFloat(36) / 255,
                 green: CGFloat(33) / 255,
@@ -184,7 +181,6 @@ private final class WindowShellTintView: NSView {
 struct WindowChromeConfigurator: NSViewRepresentable {
     let isMovable: Bool
     let glassStyle: ShellGlassStyle
-    let glassIntensity: Double
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -203,14 +199,12 @@ struct WindowChromeConfigurator: NSViewRepresentable {
     private func applyWhenAttached(to view: NSView, coordinator: Coordinator) {
         let isMovable = isMovable
         let glassStyle = glassStyle
-        let glassIntensity = glassIntensity
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             coordinator.configure(
                 window: window,
                 isMovable: isMovable,
-                glassStyle: glassStyle,
-                glassIntensity: glassIntensity
+                glassStyle: glassStyle
             )
         }
     }
@@ -227,14 +221,12 @@ struct WindowChromeConfigurator: NSViewRepresentable {
         func configure(
             window: NSWindow,
             isMovable: Bool,
-            glassStyle: ShellGlassStyle,
-            glassIntensity: Double
+            glassStyle: ShellGlassStyle
         ) {
             window.isMovable = isMovable
             WindowBackdropInstaller.install(
                 in: window,
-                glassStyle: glassStyle,
-                transparency: glassIntensity
+                glassStyle: glassStyle
             )
             WindowChromeConfigurator.applyReferenceTrafficLightGeometry(to: window)
             // The SwiftUI minimum width does not reach the window, which a
@@ -315,12 +307,30 @@ struct WindowChromeConfigurator: NSViewRepresentable {
 /// the top bar, where the OS window drag is off (see
 /// `WindowChromeConfigurator`). A double-click zooms, matching a title bar.
 struct WindowDragHandle: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { DragView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    var endsEditingOnPress = false
 
-    private final class DragView: NSView {
+    func makeNSView(context: Context) -> DragView {
+        let view = DragView()
+        view.endsEditingOnPress = endsEditingOnPress
+        return view
+    }
+
+    func updateNSView(_ nsView: DragView, context: Context) {
+        nsView.endsEditingOnPress = endsEditingOnPress
+    }
+
+    final class DragView: NSView {
+        var endsEditingOnPress = false
+
+        /// Onboarding lets a background click finish editing before a window drag.
+        /// Other drag surfaces keep the current responder, such as a web page.
+        func endEditingIfNeeded() {
+            if endsEditingOnPress { window?.makeFirstResponder(nil) }
+        }
+
         override func mouseDown(with event: NSEvent) {
             guard let window else { return }
+            endEditingIfNeeded()
             if event.clickCount == 2 {
                 window.performZoom(nil)
             } else {
