@@ -7,7 +7,7 @@ struct ServicePickerView: View {
     let allowsActions: Bool
     var destination: Binding<UUID?>? = nil
     var onSave: (() -> Bool)? = nil
-    var onContinue: (() -> Void)? = nil
+    var onEditorPresentationChange: ((Bool) -> Void)? = nil
 
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
     private var isFirstWorkspace: Bool { destination == nil }
@@ -72,6 +72,9 @@ struct ServicePickerView: View {
                         showsCustomWebsite = false
                     }
                 )
+            }
+            .onChange(of: showsCustomWebsite || showsNewWorkspace) { _, presented in
+                onEditorPresentationChange?(presented)
             }
             .onChange(of: allowsActions) { _, allowed in focusedField = allowed ? .search : nil }
             .onChange(of: navigation) { activeServiceID = navigation.retainedID(activeServiceID) }
@@ -193,7 +196,7 @@ struct ServicePickerView: View {
                 }
                 .onChange(of: scrollToCustomWebsite) { proxy.scrollTo("service-list-top", anchor: .top) }
             }
-            footer
+            if !isFirstWorkspace { footer }
         }
         .onGeometryChange(for: Bool.self) { geometry in
             geometry.size.width >= 900
@@ -371,40 +374,31 @@ struct ServicePickerView: View {
                     .foregroundStyle(.red)
                     .padding(.vertical, 12)
             }
-            if isFirstWorkspace {
-                FirstRunFooter(currentStep: .workspace) {
-                    cancelButton
-                } trailing: {
-                    saveButton
-                }
-            } else {
-                Divider()
-                HStack {
-                    cancelButton
-                    Spacer()
-                    saveButton
-                }
-                .controlSize(.large)
-                .frame(minHeight: 36)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 16)
+            Divider()
+            HStack {
+                cancelButton
+                Spacer()
+                saveButton
             }
+            .controlSize(.large)
+            .frame(minHeight: 36)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 16)
         }
     }
 
     private var cancelButton: some View {
-        Button(isFirstWorkspace ? "Back" : "Cancel") { appState.showAddService = false }
+        Button("Cancel") { appState.showAddService = false }
             .modifier(SetupKeyboardActivation { appState.showAddService = false })
             .keyboardShortcut(.cancelAction)
     }
 
     private var saveButton: some View {
-        Button(isFirstWorkspace ? "Continue" : "Add services", action: finish)
+        Button("Add services", action: finish)
             .buttonStyle(.borderedProminent)
             .modifier(SetupKeyboardActivation(action: finish))
             .keyboardShortcut(.return, modifiers: .command)
-            .disabled(isFirstWorkspace ? !selection.canCreateWorkspace
-                : selection.services.isEmpty || !liveSpaces.contains { $0.id == destination?.wrappedValue })
+            .disabled(selection.services.isEmpty || !liveSpaces.contains { $0.id == destination?.wrappedValue })
     }
 
     private func openCustomWebsite() {
@@ -448,12 +442,6 @@ struct ServicePickerView: View {
 
     private func finish() {
         guard allowsActions, !appState.isLocked, !showsCustomWebsite, !showsNewWorkspace else { return }
-        if isFirstWorkspace, let onContinue {
-            guard selection.canCreateWorkspace else { return }
-            focusedField = nil
-            onContinue()
-            return
-        }
         let saved = onSave?()
             ?? appState.addSetupServices(selection.services, workspaceName: selection.workspaceName)
         if !saved {

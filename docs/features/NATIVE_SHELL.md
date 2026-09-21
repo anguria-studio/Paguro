@@ -137,7 +137,7 @@ top bar does. The traffic lights stay visible and uncovered. The menu bar keeps
 every command: Add Service (`Command-N`), Settings, and import all work while
 the screen is up. The quick switcher opens and finds nothing.
 
-Moving between setup pages uses a 0.22-second fade and 24 points of horizontal
+Moving between setup page contents uses a 0.22-second fade and 24 points of horizontal
 travel. Forward enters from the right; Back enters from the left. Custom website
 entry uses the native sheet transition. Reduce Motion uses a fade with no
 travel for the wizard pages. Card selection fades its checkmark and border
@@ -159,9 +159,11 @@ atomic batch save. A failure keeps the appearance page and draft available.
 Command-Return continues from the catalog and saves from Appearance. Hidden
 catalog controls cannot receive input or appear in the accessibility tree.
 The footer moves progress above the actions when three steps cannot fit across
-the available width. A subtle semantic background separates the footer from
-page content and becomes solid with Reduce Transparency. Reduce Motion
-preserves the fade between pages.
+the available width. The wizard owns one persistent footer outside the animated
+page container. It has no separate background fill and never slides or fades
+with page changes. The footer owns import feedback and primary-action focus;
+the catalog keeps search focus and reports modal presentation to disable wizard
+navigation while an editor is open. Reduce Motion preserves the content fade.
 
 The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.

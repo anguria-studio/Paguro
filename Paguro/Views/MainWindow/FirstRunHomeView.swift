@@ -14,12 +14,9 @@ struct FirstRunHomeView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-    @FocusState private var primaryActionIsFocused: Bool
 
     /// True while macOS is deciding, so the button cannot be pressed twice.
     @State private var isRequestingPermission = false
-    /// The result of an import, or nil when none has run.
-    @State private var importMessage: String?
 
     /// The reading width of the column. A wider column makes the sentence run
     /// across the window and separates the title from the button under it.
@@ -50,20 +47,10 @@ struct FirstRunHomeView: View {
                     .frame(maxWidth: .infinity, minHeight: geometry.size.height)
                 }
             }
-            actions
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome to Paguro")
-        .onAppear { primaryActionIsFocused = true }
-        .alert("Import Configuration", isPresented: Binding(
-            get: { importMessage != nil },
-            set: { if !$0 { importMessage = nil } }
-        )) {
-            Button("OK") { importMessage = nil }
-        } message: {
-            Text(importMessage ?? "")
-        }
     }
 
     private var header: some View {
@@ -214,46 +201,6 @@ struct FirstRunHomeView: View {
         Text(text)
             .font(.paguroCaption.weight(.medium))
             .foregroundStyle(PaguroColor.Text.secondary)
-    }
-
-    // MARK: - Actions
-
-    private var actions: some View {
-        FirstRunFooter(currentStep: .welcome) {
-            Button("Import configuration…") { importConfiguration() }
-                .buttonStyle(.link)
-                .help("Import a configuration from another Mac")
-                .disabled(!allowsActions)
-        } trailing: {
-            Button("Choose your services") {
-                guard allowsActions else { return }
-                appState.showAddService = true
-            }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.defaultAction)
-            .focused($primaryActionIsFocused)
-            .disabled(!allowsActions)
-        }
-    }
-
-    /// Reads a configuration file and adds it.
-    ///
-    /// The Settings import offers a preview with an Add or Replace choice. This
-    /// screen has nothing to replace, because it appears only when no service
-    /// exists, so the file is added and the result is reported. The model owns
-    /// the import, so the view reaches no store.
-    private func importConfiguration() {
-        // The lock screen draws over this screen and takes its clicks already.
-        // `AppModel.importConfiguration` refuses a locked app as well. This
-        // guard keeps the third route, a keyboard activation, closed too.
-        guard allowsActions else { return }
-        do {
-            guard let archive = try ConfigurationFileAccess.chooseImport() else { return }
-            try appModel.importConfiguration(archive, applyPreferences: true, mode: .add)
-            importMessage = "Imported \(archive.workspaces.count) workspaces and \(archive.services.count) services. Sign in to each imported service to use it."
-        } catch {
-            importMessage = error.localizedDescription
-        }
     }
 
     private func openNotificationSettings() {

@@ -63,8 +63,6 @@ struct FirstRunProgress: View {
 
 /// Navigation keeps the same baseline on every setup page.
 struct FirstRunFooter<Leading: View, Trailing: View>: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     let currentStep: FirstRunStep
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let trailing: () -> Trailing
@@ -92,6 +90,5 @@ struct FirstRunFooter<Leading: View, Trailing: View>: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 16)
         }
-        .background(Color(nsColor: .windowBackgroundColor).opacity(reduceTransparency ? 1 : 0.35))
     }
 }

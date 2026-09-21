@@ -6,8 +6,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 - Setup now ends with an Appearance step for theme and Liquid Glass presets,
   with miniature window illustrations and a live shell preview. The workspace
-  name sits beside the introduction on wide windows, and a subtle footer surface
-  separates navigation from content. Back preserves service choices and catalog filters;
+  name sits beside the introduction on wide windows. The shared footer has no
+  background fill and stays still while page content transitions. Back preserves
+  service choices and catalog filters;
   Create workspace saves the selected services only on the final step.
 
 - Window glass now offers four presets: Follow system, Off, Clear, and Regular.

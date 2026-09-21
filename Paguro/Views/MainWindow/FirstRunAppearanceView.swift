@@ -4,13 +4,9 @@ import SwiftUI
 /// The shell itself previews these saved appearance preferences live.
 struct FirstRunAppearanceView: View {
     let allowsActions: Bool
-    let canFinish: Bool
     let saveError: String?
-    let onBack: () -> Void
-    let onFinish: () -> Void
 
     @Environment(AppState.self) private var appState
-    @FocusState private var finishIsFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -67,27 +63,10 @@ struct FirstRunAppearanceView: View {
                     .foregroundStyle(.red)
                     .padding(12)
             }
-            FirstRunFooter(currentStep: .appearance) {
-                Button("Back", action: onBack)
-                    .modifier(SetupKeyboardActivation(action: onBack))
-                    .keyboardShortcut(.cancelAction)
-            } trailing: {
-                Button("Create workspace", action: onFinish)
-                    .buttonStyle(.borderedProminent)
-                    .modifier(SetupKeyboardActivation(action: onFinish))
-                    .focused($finishIsFocused)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!canFinish)
-            }
         }
         .disabled(!allowsActions)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Choose your appearance")
-        .task {
-            await Task.yield()
-            guard !Task.isCancelled, allowsActions else { return }
-            finishIsFocused = true
-        }
     }
 
     private func themeChoice(_ mode: AppearanceMode, title: String) -> some View {

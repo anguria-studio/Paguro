@@ -67,10 +67,10 @@ save keeps the user on this step with Back and retry available. Hide the glass
 selector below macOS 26. Keep appearance choices available later in Settings.
 The footer puts progress above the actions when the window is too narrow for
 all three steps on one row.
-All setup pages use the same footer baseline and content margins. A quiet
-semantic surface separates navigation from the page, with a solid background
-when Reduce Transparency is enabled.
-Page changes use a 0.22-second fade with 24 points of horizontal travel.
+All setup pages share one footer outside the animated page container. It has
+no separate background fill and stays stationary across steps. Only its actions
+and progress state change. Keep the same content margins on every page.
+Page content changes use a 0.22-second fade with 24 points of horizontal travel.
 Back reverses the movement. Reduce Motion keeps only the fade. Tab reaches all
 setup controls without changing the system's keyboard preferences. The grid is
 one Tab stop with arrow-key movement and a dashed inset focus outline, separate
