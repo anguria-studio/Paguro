@@ -410,6 +410,27 @@ enum PaguroColor {
         })
     }
 
+    /// Opaque shell surfaces share a restrained violet undertone.
+    enum Solid {
+        static func canvasColor(isDark: Bool) -> NSColor {
+            isDark
+                ? NSColor(srgbRed: 24 / 255, green: 24 / 255, blue: 29 / 255, alpha: 1)
+                : NSColor(srgbRed: 245 / 255, green: 244 / 255, blue: 247 / 255, alpha: 1)
+        }
+
+        static let canvas = PaguroColor.dynamic(
+            light: canvasColor(isDark: false), dark: canvasColor(isDark: true)
+        )
+        static let surface = PaguroColor.dynamic(
+            light: NSColor(srgbRed: 236 / 255, green: 235 / 255, blue: 240 / 255, alpha: 1),
+            dark: NSColor(srgbRed: 32 / 255, green: 32 / 255, blue: 38 / 255, alpha: 1)
+        )
+        static let card = PaguroColor.dynamic(
+            light: .white,
+            dark: NSColor(srgbRed: 40 / 255, green: 40 / 255, blue: 48 / 255, alpha: 1)
+        )
+    }
+
     enum Text {
         static let primary = Color(nsColor: .labelColor)
         static let secondary = PaguroColor.ink(light: 0.60, dark: 0.62)
@@ -474,7 +495,8 @@ enum PaguroColor {
         /// A protective tint over Paguro-owned transient material surfaces. It
         /// becomes transparent as the user increases glass intensity.
         static func shellMaterialTint(intensity: Double) -> Color {
-            PaguroColor.dynamic(
+            if intensity == 0 { return PaguroColor.Solid.surface }
+            return PaguroColor.dynamic(
                 light: NSColor(
                     srgbRed: 0.95,
                     green: 0.95,
@@ -512,7 +534,8 @@ enum PaguroColor {
 
     /// The full protective tint used above the native window material.
     static func shellTint(intensity: Double) -> Color {
-        PaguroColor.dynamic(
+        if intensity == 0 { return PaguroColor.Solid.canvas }
+        return PaguroColor.dynamic(
             light: NSColor(
                 srgbRed: 0.95,
                 green: 0.95,
@@ -530,10 +553,11 @@ enum PaguroColor {
 
     /// The protective tint over the window material.
     ///
-    /// The RGB value stays stable. Only its opacity changes, so the setting
-    /// reveals the desktop instead of turning the app gray.
+    /// Off uses the opaque palette. Glass presets keep their existing tint
+    /// and opacity so the desktop remains visible through the native material.
     static func shellCanvas(intensity: Double) -> Color {
-        PaguroColor.dynamic(
+        if intensity == 0 { return PaguroColor.Solid.canvas }
+        return PaguroColor.dynamic(
             light: NSColor(
                 srgbRed: 0.95,
                 green: 0.95,
@@ -552,7 +576,8 @@ enum PaguroColor {
     /// The sidebar keeps slightly more tint than the surrounding canvas so
     /// labels stay legible over a bright or detailed wallpaper.
     static func sidebarCanvas(intensity: Double) -> Color {
-        PaguroColor.dynamic(
+        if intensity == 0 { return PaguroColor.Solid.surface }
+        return PaguroColor.dynamic(
             light: NSColor(
                 srgbRed: 0.96,
                 green: 0.96,

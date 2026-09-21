@@ -337,7 +337,9 @@ struct FloatingNoticeCard: View {
     /// above a web page that Paguro does not control.
     @ViewBuilder
     private var surface: some View {
-        if reduceTransparency {
+        if appState.liquidGlassStyle == .off {
+            shape.fill(PaguroColor.Solid.card)
+        } else if reduceTransparency {
             shape.fill(Color(nsColor: .windowBackgroundColor))
         } else if #available(macOS 26, *), appState.liquidGlassStyle != .off {
             glassSurface

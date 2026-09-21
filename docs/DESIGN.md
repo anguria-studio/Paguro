@@ -102,6 +102,14 @@ fixed tint and frost values, with no separate slider or reset control. Preserve
 the saved preset choice; ignore legacy slider values. Clear uses standard
 frosted glass without tint. It must not use Apple's Clear variant, which shows
 too much background detail behind shell text.
+Off uses a solid palette with a subtle violet undertone. The dark canvas is
+`#18181D`, grouped surfaces and sidebar are `#202026`, and cards are `#282830`.
+The light palette uses `#F5F4F7`, `#ECEBF0`, and white respectively. Apply these
+colors only to the opaque preset and the older-system solid fallback. Selected
+service names use white in dark mode and black in light mode, with the existing
+subtle row highlight instead of a blue label. Keep
+glass tint, system accent colors, and website colors unchanged. Onboarding
+keeps a uniform canvas through the footer; cards provide the surface contrast.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 

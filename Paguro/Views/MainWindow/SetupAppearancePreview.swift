@@ -46,7 +46,9 @@ struct SetupGlassPreview: View {
             .blur(radius: 5)
             SetupWindowPreview()
                 .background {
-                    if reduceTransparency || style == .off {
+                    if style == .off {
+                        Rectangle().fill(PaguroColor.Solid.canvas)
+                    } else if reduceTransparency {
                         Rectangle().fill(.background)
                     } else if style == .system {
                         Rectangle().fill(.regularMaterial)

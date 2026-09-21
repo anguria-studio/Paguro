@@ -292,6 +292,7 @@ struct ServiceRowView: View {
 
     private var serviceNameColor: Color {
         guard isSelected else { return PaguroColor.Text.primary }
+        if glassStyle == .off { return PaguroColor.Text.selectedOnGlass }
         return SidebarSelectionContrastPolicy.usesHighContrastText(
             shellTransparency: glassIntensity
         )

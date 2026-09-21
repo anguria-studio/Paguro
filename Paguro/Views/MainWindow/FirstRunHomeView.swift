@@ -219,7 +219,9 @@ struct FirstRunHomeView: View {
     /// opaque window background under Reduce Transparency.
     @ViewBuilder
     private var cardSurface: some View {
-        if reduceTransparency {
+        if appState.liquidGlassStyle == .off {
+            cardShape.fill(PaguroColor.Solid.card)
+        } else if reduceTransparency {
             cardShape.fill(Color(nsColor: .windowBackgroundColor))
         } else if #available(macOS 26, *), appState.liquidGlassStyle != .off {
             glassCardSurface

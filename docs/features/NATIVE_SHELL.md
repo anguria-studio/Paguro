@@ -216,6 +216,16 @@ Without Liquid Glass, the setup card uses a one-point border with 18 percent
 ink in light mode and 20 percent in dark mode. This keeps its edge visible on
 a solid shell. Glass keeps the lighter half-point hairline.
 
+The Off preset uses a solid charcoal canvas with a subtle violet undertone,
+slightly lighter grouped surfaces and sidebar, and raised card fills. Light
+appearance uses an off-white canvas, a pale grouped surface, and white cards.
+The native backdrop and SwiftUI canvas share the same opaque color. Welcome,
+service-selection, appearance, and floating notice cards share the card fill.
+Selected service names use white in dark mode and black in light mode with
+the existing subtle row highlight. The footer has no separate fill.
+Other glass presets and website colors keep
+their existing behavior. The older-system solid fallback uses the same palette.
+
 ### Debug preview
 
 Debug builds accept `--paguro-first-run-preview`. The **Paguro First Run Preview**

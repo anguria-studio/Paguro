@@ -461,6 +461,7 @@ private struct ServiceSetupTile: View {
     let isKeyboardFocused: Bool
     let action: () -> Void
 
+    @Environment(AppState.self) private var appState
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var icon: NSImage?
     @State private var isHovering = false
@@ -501,7 +502,12 @@ private struct ServiceSetupTile: View {
             .padding(.top, 28)
             .padding(.bottom, 18)
             .frame(maxWidth: .infinity)
-            .background(shape.fill(Color.primary.opacity(isSelected ? 0.10 : (isHovering ? 0.07 : 0.04))))
+            .background(shape.fill(Color.primary.opacity(
+                isSelected ? 0.10 : (isHovering ? 0.07 : (appState.liquidGlassStyle == .off ? 0 : 0.04))
+            )))
+            .background {
+                if appState.liquidGlassStyle == .off { shape.fill(PaguroColor.Solid.card) }
+            }
             .overlay {
                 shape.strokeBorder(
                     isSelected ? Color.accentColor : Color.primary.opacity(contrast == .increased ? 0.6 : 0.12),

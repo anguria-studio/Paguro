@@ -111,7 +111,7 @@ final class WindowBackdropContainerView: NSView {
     }
 }
 
-/// Draws a fixed RGB tint whose opacity comes from the preset.
+/// Draws the opaque canvas for Off and the protective tint for glass presets.
 ///
 /// Use a layer background so a preset change redraws this AppKit view.
 /// The explicit layer also keeps the 0 percent endpoint opaque.
@@ -144,7 +144,9 @@ private final class WindowShellTintView: NSView {
     override func updateLayer() {
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let opacity = GlassIntensityScale.shellOpacity(transparency)
-        let color = if isDark {
+        let color = if transparency == 0 {
+            PaguroColor.Solid.canvasColor(isDark: isDark)
+        } else if isDark {
             NSColor(
                 srgbRed: CGFloat(36) / 255,
                 green: CGFloat(33) / 255,

@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Solid windows now use a subtly violet charcoal palette in dark mode and a
+  soft off-white palette in light mode, with distinct sidebar and card surfaces.
+  Selected service names use neutral text instead of blue on solid backgrounds.
+
 - The welcome notification card has a clearer border when window glass is off
   or unavailable, including Reduce Transparency.
 

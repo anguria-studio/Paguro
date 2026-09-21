@@ -94,7 +94,15 @@ struct FirstRunAppearanceView: View {
             .padding(.horizontal, 16)
             .padding(.top, 28)
             .padding(.bottom, 16)
-            .background(.primary.opacity(isSelected ? 0.10 : 0.04), in: RoundedRectangle(cornerRadius: 14))
+            .background(
+                .primary.opacity(isSelected ? 0.10 : (appState.liquidGlassStyle == .off ? 0 : 0.04)),
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .background {
+                if appState.liquidGlassStyle == .off {
+                    RoundedRectangle(cornerRadius: 14).fill(PaguroColor.Solid.card)
+                }
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.2),
