@@ -1,10 +1,7 @@
+import PaguroCore
 import SwiftUI
 
-enum FirstRunStep: Int, CaseIterable {
-    case welcome = 1
-    case workspace
-    case appearance
-
+extension FirstRunStep {
     var title: String {
         switch self {
         case .welcome: "Welcome"
@@ -17,6 +14,9 @@ enum FirstRunStep: Int, CaseIterable {
 /// A stable landmark across the setup pages.
 struct FirstRunProgress: View {
     let currentStep: FirstRunStep
+    let canContinue: Bool
+    let onSelect: (FirstRunStep) -> Void
+    @State private var hoveredStep: FirstRunStep?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -28,17 +28,46 @@ struct FirstRunProgress: View {
                         .frame(width: 24, height: 1)
                         .accessibilityHidden(true)
                 }
-                step(number: item.rawValue, title: item.title,
-                     isCurrent: item == currentStep, isComplete: item.rawValue < currentStep.rawValue)
+                stepControl(item)
             }
         }
         .animation(.easeInOut(duration: PaguroMotion.setupSelectionSeconds), value: currentStep)
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Setup progress")
         .accessibilityValue("Step \(currentStep.rawValue) of 3, \(currentStep.title)")
     }
 
-    private func step(number: Int, title: String, isCurrent: Bool, isComplete: Bool) -> some View {
+    @ViewBuilder
+    private func stepControl(_ item: FirstRunStep) -> some View {
+        if item == currentStep {
+            step(number: item.rawValue, title: item.title, isCurrent: true, isComplete: false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(item.title), current step")
+                .accessibilityAddTraits(.isSelected)
+        } else {
+            let available = currentStep.canNavigate(to: item, canCreateWorkspace: canContinue)
+            Button { onSelect(item) } label: {
+                step(number: item.rawValue, title: item.title, isCurrent: false,
+                     isComplete: item.rawValue < currentStep.rawValue,
+                     isHovered: hoveredStep == item && available)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .modifier(SetupKeyboardActivation { onSelect(item) })
+            .disabled(!available)
+            .onHover { hoveredStep = $0 ? item : nil }
+            .accessibilityLabel(item.title)
+            .accessibilityRemoveTraits(.isSelected)
+            .accessibilityValue(item.rawValue < currentStep.rawValue ? "Completed" : "")
+            .accessibilityHint(available
+                ? "Go to \(item.title) without saving your workspace"
+                : "Enter a workspace name and select at least one service first")
+        }
+    }
+
+    private func step(
+        number: Int, title: String, isCurrent: Bool, isComplete: Bool, isHovered: Bool = false
+    ) -> some View {
         HStack(spacing: 8) {
             ZStack {
                 Circle()
@@ -56,7 +85,7 @@ struct FirstRunProgress: View {
             .frame(width: 26, height: 26)
             Text(title)
                 .font(.paguroBody.weight(isCurrent ? .semibold : .regular))
-                .foregroundStyle(isCurrent ? .primary : .secondary)
+                .foregroundStyle(isHovered ? Color.accentColor : (isCurrent ? Color.primary : Color.secondary))
         }
     }
 }
@@ -64,6 +93,8 @@ struct FirstRunProgress: View {
 /// Navigation keeps the same baseline on every setup page.
 struct FirstRunFooter<Leading: View, Trailing: View>: View {
     let currentStep: FirstRunStep
+    let canContinue: Bool
+    let onSelect: (FirstRunStep) -> Void
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let trailing: () -> Trailing
 
@@ -73,11 +104,11 @@ struct FirstRunFooter<Leading: View, Trailing: View>: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 16) {
                     leading().fixedSize().frame(maxWidth: .infinity, alignment: .leading)
-                    FirstRunProgress(currentStep: currentStep).fixedSize()
+                    FirstRunProgress(currentStep: currentStep, canContinue: canContinue, onSelect: onSelect).fixedSize()
                     trailing().fixedSize().frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 VStack(spacing: 16) {
-                    FirstRunProgress(currentStep: currentStep)
+                    FirstRunProgress(currentStep: currentStep, canContinue: canContinue, onSelect: onSelect)
                     HStack {
                         leading()
                         Spacer()

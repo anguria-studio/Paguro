@@ -13,6 +13,7 @@ struct FirstRunWizardView: View {
     @State private var saveError: String?
     @State private var hasLoadedWorkspaceName = false
     @State private var isEditingService = false
+    @State private var hasOpenedCatalog = false
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
 
     private var currentStep: FirstRunStep {
@@ -30,11 +31,14 @@ struct FirstRunWizardView: View {
                 allowsActions: allowsActions && !isEditingService,
                 canContinue: selection.canCreateWorkspace,
                 onBack: goBack,
-                onNext: advance
+                onNext: advance,
+                onSelectStep: navigate
             )
         }
-        .onChange(of: appState.showAddService) { _, showing in
-            if !showing {
+        .onChange(of: appState.showAddService, initial: true) { _, showing in
+            if showing {
+                hasOpenedCatalog = true
+            } else {
                 showsAppearance = false
                 isEditingService = false
                 saveError = nil
@@ -55,56 +59,51 @@ struct FirstRunWizardView: View {
 
     private var pages: some View {
         ZStack {
-            if appState.showAddService {
-                ZStack {
-                    // Keep the catalog mounted so Back preserves filters and scroll position.
-                    ServicePickerView(
-                        selection: $selection, allowsActions: allowsActions && !showsAppearance,
-                        onEditorPresentationChange: { isEditingService = $0 }
-                    )
-                    .accessibilityElement(children: showsAppearance ? .ignore : .contain)
-                    .opacity(showsAppearance ? 0 : 1)
-                    .allowsHitTesting(!showsAppearance)
-                    .accessibilityHidden(showsAppearance)
-                    if showsAppearance {
-                        FirstRunAppearanceView(allowsActions: allowsActions, saveError: saveError)
-                            .transition(pageTransition(from: 24))
-                    }
-                }
+            if appState.showAddService || hasOpenedCatalog {
+                // Keep the catalog mounted across every step to retain filters and scroll position.
+                ServicePickerView(
+                    selection: $selection, allowsActions: allowsActions && currentStep == .workspace,
+                    onEditorPresentationChange: { isEditingService = $0 }
+                )
+                .accessibilityElement(children: currentStep == .workspace ? .contain : .ignore)
+                .opacity(currentStep == .workspace ? 1 : 0)
+                .offset(x: reduceMotion || currentStep == .workspace ? 0 : (currentStep == .welcome ? 24 : -24))
+                .allowsHitTesting(currentStep == .workspace)
+                .accessibilityHidden(currentStep != .workspace)
                 .transition(pageTransition(from: 24))
-            } else {
+            }
+            if currentStep == .appearance {
+                FirstRunAppearanceView(allowsActions: allowsActions, saveError: saveError)
+                    .transition(pageTransition(from: 24))
+            } else if currentStep == .welcome {
                 FirstRunHomeView(setup: setup, allowsActions: allowsActions)
                     .transition(pageTransition(from: -24))
             }
         }
     }
 
-    private func goBack() {
-        guard allowsActions, !appState.isLocked, !isEditingService else { return }
+    private func navigate(to step: FirstRunStep) {
+        guard allowsActions, !appState.isLocked, !isEditingService,
+              currentStep.canNavigate(to: step, canCreateWorkspace: selection.canCreateWorkspace) else { return }
         saveError = nil
-        if showsAppearance {
-            showsAppearance = false
-        } else {
-            appState.showAddService = false
-        }
+        showsAppearance = step == .appearance
+        appState.showAddService = step != .welcome
+    }
+
+    private func goBack() {
+        navigate(to: currentStep == .appearance ? .workspace : .welcome)
     }
 
     private func advance() {
-        guard allowsActions, !appState.isLocked, !isEditingService else { return }
         switch currentStep {
-        case .welcome:
-            appState.showAddService = true
-        case .workspace:
-            guard selection.canCreateWorkspace else { return }
-            saveError = nil
-            showsAppearance = true
-        case .appearance:
-            finish()
+        case .welcome: navigate(to: .workspace)
+        case .workspace: navigate(to: .appearance)
+        case .appearance: finish()
         }
     }
 
     private func finish() {
-        guard allowsActions, !appState.isLocked, showsAppearance, selection.canCreateWorkspace else { return }
+        guard allowsActions, !appState.isLocked, !isEditingService, showsAppearance, selection.canCreateWorkspace else { return }
         if !appState.addSetupServices(selection.services, workspaceName: selection.workspaceName) {
             saveError = "Paguro could not save your services. Your selection is ready to try again."
         }

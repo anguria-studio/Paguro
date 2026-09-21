@@ -28,6 +28,7 @@ struct UnifiedRailView: View {
     @Query var allLinks: [SpaceServiceLink]
     @Query(sort: \Space.sortOrder) var spaces: [Space]
     @Environment(AppState.self) var appState
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showingPalette = false
@@ -423,9 +424,13 @@ struct UnifiedRailView: View {
                     Divider()
                         .padding(.horizontal, 14)
 
-                    addServiceButton
-                        .frame(maxHeight: .infinity)
-                        .padding(.bottom, 8)
+                    HStack(spacing: 6) {
+                        addServiceButton
+                        settingsButton
+                    }
+                    .frame(width: ServiceRowView.rowWidth)
+                    .frame(maxHeight: .infinity)
+                    .padding(.bottom, 8)
                 }
                 .frame(height: PaguroMetric.Sidebar.footerHeight)
             }
@@ -986,9 +991,22 @@ struct UnifiedRailView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .frame(width: ServiceRowView.rowWidth)
         .help("Add service")
         .disabled(selectedSpaceID == nil)
+    }
+
+    private var settingsButton: some View {
+        Button {
+            openSettings()
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.paguroToolbarControl)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help("Settings (⌘,)")
+        .accessibilityLabel("Open Paguro Settings")
+        .accessibilityIdentifier("sidebar.settings")
     }
 
 }
