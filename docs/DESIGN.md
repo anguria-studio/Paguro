@@ -110,7 +110,11 @@ See [Native shell](features/NATIVE_SHELL.md).
 
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is
 available on macOS 26; macOS 15 uses the fallback surface materials.
-Follow system is the default glass mode. Use untinted native Regular glass
+Follow system is the default glass preference on macOS 27 and later. On
+macOS 26, resolve it to Regular and offer only Off, Clear, and Regular. Earlier
+systems use the solid palette without glass controls. Preserve the saved
+preference across these fallbacks. On supported systems, Follow system uses
+untinted native Regular glass
 without extra window frost or protective color. Off, Clear, and Regular use
 fixed tint and frost values, with no separate slider or reset control. Preserve
 the saved preset choice; ignore legacy slider values. Clear uses standard
@@ -119,13 +123,24 @@ too much background detail behind shell text.
 Off uses a solid palette with a subtle violet undertone. The dark canvas is
 `#18181D`, grouped surfaces and sidebar are `#202026`, and cards are `#282830`.
 The light palette uses `#F5F4F7`, `#ECEBF0`, and white respectively. Apply these
-colors only to the opaque preset and the older-system solid fallback. Selected
+colors to the opaque preset and the older-system solid fallback. Regular glass
+uses the same canvas and surface hues at its existing tint opacities. Follow
+system and Clear add no protective tint. Selected
 service names use white in dark mode and black in light mode, with the existing
 subtle row highlight instead of a blue label. Keep
-glass tint, system accent colors, and website colors unchanged. Onboarding
+system accent colors and website colors unchanged. Onboarding
 keeps a uniform canvas through the footer; cards provide the surface contrast.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
+
+Settings and Paguro-owned sheets share the shell palette and app appearance.
+Use the solid canvas with glass Off, on older systems, or with Reduce Transparency.
+Glass presets use native material with the shared shell tint for readable forms.
+Keep native controls, grouped form surfaces, and sheet geometry. Settings hides
+its default scroll background so the shared canvas also reaches the toolbar.
+Workspace, service, custom website, import, recovery, and quick-switcher sheets
+use the same background. System alerts, file panels, and website windows keep
+their own surfaces.
 
 A command row at the bottom of a popover list uses the menu row style. The row
 takes the full width of the list and lines up with the rows above it. The

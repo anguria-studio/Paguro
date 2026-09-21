@@ -24,3 +24,26 @@ public enum ShellGlassStyle: String, CaseIterable, Sendable {
         }
     }
 }
+
+/// Resolves saved choices without changing them when platform support differs.
+public enum ShellGlassSupport: Sendable {
+    case unavailable
+    case presets
+    case systemAppearance
+
+    public var availableStyles: [ShellGlassStyle] {
+        switch self {
+        case .unavailable: []
+        case .presets: [.off, .clear, .regular]
+        case .systemAppearance: ShellGlassStyle.allCases
+        }
+    }
+
+    public func effectiveStyle(for preference: ShellGlassStyle) -> ShellGlassStyle {
+        switch self {
+        case .unavailable: .off
+        case .presets: preference == .system ? .regular : preference
+        case .systemAppearance: preference
+        }
+    }
+}

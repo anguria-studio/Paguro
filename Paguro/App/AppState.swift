@@ -64,13 +64,9 @@ final class AppState {
 
     var railLayout: RailLayout { shellPreferences.railLayout }
     var appearanceMode: AppearanceMode { shellPreferences.appearanceMode }
-    /// The glass style in force.
-    ///
-    /// Below macOS 26 this is always `.off`, whatever the stored preference
-    /// says, so the shell renders one predictable way rather than reading a
-    /// setting the user was never offered.
+    /// Resolve platform fallbacks without rewriting the saved preference.
     var liquidGlassStyle: ShellGlassStyle {
-        AppCapabilities.liquidGlassSupported ? shellPreferences.liquidGlassStyle : .off
+        AppCapabilities.shellGlassSupport.effectiveStyle(for: shellPreferences.liquidGlassStyle)
     }
     var liquidGlassIntensity: Double {
         liquidGlassStyle.transparency

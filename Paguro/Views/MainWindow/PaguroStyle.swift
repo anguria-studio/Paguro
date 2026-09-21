@@ -503,19 +503,8 @@ enum PaguroColor {
         /// becomes transparent as the user increases glass intensity.
         static func shellMaterialTint(intensity: Double) -> Color {
             if intensity == 0 { return PaguroColor.Solid.surface }
-            return PaguroColor.dynamic(
-                light: NSColor(
-                    srgbRed: 0.95,
-                    green: 0.95,
-                    blue: 0.96,
-                    alpha: GlassIntensityScale.materialTintOpacity(intensity)
-                ),
-                dark: NSColor(
-                    srgbRed: CGFloat(36) / 255,
-                    green: CGFloat(33) / 255,
-                    blue: CGFloat(37) / 255,
-                    alpha: GlassIntensityScale.materialTintOpacity(intensity)
-                )
+            return PaguroColor.Solid.canvas.opacity(
+                GlassIntensityScale.materialTintOpacity(intensity)
             )
         }
 
@@ -539,65 +528,22 @@ enum PaguroColor {
     /// The shadow under a service cell that a person moves in the rail.
     static let railLiftShadow = PaguroColor.ink(light: 0.28, dark: 0.45)
 
-    /// The full protective tint used above the native window material.
+    /// The full protective tint uses the same hue as the opaque canvas.
     static func shellTint(intensity: Double) -> Color {
-        if intensity == 0 { return PaguroColor.Solid.canvas }
-        return PaguroColor.dynamic(
-            light: NSColor(
-                srgbRed: 0.95,
-                green: 0.95,
-                blue: 0.96,
-                alpha: GlassIntensityScale.shellOpacity(intensity)
-            ),
-            dark: NSColor(
-                srgbRed: CGFloat(36) / 255,
-                green: CGFloat(33) / 255,
-                blue: CGFloat(37) / 255,
-                alpha: GlassIntensityScale.shellOpacity(intensity)
-            )
-        )
+        PaguroColor.Solid.canvas.opacity(GlassIntensityScale.shellOpacity(intensity))
     }
 
-    /// The protective tint over the window material.
-    ///
-    /// Off uses the opaque palette. Glass presets keep their existing tint
-    /// and opacity so the desktop remains visible through the native material.
+    /// Glass keeps the canvas hue with a lighter structural tint.
     static func shellCanvas(intensity: Double) -> Color {
         if intensity == 0 { return PaguroColor.Solid.canvas }
-        return PaguroColor.dynamic(
-            light: NSColor(
-                srgbRed: 0.95,
-                green: 0.95,
-                blue: 0.96,
-                alpha: GlassIntensityScale.surfaceOpacity(intensity)
-            ),
-            dark: NSColor(
-                srgbRed: CGFloat(36) / 255,
-                green: CGFloat(33) / 255,
-                blue: CGFloat(37) / 255,
-                alpha: GlassIntensityScale.surfaceOpacity(intensity)
-            )
-        )
+        return PaguroColor.Solid.canvas.opacity(GlassIntensityScale.surfaceOpacity(intensity))
     }
 
     /// The sidebar keeps slightly more tint than the surrounding canvas so
     /// labels stay legible over a bright or detailed wallpaper.
     static func sidebarCanvas(intensity: Double) -> Color {
         if intensity == 0 { return PaguroColor.Solid.surface }
-        return PaguroColor.dynamic(
-            light: NSColor(
-                srgbRed: 0.96,
-                green: 0.96,
-                blue: 0.97,
-                alpha: GlassIntensityScale.sidebarOpacity(intensity)
-            ),
-            dark: NSColor(
-                srgbRed: CGFloat(32) / 255,
-                green: CGFloat(30) / 255,
-                blue: CGFloat(34) / 255,
-                alpha: GlassIntensityScale.sidebarOpacity(intensity)
-            )
-        )
+        return PaguroColor.Solid.surface.opacity(GlassIntensityScale.sidebarOpacity(intensity))
     }
 }
 

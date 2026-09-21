@@ -76,6 +76,7 @@ struct SetupCustomWebsiteSheet: View {
         }
         .frame(width: 600)
         .fixedSize(horizontal: false, vertical: true)
+        .paguroSheetAppearance()
         .disabled(!allowsActions)
         .onAppear { nameIsFocused = true }
         .onDisappear { iconDraft.cancel() }

@@ -30,13 +30,16 @@ enum AppCapabilities {
     /// entitlements file, and provisioned. See DISTRIBUTION.md.
     static let passkeysSupported = false
 
-    /// Liquid Glass arrived in macOS 26. Below that the shell draws the same
-    /// material surfaces for every glass style, so the style choice would show
-    /// options that cannot change the native glass appearance.
-    ///
-    /// Earlier systems use the solid shell fallback without glass controls.
+    /// The continuous system glass control is available from macOS 27.
+    /// macOS 26 keeps manual presets; earlier systems use the solid palette.
+    static var shellGlassSupport: ShellGlassSupport {
+        if #available(macOS 27, *) { return .systemAppearance }
+        if #available(macOS 26, *) { return .presets }
+        return .unavailable
+    }
+
     static var liquidGlassSupported: Bool {
-        if #available(macOS 26, *) { true } else { false }
+        !shellGlassSupport.availableStyles.isEmpty
     }
 
     /// Text of the floating notice card that shows the first time a service

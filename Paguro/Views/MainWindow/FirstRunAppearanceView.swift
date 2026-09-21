@@ -31,7 +31,7 @@ struct FirstRunAppearanceView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Liquid Glass").font(.headline)
                             HStack(spacing: 12) {
-                                ForEach(ShellGlassStyle.allCases, id: \.self) { style in
+                                ForEach(AppCapabilities.shellGlassSupport.availableStyles, id: \.self) { style in
                                     choice(title: style.displayName,
                                            isSelected: appState.liquidGlassStyle == style) {
                                         guard allowsActions, !appState.isLocked else { return }

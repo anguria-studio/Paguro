@@ -4,6 +4,15 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Window glass defaults to Regular on macOS 26 and the solid palette on
+  earlier systems. Follow system is offered on macOS 27 and later.
+
+- Regular glass now shares the solid palette's charcoal and off-white hues,
+  with the same transparency and frost as before.
+
+- Settings and Paguro dialogs now follow the app's palette and appearance,
+  with matching solid backgrounds and tinted material for glass presets.
+
 - The bundled Sentry logo uses an off-white variant in dark appearance.
 
 - Selected service icons have a clearer background in the collapsed sidebar

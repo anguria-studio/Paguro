@@ -840,8 +840,13 @@ The Window glass selector has four presets and no separate transparency slider:
 | Clear | Untinted Regular glass | 45 percent | None |
 | Regular | Regular glass | Full strength | 15 percent |
 
-Follow system is the default for a fresh install. Native glass responds to the
+Follow system is the default preference for a fresh install. On macOS 27 and
+later, native glass responds to the
 system Liquid Glass appearance. Paguro does not copy the system slider value.
+On macOS 26, a Follow system preference resolves to Regular. Settings and
+onboarding offer Off, Clear, and Regular only. Explicit manual choices stay
+unchanged. Below macOS 26, every preference resolves to Off and glass controls
+are hidden. These fallbacks do not rewrite saved or imported preferences.
 Clear also uses the native Regular material, with light extra backdrop frost
 and no protective tint. Do not map this preset to Apple's Clear material:
 that variant leaves background text too visible behind shell content.
@@ -854,8 +859,16 @@ opacity and frost values. Loading preferences removes the old slider setting.
 Configuration import accepts the legacy opacity field but uses the preset;
 export writes the preset's opacity for compatibility with older versions.
 
-The presets update the main window live. They do not change the Settings
-window, system-owned surfaces, or web pages. Selecting Follow system restores
+The presets update the main window live. Settings and Paguro-owned sheets
+follow the same theme and palette through `PaguroSecondarySurface`.
+Off, older systems, and Reduce Transparency use the solid canvas. Glass presets
+use regular native material with the shared shell tint, keeping forms readable.
+Settings hides its default scroll background. Native grouped form surfaces,
+controls, sheet corners, and keyboard behavior remain in place. Workspace and
+service editors, custom website entry, import preview, recovery, and quick
+switcher all use the shared sheet appearance. System-owned alerts and file
+panels, authentication windows, and web pages keep their own backgrounds.
+Selecting Follow system restores
 the default behavior, so there is no separate Reset Glass Lab action.
 On macOS 15, the glass selector is unavailable and the shell uses a solid tint
 over the native visual-effect fallback.
@@ -870,8 +883,10 @@ light appearance and white text in dark appearance. The fixed tint strength
 controls the blend, so Regular retains more selection fill than Clear.
 Collapsed service icons keep their stronger neutral fill across all presets.
 The web page stays on an opaque or quiet semantic background.
-The opaque dark shell tint uses `#242125`. Presets change its opacity, not its
-RGB values.
+The protective shell tint shares the solid canvas hue: `#18181D` in dark
+appearance and `#F5F4F7` in light appearance. The sidebar uses the matching
+solid surface hue. Regular keeps its existing tint opacities and frost.
+Follow system and Clear add no protective tint.
 
 The lock screen uses this same window material and protective tint.
 It hides the underlying shell without unloading service views. Hidden shell

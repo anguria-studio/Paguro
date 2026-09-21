@@ -172,6 +172,7 @@ struct EditServiceSheet: View {
             .padding(20)
         }
         .frame(width: 420, height: 520)
+        .paguroSheetAppearance()
         .onAppear {
             label = service.label
             url = service.url
