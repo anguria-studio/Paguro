@@ -272,7 +272,7 @@ Record the result in `THIRD_PARTY_NOTICES.md`.
 Test these cases before each public release:
 
 - first launch on a clean user account, which must show the first-run welcome
-  screen with the two empty default workspaces behind it;
+  screen without example services or workspaces;
 - all optional permissions denied;
 - each permission enabled later;
 - window close and menu-bar use;
