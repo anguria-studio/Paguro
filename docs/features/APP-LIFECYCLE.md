@@ -97,7 +97,30 @@ service, toggle global notification mute, lock Paguro, open the main window,
 or open Settings. This window is the complete application route
 while Paguro runs in Menu bar only mode.
 
+## First run
+
+A window with no service shows the first-run welcome screen in place of the
+shell. `FirstRunPolicy` in PaguroCore holds the rule, and it counts the
+services of every workspace together. The screen carries the notification
+permission and the island offers, so Paguro has no separate welcome sheet and
+stores no "seen" state for one.
+
+A new install has no workspace and no service. Launch never seeds data.
+`WorkspaceStore.addService` creates Home with the first service in one save.
+Store recovery still uses `hasEverHadData`, snapshots, and the saved content
+record to detect data loss. Any workspace now counts as user data.
+
+The window reads the rule at each render, so the first service ends the screen
+without another signal. `NotificationRuntime.start()` still owns the macOS
+permission request for every launch, including a login-item launch that opens
+no window. See [Native shell](NATIVE_SHELL.md) and
+[Notification system](NOTIFICATIONS.md).
+
 ## App lock
+
+A launch that starts locked shows the lock screen first. The first-run screen
+waits under it and appears after the unlock, and none of its actions can run
+while the window is locked.
 
 Locking suppresses island alerts and macOS notification banners and sounds.
 The island hides immediately and retains its recent history in memory. Paguro removes

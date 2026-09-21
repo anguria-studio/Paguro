@@ -2,49 +2,6 @@ import Foundation
 import SQLite3
 import PaguroCore
 
-/// The spaces and services `WorkspaceStore` writes on a genuine fresh
-/// install. Shared with `StoreContent.looksLikeUntouchedSeed` so the seeder and
-/// the fingerprint can never drift apart; `testSeededStoreIsFingerprintedAsSeed`
-/// fails if they do.
-enum DefaultSeed {
-    static let spaces: [(name: String, emoji: String)] = [
-        (name: "Personal", emoji: "🏠"),
-        (name: "Work", emoji: "💼"),
-    ]
-
-    static let personalServices: [(label: String, url: String, catalogID: String)] = [
-        (label: "Gmail", url: "https://mail.google.com/mail/u/0/#inbox", catalogID: "gmail"),
-        (label: "Discord", url: "https://discord.com/channels/@me", catalogID: "discord"),
-        (label: "ChatGPT", url: "https://chatgpt.com", catalogID: "chatgpt"),
-        (label: "Claude", url: "https://claude.ai", catalogID: "claude"),
-    ]
-
-    static let workServices: [(label: String, url: String, catalogID: String)] = [
-        (label: "Gmail", url: "https://mail.google.com/mail/u/0/#inbox", catalogID: "gmail"),
-        (label: "Slack", url: "https://app.slack.com/client", catalogID: "slack"),
-        (label: "Outlook", url: "https://outlook.cloud.microsoft/mail/", catalogID: "outlook"),
-    ]
-
-    /// Every seeded service label, including the duplicate Gmail that appears in
-    /// both spaces. Compared as a multiset, so the duplicate matters.
-    static var allServiceLabels: [String] {
-        (personalServices + workServices).map(\.label)
-    }
-}
-
-extension StoreContent {
-    /// True only when the store is exactly what `WorkspaceStore`
-    /// writes: the two seeded spaces, the seven seeded services, nothing added,
-    /// nothing renamed. A store like this holds nothing of the user's, which is
-    /// what makes it safe to preselect a backup over.
-    var looksLikeUntouchedSeed: Bool {
-        matchesUntouchedSeed(
-            spaceNames: DefaultSeed.spaces.map(\.name),
-            serviceLabels: DefaultSeed.allServiceLabels
-        )
-    }
-}
-
 /// Reads store files without opening a `ModelContainer`, so candidates can be
 /// inspected and ranked before anything migrates or locks them. Read-only
 /// throughout: nothing here writes to a store.

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CatalogGridView: View {
     let searchText: String
-    let spaceID: UUID
+    let spaceID: UUID?
     let onAdd: () -> Void
 
     @Environment(AppState.self) private var appState

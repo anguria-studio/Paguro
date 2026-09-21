@@ -8,7 +8,7 @@ struct AddServiceSheet: View {
     @Query(sort: \Space.sortOrder) private var spaces: [Space]
     @State private var searchText = ""
     @State private var selectedTab: AddServiceTab = .catalog
-    @State private var selectedSpaceID: UUID
+    @State private var selectedSpaceID: UUID?
     @State private var customURL = ""
     @State private var customLabel = ""
     @State private var iconDraft = ServiceIconDraft()
@@ -19,7 +19,7 @@ struct AddServiceSheet: View {
         case custom = "Custom URL"
     }
 
-    init(spaceID: UUID) {
+    init(spaceID: UUID?) {
         _selectedSpaceID = State(initialValue: spaceID)
     }
 
@@ -46,7 +46,7 @@ struct AddServiceSheet: View {
                 Picker("Workspace", selection: $selectedSpaceID) {
                     ForEach(liveSpaces) { space in
                         Text(space.displayNameWithEmoji)
-                            .tag(space.id)
+                            .tag(Optional(space.id))
                     }
                 }
                 .pickerStyle(.menu)

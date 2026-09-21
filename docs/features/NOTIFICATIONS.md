@@ -371,6 +371,14 @@ Paguro reads the permission first and then applies
 `NotificationAuthorizationPolicy.shouldRequest`. A fresh install reads
 `notDetermined`, so Paguro asks and macOS shows its prompt.
 
+The first-run screen also carries a notification row while no service exists.
+The row offers Allow, which makes the same request, while macOS holds no
+decision. It reports "On" for a granted permission, and it routes to System
+Settings for a stored decision, because macOS never asks twice. The row is the
+only first-run offer: Paguro has no welcome sheet. Once the first service
+exists, the Settings warning below owns this state. See
+[Native shell](NATIVE_SHELL.md).
+
 ### A refusal and a failure are different
 
 Two states look the same from outside. In both, no banner appears and

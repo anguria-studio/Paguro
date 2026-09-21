@@ -174,24 +174,10 @@ enum StoreRepair {
         return scalarText(db, "PRAGMA integrity_check(1);") == "ok"
     }
 
-    /// Whether the snapshot at `url` holds data that is actually the user's, as
-    /// opposed to the default seed a post-loss snapshot captures.
-    ///
-    /// `snapshotHasUsableData` answers "can this be opened and does it have a
-    /// space", which is the right question for an automatic restore. It is the
-    /// wrong question for pruning: the seed has two spaces, so a snapshot taken
-    /// after the loss passes it, and protecting that one let the user's real
-    /// backup age past `keep` and be deleted.
-    ///
-    /// `readContent` requires three tables and can fail to read a store that
-    /// `snapshotHasUsableData` (which only needs `ZSPACE`) still judges usable.
-    /// Unknown content is not evidence of a seed, so that case falls back to the
-    /// shipped rule rather than being denied protection — pruning must never
-    /// delete a backup it merely failed to read.
+    /// Protect any usable snapshot with a workspace. A fresh install has no
+    /// workspace, so even an empty workspace belongs to the user.
     static func snapshotHoldsUsersData(at url: URL) -> Bool {
-        guard let content = StoreInventory.readContent(at: url) else { return snapshotHasUsableData(at: url) }
-        guard !content.looksLikeUntouchedSeed else { return false }
-        return snapshotHasUsableData(at: url)
+        snapshotHasUsableData(at: url)
     }
 
     /// The newest pre-migration snapshot of the store at `storeURL` that is safe

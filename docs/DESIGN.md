@@ -21,6 +21,16 @@ Service rows draw the bundled Paguro tile 10 percent larger for optical
 balance with flat logos. Scale the square and shell together, without changing
 the row spacing.
 
+## First run
+
+A window with no service shows one welcome screen instead of an empty shell.
+The screen keeps the window glass of the view that no selected service shows.
+It hides the rail and the header until the first service exists. It carries
+exactly one prominent action, the first service. There is no tour, no
+permanent dashboard, and no carousel: a new user has one thing to do here.
+The setup decisions that have no other home at first run sit in one grouped
+card above that action. See [Native shell](features/NATIVE_SHELL.md).
+
 ## Appearance
 
 Use semantic colors that adapt to light and dark appearance. Liquid Glass is

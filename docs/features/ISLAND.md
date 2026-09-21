@@ -492,6 +492,15 @@ external display, the test action therefore shows nothing while the main window
 stays on the external display. Move the window to the laptop display for the
 test.
 
+## First offer
+
+The island lives in Settings, which a new user has no reason to open. The
+first-run screen therefore carries an island row while no service exists. The
+row holds the same switch as Settings and writes the same island route. It
+appears only when a connected display has a camera housing, so a Mac that
+cannot show the island is never offered it. See
+[Native shell](NATIVE_SHELL.md).
+
 ## Non-notched displays
 
 A non-notched display does not show the island.

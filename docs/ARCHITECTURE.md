@@ -69,7 +69,7 @@ The main services and startup adapters are:
 - `StoreLoader` for SwiftData migration, integrity checks, and launch recovery.
 - `StoreRecoveryCoordinator` for recovery notices, backup selection, and restart handoff.
 - `PreferencesStore` for the single loaded preferences row and typed commits.
-- `WorkspaceStore` for workspace and service queries, mutations, seeding, and selection persistence.
+- `WorkspaceStore` for workspace and service queries, mutations and selection persistence.
 - `ServiceIconDraft` for cancellable icon previews in the add-service form.
 - `ShellPreferences` for normalized window appearance and rail settings.
 - `MediaPermissionCoordinator` for capture policy and native permission prompts.
@@ -230,8 +230,8 @@ WebKit stores service cookies, caches, and local storage.
 
 `PreferencesStore` loads or creates one `AppPreferences` row. It is the only
 type that writes that row.
-`WorkspaceStore` is the SwiftData facade for spaces, services, links, default
-seeding, passkey-notice state, favicons, page zoom, and window selection.
+`WorkspaceStore` is the SwiftData facade for spaces, services, links,
+passkey-notice state, favicons, page zoom, and window selection.
 
 Paguro must not store account passwords.
 Paguro must not copy full message history into its data store.

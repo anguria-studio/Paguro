@@ -14,7 +14,6 @@ final class AppModel {
     let notificationRouteSettings: NotificationRouteSettings
 
     private var shutdownState = ApplicationShutdownState()
-    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let notificationCenter: NotificationCenter
     @ObservationIgnored private var screenObserverTokens: [NSObjectProtocol] = []
     @ObservationIgnored private var notchedDisplayTask: Task<Void, Never>?
@@ -45,26 +44,26 @@ final class AppModel {
     /// so this reference stays weak.
     @ObservationIgnored private weak var appDelegate: AppDelegate?
 
-    /// Whether the first-run welcome has already run for this user.
-    private(set) var hasSeenWelcome: Bool
-
-    /// What to ask a new user, or nil when there is nothing worth asking.
+    /// Whether the Debug preview argument forces the first-run home screen.
     ///
-    /// Both offers are things that were otherwise only reachable by finding
-    /// System Settings or the Settings window, which a new user has no reason
-    /// to look in yet.
-    var firstRunWelcome: FirstRunWelcome? {
-        FirstRunPolicy.welcome(
-            hasSeenWelcome: hasSeenWelcome,
-            authorization: appState.notificationManager.authorizationState,
-            islandIsAvailable: islandPanelController.canPresentIsland
-        )
-    }
+    /// A Release build has no such argument, so the value is always false
+    /// there. The flag is read one time at launch, because a launch argument
+    /// cannot change while the app runs.
+    let forcesFirstRunPreview: Bool
 
-    /// Records that the welcome ran, so it never runs twice.
-    func markWelcomeSeen() {
-        hasSeenWelcome = true
-        defaults.set(true, forKey: DefaultsKey.hasSeenWelcome)
+    /// What the main window shows before the user has a service.
+    ///
+    /// The window passes its own service count, because SwiftData owns that
+    /// number and this model must not hold a stale copy of it.
+    func firstRunPresentation(serviceCount: Int) -> FirstRunPresentation {
+        FirstRunPolicy.presentation(
+            serviceCount: serviceCount,
+            isLocked: appState.isLocked,
+            authorization: appState.notificationManager.authorizationState,
+            islandIsAvailable: islandPanelController.canPresentIsland,
+            previewArgument: forcesFirstRunPreview,
+            previewEnded: appState.hasCompletedFirstRunAction
+        )
     }
 
     init(
@@ -72,12 +71,16 @@ final class AppModel {
         presenceController: AppPresenceController = AppPresenceController(),
         screenGeometryProvider: (any ScreenGeometryProvider)? = nil,
         notificationRouteSettings: NotificationRouteSettings? = nil,
-        defaults: UserDefaults = .standard,
         notificationCenter: NotificationCenter = .default,
         launchArguments: [String] = ProcessInfo.processInfo.arguments
     ) {
         #if DEBUG
         self.usesDemoNotifications = launchArguments.contains(IslandPreviewNotifications.launchArgument)
+        self.forcesFirstRunPreview = FirstRunPreviewConfiguration.isEnabled(
+            arguments: launchArguments
+        )
+        #else
+        self.forcesFirstRunPreview = false
         #endif
         let resolvedScreenGeometryProvider = screenGeometryProvider
             ?? IslandScreenGeometryConfiguration.makeProvider(arguments: launchArguments)
@@ -90,9 +93,7 @@ final class AppModel {
         )
         let resolvedNotificationRouteSettings = notificationRouteSettings
             ?? NotificationRouteSettings()
-        self.defaults = defaults
         self.notificationCenter = notificationCenter
-        self.hasSeenWelcome = defaults.bool(forKey: DefaultsKey.hasSeenWelcome)
         self.screenGeometryProvider = resolvedScreenGeometryProvider
         self.islandPanelController = islandPanelController
         self.notificationRouteSettings = resolvedNotificationRouteSettings

@@ -437,41 +437,13 @@ final class WorkspaceStoreMutationTests: XCTestCase {
     }
 
     @MainActor
-    func testSeedCreatesIsolatedDefaultServicesAndRecordsDurableData() throws {
+    func testRestoringSelectionLeavesAFreshStoreEmpty() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext
         let store = makeStore(context: context)
-        let suiteName = "WorkspaceStoreTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let outcome = store.seedDefaultDataIfNeeded(defaults: defaults)
-
-        XCTAssertTrue(outcome.didSeed)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 2)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 7)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<SpaceServiceLink>()), 7)
-        XCTAssertTrue(defaults.bool(forKey: DefaultsKey.hasEverHadData))
-        XCTAssertEqual(
-            store.servicesForSpace(try XCTUnwrap(outcome.selectedSpaceID)).count,
-            DefaultSeed.personalServices.count
-        )
-    }
-
-    @MainActor
-    func testSeedDoesNotOverwriteAProtectedEmptyStore() throws {
-        let container = try ModelFixtures.groupingContainer()
-        let context = container.mainContext
-        let store = makeStore(context: context)
-        let suiteName = "WorkspaceStoreTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(true, forKey: DefaultsKey.hasEverHadData)
-
-        let outcome = store.seedDefaultDataIfNeeded(defaults: defaults)
-
-        XCTAssertFalse(outcome.didSeed)
-        XCTAssertNil(outcome.selectedSpaceID)
+        let selection = store.restoredWindowSelection(fallbackSpaceID: nil, fallbackServiceID: nil)
+        XCTAssertNil(selection.spaceID)
+        XCTAssertNil(selection.serviceID)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Space>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ServiceInstance>()), 0)
     }

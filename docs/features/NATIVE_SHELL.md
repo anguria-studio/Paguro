@@ -7,6 +7,82 @@ Status: active
 The native shell gives each web service a consistent Mac interface.
 It does not change the web content of a service.
 
+## First run
+
+The main window shows one welcome screen while no service exists. A new install
+starts completely empty, with no workspace and no service. Adding the first
+service creates one workspace named Home and the service in one transaction.
+Cancel and a failed save leave the store empty. The Add Service sheet hides the
+workspace picker until more than one workspace exists. Launch never seeds data.
+
+The screen replaces the complete shell: no rail in any of the four layouts, no
+content header, and no top bar. An empty rail beside an empty header said
+nothing, and the window had no route to its first service except a menu.
+
+`FirstRunPolicy` in PaguroCore holds the rule. Its input is the number of
+services in every workspace together, not the services of the current
+workspace. One service ends the screen, and no service brings it back. A user
+who removes every service therefore sees it again, which is correct: the window
+is empty again.
+
+The screen holds one centered column, 380 points wide, on the same window glass
+as the view that no selected service shows. It carries:
+
+- the Paguro app icon, the title "Welcome to Paguro", and one sentence about
+  what the app does;
+- a grouped card with the setup rows that apply on this Mac;
+- one prominent button, **Add your first service**;
+- a quiet import line under it.
+
+The card holds at most two rows. The notification row reports the macOS
+permission. It offers Allow while macOS holds no decision. It reports "On", or
+it routes to System Settings, once macOS has decided. The island row appears
+only on a display with a camera housing, with a switch for the island route.
+A permission that Paguro has not read yet shows no notification row, because
+the state would change under the user. The card is left out when neither row
+applies.
+
+The two setup decisions have no other place at first run. Settings owns them
+once the first service exists. The screen is the only first-run offer: Paguro
+has no separate welcome sheet.
+
+The import line reads a configuration file and adds it. The Settings import
+offers an Add or Replace choice; this screen has nothing to replace, so it adds
+the file and reports the result. See [Configuration transfer](CONFIGURATION.md).
+
+The whole glass background moves the window, the way the reserved gap in the
+top bar does. The traffic lights stay visible and uncovered. The menu bar keeps
+every command: Add Service (`Command-N`), Settings, and import all work while
+the screen is up. The quick switcher opens and finds nothing.
+
+The first service ends the screen. The shell fades in over 0.3 seconds and the
+rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
+`PaguroMotion.firstRunSwapSeconds` holds the duration. `AppState.addService`
+selects the new service, so the shell opens on it.
+
+App Lock wins. A locked launch shows the lock screen, and the welcome screen
+waits under it. None of its actions can run while the window is locked, so the
+import line is closed to a click and to a keyboard activation. The import
+itself refuses a locked app as well.
+
+Keyboard focus starts on **Add your first service**, and Return activates it.
+VoiceOver reads the title, the sentence, the rows, the button, and the import
+line in that order. A row is one element with its title and description, and
+its control stays a separate element beside it. Increase Contrast gives the
+card a full border, and Reduce Transparency gives it an opaque background.
+
+### Debug preview
+
+Debug builds accept `--paguro-first-run-preview`. It shows the screen although
+services exist, so the screen can be inspected at any time. A successful add or
+import ends the forced preview and shows the normal shell if services exist.
+The argument itself writes nothing; additions and imports save normally. The
+**Paguro First Run Preview** scheme in `project.yml` runs the app with it.
+
+`FirstRunPreviewConfiguration` sits completely inside `#if DEBUG`, so a Release
+build compiles nothing from it. The release script and the direct build check
+scan each built Release app for the argument and stop the build when it appears.
+
 ## Window structure
 
 The sidebar layout has three parts:
@@ -614,9 +690,10 @@ Layout and appearance use the transactional app preferences row. Glass,
 icon-rail, workspace-view, and sidebar-state settings use `UserDefaults` so
 they remain available while Paguro repairs or restores the content store.
 
-On a fresh install, Paguro follows the system appearance, uses the left rail,
-shows all workspaces, and appears in both the Dock and menu bar. The Dock badge
-is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
+On a fresh install, Paguro creates no workspace and no
+service, so the window opens on the first-run welcome screen. Paguro follows
+the system appearance, uses the left rail, shows all workspaces, and appears in
+both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
 choices remain unchanged.
 

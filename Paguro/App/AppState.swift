@@ -143,6 +143,9 @@ final class AppState {
     /// through `setAnnoyanceBlockingEnabled(_:)`.
     var annoyanceBlockingEnabled = false
 
+    /// Ends the forced preview only after a setup mutation commits.
+    private(set) var hasCompletedFirstRunAction = false
+
     /// Auto-hibernate idle background services. Loaded from `PreferencesStore`.
     var autoHibernateIdleEnabled = false
     /// Idle minutes before auto-hibernation fires. Loaded from `PreferencesStore`.
@@ -297,9 +300,8 @@ final class AppState {
             isLocked: { [weak self] in self?.isLocked ?? true },
             onWebViewRebuilt: { [weak self] in self?.webViewRebuildToken &+= 1 }
         )
-        let seedOutcome = workspaceStore.seedDefaultDataIfNeeded()
-        selectedSpaceID = seedOutcome.selectedSpaceID
-        workspaceStore.backfillPasskeyNoticeIfNeeded(freshInstall: seedOutcome.didSeed)
+        // Launch only reads selection. The first explicit add creates Home.
+        workspaceStore.backfillPasskeyNoticeIfNeeded(freshInstall: workspaceStore.allServices().isEmpty)
         websiteDataReclaimer.reapOrphanedServices()
         restoreWindowState()
         notificationRuntime.start(
@@ -738,8 +740,9 @@ final class AppState {
         userAgent: String? = nil,
         customIconData: Data? = nil,
         fetchedIconData: Data? = nil,
-        to spaceID: UUID
+        to spaceID: UUID?
     ) -> UUID? {
+        guard !isLocked else { return nil }
         defer { notificationRuntime.refreshMuteState() }
         let serviceID: UUID?
         do {
@@ -758,8 +761,9 @@ final class AppState {
         }
         guard let serviceID else { return nil }
 
-        selectedSpaceID = spaceID
+        selectedSpaceID = workspaceStore.service(id: serviceID)?.spaceLinks.first?.space?.id
         selectedServiceID = serviceID
+        hasCompletedFirstRunAction = true
         mediaPermissions.offerPresenceActivationIfNeeded(
             serviceID: serviceID,
             catalogEntryID: catalogEntryID
@@ -1303,6 +1307,7 @@ extension AppState {
         mode: ConfigurationImportMode
     ) {
         defer { notificationRuntime.refreshMuteState() }
+        hasCompletedFirstRunAction = true
         if mode == .replace {
             launchPreloadTask?.cancel()
             workspacePreloadTask?.cancel()

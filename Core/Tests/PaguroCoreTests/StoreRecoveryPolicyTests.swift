@@ -5,7 +5,7 @@ import XCTest
 final class StoreRecoveryPolicyTests: XCTestCase {
     private let directory = URL(fileURLWithPath: "/tmp/store-recovery-policy")
 
-    func testContentComparisonAndSeedMatching() {
+    func testContentComparisonAndEmptiness() {
         let fullest = content(spaces: 4, services: 13)
         let fewerServices = content(spaces: 9, services: 12)
         let fewerSpaces = content(spaces: 2, services: 13)
@@ -14,21 +14,11 @@ final class StoreRecoveryPolicyTests: XCTestCase {
         XCTAssertTrue(fullest.holdsMore(than: fewerSpaces))
         XCTAssertFalse(fullest.holdsMore(than: fullest))
 
-        let seed = StoreContent(
-            spaces: 2,
-            services: 3,
-            links: 3,
-            spaceNames: ["Work", "Personal"],
-            serviceLabels: ["Mail", "Chat", "Mail"]
-        )
-        XCTAssertTrue(seed.matchesUntouchedSeed(
-            spaceNames: ["Personal", "Work"],
-            serviceLabels: ["Mail", "Mail", "Chat"]
-        ))
-        XCTAssertFalse(seed.matchesUntouchedSeed(
-            spaceNames: ["Personal", "Clients"],
-            serviceLabels: ["Mail", "Mail", "Chat"]
-        ))
+        // Paguro writes no seed, so a fresh install is an empty store. One
+        // workspace with nothing in it is already the user's.
+        XCTAssertTrue(content(spaces: 0, services: 0).isEmpty)
+        XCTAssertFalse(content(spaces: 1, services: 0).isEmpty)
+        XCTAssertFalse(content(spaces: 0, services: 1).isEmpty)
     }
 
     func testBestCandidateRanksContentThenRecency() {
@@ -76,6 +66,9 @@ final class StoreRecoveryPolicyTests: XCTestCase {
         )
     }
 
+    /// An empty live store is the only one a backup is preselected over.
+    /// Paguro writes no seed, so a store with one workspace in it is already
+    /// the user's and they choose for themselves.
     func testPreselectionProtectsUserDataAndSkipsCorruptBackups() {
         let backup = candidate("snapshot.bak", spaces: 4, services: 13, takenAt: 1_000)
         let corrupt = candidate(
@@ -86,86 +79,96 @@ final class StoreRecoveryPolicyTests: XCTestCase {
             takenAt: 2_000
         )
         let empty = content(spaces: 0, services: 0)
-        let seed = content(spaces: 2, services: 7)
+        let oneEmptyWorkspace = content(spaces: 1, services: 0)
         let userData = content(spaces: 3, services: 10)
 
         XCTAssertEqual(StoreRecoveryPolicy.preselection(
             among: [backup],
-            liveContent: empty,
-            liveMatchesUntouchedSeed: false
+            liveContent: empty
         ), backup)
         XCTAssertEqual(StoreRecoveryPolicy.preselection(
             among: [backup],
-            liveContent: seed,
-            liveMatchesUntouchedSeed: true
-        ), backup)
-        XCTAssertEqual(StoreRecoveryPolicy.preselection(
-            among: [backup],
-            liveContent: nil,
-            liveMatchesUntouchedSeed: false
+            liveContent: nil
         ), backup)
         XCTAssertNil(StoreRecoveryPolicy.preselection(
             among: [backup],
-            liveContent: userData,
-            liveMatchesUntouchedSeed: false
+            liveContent: oneEmptyWorkspace
+        ))
+        XCTAssertNil(StoreRecoveryPolicy.preselection(
+            among: [backup],
+            liveContent: userData
         ))
         XCTAssertEqual(StoreRecoveryPolicy.preselection(
             among: [corrupt, backup],
-            liveContent: empty,
-            liveMatchesUntouchedSeed: false
+            liveContent: empty
         ), backup)
         XCTAssertNil(StoreRecoveryPolicy.preselection(
             among: [corrupt],
-            liveContent: empty,
-            liveMatchesUntouchedSeed: false
+            liveContent: empty
         ))
 
         let emptyBackup = candidate("empty.bak", spaces: 0, services: 0, takenAt: 3_000)
         XCTAssertNil(StoreRecoveryPolicy.preselection(
             among: [emptyBackup],
-            liveContent: empty,
-            liveMatchesUntouchedSeed: false
+            liveContent: empty
         ))
     }
 
-    func testOfferRuleCoversLossSeedDeclineAndUnknownContent() {
+    /// A fresh install and a total loss both leave an empty store. The backups
+    /// are what separate them: a fresh install has none.
+    func testAnEmptyStoreIsOfferedABackupOnlyWhenOneExists() {
         let backup = candidate("snapshot.bak", spaces: 4, services: 13, takenAt: 1_000)
-        let thin = candidate("thin.bak", spaces: 1, services: 2, takenAt: 2_000)
-        let partial = content(spaces: 1, services: 4)
-        let seed = content(spaces: 2, services: 7)
-        let record = content(spaces: 4, services: 13)
+        let empty = content(spaces: 0, services: 0)
 
         XCTAssertEqual(StoreRecoveryPolicy.offer(
-            liveContent: partial,
-            liveMatchesUntouchedSeed: false,
-            best: backup,
-            record: record,
-            declinedKeys: []
-        ), .belowRecord)
-        XCTAssertEqual(StoreRecoveryPolicy.offer(
-            liveContent: seed,
-            liveMatchesUntouchedSeed: true,
+            liveContent: empty,
             best: backup,
             record: nil,
             declinedKeys: []
         ), .nothingToLose)
         XCTAssertNil(StoreRecoveryPolicy.offer(
+            liveContent: empty,
+            best: nil,
+            record: nil,
+            declinedKeys: []
+        ))
+    }
+
+    func testOfferRuleCoversLossDeclineAndUnknownContent() {
+        let backup = candidate("snapshot.bak", spaces: 4, services: 13, takenAt: 1_000)
+        let thin = candidate("thin.bak", spaces: 1, services: 2, takenAt: 2_000)
+        let partial = content(spaces: 1, services: 4)
+        let empty = content(spaces: 0, services: 0)
+        let record = content(spaces: 4, services: 13)
+
+        XCTAssertEqual(StoreRecoveryPolicy.offer(
             liveContent: partial,
-            liveMatchesUntouchedSeed: false,
+            best: backup,
+            record: record,
+            declinedKeys: []
+        ), .belowRecord)
+        // The live store holds the user's data and no record says it lost any,
+        // so nothing is offered although a fuller backup exists.
+        XCTAssertNil(StoreRecoveryPolicy.offer(
+            liveContent: partial,
+            best: backup,
+            record: nil,
+            declinedKeys: []
+        ))
+        XCTAssertNil(StoreRecoveryPolicy.offer(
+            liveContent: partial,
             best: backup,
             record: partial,
             declinedKeys: []
         ))
         XCTAssertNil(StoreRecoveryPolicy.offer(
             liveContent: partial,
-            liveMatchesUntouchedSeed: false,
             best: thin,
             record: record,
             declinedKeys: []
         ))
         XCTAssertNil(StoreRecoveryPolicy.offer(
             liveContent: partial,
-            liveMatchesUntouchedSeed: false,
             best: nil,
             record: record,
             declinedKeys: []
@@ -174,28 +177,26 @@ final class StoreRecoveryPolicyTests: XCTestCase {
         let decline = StoreRecoveryPolicy.declineKey(live: partial, candidate: backup)
         XCTAssertNil(StoreRecoveryPolicy.offer(
             liveContent: partial,
-            liveMatchesUntouchedSeed: false,
             best: backup,
             record: record,
             declinedKeys: [decline]
         ))
+        // A different live store makes a different pairing, so an earlier
+        // refusal does not silence this one.
         XCTAssertNotNil(StoreRecoveryPolicy.offer(
-            liveContent: seed,
-            liveMatchesUntouchedSeed: true,
+            liveContent: empty,
             best: backup,
             record: record,
             declinedKeys: [decline]
         ))
         XCTAssertEqual(StoreRecoveryPolicy.offer(
             liveContent: nil,
-            liveMatchesUntouchedSeed: false,
             best: thin,
             record: record,
             declinedKeys: []
         ), .belowRecord)
         XCTAssertEqual(StoreRecoveryPolicy.offer(
             liveContent: nil,
-            liveMatchesUntouchedSeed: false,
             best: thin,
             record: nil,
             declinedKeys: []
