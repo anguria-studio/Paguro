@@ -26,6 +26,7 @@ struct ServicePickerView: View {
     @State private var activeServiceID: String?
     @State private var showsGridKeyboardFocus = true
     @State private var gridColumnCount = 1
+    @State private var usesWideHeader = false
     @State private var focusAfterCustom: InputField = .customWebsite
     @FocusState private var focusedField: InputField?
 
@@ -98,9 +99,7 @@ struct ServicePickerView: View {
     private var catalogContent: some View {
         VStack(spacing: 0) {
             header
-            if isFirstWorkspace {
-                workspaceNameField
-            } else {
+            if !isFirstWorkspace {
                 destinationPicker
             }
             filters
@@ -196,6 +195,9 @@ struct ServicePickerView: View {
             }
             footer
         }
+        .onGeometryChange(for: Bool.self) { geometry in
+            geometry.size.width >= 900
+        } action: { usesWideHeader = $0 }
         .task {
             // Wait for the new page to enter the focus hierarchy before choosing its input.
             await Task.yield()
@@ -205,7 +207,11 @@ struct ServicePickerView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
+        // AnyLayout preserves the editor and its focus when the window resizes.
+        let layout = usesWideHeader
+            ? AnyLayout(HStackLayout(alignment: .top, spacing: 28))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+        return layout {
             VStack(alignment: .leading, spacing: 6) {
                 Text(isFirstWorkspace ? "Set up your first workspace" : "Choose your services")
                     .font(.largeTitle.weight(.semibold))
@@ -215,27 +221,27 @@ struct ServicePickerView: View {
                     .font(.paguroBody)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if isFirstWorkspace {
+                workspaceNameField
+            }
         }
         .padding(.horizontal, 32)
         .padding(.bottom, 24)
     }
 
     private var workspaceNameField: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Workspace name")
                 .font(.paguroBody.weight(.medium))
             TextField("Workspace name", text: $selection.workspaceName)
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.large)
-                .frame(maxWidth: 320)
                 .focused($focusedField, equals: .workspaceName)
                 .onSubmit { focusedField = nil }
                 .onChange(of: selection.workspaceName) { saveError = nil }
-            Spacer()
         }
-        .padding(.horizontal, 32)
-        .padding(.bottom, 20)
+        .frame(width: usesWideHeader ? 240 : 320, alignment: .leading)
     }
 
     @ViewBuilder

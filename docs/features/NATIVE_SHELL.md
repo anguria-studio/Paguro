@@ -70,7 +70,10 @@ uses the same footer baseline and side margins.
 
 The second step is titled "Set up your first workspace". It explains that a
 workspace keeps related services together for work, personal use, or a project.
-A Workspace name field sits above search and defaults to Personal on a new install.
+Workspace name defaults to Personal on a new install. At widths of 900 points
+or more, the field sits beside the introduction. Below that width, it moves
+below the introduction, above search. AnyLayout keeps the same editor and focus
+when the window resizes.
 If setup appears over existing empty workspaces, it starts with the target
 workspace’s current name. Back and custom website entry keep the typed name.
 Continue requires a nonblank name and at least one selected service.
@@ -86,8 +89,7 @@ Search, category, and Custom website sit in one toolbar above the grid. All
 three controls are 36 points high. The category selector shows plain text and
 a chevron without a button background or border. Its width follows the current
 label, including native chevron spacing. Categories appear directly in the menu,
-with no submenu. Search is compact, and the workspace name
-stays on its own row above the toolbar. The fixed footer holds Back and Continue,
+with no submenu. Search is compact. The fixed footer holds Back and Continue,
 with no selection counter. The primary button stays disabled until
 a service is selected. The custom website sheet validates the name and HTTP(S)
 address, then stages the website with the other choices. It opens as a native
@@ -145,6 +147,10 @@ Continue opens the third step, Appearance, without creating any services.
 Theme offers Follow System, Light, and Dark. Liquid Glass offers Follow system,
 Off, Clear, and Regular on macOS 26 or later. Choices update the shell live
 through the same preference actions as Settings and persist immediately.
+Theme cards show miniature windows, with a split light/dark preview for Follow
+System. Glass cards use one sample backdrop to illustrate the relative density
+of each choice. These are illustrations, not exact material measurements. The
+full shell remains the live preview. Preview shapes are hidden from VoiceOver.
 They do not change the workspace draft or sign in to services. The website
 still owns its own appearance. Theme remains available on macOS 15.
 Back returns to the mounted catalog with filters, scroll position, custom
@@ -153,7 +159,9 @@ atomic batch save. A failure keeps the appearance page and draft available.
 Command-Return continues from the catalog and saves from Appearance. Hidden
 catalog controls cannot receive input or appear in the accessibility tree.
 The footer moves progress above the actions when three steps cannot fit across
-the available width. Reduce Motion preserves the fade between pages.
+the available width. A subtle semantic background separates the footer from
+page content and becomes solid with Reduce Transparency. Reduce Motion
+preserves the fade between pages.
 
 The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.

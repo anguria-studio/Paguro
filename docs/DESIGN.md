@@ -44,26 +44,32 @@ The welcome step explains Paguro and groups notification and island setup.
 Its fixed footer offers import on the left and "Choose your services" on the
 right. The primary action opens a full-page catalog.
 The second step is "Set up your first workspace". It explains that a workspace
-keeps related services together and offers a Workspace name field above search.
+keeps related services together. On wide windows, Workspace name sits beside
+the introduction. On narrow windows, it sits below the introduction, above search.
 The name starts as Personal on a new install and survives Back and custom website
 entry. The step has search, category filtering, and multiple selection.
 The service toolbar has a compact search field, category menu, and Custom
 website button, all 36 points high. The category selector uses plain text and
 a chevron, with no background or border. Its width fits the selected label and
-native chevron; unselected categories do not reserve space. Keep the workspace
-name on its own row.
+native chevron; unselected categories do not reserve space. Resizing preserves
+the same workspace editor and keyboard focus.
 Selected cards have a checkmark and an accent border. A fixed footer holds
 Back and Continue without a selection count. Back keeps the selection.
 Continue opens Appearance without saving any workspace or service. The third
 step offers Follow System, Light, and Dark themes and the four Liquid Glass
-presets. Choices update the shell live and persist as normal preferences.
+presets. Small window illustrations show light and dark themes and differences
+in glass density. Use the same sample backdrop for every glass choice. These
+are illustrations; the full shell previews the actual preference live. Keep
+preview shapes out of the accessibility tree. Choices persist as normal preferences.
 Back keeps the catalog filters, scroll position, workspace name, and draft.
 Create workspace on Appearance saves the complete service selection. A failed
 save keeps the user on this step with Back and retry available. Hide the glass
 selector below macOS 26. Keep appearance choices available later in Settings.
 The footer puts progress above the actions when the window is too narrow for
 all three steps on one row.
-All setup pages use the same footer baseline and content margins.
+All setup pages use the same footer baseline and content margins. A quiet
+semantic surface separates navigation from the page, with a solid background
+when Reduce Transparency is enabled.
 Page changes use a 0.22-second fade with 24 points of horizontal travel.
 Back reverses the movement. Reduce Motion keeps only the fade. Tab reaches all
 setup controls without changing the system's keyboard preferences. The grid is

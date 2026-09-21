@@ -26,9 +26,9 @@ struct FirstRunAppearanceView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Theme").font(.headline)
                         HStack(spacing: 12) {
-                            themeChoice(.system, title: "Follow System", symbol: "circle.lefthalf.filled")
-                            themeChoice(.light, title: "Light", symbol: "sun.max")
-                            themeChoice(.dark, title: "Dark", symbol: "moon.stars")
+                            themeChoice(.system, title: "Follow System")
+                            themeChoice(.light, title: "Light")
+                            themeChoice(.dark, title: "Dark")
                         }
                     }
                     if AppCapabilities.liquidGlassSupported {
@@ -36,10 +36,12 @@ struct FirstRunAppearanceView: View {
                             Text("Liquid Glass").font(.headline)
                             HStack(spacing: 12) {
                                 ForEach(ShellGlassStyle.allCases, id: \.self) { style in
-                                    choice(title: style.displayName, symbol: glassSymbol(style),
+                                    choice(title: style.displayName,
                                            isSelected: appState.liquidGlassStyle == style) {
                                         guard allowsActions, !appState.isLocked else { return }
                                         appState.setLiquidGlassStyle(style)
+                                    } preview: {
+                                        SetupGlassPreview(style: style)
                                     }
                                 }
                             }
@@ -88,24 +90,31 @@ struct FirstRunAppearanceView: View {
         }
     }
 
-    private func themeChoice(_ mode: AppearanceMode, title: String, symbol: String) -> some View {
-        choice(title: title, symbol: symbol, isSelected: appState.appearanceMode == mode) {
+    private func themeChoice(_ mode: AppearanceMode, title: String) -> some View {
+        choice(title: title, isSelected: appState.appearanceMode == mode) {
             guard allowsActions, !appState.isLocked else { return }
             appState.setAppearanceMode(mode)
+        } preview: {
+            SetupThemePreview(mode: mode)
         }
     }
 
-    private func choice(title: String, symbol: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func choice<Preview: View>(
+        title: String, isSelected: Bool, action: @escaping () -> Void,
+        @ViewBuilder preview: () -> Preview
+    ) -> some View {
         Button(action: action) {
             VStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 28))
-                    .frame(height: 36)
+                preview()
+                    .frame(maxWidth: 144)
+                    .frame(height: 76)
                     .accessibilityHidden(true)
                 Text(title).font(.paguroBody.weight(.medium))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            .padding(.horizontal, 16)
+            .padding(.top, 28)
+            .padding(.bottom, 16)
             .background(.primary.opacity(isSelected ? 0.10 : 0.04), in: RoundedRectangle(cornerRadius: 14))
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
@@ -127,12 +136,4 @@ struct FirstRunAppearanceView: View {
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 
-    private func glassSymbol(_ style: ShellGlassStyle) -> String {
-        switch style {
-        case .system: "desktopcomputer"
-        case .off: "rectangle.fill"
-        case .clear: "rectangle"
-        case .regular: "rectangle.on.rectangle"
-        }
-    }
 }
