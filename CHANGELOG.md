@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The welcome notification card has a clearer border when window glass is off
+  or unavailable, including Reduce Transparency.
+
 - Clicking a service card no longer briefly flashes the keyboard focus outline
   on the first card. Tab and arrow-key navigation still show the outline.
 

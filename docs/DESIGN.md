@@ -41,6 +41,8 @@ Your workspace, and Appearance. It stays at the same position across pages, high
 current step, and checks the completed step. Content starts below the traffic
 lights without a separate progress row above it.
 The welcome step explains Paguro and groups notification and island setup.
+The setup card uses a stronger one-point border without glass, including
+Reduce Transparency and the older-system fallback. Glass keeps its light hairline.
 Its fixed footer offers import on the left and "Choose your services" on the
 right. The primary action opens a full-page catalog.
 The second step is "Set up your first workspace". It explains that a workspace

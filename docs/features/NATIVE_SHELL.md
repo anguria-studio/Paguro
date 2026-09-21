@@ -212,6 +212,9 @@ On the welcome step, VoiceOver reads the title, explanation, setup rows, import
 action, and primary button in that order. A row is one element with its title
 and description. Its control stays a separate element beside it. Increase Contrast gives the
 card a full border, and Reduce Transparency gives it an opaque background.
+Without Liquid Glass, the setup card uses a one-point border with 18 percent
+ink in light mode and 20 percent in dark mode. This keeps its edge visible on
+a solid shell. Glass keeps the lighter half-point hairline.
 
 ### Debug preview
 

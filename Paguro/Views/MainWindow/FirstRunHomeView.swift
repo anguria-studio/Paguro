@@ -251,13 +251,17 @@ struct FirstRunHomeView: View {
         }
     }
 
-    /// A hairline lifts the card off the glass. Increase Contrast makes it a
-    /// full border, because the hairline can disappear over a bright desktop.
+    private var usesGlassSurface: Bool {
+        AppCapabilities.liquidGlassSupported && appState.liquidGlassStyle != .off && !reduceTransparency
+    }
+
+    /// Solid surfaces need a stronger edge because they have no glass highlight.
     private var borderColor: Color {
-        colorSchemeContrast == .increased ? PaguroColor.shellBorder : PaguroColor.hairline
+        if colorSchemeContrast == .increased { return PaguroColor.shellBorder }
+        return usesGlassSurface ? PaguroColor.hairline : PaguroColor.ink(light: 0.18, dark: 0.20)
     }
 
     private var borderWidth: CGFloat {
-        colorSchemeContrast == .increased ? 1 : 0.5
+        usesGlassSurface && colorSchemeContrast != .increased ? 0.5 : 1
     }
 }
