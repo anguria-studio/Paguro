@@ -79,6 +79,7 @@ struct SpaceEditorSheet: View {
             .padding(.vertical, 14)
         }
         .frame(width: 420, height: 520)
+        .paguroSheetAppearance()
         .onAppear {
             if let space = editingSpace {
                 name = space.name

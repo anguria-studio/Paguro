@@ -144,18 +144,8 @@ private final class WindowShellTintView: NSView {
     override func updateLayer() {
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let opacity = GlassIntensityScale.shellOpacity(transparency)
-        let color = if transparency == 0 {
-            PaguroColor.Solid.canvasColor(isDark: isDark)
-        } else if isDark {
-            NSColor(
-                srgbRed: CGFloat(36) / 255,
-                green: CGFloat(33) / 255,
-                blue: CGFloat(37) / 255,
-                alpha: opacity
-            )
-        } else {
-            NSColor(srgbRed: 0.95, green: 0.95, blue: 0.96, alpha: opacity)
-        }
+        let color = PaguroColor.Solid.canvasColor(isDark: isDark)
+            .withAlphaComponent(opacity)
         layer?.backgroundColor = color.cgColor
     }
 }

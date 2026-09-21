@@ -38,6 +38,7 @@ struct StoreRecoveryView: View {
                 row(for: candidate)
             }
             .frame(minHeight: 200)
+            .scrollContentBackground(.hidden)
 
             if let failureMessage {
                 Text(failureMessage)
@@ -72,6 +73,7 @@ struct StoreRecoveryView: View {
         }
         .padding(20)
         .frame(width: 520)
+        .paguroSheetAppearance()
         .onAppear {
             appState.storeRecovery.refreshCandidates()
             selectionID = appState.storeRecovery.preselectedCandidate?.id

@@ -75,6 +75,7 @@ struct ConfigurationSettingsSection: View {
         }
         .padding(24)
         .frame(width: 440)
+        .paguroSheetAppearance()
     }
 
     private func exportConfiguration() {

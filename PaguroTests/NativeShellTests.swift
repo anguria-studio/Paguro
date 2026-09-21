@@ -8,6 +8,22 @@ import PaguroCore
 
 final class NativeShellTests: XCTestCase {
     @MainActor
+    func testSecondarySurfaceRendersWithoutTheAppEnvironment() async {
+        // SwiftUI relocates window backgrounds outside the content hierarchy.
+        for style in ShellGlassStyle.allCases {
+            for scheme in [ColorScheme.light, .dark] {
+                let appeared = expectation(description: "Secondary surface appeared")
+                let view = NSHostingView(rootView: PaguroSecondarySurface(glassStyle: style)
+                    .environment(\.colorScheme, scheme)
+                    .onAppear { appeared.fulfill() })
+                view.frame = NSRect(x: 0, y: 0, width: 200, height: 200)
+                view.layoutSubtreeIfNeeded()
+                await fulfillment(of: [appeared], timeout: 2)
+            }
+        }
+    }
+
+    @MainActor
     func testLockScreenDoesNotAuthenticateOnAppearanceOrReappearance() async {
         var authenticationRequests = 0
 
