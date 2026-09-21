@@ -74,8 +74,9 @@ Page content changes use a 0.22-second fade with 24 points of horizontal travel.
 Back reverses the movement. Reduce Motion keeps only the fade. Tab reaches all
 setup controls without changing the system's keyboard preferences. The grid is
 one Tab stop with arrow-key movement and a dashed inset focus outline, separate
-from the selection border. Clicking a card hides that outline; keyboard
-navigation restores it. Space or Return toggles a card; Command-Return
+from the selection border. Mouse-down hides the outline before the grid takes
+focus, so clicking never flashes it on the first card. Keyboard navigation
+restores it. Space or Return toggles a card; Command-Return
 advances from service selection and finishes setup on Appearance. Card selection
 fades its checkmark and border over 0.14 seconds, without scaling or bouncing.
 Custom website entry opens a native modal sheet over service selection, with

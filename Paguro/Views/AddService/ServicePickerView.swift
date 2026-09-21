@@ -24,7 +24,7 @@ struct ServicePickerView: View {
     @State private var saveError: String?
     private enum InputField: Hashable { case workspaceName, destination, search, category, services, customWebsite }
     @State private var activeServiceID: String?
-    @State private var showsGridKeyboardFocus = true
+    @State private var showsGridKeyboardFocus = false
     @State private var gridColumnCount = 1
     @State private var usesWideHeader = false
     @State private var focusAfterCustom: InputField = .customWebsite
@@ -93,9 +93,13 @@ struct ServicePickerView: View {
             .onChange(of: focusedField) { _, field in
                 if field == .services {
                     activeServiceID = navigation.retainedID(activeServiceID)
-                } else {
-                    showsGridKeyboardFocus = true
                 }
+            }
+            .background {
+                SetupInputMethodObserver(
+                    isEnabled: allowsActions && !showsCustomWebsite && !showsNewWorkspace,
+                    onChange: { showsGridKeyboardFocus = $0 }
+                )
             }
     }
 

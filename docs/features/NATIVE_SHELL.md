@@ -186,7 +186,10 @@ The category menu uses a native popup with direct choices and keyboard handling.
 The grid is one Tab stop. Arrow keys move a visible focus outline between cards;
 Space or Return toggles the focused card. The outline differs from a selected
 card's checkmark and accent border. Clicking a card hides the dotted outline
-while keeping it ready for keyboard input. Tab entry, arrow movement, and
+while keeping it ready for keyboard input. A window-scoped local event observer
+records mouse-down before AppKit assigns focus, rather than waiting for the
+button action on mouse-up. It passes events through unchanged and ignores
+hidden or modal-covered catalogs and events from other windows. Tab entry, arrow movement, and
 Space or Return restore the outline. Moving focus scrolls the card into view.
 `SetupGridNavigation` in PaguroCore follows the current column count and keeps
 custom and catalog sections on separate rows. Filters retain a visible target

@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Clicking a service card no longer briefly flashes the keyboard focus outline
+  on the first card. Tab and arrow-key navigation still show the outline.
+
 - Setup now ends with an Appearance step for theme and Liquid Glass presets,
   with miniature window illustrations and a live shell preview. The workspace
   name sits beside the introduction on wide windows. The shared footer has no
