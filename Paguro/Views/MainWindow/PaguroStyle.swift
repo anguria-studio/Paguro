@@ -456,6 +456,13 @@ enum PaguroColor {
     }
 
     enum Fill {
+        /// Icon-only selection needs more contrast because it has no bold label.
+        static let dockSelection = PaguroColor.ink(
+            light: 0.14,
+            dark: 0.20,
+            contrastLight: 0.22,
+            contrastDark: 0.30
+        )
         static let sidebarSelection = PaguroColor.dynamic(
             light: .black.withAlphaComponent(0.045),
             dark: NSColor(srgbRed: 0.173, green: 0.169, blue: 0.184, alpha: 1)

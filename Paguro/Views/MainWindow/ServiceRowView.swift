@@ -110,9 +110,8 @@ struct ServiceRowView: View {
                         isFocused: isFocused,
                         isHovering: presentsHover
                     )
-                    // The tab bar and the sidebar stand on the same material,
-                    // so a selected cell adapts the same way in both.
-                    let adaptiveProgress = mark.fill == .selected
+                    // Icon-only tiles keep their stronger fill across glass presets.
+                    let adaptiveProgress = mark.fill == .selected && !isDockItem
                         ? GlassIntensityScale.adaptiveSelectionProgress(glassIntensity)
                         : 0
 
@@ -282,6 +281,9 @@ struct ServiceRowView: View {
     /// Each rail hovers against its own ground, so each takes its own fill.
     /// The Dock item keeps the shared one: it hovers over service artwork.
     private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
+        if mark.fill == .selected, isDockItem {
+            return AnyShapeStyle(PaguroColor.Fill.dockSelection)
+        }
         guard mark.fill == .hover, !isDockItem else { return mark.fillStyle }
         return AnyShapeStyle(
             axis == .vertical

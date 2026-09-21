@@ -4,6 +4,18 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The bundled Sentry logo uses an off-white variant in dark appearance.
+
+- Selected service icons have a clearer background in the collapsed sidebar
+  in light and dark appearance, including solid windows.
+
+- The expanded sidebar has a Settings gear beside Add service. Both buttons
+  hide when the sidebar is collapsed.
+
+- Setup footer steps are clickable. Earlier steps preserve your choices, and
+  Appearance becomes available after naming the workspace and selecting a
+  service. Step navigation never saves or completes setup.
+
 - Solid windows now use a subtly violet charcoal palette in dark mode and a
   soft off-white palette in light mode, with distinct sidebar and card surfaces.
   Selected service names use neutral text instead of blue on solid backgrounds.

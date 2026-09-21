@@ -10,6 +10,15 @@ workspaces and accounts, and the toolbar for navigation and service controls.
 Use "workspace" in user-facing text. Each service account keeps a separate
 session, even when two accounts use the same website.
 
+The expanded sidebar footer places an icon-only Settings gear beside Add
+service. Both use small native bordered buttons and disappear when the sidebar
+collapses. Keep Settings out of the service header.
+
+Selected service icons in the collapsed sidebar use a stronger neutral fill:
+black at 14 percent in light appearance and white at 20 percent in dark appearance.
+Keep this fill across glass presets. Increase Contrast raises it to 22 and 30
+percent respectively. Expanded rows retain their existing fill and bold label.
+
 The custom-service form discovers the website icon while the user enters the
 address. Place its compact preview beside the name and address, with a native
 Change Icon menu. Keep manual URL overrides in the service editor. Adding a
@@ -38,7 +47,11 @@ Do not show wizard progress or a workspace naming field during ordinary add.
 A window with no service shows a three-step wizard on the window glass.
 A shared progress indicator sits between the footer actions and shows Welcome,
 Your workspace, and Appearance. It stays at the same position across pages, highlights the
-current step, and checks the completed step. Content starts below the traffic
+current step, and checks the completed step. Previous steps are clickable.
+Your workspace is always available; Appearance requires a valid workspace name
+and at least one selected service. The current step does not act as a button.
+Step buttons use plain labels with hover and keyboard focus feedback. Navigation
+never saves; only Create workspace completes setup. Content starts below the traffic
 lights without a separate progress row above it.
 The welcome step explains Paguro and groups notification and island setup.
 The setup card uses a stronger one-point border without glass, including
@@ -63,7 +76,8 @@ presets. Small window illustrations show light and dark themes and differences
 in glass density. Use the same sample backdrop for every glass choice. These
 are illustrations; the full shell previews the actual preference live. Keep
 preview shapes out of the accessibility tree. Choices persist as normal preferences.
-Back keeps the catalog filters, scroll position, workspace name, and draft.
+Back and stepper jumps keep the catalog filters, scroll position, workspace
+name, and draft, including when returning through Welcome.
 Create workspace on Appearance saves the complete service selection. A failed
 save keeps the user on this step with Back and retry available. Hide the glass
 selector below macOS 26. Keep appearance choices available later in Settings.

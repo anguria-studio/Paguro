@@ -61,7 +61,13 @@ A shared progress indicator sits in the center of the footer, between its
 actions. It labels Welcome, Your workspace, and Appearance, highlights the current step,
 and checks the completed step. Removing the top progress row brings page
 content 50 points higher, with 52 points still reserved for the traffic lights.
-VoiceOver reads the current step number and name. The indicator is informational.
+VoiceOver reads the current step number and name and exposes the other steps
+as buttons. Completed steps remain available. Your workspace is reachable from
+Welcome without a draft; Appearance requires a nonblank name and at least one
+selected service. The current step has no action. Step buttons have plain labels,
+hover feedback, and keyboard focus; Space or Return navigates. A step click never
+saves a workspace. App Lock and modal editors disable step navigation.
+`FirstRunStep` in PaguroCore owns the same eligibility rule used by Continue.
 
 Welcome centers a 380-point column on the window glass. It carries the Paguro
 icon, title, explanation, and grouped setup card. A fixed footer puts Import
@@ -153,8 +159,8 @@ of each choice. These are illustrations, not exact material measurements. The
 full shell remains the live preview. Preview shapes are hidden from VoiceOver.
 They do not change the workspace draft or sign in to services. The website
 still owns its own appearance. Theme remains available on macOS 15.
-Back returns to the mounted catalog with filters, scroll position, custom
-icons, name, and selection intact. Create workspace performs the existing
+Back and stepper jumps return to the mounted catalog with filters, scroll position, custom
+icons, name, and selection intact, even after visiting Welcome. Create workspace performs the existing
 atomic batch save. A failure keeps the appearance page and draft available.
 Command-Return continues from the catalog and saves from Appearance. Hidden
 catalog controls cannot receive input or appear in the accessibility tree.
@@ -309,7 +315,11 @@ shadow over the service icon.
 An expanded service row uses a neutral hover fill. The fill remains quieter
 than the selected service fill. A top-bar tab uses a lighter hover fill in dark
 appearance, because the material behind the bar is a lighter ground than the
-rail canvas. The selected fill is the same in both rails.
+rail canvas. Expanded rows and top-bar tabs share their selected fill.
+Collapsed service icons use a stronger neutral selection because they have no
+bold label. The fill is 14 percent black in light appearance and 20 percent
+white in dark appearance. Increase Contrast raises these values to 22 and 30
+percent. Keep this strength across glass presets, including Off.
 
 The Icon Rail settings shape the collapsed rail on the left, whether it holds
 the services or the workspaces. Paguro hides that settings section while the
@@ -854,11 +864,11 @@ Paguro removes its permanent surface in the expanded state.
 Paguro gives it a circular material, border, and hover fill in the collapsed
 state.
 The service list does not use strong glass because it contains dense text.
-Off uses a solid source-list selection and a blue selected service name.
+Off uses a solid source-list selection and a neutral selected service name.
 The glass presets use a translucent neutral selection with black text in
 light appearance and white text in dark appearance. The fixed tint strength
 controls the blend, so Regular retains more selection fill than Clear.
-The same rule applies to expanded rows and collapsed dock items.
+Collapsed service icons keep their stronger neutral fill across all presets.
 The web page stays on an opaque or quiet semantic background.
 The opaque dark shell tint uses `#242125`. Presets change its opacity, not its
 RGB values.
@@ -880,9 +890,12 @@ both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 poi
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
 choices remain unchanged.
 
-The expanded sidebar footer contains a native bordered add-service button.
+The expanded sidebar footer contains Add service and an icon-only Settings
+gear on one row. Both use small native bordered buttons. The gear opens the
+app's Settings window and its tooltip shows Command-comma. Both actions hide
+when the sidebar collapses. Settings remains available from the app menu.
 The footer is 52 points high.
-It places the button slightly above its center.
+It places the buttons slightly above its center.
 
 ## Menu-bar window
 

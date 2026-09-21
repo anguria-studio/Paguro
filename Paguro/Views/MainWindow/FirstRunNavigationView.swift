@@ -1,3 +1,4 @@
+import PaguroCore
 import SwiftUI
 
 /// One footer stays mounted outside the animated setup pages.
@@ -7,6 +8,7 @@ struct FirstRunNavigationView: View {
     let canContinue: Bool
     let onBack: () -> Void
     let onNext: () -> Void
+    let onSelectStep: (FirstRunStep) -> Void
 
     @Environment(AppState.self) private var appState
     @Environment(AppModel.self) private var appModel
@@ -14,7 +16,7 @@ struct FirstRunNavigationView: View {
     @State private var importMessage: String?
 
     var body: some View {
-        FirstRunFooter(currentStep: currentStep) {
+        FirstRunFooter(currentStep: currentStep, canContinue: canContinue, onSelect: onSelectStep) {
             if currentStep == .welcome {
                 Button("Import configuration…", action: importConfiguration)
                     .buttonStyle(.link)
