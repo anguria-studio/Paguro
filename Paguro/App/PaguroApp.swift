@@ -188,7 +188,6 @@ struct PaguroApp: App {
                 .environment(appState)
                 .environment(appModel)
                 .modelContainer(appState.modelContainer)
-                .preferredColorScheme(appState.appearanceColorScheme)
                 .modifier(MainWindowOpener(appDelegate: appDelegate))
         } label: {
             MenuBarIconLabel(appState: appState)

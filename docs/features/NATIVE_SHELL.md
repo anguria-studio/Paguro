@@ -866,7 +866,7 @@ and no protective tint. Do not map this preset to Apple's Clear material:
 that variant leaves background text too visible behind shell content.
 Public glass APIs do not expose a per-app system-slider endpoint override.
 Native glass still adapts to system appearance in all glass presets.
-The same preset applies to toolbar controls, cards, the menu-bar surface, and
+The same preset applies to main-window toolbar controls, cards, and
 the expanded island. Accessibility appearance settings remain in effect.
 Existing saved glass choices stay unchanged, but each choice now uses fixed
 opacity and frost values. Loading preferences removes the old slider setting.
@@ -943,8 +943,11 @@ Lock closes the menu and uses the same app-lock route as File > Lock Now. It
 is hidden when App Lock is off or Paguro is already locked.
 The app name and shell mark open the main window, including
 when no services exist. The window has no footer. These routes remain available
-in Menu bar only mode. The complete window follows the Window glass
-preset. The content also follows the selected Paguro appearance.
+in Menu bar only mode. macOS supplies the native MenuBarExtra window background,
+light or dark appearance, and accessibility treatment. The window does not use
+Paguro's Window glass preset or app theme. Do not replace the container background
+with shell tint or another glass layer. Header controls use a circular semantic
+fill without extra glass, independent of the main window settings.
 
 The selected service uses a light fill and an accent-colored checkmark. In
 light appearance, the fill is 55 percent white, or opaque white with Reduce

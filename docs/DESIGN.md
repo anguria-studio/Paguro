@@ -222,7 +222,10 @@ list does not imply mute. The Dock shows a muted-bell overlay in its top-right
 corner for the same state. The notification counter is hidden while this overlay appears.
 
 The menu-bar window header groups notification mute, Lock, and Settings on the
-right. All three use the same circular toolbar surface. The app name and shell
+right. All three use the same circular semantic fill without extra glass.
+The window uses the native MenuBarExtra background, system light or dark
+appearance, and system accessibility treatment. Do not override its container
+background or apply the main window's glass preset or theme. The app name and shell
 mark open the main window. The window has no footer.
 Show Lock only when App Lock is enabled and Paguro is unlocked.
 

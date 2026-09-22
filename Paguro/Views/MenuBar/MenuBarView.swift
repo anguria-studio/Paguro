@@ -25,11 +25,7 @@ struct MenuBarView: View {
             serviceList
         }
         .frame(width: 340)
-        .containerBackground(for: .window) {
-            MenuBarWindowSurface(
-                glassStyle: appState.liquidGlassStyle
-            )
-        }
+        // Let MenuBarExtra supply the system panel material and accessibility fallback.
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Paguro menu bar window")
     }
@@ -87,9 +83,7 @@ struct MenuBarView: View {
             Image(systemName: appState.doNotDisturb ? "bell.slash" : "bell")
         }
         .buttonStyle(PaguroToolbarButtonStyle(isSelected: appState.doNotDisturb))
-        .toolbarControlSurface(
-            intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
-        )
+        .background(.quaternary, in: Circle())
         .help(appState.doNotDisturb ? "Unmute notifications and media" : "Mute notifications and media")
         .accessibilityLabel(
             appState.doNotDisturb
@@ -107,9 +101,7 @@ struct MenuBarView: View {
             Image(systemName: "lock")
         }
         .buttonStyle(PaguroToolbarButtonStyle())
-        .toolbarControlSurface(
-            intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
-        )
+        .background(.quaternary, in: Circle())
         .help("Lock Paguro (⇧⌘L)")
         .accessibilityLabel("Lock Paguro")
         .accessibilityHint("Lock Paguro (⇧⌘L)")
@@ -125,9 +117,7 @@ struct MenuBarView: View {
             Image(systemName: "gearshape")
         }
         .buttonStyle(PaguroToolbarButtonStyle())
-        .toolbarControlSurface(
-            intensity: appState.liquidGlassIntensity, glassStyle: appState.liquidGlassStyle
-        )
+        .background(.quaternary, in: Circle())
         .help("Settings")
         .accessibilityLabel("Open Paguro Settings")
         .accessibilityIdentifier("menuBar.settings")
@@ -338,45 +328,6 @@ struct MenuBarServiceList<Content: View>: View {
         }
         .frame(maxHeight: MenuBarServiceListMetrics.maximumHeight)
         .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-/// Matches the menu-bar window to the main shell's frost, glass, and
-/// protective tint. The system still owns the window shape and shadow.
-private struct MenuBarWindowSurface: View {
-    let glassStyle: ShellGlassStyle
-
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.regularMaterial)
-                .opacity(glassStyle.frostOpacity)
-
-            glassLayer
-
-            Rectangle()
-                .fill(PaguroColor.shellTint(
-                    intensity: glassStyle.transparency
-                ))
-        }
-    }
-
-    @ViewBuilder
-    private var glassLayer: some View {
-        // Below macOS 26 there is no glass layer to draw. The panel keeps the
-        // material behind it, which is the same result the Off style gives.
-        if #available(macOS 26, *), glassStyle != .off {
-            availableGlassLayer
-        } else {
-            EmptyView()
-        }
-    }
-
-    @available(macOS 26, *)
-    private var availableGlassLayer: some View {
-        Rectangle()
-            .fill(.clear)
-            .glassEffect(.regular, in: .rect)
     }
 }
 
