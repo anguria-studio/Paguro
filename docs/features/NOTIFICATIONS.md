@@ -1,6 +1,6 @@
 # Notification system
 
-Status: in progress
+Status: shipped; live service compatibility remains under review
 
 ## Purpose
 
@@ -93,8 +93,9 @@ second and reads the count at an adaptive interval. The interval starts at 5
 seconds. It steps up by 5 seconds, up to 15 seconds, after each run of 120
 unchanged polls. A changed count returns the interval to 5 seconds.
 
-The 15 second cap is a promise to the user: a page in front of the user never
-holds a stale badge longer than that.
+The scheduled active polling interval does not exceed 15 seconds. A suspended
+WebKit process, a slow script, or an unavailable badge source can delay the
+visible result; this interval is not a delivery guarantee.
 
 A change of the page title kicks the loop. The next tick reads the count at
 once, and the interval returns to 5 seconds. A title change means the page
@@ -217,10 +218,9 @@ origin is the same as the main-frame origin. It rejects a cross-origin signal.
 The bridge must not expose file access, shell access, or a general native command.
 
 The current signal uses schema version `1` and type `web-notification`. The
-complete UTF-8 message can use 16,384 bytes. A title can use 512 bytes, a body
-can use 4,096 bytes, a tag can use 512 bytes, and a target URL can use 4,096
-bytes. A page click token is a UUID. The decoder rejects another version or
-type. It removes control characters that have no display use from display
+complete UTF-8 message can use 16,384 bytes. A title or tag can use 512 bytes.
+A body or target URL can use 4,096 bytes. A page click token is a UUID.
+The decoder rejects another version or type. It removes control characters that have no display use from display
 text. A URL with a control character is not a destination.
 
 `NotificationDestinationPolicy` resolves an absolute URL or a relative path
@@ -450,11 +450,14 @@ macOS then drops the banner and reports nothing to the app.
 `NotificationManager` therefore keeps an observable permission value. Settings
 shows a warning row above the Presentation section when that value is not
 `authorized`. The row names the problem and opens the System Settings
-notification pane:
+controls for the running bundle identifier:
 
+```text
+x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=<bundle-id>
 ```
-x-apple.systempreferences:com.apple.preference.notifications
-```
+
+If macOS has not registered that app, System Settings can show the main
+notification pane instead.
 
 Each state has its own words. A `denied` state asks the user to turn the
 permission on. An `unavailable` state explains that macOS never asked, and it
@@ -470,7 +473,7 @@ warning text, and it imports no AppKit or UserNotifications type.
 Use this command to read the current permission from the log:
 
 ```sh
-log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
+/usr/bin/log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
 ```
 
 ## Dock badge
@@ -500,7 +503,7 @@ so the Dock can show no badge in that mode.
 Use this command to read the current state:
 
 ```sh
-log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
+/usr/bin/log stream --predicate 'subsystem == "studio.anguria.paguro"' --info
 ```
 
 ## Global mute
@@ -614,7 +617,8 @@ When Paguro starts, it first records an unread baseline.
 It must not present old unread items as new alerts.
 
 When the user quits Paguro, all notification work stops.
-Version 1 has no push server and no helper process.
+Version 1 has no push server or background notification helper. The direct
+build can use temporary Sparkle installer helpers during an app update.
 
 ## Privacy
 
@@ -639,7 +643,7 @@ The service matrix must state these limits for each service.
 
 ### Notification Test catalog service
 
-Choose Add Service > Browse and search for Notification Test, or find it under
+Open Add Service and search for Notification Test, or filter the catalog by
 Utilities. It opens the public
 [notification test page](https://anguria.studio/paguro/test-notifications/).
 The entry is available in both release editions and includes the Paguro icon.

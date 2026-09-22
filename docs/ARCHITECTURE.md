@@ -115,10 +115,11 @@ icon-rail, and workspace-view settings use `UserDefaults`.
 `NotificationRouteSettings` also uses `UserDefaults`. A route setting does not
 change the SwiftData model or service account data.
 
-The planned `SessionStoreManager` and `NotificationPipeline` will replace the
-current managers when their runtime phases start. The planned `IslandStore`
-and the current `IslandPanelController` remain optional services. The backlog
-tracks these changes.
+`DataStoreManager` owns current account stores. `NotificationRuntime`,
+`NotificationMessageHandler`, and `NotificationPresentationRouter` coordinate
+current notification work. `NotificationEvent` and presentation policies live
+in PaguroCore. `IslandPanelController` is optional. Proposed manager names in
+older planning notes do not describe additional runtime components.
 
 ## App lifecycle
 
@@ -144,13 +145,15 @@ See [Application lifecycle](features/APP-LIFECYCLE.md).
 
 ## Web runtime
 
-Each service account has a stable UUID.
-That UUID identifies a persistent `WKWebsiteDataStore`.
+Each service account has a stable record ID and a separate
+`dataStoreIdentifier` UUID. The data-store UUID identifies its persistent
+`WKWebsiteDataStore`.
 The data store keeps cookies and local storage separate from other accounts.
 
-`WebViewPool` limits the number of live web views to `WebViewPoolCapacity`,
-which is 15 at this time. Above that number it releases the least recently used
-services, even when idle hibernation is off.
+`WebViewPool` targets `WebViewPoolCapacity`, currently 15 live web views.
+Above that number it releases eligible least recently used services, even when
+idle hibernation is off. Active, messaging, pinned, and Keep Loaded services are
+exempt. Protected views can keep the total above the target.
 It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or
 microphone is in use.
@@ -212,8 +215,9 @@ exemption, and the pool owns the poll timer and the WebKit playback calls.
 The bundled `WebAudioMuteScript` also silences Web Audio contexts created
 after suspension, including those in child frames. The web view configuration
 installs that script, so the first document of a service already holds it.
-The backlog tracks the split of that handler into detection and presentation
-parts, and a shared event type in `PaguroCore` for the island.
+`NotificationMessageHandler` validates and normalizes the page signal into
+`PaguroCore.NotificationEvent`. `NotificationPresentationRouter` applies the
+shared policy before sending it to the system or island presenter.
 
 The island does not detect notifications.
 `AppState` synchronously forwards lock changes to the notification manager and
@@ -241,7 +245,9 @@ for schema compatibility and seed the app-wide value during migration.
 
 The Debug first-run preview uses an in-memory model container and one
 nonpersistent WebKit store per account. It bypasses normal-store recovery and
-persistent session enumeration. The normal app keeps persistent account stores.
+persistent session enumeration. Its shell settings use isolated defaults that
+reset on each launch, with glass Off. The normal app keeps persistent account
+stores and its saved preferences.
 
 Paguro must not store account passwords.
 Paguro must not copy full message history into its data store.
@@ -285,17 +291,20 @@ Paguro does not disable Intelligent Tracking Prevention.
 XcodeGen creates `Paguro.xcodeproj` from `project.yml`.
 Do not edit the generated project by hand.
 
-The repository tracks the generated project only when the project policy requires it.
-The current setup generates it during local work.
+Git ignores the generated project. Generate it locally or in CI from the
+selected specification. `project-direct.yml` and `project-store.yml` add the
+edition-specific release settings.
 
 ## Test layers
 
 `PaguroCoreTests` test pure values and policies.
 `PaguroTests` test application services and WebKit adapters.
-UI tests will use launch arguments and simulated screen geometry.
+Native view tests use AppKit hosts and simulated screen geometry. Debug preview
+schemes support manual onboarding, island, and notification checks.
 
-A local web fixture will test notifications, frames, downloads, and media requests.
-Live service tests will use a documented compatibility matrix.
+The local HTTPS fixture exercises notifications, frames, downloads, media, and
+session persistence. Live service results remain dated evidence in the private
+service matrix, not a guarantee of provider compatibility.
 
 See [Compatibility fixture](features/COMPATIBILITY.md).
 

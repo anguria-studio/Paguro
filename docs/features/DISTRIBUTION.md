@@ -2,17 +2,20 @@
 
 Status: active
 
-## Release order
+## Release channels
 
-Paguro will use direct distribution first.
-An App Store build is optional and comes later.
+Paguro has direct-download and App Store editions. The direct edition is
+published on GitHub and distributed through Homebrew. The App Store edition
+uses a separate archive and Apple's upload and review process.
+Publishing a GitHub release does not submit or release an App Store update.
 
-The direct build still uses App Sandbox and Hardened Runtime.
-This choice reduces risk and keeps the App Store path open.
+Both editions use App Sandbox and Hardened Runtime. Release versions and
+notes are recorded in [the changelog](../../CHANGELOG.md). The channels can
+ship on different dates and offer different current versions.
 
 ## Direct release
 
-The release process will perform these steps:
+The direct release process uses these steps:
 
 1. Create a Release archive.
 2. Sign the app with a Paguro Developer ID identity.
@@ -90,12 +93,14 @@ date. Include compatibility changes and any required user action. Keep an
 `Unreleased` section for the next release and update its comparison link.
 Use the released section as the source for the GitHub release notes.
 
-Use the `bin` directory from the official pinned Sparkle distribution:
+Use the `bin` directory from the official pinned Sparkle distribution.
+This example names the 1.0.7 candidate. For a new release, use its approved
+version, a higher unused build number, and a new output directory:
 
 ```sh
 python3 scripts/build_release.py \
-  --version 1.0.1 --build 6 \
-  --output .project/releases/1.0.1-6 \
+  --version 1.0.7 --build 16 \
+  --output .project/releases/1.0.7-16 \
   --sparkle-tools .project/sparkle-tools/bin
 ```
 
@@ -113,7 +118,7 @@ app, release manifest, DMG, signed appcast, and checksums. Only files under
 `assets` are release downloads. Increase the build number for each update.
 
 The `assets` directory holds two copies of the disk image. The versioned name,
-for example `Paguro-1.0.5-14.dmg`, is the address that the update feed and a
+for example `Paguro-1.0.7-16.dmg`, is the address that the update feed and a
 package manager use, because its content never changes. `Paguro.dmg` is the
 same file under a fixed name. It gives the website one permanent link:
 `https://github.com/anguria-studio/Paguro/releases/latest/download/Paguro.dmg`.
@@ -131,14 +136,20 @@ This option uses the isolated bundle identifier
 `studio.anguria.paguro.updatetest` and permits local networking.
 Serve the newer build's `assets` directory on loopback. Install and launch the
 older test app from a writable directory. Use Check for Updates, install the
-newer version, and confirm its build number after relaunch. Repeat with a
-damaged download and confirm that installation is rejected.
+newer version, and confirm its build number after relaunch.
+
+Also verify session persistence with synthetic account data. Before updating,
+write separate markers to a persistent cookie, local storage, and IndexedDB.
+Confirm them after a normal quit and reopen, then after Install and Relaunch.
+The test page must report missing markers without recreating them. A passing
+storage test does not establish that a provider keeps its server-side pairing.
+Repeat with a damaged download and confirm that installation is rejected.
 Never publish these test artifacts. Production builds use HTTPS and the real
 bundle identifier.
 
 ### Publish after review
 
-Finish the repository review and migration first. Build from a clean release
+Finish the release review and required checks. Build from a clean release
 commit. Create a draft release for that version in `anguria-studio/Paguro`.
 Attach every file under `assets` from the same build: the versioned DMG,
 `Paguro.dmg`, `appcast.xml`, and `SHA256SUMS`. Add the release notes.
@@ -159,7 +170,8 @@ The cask is not a separate build. It names the versioned DMG of the GitHub
 release and its SHA-256 value. It sets `auto_updates`, because Sparkle updates
 the app, so `brew upgrade` leaves an installed copy alone. Its `livecheck` block
 reads the signed Sparkle feed. Its `zap` list names the sandbox container and
-the application scripts folder; a sandboxed Paguro stores nothing elsewhere.
+the application scripts folder. Exported configurations and downloaded files
+can remain outside those locations.
 
 The release script writes `paguro.rb` in the output directory, beside
 `release.json`. It is not a release download. After you publish a release, copy
@@ -202,8 +214,15 @@ xcodebuild -project Paguro.xcodeproj -scheme 'Paguro App Store' \
 Automatic signing uses Apple Development for the archive. Xcode signs again
 for App Store distribution during export. Configure the Apple account in Xcode
 and resolve signing requirements before export. This command does not upload
-or submit the app. Use Organizer to validate and distribute the signed archive
-after the privacy audit and release checks are complete.
+or submit the app. Validate and distribute the archive through Xcode Organizer,
+or export an App Store-signed `.pkg` and upload it with Transporter.
+
+After Apple processes the upload, select the build on the matching macOS
+version in App Store Connect. Enter What's New in This Version there. If the
+Store skips direct releases, cover all changes since the previous Store version.
+Complete the required metadata and compliance answers before submitting for
+review. Upload, review submission, approval, and publication are separate states.
+See [Apple's upload guide](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds).
 
 Run `xcodegen generate` to restore the default development project.
 
@@ -288,8 +307,8 @@ Test these cases before each public release:
 
 ## Version policy
 
-The first public release is 1.0.0, build 4. Increase the build number
-again if that candidate changes. Keep build numbers increasing across all
+The first public release was 1.0.0, build 4. Increase the build number whenever
+a candidate binary changes. Keep build numbers increasing across all
 versions; Sparkle uses them to order updates. Use patch versions for fixes,
 minor versions for compatible features, and major versions for incompatible
 configuration or workflow changes. Tag public releases as `vMAJOR.MINOR.PATCH`.

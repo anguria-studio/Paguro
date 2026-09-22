@@ -65,8 +65,9 @@ Paguro does not link this tool into the application.
 
 Service logos and names can be trademarks.
 Their owners keep all trademark rights.
-The [service-icon inventory](vendor/service-icons.json) records all 63 bundled
-marks, their collection source URLs, and file checksums. They identify services;
+The [service-icon inventory](vendor/service-icons.json) records the 63 bundled
+service marks and the additional Sentry dark variant, with source URLs and
+file checksums. Paguro recolors the Sentry variant for dark appearance. They identify services;
 they do not imply endorsement or affiliation. The collection tooling license
 does not grant rights to third-party trademarks.
 

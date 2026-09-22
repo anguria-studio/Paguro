@@ -17,7 +17,7 @@ and battery use separately. A memory result cannot support a speed or battery cl
 2. Use current stable native builds of the comparison apps. Run Paguro in Release
    without Xcode or a debugger. Record each version and build number. Confirm that
    none runs through Rosetta unless that is the intended comparison.
-3. Sign in to the same services and accounts in both apps — at least five. Use the same pages,
+3. Sign in to the same services and accounts in both apps: at least five. Use the same pages,
    selected service, content, and zoom. Sign-in pages are not an equivalent workload.
 4. Match notification, preload, content-blocking, extension, and hibernation settings.
    Record any setting that cannot be matched. Include relevant user-agent differences.
@@ -25,10 +25,11 @@ and battery use separately. A memory result cannot support a speed or battery cl
    Do not treat a failed page, missing service, or silently sleeping tab as a memory win.
 6. Run one app at a time. Close unrelated high-load apps, stop builds and downloads,
    and wait for the Mac to settle. Use the same foreground/background state in each run.
-   Host swap must be near zero before a run, because `footprint` excludes swapped-out
-   pages and a pressured host under-reports whichever app lost pages to swap;
-   `scripts/benchmark_session.py` refuses to start above 1 GiB of swap in use
-   (override with `--allow-swap`) and records swap at both ends of every session.
+   Host swap must be near zero before a run. `footprint` excludes swapped-out
+   pages, so memory pressure can make an app's measurement misleading.
+   `scripts/benchmark_session.py` refuses to start above 1 GiB of swap in use.
+   `--allow-swap` overrides this guard. The script records swap at both ends of
+   every session.
 7. Wait two minutes after all pages settle, then measure for five minutes. Avoid
    calls, playback, typing, and manual navigation during this idle-memory scenario.
 8. Repeat at least five matched pairs. Alternate or randomize app order. Keep all
@@ -99,9 +100,9 @@ it does not qualify for a performance claim.
 
 ## Session orchestration
 
-`scripts/benchmark_session.py` automates steps 6 to 8 of the matched workload: one app
-at a time, settle, measure, then the same for the other app, repeated as matched pairs
-with the order alternating each pair. From the repository root, run:
+`scripts/benchmark_session.py` automates steps 6 to 8 of the matched workload.
+It settles and measures each app separately, then repeats matched pairs with
+alternating order. From the repository root, run:
 
 ```sh
 python3 scripts/benchmark_session.py --scenario awake --pairs 5 \
@@ -110,18 +111,18 @@ python3 scripts/benchmark_session.py --scenario awake --pairs 5 \
   --release-build-settings .project/benchmarks/release-build-settings.json
 ```
 
-Each run launches the app, waits two minutes, takes two membership probes twenty
-seconds apart, calls `scripts/benchmark_memory.py` as a subprocess, quits the app with
-`osascript`, and cools down. Use `--dry-run` first: it performs the read-only checks and
+Each run launches the app, waits two minutes, and takes two membership probes
+twenty seconds apart. It then calls `scripts/benchmark_memory.py`, quits the app
+with `osascript`, and cools down. Use `--dry-run` first: it performs the read-only checks and
 prints every command the session would run, without launching or writing anything.
 
-The session refuses to start on battery power without `--allow-battery`, while Xcode is
-running, or while either app is already running; a stale Debug build shares Paguro's
-bundle id, and measuring it would not measure the Release build. After launching Paguro
+The session refuses to start on battery power without `--allow-battery`.
+It also refuses while Xcode or either measured app is running. Current Debug
+builds have a separate bundle ID, but older local builds may share the release ID. After launching Paguro
 it compares the running bundle path against `--paguro-app` and stops on any mismatch.
-It stops if process membership changes between the two probes, if `--min-processes` is
-not met, if the collector exits non-zero or prints no saved report, or if an app does
-not quit within forty-five seconds. It never retries, never skips a pair, and never
+It stops if process membership changes between probes or `--min-processes` is
+not met. It also stops after a collector failure or missing report. An app that
+does not quit within forty-five seconds stops the session. It never retries, never skips a pair, and never
 substitutes a result. `caffeinate` keeps the Mac awake for the session only.
 
 The manifest at `.project/benchmarks/session-<timestamp>-<scenario>.json` lists every
@@ -130,9 +131,8 @@ records the scenario, services, environment, power at both ends, and for each ru
 pair, order, app, label, run directory, status, and error. An aborted session keeps its
 completed runs and names the failure; keep those runs and explain any exclusion.
 
-The script launches and quits the apps. It never signs in, never changes a setting, and
-never kills a process: when an app will not quit, it says so and asks you to quit it
-yourself, then start a new session.
+The script launches and quits the apps. It never signs in, changes settings,
+or kills a process. If an app does not quit, close it yourself and start a new session.
 
 ## Reporting
 
@@ -152,8 +152,8 @@ as such. Do not select a maximum reduction as the headline.
 
 A supported claim could say: “Lower memory footprint than Ferdium [version] in
 our [N]-service idle test on [Mac and macOS version].” [N] is the number of
-services signed in with real content in both apps during that session; the
-summary derives it from the run's service list. Add the measured number
+services signed in with real content in both apps during that session.
+The summary derives this count from the run's service list. Add the measured number
 only after review. Do not generalize this to all Electron apps or all workloads.
 
 Use Instruments for later CPU, launch, and response-time measurements. Battery
@@ -170,33 +170,46 @@ python3 scripts/benchmark_summary.py \
   --write .project/benchmarks/session-<timestamp>-<scenario>-summary.md
 ```
 
-Use `--reports <run directory> …` for an ad-hoc set without a manifest; the app comes from the
-bundle identifier and pair `k` is the `k`-th run of each app in start order. Add `--format json`
+Use `--reports <run directory> …` for an ad-hoc set without a manifest.
+The bundle identifier supplies the app. Pair `k` contains the `k`-th run of each
+app in start order. Add `--format json`
 for the same fields as data. The tool reads saved reports only. It never launches, configures,
 or measures an app.
 
-The summary refuses, rather than guesses, when the method has been broken: any aggregated run
-that is not `complete-unreviewed`, any run with fewer samples than it requested, a Paguro run
-without verified Release build settings or from a smoke test, a version or build that changes
-between runs of one app, a macOS version, model, scenario, or service list that changes across
-runs, an unequal number of runs per app, or runs split between AC power and battery. Each
-refusal names the run, so the fix is to repeat that pair rather than to drop it. `--include-incomplete`
-lists excluded runs with their reasons; it never lets them into the arithmetic. A session measured
-entirely on battery is allowed and warned about prominently, as is a session shorter than five pairs.
+The summary rejects these inputs:
 
-The verdict is `repeatable` only when every pair favors Paguro and the median reduction is larger
-than the wider of the two apps' run-to-run spreads; otherwise it reports `mixed or inconclusive`
-and supports no comparison. The headline is always the median reduction, never the largest pair.
+- a run without `complete-unreviewed` status or all requested samples;
+- a Paguro run without verified Release settings, or from a smoke test;
+- a version or build that changes between runs of one app;
+- changes in macOS version, hardware model, scenario, or service list;
+- unequal run counts for the two apps;
+- runs split between AC power and battery.
 
-The claim line carries ` — unreviewed; do not publish` until a person has read the raw samples and
+Each refusal names the run. Repeat the affected pair instead of dropping it.
+`--include-incomplete` lists excluded runs and reasons without including them
+in the arithmetic. Sessions entirely on battery are allowed with a warning.
+Sessions shorter than five pairs also receive a warning.
+
+The verdict is `repeatable` only when every pair favors Paguro. The median
+reduction must also exceed the wider of the two apps' run-to-run spreads.
+Otherwise, the verdict is `mixed or inconclusive` and supports no comparison.
+The headline is always the median reduction, never the largest pair.
+
+The claim line is marked unreviewed until a person has read the raw samples and
 process lists and passed `--reviewed`. That flag changes the suffix and nothing else. Publishing
 the number still needs the method, versions, workload, settings, date, and hardware beside it.
 
 ## Verification and references
 
-Run `python3 scripts/test_benchmark_memory.py`, `test_benchmark_session.py` and
-`test_benchmark_summary.py` from `scripts/` for grouping, partial-sample, session and
-summary regressions. No application behavior changes are required for this collector.
+From the repository root, run:
+
+```sh
+python3 scripts/test_benchmark_memory.py
+python3 scripts/test_benchmark_session.py
+python3 scripts/test_benchmark_summary.py
+```
+
+These tests cover grouping, partial samples, session orchestration, and summaries. No application behavior changes are required for this collector.
 
 - [Apple Instruments tutorials](https://developer.apple.com/tutorials/instruments)
 - [Apple performance and metrics](https://developer.apple.com/documentation/xcode/performance-and-metrics)

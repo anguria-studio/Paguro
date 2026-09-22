@@ -76,7 +76,7 @@ Version 1.0.6, build 15. Direct download release only.
 - Requires macOS 15 or later, on Apple silicon or Intel.
 - No App Store update is included in this release.
 
-## [1.0.5] — 2026-09-19
+## [1.0.5]: 2026-09-19
 
 Version 1.0.5, build 14.
 
@@ -142,7 +142,7 @@ Version 1.0.5, build 14.
 - A notification without a destination no longer reloads the service root after
   selecting the service.
 
-## [1.0.4] — 2026-09-12
+## [1.0.4]: 2026-09-12
 
 Version 1.0.4, build 11.
 
@@ -159,7 +159,7 @@ Version 1.0.4, build 11.
 - Clear All dismisses island cards in a short stagger, then smoothly shrinks
   the empty island. Reduce Motion uses a simple fade.
 
-## [1.0.3] — 2026-09-12
+## [1.0.3]: 2026-09-12
 
 Version 1.0.3, build 9.
 
@@ -184,7 +184,7 @@ Version 1.0.3, build 9.
 - New macOS and island notifications use favicons fetched after a service
   opens, without restarting Paguro.
 
-## [1.0.2] — 2026-09-11
+## [1.0.2]: 2026-09-11
 
 Version 1.0.2, build 7.
 
@@ -194,7 +194,7 @@ Version 1.0.2, build 7.
   a setup, at the bottom of the General tab. Automatic backups remain available
   through recovery prompts when Paguro detects a data problem.
 
-## [1.0.1] — 2026-09-11
+## [1.0.1]: 2026-09-11
 
 Version 1.0.1, build 6.
 
@@ -209,7 +209,7 @@ Version 1.0.1, build 6.
 - The lock screen now waits for Unlock before requesting Touch ID or the Mac
   password. Locking the app no longer starts an authentication prompt.
 
-## [1.0.0] — 2026-09-10
+## [1.0.0]: 2026-09-10
 
 First public Paguro release, based on [Chorus](https://github.com/nicojan/Chorus)
 by Nico Jan. Version 1.0.0, build 4.

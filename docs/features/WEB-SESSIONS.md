@@ -9,10 +9,10 @@ The accounts must not share cookies or local storage.
 
 ## Identity
 
-Each service account has a stable UUID.
-The UUID identifies its `WKWebsiteDataStore`.
+Each service account has a stable record ID and a separate persisted
+`dataStoreIdentifier` UUID. The latter identifies its `WKWebsiteDataStore`.
 
-Paguro reuses one store object for each UUID during a process run.
+Paguro reuses one store object for each data-store UUID during a process run.
 WebKit keeps the store data on disk after the app quits.
 
 ## Isolation rule
@@ -119,8 +119,8 @@ Both sweeps read that one rule, so the same service is safe from both:
   the pool limit.
 
 A call therefore blocks a capacity release as well. The capacity sweep does not
-stop at a protected service. It takes the next candidate instead, so the pool
-still returns to its limit. A call blocks the immediate policy as well, because
+stop at a protected service. It takes the next eligible candidate instead.
+If too few services are eligible, the pool can remain above its target. A call blocks the immediate policy as well, because
 the grace task ends in the same shared decision.
 
 A service that keeps playing audio holds the same kind of protection. Music and
@@ -354,7 +354,8 @@ The tick is 150 milliseconds, so the ring moves in small steps.
 
 Records stay in memory. They reach no store, and the process drops them at
 quit. The island's recent list uses the same model.
-The tracker keeps the newest 25 records and drops the oldest ended one first.
+The tracker targets 25 records and drops the oldest ended records first.
+It retains running transfers even when they exceed that limit.
 
 `DownloadIndicatorState` in `PaguroCore` owns the visibility rules.
 The app supplies the byte totals, the record count, the failed count, and the
@@ -474,6 +475,30 @@ Before removal, the reclaimer drops a tombstone when a live service claims the
 identifier. It scans for unclaimed stores only after a healthy store launch.
 It cancels delayed work during application shutdown. If shutdown cancels the
 removal or WebKit rejects every attempt, the tombstone remains for the next launch.
+
+## Investigating a lost sign-in
+
+Distinguish a normal process restart from an app update, a cleared session,
+a removed account, and a configuration import. Imports create fresh account
+identifiers. Removing the final workspace link or clearing a session removes
+website data by design. A normal restart or update must keep the same account
+store identifier.
+
+Record the Paguro version and build, macOS version and build, distribution
+channel, service, and approximate time. For a QR-linked service, check whether
+the provider still lists the Mac as a linked device. A missing provider entry
+alone does not establish whether local storage or server-side pairing failed.
+
+Compare normal quit and reopen with the update path. Use the isolated update
+test in [Distribution](DISTRIBUTION.md#verify-an-update-privately) for synthetic
+cookies and website database markers. Do not copy a real account's session into
+test builds. A passing synthetic test does not rule out provider-specific issues.
+
+`scripts/capture_service_test_logs.sh` captures future WebView events while the
+problem is reproduced. It cannot recover logs from an earlier incident. Review
+its output before sharing, and never add cookies, tokens, or message content
+to a report. Avoid deleting the account as a diagnostic step because it removes
+the session being investigated.
 
 ## Compatibility matrix
 

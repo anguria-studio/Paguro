@@ -155,7 +155,8 @@ over 0.14 seconds.
 
 Continue opens the third step, Appearance, without creating any services.
 Theme offers Follow System, Light, and Dark. Liquid Glass offers Follow system,
-Off, Clear, and Regular on macOS 26 or later. Choices update the shell live
+Off, Clear, and Regular on macOS 27 or later. macOS 26 offers Off, Clear, and
+Regular. Earlier systems hide the glass selector. Choices update the shell live
 through the same preference actions as Settings and persist immediately.
 Theme cards show miniature windows, with a split light/dark preview for Follow
 System. Glass cards use one sample backdrop to illustrate the relative density
@@ -171,9 +172,9 @@ catalog controls cannot receive input or appear in the accessibility tree.
 The footer moves progress above the actions when three steps cannot fit across
 the available width. The wizard owns one persistent footer outside the animated
 page container. It has no separate background fill and never slides or fades
-with page changes. The footer owns import feedback and primary-action focus;
-the catalog keeps search focus and reports modal presentation to disable wizard
-navigation while an editor is open. Reduce Motion preserves the content fade.
+with page changes. The footer owns import feedback and primary-action focus.
+The catalog keeps search focus. While an editor is open, it reports modal
+presentation to disable wizard navigation. Reduce Motion preserves the content fade.
 
 The saved selection ends the wizard. The shell fades in over 0.3 seconds and the
 rail slides in from the edge it lives on. Reduce Motion keeps the fade alone.
@@ -398,10 +399,10 @@ stay within that workspace. Moving a service between workspaces remains an
 explicit context-menu action. A workspace section menu can add a service to
 that workspace, including when the workspace is empty. The same menu can mute
 the workspace.
-When more than one workspace exists, the Add Service dialog shows a Workspace
-menu for catalog and custom services. It starts with the workspace that opened
-the dialog. The chosen workspace receives the new service and becomes active.
-The dialog hides this menu when only one workspace exists.
+The Add Service page always shows its destination workspace, including when
+only one exists. It starts with the workspace that opened the catalog. Its
+New workspace action creates and selects a destination without clearing the
+service selection. The successful batch opens the first added service.
 The workspace editor can leave the emoji empty. Paguro then shows the workspace
 name without a replacement symbol or leading space. The collapsed workspace
 rail is the one exception, because it has no name to show.
@@ -590,7 +591,8 @@ places before transient cards. Remaining cards wait for a free place. Paguro
 shows the passkey notice once for the app and saves its seen state when raised.
 Later services and launches do not repeat it. A stored seen flag from any older
 service also counts as seen. The Debug preview uses its own resettable defaults.
-A locked window cannot consume the notice. The Add Service sheet does not repeat it.
+A locked window cannot consume the notice. The Add Service page and its custom
+website sheet do not repeat it.
 
 `FloatingNoticeCard` draws one card and `FloatingNoticeStack` places the stack.
 `FloatingNoticeLayout`, `FloatingNoticeStackRule`, and `OfflineNoticeState` in
@@ -617,8 +619,9 @@ Each record still names the service that started it.
 
 The indicator appears when the app has one download record.
 It stays in the header until the user removes the last record.
-No record disappears on its own, so the route to a finished file remains
-available after the transfer ends.
+Finished records remain available during the app run until dismissed or
+removed by the history limit. The tracker trims the oldest ended records when
+its history exceeds 25 records. Running transfers are retained.
 
 The control draws the Paguro download mark from the `DownloadIcon` asset.
 The mark is a tray with an arrow above it.
@@ -908,8 +911,8 @@ they remain available while Paguro repairs or restores the content store.
 
 On a fresh install, Paguro creates no workspace and no
 service, so the window opens on the first-run welcome screen. Paguro follows
-the system light/dark appearance, starts with glass Off, uses the left rail, shows all workspaces, and appears in
-both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
+the system light/dark appearance and starts with glass Off. It uses the left
+rail, shows all workspaces, and appears in both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
 choices remain unchanged.
 
