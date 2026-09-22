@@ -10,6 +10,7 @@ final class AppState {
     let modelContainer: ModelContainer
     let preferencesStore: PreferencesStore
     let workspaceStore: WorkspaceStore
+    @ObservationIgnored private let shellDefaults: UserDefaults
     private(set) var shellPreferences: ShellPreferences
     let mediaPermissions: MediaPermissionCoordinator
     let storeRecovery: StoreRecoveryCoordinator
@@ -188,6 +189,7 @@ final class AppState {
         let preparedStore = StoreLoader.prepare(schema: schema, config: config)
         let loadedContainer = preparedStore.container
         self.modelContainer = loadedContainer
+        self.shellDefaults = preparedStore.defaults
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
         let workspaceStore = WorkspaceStore(
@@ -200,6 +202,7 @@ final class AppState {
             hasLegacySeenNotice: workspaceStore.allServices().contains { $0.hasSeenPasskeyNotice == true }
         )
         self.shellPreferences = ShellPreferences.load(
+            defaults: preparedStore.defaults,
             preferencesStore: preferencesStore
         )
         self.mediaPermissions = MediaPermissionCoordinator(
@@ -465,31 +468,31 @@ final class AppState {
     }
 
     func setLiquidGlassStyle(_ style: ShellGlassStyle) {
-        shellPreferences.setLiquidGlassStyle(style)
+        shellPreferences.setLiquidGlassStyle(style, defaults: shellDefaults)
     }
 
     func setIconRailBaseSize(_ value: Double) {
-        shellPreferences.setIconRailBaseSize(value)
+        shellPreferences.setIconRailBaseSize(value, defaults: shellDefaults)
     }
 
     func setIconRailMagnification(_ value: Double) {
-        shellPreferences.setIconRailMagnification(value)
+        shellPreferences.setIconRailMagnification(value, defaults: shellDefaults)
     }
 
     func setIconRailPosition(_ position: DockRailPosition) {
-        shellPreferences.setIconRailPosition(position)
+        shellPreferences.setIconRailPosition(position, defaults: shellDefaults)
     }
 
     func setWorkspaceViewMode(_ mode: WorkspaceViewMode) {
-        shellPreferences.setWorkspaceViewMode(mode)
+        shellPreferences.setWorkspaceViewMode(mode, defaults: shellDefaults)
     }
 
     func setRailBarIconsOnly(_ iconsOnly: Bool) {
-        shellPreferences.setRailBarIconsOnly(iconsOnly)
+        shellPreferences.setRailBarIconsOnly(iconsOnly, defaults: shellDefaults)
     }
 
     func setSidebarCollapsed(_ collapsed: Bool) {
-        shellPreferences.setSidebarCollapsed(collapsed)
+        shellPreferences.setSidebarCollapsed(collapsed, defaults: shellDefaults)
     }
 
     func setShowBadgeCountInDock(_ enabled: Bool) {
@@ -1300,8 +1303,10 @@ final class AppState {
 extension AppState {
     /// Synchronizes runtime adapters after the configuration transaction commits.
     func applyImportedPreferences(_ value: ConfigurationPreferences) {
-        shellPreferences = ShellPreferences.load(preferencesStore: preferencesStore)
-        shellPreferences.applyConfiguration(value)
+        shellPreferences = ShellPreferences.load(
+            defaults: shellDefaults, preferencesStore: preferencesStore
+        )
+        shellPreferences.applyConfiguration(value, defaults: shellDefaults)
         userScriptManager.autoDismissCookieBanners = preferencesStore.autoDismissCookieBanners
         defaultZoom = preferencesStore.defaultZoom
         for service in workspaceStore.allServices() where service.pageZoom == nil {

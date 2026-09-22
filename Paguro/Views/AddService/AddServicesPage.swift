@@ -30,7 +30,8 @@ struct AddServicesPage: View {
         .frame(maxWidth: 1040)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(WindowDragHandle(endsEditingOnPress: true))
-        .background(PaguroColor.shellCanvas(intensity: appState.liquidGlassIntensity))
+        .background(PaguroColor.Solid.canvas)
+        .clipShape(RoundedRectangle(cornerRadius: PaguroRadius.surface, style: .continuous))
         .onChange(of: appState.selectedSpaceID) { _, id in destinationID = id }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Add services")

@@ -52,16 +52,28 @@ final class NativeShellTests: XCTestCase {
     @MainActor
     func testSecondarySurfaceRendersWithoutTheAppEnvironment() async {
         // SwiftUI relocates window backgrounds outside the content hierarchy.
-        for style in ShellGlassStyle.allCases {
-            for scheme in [ColorScheme.light, .dark] {
-                let appeared = expectation(description: "Secondary surface appeared")
-                let view = NSHostingView(rootView: PaguroSecondarySurface(glassStyle: style)
-                    .environment(\.colorScheme, scheme)
-                    .onAppear { appeared.fulfill() })
-                view.frame = NSRect(x: 0, y: 0, width: 200, height: 200)
-                view.layoutSubtreeIfNeeded()
-                await fulfillment(of: [appeared], timeout: 2)
-            }
+        for scheme in [ColorScheme.light, .dark] {
+            let appeared = expectation(description: "Secondary surface appeared")
+            let view = NSHostingView(rootView: PaguroSecondarySurface()
+                .environment(\.colorScheme, scheme)
+                .onAppear { appeared.fulfill() })
+            view.frame = NSRect(x: 0, y: 0, width: 200, height: 200)
+            view.layoutSubtreeIfNeeded()
+            await fulfillment(of: [appeared], timeout: 2)
+        }
+    }
+
+    @MainActor
+    func testSecondarySurfaceIsOpaqueInBothAppearances() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            let renderer = ImageRenderer(content: PaguroSecondarySurface()
+                .frame(width: 40, height: 40)
+                .environment(\.colorScheme, scheme))
+            let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+            let pixel = try XCTUnwrap(bitmap.colorAt(
+                x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2
+            ))
+            XCTAssertEqual(pixel.alphaComponent, 1, accuracy: 0.001)
         }
     }
 

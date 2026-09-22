@@ -1,22 +1,9 @@
-import PaguroCore
 import SwiftUI
 
-/// Shared canvas for Paguro's Settings window and modal editors.
+/// Editing surfaces stay opaque, independently of the main window glass.
 struct PaguroSecondarySurface: View {
-    // Window backgrounds render outside the content's app environment.
-    let glassStyle: ShellGlassStyle
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     var body: some View {
-        if reduceTransparency || !AppCapabilities.liquidGlassSupported || glassStyle == .off {
-            PaguroColor.Solid.canvas
-        } else {
-            Rectangle()
-                .fill(.regularMaterial)
-                .overlay {
-                    PaguroColor.Fill.shellMaterialTint(intensity: glassStyle.transparency)
-                }
-        }
+        PaguroColor.Solid.canvas
     }
 }
 
@@ -26,7 +13,7 @@ private struct PaguroSheetAppearance: ViewModifier {
     func body(content: Content) -> some View {
         content
             .preferredColorScheme(appState.appearanceColorScheme)
-            .presentationBackground { PaguroSecondarySurface(glassStyle: appState.liquidGlassStyle) }
+            .presentationBackground { PaguroSecondarySurface() }
     }
 }
 

@@ -14,6 +14,10 @@ area. The rail, workspace controls, and native header stay available. The same
 picker serves onboarding and ordinary add, including search, category filters,
 multiple selection, custom website drafts, icon previews, and keyboard controls.
 The toolbar wraps into two rows in a narrow pane.
+The catalog has an opaque neutral canvas behind its toolbar, grid, and footer.
+It uses the browser's 14 point continuous corners and existing pane gutters.
+This background follows the app theme and stays readable with every glass preset.
+The surrounding sidebar and header retain the shell glass.
 
 The page shows the destination workspace in a native popup. It changes the
 destination without renaming a workspace. New workspace opens the name and
@@ -222,7 +226,7 @@ Without Liquid Glass, the setup card uses a one-point border with 18 percent
 ink in light mode and 20 percent in dark mode. This keeps its edge visible on
 a solid shell. Glass keeps the lighter half-point hairline.
 
-The Off preset uses a solid charcoal canvas with a subtle violet undertone,
+The Off preset uses a solid neutral charcoal canvas,
 slightly lighter grouped surfaces and sidebar, and raised card fills. Light
 appearance uses an off-white canvas, a pale grouped surface, and white cards.
 The native backdrop and SwiftUI canvas share the same opaque color. Welcome,
@@ -241,6 +245,10 @@ shows only that run's services and ends the welcome screen. Quitting discards
 those test services and sign-ins. The normal **Paguro** scheme uses the saved setup.
 
 The preview bypasses normal-store restore, snapshots, and recovery history.
+Shell appearance and layout choices use the preview defaults, including imports,
+and reset on each launch. Window glass starts Off. Preview changes do not overwrite
+the normal app preferences.
+
 It uses separate recovery defaults and disables persistent-session enumeration,
 so the empty test graph cannot reclaim the normal app's sign-in data. macOS
 notification authorization remains the system decision for the Debug app.
@@ -842,9 +850,10 @@ The Window glass selector has four presets and no separate transparency slider:
 | Clear | Untinted Regular glass | 45 percent | None |
 | Regular | Regular glass | Full strength | 15 percent |
 
-Follow system is the default preference for a fresh install. On macOS 27 and
-later, native glass responds to the
-system Liquid Glass appearance. Paguro does not copy the system slider value.
+Off is the default preference for a fresh install. The first two setup steps
+start on the opaque canvas. The Appearance step previews changes live; leaving
+it untouched keeps Off. Existing saved choices remain unchanged.
+On macOS 27 and later, Follow system uses the system Liquid Glass appearance. Paguro does not copy the system slider value.
 On macOS 26, a Follow system preference resolves to Regular. Settings and
 onboarding offer Off, Clear, and Regular only. Explicit manual choices stay
 unchanged. Below macOS 26, every preference resolves to Off and glass controls
@@ -861,17 +870,14 @@ opacity and frost values. Loading preferences removes the old slider setting.
 Configuration import accepts the legacy opacity field but uses the preset;
 export writes the preset's opacity for compatibility with older versions.
 
-The presets update the main window live. Settings and Paguro-owned sheets
-follow the same theme and palette through `PaguroSecondarySurface`.
-Off, older systems, and Reduce Transparency use the solid canvas. Glass presets
-use regular native material with the shared shell tint, keeping forms readable.
-Settings hides its default scroll background. Native grouped form surfaces,
-controls, sheet corners, and keyboard behavior remain in place. Workspace and
-service editors, custom website entry, import preview, recovery, and quick
-switcher all use the shared sheet appearance. System-owned alerts and file
-panels, authentication windows, and web pages keep their own backgrounds.
-Selecting Follow system restores
-the default behavior, so there is no separate Reset Glass Lab action.
+The presets update the main window live. Settings uses the native opaque window
+background and standard grouped forms, following the app's light/dark appearance.
+Paguro-owned sheets use the opaque solid palette through `PaguroSecondarySurface`.
+Neither depends on the shell glass preset. Native controls, sheet corners, and
+keyboard behavior remain in place. Workspace and service editors, custom website
+entry, import preview, recovery, and quick switcher share the sheet appearance.
+System-owned alerts and file panels, authentication windows, and web pages keep
+their own backgrounds. There is no separate Reset Glass Lab action.
 On macOS 15, the glass selector is unavailable and the shell uses a solid tint
 over the native visual-effect fallback.
 The sidebar button uses a 32 point target.
@@ -885,8 +891,8 @@ light appearance and white text in dark appearance. The fixed tint strength
 controls the blend, so Regular retains more selection fill than Clear.
 Collapsed service icons keep their stronger neutral fill across all presets.
 The web page stays on an opaque or quiet semantic background.
-The protective shell tint shares the solid canvas hue: `#18181D` in dark
-appearance and `#F5F4F7` in light appearance. The sidebar uses the matching
+The protective shell tint shares the solid canvas hue: `#181818` in dark
+appearance and `#F5F5F5` in light appearance. The sidebar uses the matching
 solid surface hue. Regular keeps its existing tint opacities and frost.
 Follow system and Clear add no protective tint.
 
@@ -902,7 +908,7 @@ they remain available while Paguro repairs or restores the content store.
 
 On a fresh install, Paguro creates no workspace and no
 service, so the window opens on the first-run welcome screen. Paguro follows
-the system appearance, uses the left rail, shows all workspaces, and appears in
+the system light/dark appearance, starts with glass Off, uses the left rail, shows all workspaces, and appears in
 both the Dock and menu bar. The Dock badge is on. The collapsed rail uses 22 point icons, 26 percent magnification, and a
 top-aligned stack. Automatic cookie-banner acceptance is off. Existing saved
 choices remain unchanged.

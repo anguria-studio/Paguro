@@ -293,6 +293,45 @@ final class FirstRunHomeTests: XCTestCase {
 
     #if DEBUG
     @MainActor
+    func testPreviewShellChoicesResetOnRelaunchWithoutChangingNormalDefaults() throws {
+        let normalGlass = UserDefaults.standard.string(forKey: DefaultsKey.liquidGlassStyle)
+        let normalSidebar = UserDefaults.standard.object(forKey: DefaultsKey.sidebarCollapsed) as? Bool
+        let schema = Schema(versionedSchema: PaguroSchemaVCurrent.self)
+        let first = try FirstRunPreviewConfiguration.makeStore(schema: schema)
+        let preferencesStore = PreferencesStore(context: first.container.mainContext)
+        var shell = ShellPreferences.load(defaults: first.defaults, preferencesStore: preferencesStore)
+        XCTAssertEqual(shell.liquidGlassStyle, .off)
+        XCTAssertEqual(shell.appearanceMode, .system)
+
+        shell.setLiquidGlassStyle(.clear, defaults: first.defaults)
+        shell.setAppearanceMode(.dark, preferencesStore: preferencesStore)
+        shell.setSidebarCollapsed(true, defaults: first.defaults)
+        let reloaded = ShellPreferences.load(defaults: first.defaults, preferencesStore: preferencesStore)
+        XCTAssertEqual(reloaded.liquidGlassStyle, .clear)
+        XCTAssertEqual(reloaded.appearanceMode, .dark)
+        XCTAssertTrue(reloaded.sidebarCollapsed)
+
+        var imported = ConfigurationPreferences()
+        imported.liquidGlassStyle = ShellGlassStyle.regular.rawValue
+        shell.applyConfiguration(imported, defaults: first.defaults)
+        XCTAssertEqual(first.defaults.string(forKey: DefaultsKey.liquidGlassStyle), "regular")
+
+        let second = try FirstRunPreviewConfiguration.makeStore(schema: schema)
+        let fresh = ShellPreferences.load(
+            defaults: second.defaults,
+            preferencesStore: PreferencesStore(context: second.container.mainContext)
+        )
+        XCTAssertEqual(fresh.liquidGlassStyle, .off)
+        XCTAssertEqual(fresh.appearanceMode, .system)
+        XCTAssertFalse(fresh.sidebarCollapsed)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: DefaultsKey.liquidGlassStyle), normalGlass)
+        XCTAssertEqual(
+            UserDefaults.standard.object(forKey: DefaultsKey.sidebarCollapsed) as? Bool,
+            normalSidebar
+        )
+    }
+
+    @MainActor
     func testPreviewStartsEmptyOnEveryLaunchAndNeverOpensNormalStore() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

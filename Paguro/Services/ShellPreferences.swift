@@ -2,6 +2,7 @@ import Foundation
 import PaguroCore
 
 /// Stores the main-window appearance and rail preferences as one value.
+/// Require the launch defaults explicitly so previews cannot use the normal app domain.
 @MainActor
 struct ShellPreferences: Equatable {
     private(set) var liquidGlassStyle: ShellGlassStyle
@@ -28,7 +29,7 @@ struct ShellPreferences: Equatable {
     }
 
     static func load(
-        defaults: UserDefaults = .standard,
+        defaults: UserDefaults,
         preferencesStore: PreferencesStore
     ) -> Self {
         let storedBaseSize = defaults.object(forKey: DefaultsKey.iconRailBaseSize) != nil
@@ -83,7 +84,7 @@ struct ShellPreferences: Equatable {
         value.sidebarCollapsed = sidebarCollapsed
     }
 
-    mutating func applyConfiguration(_ value: ConfigurationPreferences, defaults: UserDefaults = .standard) {
+    mutating func applyConfiguration(_ value: ConfigurationPreferences, defaults: UserDefaults) {
         setLiquidGlassStyle(ShellGlassStyle.resolving(value.liquidGlassStyle), defaults: defaults)
         defaults.removeObject(forKey: DefaultsKey.liquidGlassIntensity)
         setIconRailBaseSize(value.iconRailBaseSize, defaults: defaults)
@@ -96,7 +97,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setLiquidGlassStyle(
         _ style: ShellGlassStyle,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         liquidGlassStyle = style
         defaults.set(style.rawValue, forKey: DefaultsKey.liquidGlassStyle)
@@ -104,7 +105,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setIconRailBaseSize(
         _ value: Double,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         let magnification = iconRailMagnification
         iconRailBaseSize = DockIconSizing.baseSize(value)
@@ -118,7 +119,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setIconRailMagnification(
         _ value: Double,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         let magnification = DockIconSizing.magnification(value)
         iconRailMagnificationEnabled = magnification > 0
@@ -135,7 +136,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setIconRailPosition(
         _ position: DockRailPosition,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         iconRailPosition = position
         defaults.set(position.rawValue, forKey: DefaultsKey.iconRailPosition)
@@ -143,7 +144,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setWorkspaceViewMode(
         _ mode: WorkspaceViewMode,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         workspaceViewMode = mode
         defaults.set(mode.rawValue, forKey: DefaultsKey.workspaceViewMode)
@@ -151,7 +152,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setRailBarIconsOnly(
         _ iconsOnly: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         railBarIconsOnly = iconsOnly
         defaults.set(iconsOnly, forKey: DefaultsKey.railBarIconsOnly)
@@ -159,7 +160,7 @@ struct ShellPreferences: Equatable {
 
     mutating func setSidebarCollapsed(
         _ collapsed: Bool,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults
     ) {
         sidebarCollapsed = collapsed
         defaults.set(collapsed, forKey: DefaultsKey.sidebarCollapsed)
