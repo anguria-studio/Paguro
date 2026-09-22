@@ -19,6 +19,7 @@ Do not copy the official dictionary into this repository.
 - Put a condition before its instruction.
 - Use an imperative verb for an instruction.
 - Avoid slang, idioms, and vague phrases.
+- Do not use em dashes. Use a period, comma, colon, or parentheses.
 - Use a technical name when the general vocabulary has no suitable word.
 - Define a new technical name at its first important use.
 

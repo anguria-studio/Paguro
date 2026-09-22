@@ -21,9 +21,10 @@ from `applicationDidFinishLaunching`. That second phase attaches platform
 observers, timers, WebKit callbacks, background fetchers, and preload work.
 Repeated start calls and start calls after shutdown do nothing.
 
-The notification manager installs its macOS notification delegate while the
-composition root initializes the application state. This timing allows a
-notification action that launches Paguro to wait until navigation is ready.
+`NotificationRuntime.start()` installs the macOS notification delegate after
+AppKit finishes launching, then connects the navigation observers. It starts
+authorization one task turn later. The composition root does not access
+`UNUserNotificationCenter` during initialization.
 
 `StoreLoader` opens or repairs the SwiftData store.
 `StoreRecoveryCoordinator` then prepares any recovery notice and backup picker.
@@ -106,7 +107,11 @@ permission and the island offers, so Paguro has no separate welcome sheet and
 stores no "seen" state for one.
 
 A new install has no workspace and no service. Launch never seeds data.
-`WorkspaceStore.addService` creates Home with the first service in one save.
+The wizard collects a workspace name, service selections, and appearance.
+The name defaults to Personal. `AppState.addSetupServices` sends the complete
+selection to `WorkspaceStore.addServices`, which saves the named workspace and
+its accounts in one transaction. Back and step navigation do not save accounts.
+A failed save keeps the draft available for retry.
 Store recovery still uses `hasEverHadData`, snapshots, and the saved content
 record to detect data loss. Any workspace now counts as user data.
 

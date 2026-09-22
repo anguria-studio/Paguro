@@ -68,6 +68,7 @@ Use ASD-STE100 Simplified Technical English where practical.
 Use short sentences and active voice.
 Use one term for one concept.
 Put one instruction in each numbered step.
+Do not use em dashes in UI text, comments, documentation, or change descriptions.
 
 Add changes that affect users to the `Unreleased` section of
 [CHANGELOG.md](CHANGELOG.md). Group entries under Added, Changed, Fixed,

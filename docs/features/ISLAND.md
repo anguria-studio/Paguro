@@ -1,6 +1,6 @@
 # Island and notch support
 
-Status: in progress
+Status: shipped; hardware validation remains open
 
 ## Purpose
 
@@ -120,7 +120,7 @@ rule in full.
 
 The collapsed state is quiet.
 The collapsed island's counter wings are always solid black. They keep this
-black surface in every glass style and transparency setting, as an extension
+black surface in every Window glass preset, as an extension
 of the camera housing. The collapsed background continues behind the camera.
 It shows the unreviewed count when that count is not zero.
 The counter badge stays legible on the black surface.
@@ -317,15 +317,9 @@ clears all session events. The count is on the left side of the camera housing.
 The text button "Clear All" is on the right side. Its VoiceOver label is
 "Clear all notifications". The island has no close button.
 
-The first controls can include these actions:
-
-- open the active service;
-- mute the active service;
-- turn Do Not Disturb on or off;
-- switch to a recent service;
-- dismiss an event.
-
-Do not add a control that has no clear daily use.
+The current controls open or dismiss an event and clear recent history.
+Mute, App Lock, and service switching remain in the app shell and menu-bar
+window. Do not describe proposed island controls as shipped features.
 
 ## Window type
 
@@ -497,8 +491,9 @@ test.
 The island lives in Settings, which a new user has no reason to open. The
 first-run screen therefore carries an island row while no service exists. The
 row holds the same switch as Settings and writes the same island route. It
-appears only when a connected display has a camera housing, so a Mac that
-cannot show the island is never offered it. See
+appears when the selected display has a camera housing. Move the main window
+to the notched display to see this offer. Settings checks all connected displays
+and can offer the switch while the main window is on an external display. See
 [Native shell](NATIVE_SHELL.md).
 
 ## Non-notched displays
@@ -562,8 +557,8 @@ Paguro draws one continuous background across the panel. There is no camera
 cutout and no second black camera housing on the open surface. The toolbar
 reserves the camera space for layout. A screen recording shows the continuous
 surface; the physical camera obscures that area on the display itself.
-The collapsed counter strip stays solid black, independent of the glass style
-and transparency settings. An empty collapsed island paints nothing.
+The collapsed counter strip stays solid black, independent of the Window glass
+preset. An empty collapsed island paints nothing.
 
 On hardware, the reserved camera rectangle comes from the gap between
 `NSScreen.auxiliaryTopLeftArea` and `auxiliaryTopRightArea`, when the screen has
@@ -571,9 +566,9 @@ a positive top safe-area inset. These are macOS layout bounds, not an exact
 outline of the camera's rounded corners. Simulator presets use a fixed
 164 by 38 point rectangle. The panel does not depend on tracing that outline.
 
-The peek, alert, and expanded states use the shared glass and transparency
-settings. Their surface follows the Window glass style and the shell
-transparency setting. Reduce Transparency replaces this material with an
+The peek, alert, and expanded states use the shared Window glass preset,
+including its fixed tint and frost values and platform fallback. There is no
+separate app transparency slider. Reduce Transparency replaces this material with an
 opaque system background. The island has no added outer border. Increase
 Contrast strengthens the card edges only. In light appearance, card edges use
 10 percent black normally and 30 percent with Increase Contrast.

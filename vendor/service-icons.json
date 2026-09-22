@@ -1,5 +1,5 @@
 {
-  "reviewed": "2026-09-09",
+  "reviewed": "2026-09-22",
   "notes": "Service identification marks. Trademarks belong to their owners. Source URLs record the collection used; hashes identify the bundled files.",
   "icons": [
     {
@@ -379,6 +379,14 @@
       "file": "Paguro/Resources/Assets.xcassets/brand-zoom.imageset/default.svg",
       "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/zoom/default.svg",
       "sha256": "5d1bf4d38bc5fc437578292dafc3cb4a678682e3124f1e2910d817aee9658615"
+    },
+    {
+      "service": "sentry",
+      "variant": "dark",
+      "file": "Paguro/Resources/Assets.xcassets/brand-sentry.imageset/dark.svg",
+      "source": "https://raw.githubusercontent.com/GLINCKER/thesvg/main/public/icons/sentry/default.svg",
+      "modification": "Paguro recolors the bundled Sentry paths off-white for dark appearance.",
+      "sha256": "d95df555f9d57b3035f61a66c7aa941f2431414de2a5b4f09de53465181d9bd9"
     }
   ]
 }

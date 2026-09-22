@@ -81,7 +81,8 @@ and Intel Macs. Get the [latest release](https://github.com/anguria-studio/Pagur
   without carrying login sessions.
 - **Signed updates** in the direct-download build.
 
-Paguro ships 73 preset services and accepts any other site by its URL.
+Paguro ships 73 website presets plus a Notification Test entry. You can also
+add a custom website by its URL.
 Third-party websites control their own features and sign-in requirements.
 Paguro does not guarantee support for every website feature.
 
@@ -113,6 +114,22 @@ microphone access when needed. Paguro itself does not need an account.
 For updates, choose **Paguro → Check for Updates…**. You can enable automatic
 checks in **Settings → About**. Builds made before Sparkle integration need
 one manual installation of a newer DMG.
+
+## Set up Paguro
+
+The welcome step offers notifications and, on the selected notched display,
+island alerts. Choose your services, name the workspace (Personal by default),
+and select several services together. Custom website opens an editor with an
+icon preview. The final step previews the app theme and window glass.
+New installations start with glass Off.
+
+Later, Add service opens the same catalog in the browser area. Its workspace
+menu can create another workspace. Open Settings with **⌘,**, from the Paguro
+menu, or with the gear beside Add service in the expanded sidebar.
+
+Window glass offers Follow system on macOS 27, plus Off, Clear, and Regular.
+macOS 26 offers the three manual presets. macOS 15 uses the solid palette.
+Settings and editor sheets stay opaque and follow the app's light or dark theme.
 
 ## Your data
 
@@ -149,6 +166,9 @@ xcodebuild \
 
 You can also open `Paguro.xcodeproj` in Xcode, choose the **Paguro** scheme,
 and press **⌘R**. Use **Paguro Island Preview** to test a simulated notch.
+Use **Paguro First Run Preview** for a fresh, isolated onboarding run. Its
+services, sign-ins, and appearance choices reset each launch. The normal
+**Paguro** scheme retains your saved development setup.
 Development builds do not contain Sparkle. See [Distribution](docs/features/DISTRIBUTION.md)
 for the signed direct-release build process.
 
@@ -181,6 +201,8 @@ xcodebuild \
 - [Web appearance](docs/features/WEB-APPEARANCE.md)
 - [Service icons](docs/features/SERVICE-ICONS.md)
 - [Compatibility fixture](docs/features/COMPATIBILITY.md)
+- [Configuration transfer](docs/features/CONFIGURATION.md)
+- [Performance comparisons](docs/features/PERFORMANCE.md)
 - [Distribution](docs/features/DISTRIBUTION.md)
 
 ## Contributing

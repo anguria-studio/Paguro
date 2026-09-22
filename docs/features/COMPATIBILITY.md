@@ -150,7 +150,9 @@ Each native notification request has a short trace identifier.
 Use it to follow one request through the native stages.
 
 The title badge poll runs at an interval.
-The visible badge can take up to five seconds to change while the service is active.
+The active polling interval starts at five seconds and can grow to 15 seconds.
+A title change requests a read on the next one-second loop tick. WebKit or page
+delays can extend the visible wait. See [Notification system](NOTIFICATIONS.md).
 Notification events do not increment the unread count.
 The page title or the service DOM is the unread count source.
 This rule prevents duplicate alerts from increasing a badge that the service cannot clear.

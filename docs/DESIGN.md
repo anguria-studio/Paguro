@@ -14,8 +14,8 @@ The expanded sidebar footer places an icon-only Settings gear beside Add
 service. Both use small native bordered buttons and disappear when the sidebar
 collapses. Keep Settings out of the service header.
 
-Selected service icons in the collapsed sidebar use a stronger neutral fill:
-black at 14 percent in light appearance and white at 20 percent in dark appearance.
+Selected service icons in the collapsed sidebar use a stronger neutral fill.
+Light appearance uses 14 percent black; dark appearance uses 20 percent white.
 Keep this fill across glass presets. Increase Contrast raises it to 22 and 30
 percent respectively. Expanded rows retain their existing fill and bold label.
 
@@ -74,8 +74,8 @@ the same workspace editor and keyboard focus.
 Selected cards have a checkmark and an accent border. A fixed footer holds
 Back and Continue without a selection count. Back keeps the selection.
 Continue opens Appearance without saving any workspace or service. The third
-step offers Follow System, Light, and Dark themes and the four Liquid Glass
-presets. Small window illustrations show light and dark themes and differences
+step offers Follow System, Light, and Dark themes. macOS 27 offers four Liquid
+Glass presets; macOS 26 offers Off, Clear, and Regular. Small window illustrations show light and dark themes and differences
 in glass density. Use the same sample backdrop for every glass choice. These
 are illustrations; the full shell previews the actual preference live. Keep
 preview shapes out of the accessibility tree. Choices persist as normal preferences.
@@ -349,7 +349,7 @@ password authentication only when the user activates Unlock. Cancelling the
 prompt leaves the lock screen in place.
 
 The lock screen uses the same behind-window glass and protective tint as the
-empty-service view. It follows Window glass and Shell transparency settings.
+empty-service view. It follows the Window glass preset and its fixed tint.
 Hide the service content and sidebar while locked, including from hit testing
 and accessibility. The glass must not reveal service content.
 

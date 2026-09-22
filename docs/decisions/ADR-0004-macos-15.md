@@ -10,8 +10,12 @@ Replaces [ADR-0003](ADR-0003-macos-26.md).
 
 ADR-0003 required macOS 26 so the shell could use Liquid Glass without a
 second visual implementation. A test build reached a person running macOS
-15.7.7, who could not open it. Apple also ended Intel support with macOS 26,
-so those Macs stay below the floor for good rather than catching up.
+15.7.7, who could not open it. Some Intel Macs cannot upgrade to macOS 26,
+so a macOS 26 floor would exclude them permanently.
+
+Factual correction, September 22, 2026: macOS 26 still supports selected Intel
+Macs. See [Apple's compatibility list](https://support.apple.com/122867).
+This correction does not change the accepted macOS 15 deployment floor.
 
 A build at a macOS 14 target reported 23 availability errors and no other
 errors. Eight of them belong to scroll and window APIs that arrived in macOS
