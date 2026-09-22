@@ -7,7 +7,6 @@ import Sparkle
 #endif
 
 struct SettingsView: View {
-    @Environment(AppState.self) private var appState
     #if DIRECT_DISTRIBUTION
     let updater: SPUUpdater
 
@@ -42,7 +41,7 @@ struct SettingsView: View {
         }
         .frame(width: 520, height: 460)
         .containerBackground(for: .window) {
-            PaguroSecondarySurface(glassStyle: appState.liquidGlassStyle)
+            Color(nsColor: .windowBackgroundColor)
         }
     }
 
@@ -263,7 +262,6 @@ struct GeneralSettingsView: View {
             ConfigurationSettingsSection()
         }
         .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     private static let zoomLevels: [Double] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5]
@@ -336,7 +334,6 @@ struct NotificationSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
         // A display can change while Settings is closed, so read it again here.
         .onAppear {
             appModel.refreshNotchedDisplay()
@@ -623,7 +620,6 @@ struct PrivacySettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 }
 
@@ -680,7 +676,6 @@ struct AboutSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder

@@ -20,6 +20,8 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertTrue(row.showBadgeCountInDock)
         XCTAssertFalse(row.autoDismissCookieBanners)
         XCTAssertEqual(preferences.appearanceMode, .system)
+        XCTAssertEqual(preferences.liquidGlassStyle, .off)
+        XCTAssertEqual(preferences.liquidGlassIntensity, 0)
         XCTAssertEqual(preferences.railLayout, .sidebar)
         XCTAssertFalse(preferences.sidebarCollapsed)
         XCTAssertEqual(preferences.workspaceViewMode, .all)
@@ -90,7 +92,7 @@ final class ShellPreferencesTests: XCTestCase {
         )
 
         XCTAssertEqual(preferences.liquidGlassStyle, ShellGlassDefaults.style)
-        XCTAssertEqual(preferences.liquidGlassIntensity, 1)
+        XCTAssertEqual(preferences.liquidGlassIntensity, 0)
         XCTAssertEqual(preferences.iconRailBaseSize, DockIconSizing.minimumBaseSize)
         XCTAssertEqual(
             preferences.iconRailMagnifiedSize,

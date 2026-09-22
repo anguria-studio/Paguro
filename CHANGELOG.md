@@ -4,6 +4,23 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Add Service uses a solid neutral background inside the rounded browser frame
+  so the catalog stays readable with Liquid Glass enabled.
+
+- First Run Preview resets shell appearance on each launch, starting with glass
+  Off, without reading or overwriting the normal app appearance settings.
+
+- The shell and editor palette uses neutral grays without the purple undertone,
+  including Regular glass tint and selected sidebar rows.
+
+- New installations start with window glass Off. Setup previews glass choices
+  in the Appearance step; saved choices on existing installations stay unchanged.
+- Settings uses its native opaque background, and editor sheets use the solid
+  app palette. Both follow the app theme independently of window glass.
+
+- Horizontal service and workspace headers now share the window glass with
+  the sidebar layout, removing the extra dark material band.
+
 ## [1.0.6] - 2026-09-21
 
 Version 1.0.6, build 15. Direct download release only.

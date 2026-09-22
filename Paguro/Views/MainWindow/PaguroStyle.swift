@@ -281,7 +281,7 @@ extension ShellGlassStyle {
 
 /// Default preset for a new installation.
 enum ShellGlassDefaults {
-    static let style = ShellGlassStyle.system
+    static let style = ShellGlassStyle.off
 }
 
 enum DockRailPosition: String, CaseIterable {
@@ -410,24 +410,24 @@ enum PaguroColor {
         })
     }
 
-    /// Opaque shell surfaces share a restrained violet undertone.
+    /// Opaque shell surfaces use neutral grays with distinct brightness levels.
     enum Solid {
         static func canvasColor(isDark: Bool) -> NSColor {
             isDark
-                ? NSColor(srgbRed: 24 / 255, green: 24 / 255, blue: 29 / 255, alpha: 1)
-                : NSColor(srgbRed: 245 / 255, green: 244 / 255, blue: 247 / 255, alpha: 1)
+                ? NSColor(srgbRed: 24 / 255, green: 24 / 255, blue: 24 / 255, alpha: 1)
+                : NSColor(srgbRed: 245 / 255, green: 245 / 255, blue: 245 / 255, alpha: 1)
         }
 
         static let canvas = PaguroColor.dynamic(
             light: canvasColor(isDark: false), dark: canvasColor(isDark: true)
         )
         static let surface = PaguroColor.dynamic(
-            light: NSColor(srgbRed: 236 / 255, green: 235 / 255, blue: 240 / 255, alpha: 1),
-            dark: NSColor(srgbRed: 32 / 255, green: 32 / 255, blue: 38 / 255, alpha: 1)
+            light: NSColor(srgbRed: 236 / 255, green: 236 / 255, blue: 236 / 255, alpha: 1),
+            dark: NSColor(srgbRed: 32 / 255, green: 32 / 255, blue: 32 / 255, alpha: 1)
         )
         static let card = PaguroColor.dynamic(
             light: .white,
-            dark: NSColor(srgbRed: 40 / 255, green: 40 / 255, blue: 48 / 255, alpha: 1)
+            dark: NSColor(srgbRed: 40 / 255, green: 40 / 255, blue: 40 / 255, alpha: 1)
         )
     }
 
@@ -465,7 +465,7 @@ enum PaguroColor {
         )
         static let sidebarSelection = PaguroColor.dynamic(
             light: .black.withAlphaComponent(0.045),
-            dark: NSColor(srgbRed: 0.173, green: 0.169, blue: 0.184, alpha: 1)
+            dark: NSColor(srgbRed: 44 / 255, green: 44 / 255, blue: 44 / 255, alpha: 1)
         )
         static let sidebarAdaptiveSelection = PaguroColor.dynamic(
             light: .black.withAlphaComponent(0.08),
