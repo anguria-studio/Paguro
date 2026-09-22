@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- The menu-bar panel uses the standard macOS background and system appearance,
+  independently of the main window's theme and Liquid Glass preset.
+
 ## [1.0.7] - 2026-09-22
 
 Version 1.0.7, build 16.
