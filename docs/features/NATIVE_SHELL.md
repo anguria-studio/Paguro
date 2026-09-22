@@ -821,7 +821,9 @@ edges.
 The content column keeps an 8 point gutter on the right and bottom edges.
 The top-bar layout also keeps an 8 point gutter on the browser's left edge.
 The horizontal rail forms the upper part of the frame around the browser.
-The horizontal rail has no bottom separator.
+The horizontal rail has no bottom separator. Both horizontal service and
+workspace rails use the same shell canvas tint as the sidebar layout header.
+They add no separate material, so the window glass remains continuous.
 The header starts at the window top and uses the native 52 point centerline.
 The header does not compress when the window becomes short.
 The browser and sidebar scroll viewport use the remaining height.

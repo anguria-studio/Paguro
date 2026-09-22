@@ -133,6 +133,10 @@ keeps a uniform canvas through the footer; cards provide the surface contrast.
 Preserve readable text, visible selection, and distinct notification cards
 when Reduce Transparency or Increase Contrast is enabled.
 
+All main-window headers use the shared shell canvas tint over the window
+backdrop. Horizontal service and workspace rails must not add a second material
+layer. Switching layouts keeps the same glass appearance.
+
 Settings and Paguro-owned sheets share the shell palette and app appearance.
 Use the solid canvas with glass Off, on older systems, or with Reduce Transparency.
 Glass presets use native material with the shared shell tint for readable forms.

@@ -8,6 +8,48 @@ import PaguroCore
 
 final class NativeShellTests: XCTestCase {
     @MainActor
+    func testRailBarDoesNotAddAnotherMaterialOverWindowGlass() async throws {
+        for scheme in [ColorScheme.light, .dark] {
+            for style in ShellGlassStyle.allCases {
+                let view = Color.clear
+                    .frame(width: 160)
+                    .railBarSurface(glassIntensity: style.transparency)
+                    .environment(\.colorScheme, scheme)
+                // The drag handle is AppKit-backed, so use native rendering.
+                let panel = NSPanel(
+                    contentRect: NSRect(x: -2000, y: -2000, width: 160, height: 52),
+                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false
+                )
+                panel.isReleasedWhenClosed = false
+                panel.isOpaque = false
+                panel.backgroundColor = .clear
+                defer { panel.close() }
+                let host = NSHostingView(rootView: view)
+                host.sizingOptions = []
+                host.safeAreaRegions = []
+                panel.contentView = host
+                panel.orderBack(nil)
+                try await Task.sleep(for: .milliseconds(100))
+                host.layoutSubtreeIfNeeded()
+                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                let pixel = try XCTUnwrap(bitmap.colorAt(
+                    x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2
+                ))
+                // Glass comes from the window behind this view. Only Regular
+                // adds a 1.2 percent structural tint; Off covers it completely.
+                let expectedAlpha: CGFloat = switch style {
+                case .system, .clear: 0
+                case .regular: 0.012
+                case .off: 1
+                }
+                XCTAssertEqual(pixel.alphaComponent, expectedAlpha, accuracy: 1.0 / 255,
+                               "Unexpected header opacity for \(style) in \(scheme)")
+            }
+        }
+    }
+
+    @MainActor
     func testSecondarySurfaceRendersWithoutTheAppEnvironment() async {
         // SwiftUI relocates window backgrounds outside the content hierarchy.
         for style in ShellGlassStyle.allCases {

@@ -49,7 +49,7 @@ struct WorkspaceBarView: View {
             WebContentActions(webViewState: appState.webViewState)
                 .padding(.trailing, 10)
         }
-        .railBarSurface()
+        .railBarSurface(glassIntensity: appState.liquidGlassIntensity)
         .onChange(of: modelSpaces.map(\.id)) { _, modelOrder in
             railReorder.settle(modelOrder: modelOrder)
         }

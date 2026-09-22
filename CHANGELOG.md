@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Horizontal service and workspace headers now share the window glass with
+  the sidebar layout, removing the extra dark material band.
+
 ## [1.0.6] - 2026-09-21
 
 Version 1.0.6, build 15. Direct download release only.

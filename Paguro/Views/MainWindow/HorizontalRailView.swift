@@ -24,17 +24,20 @@ struct RailBarGroup: Identifiable {
 /// cell drag can reorder, and the handle gives it back from every empty part of
 /// the band.
 struct RailBarSurface: ViewModifier {
+    let glassIntensity: Double
+
     func body(content: Content) -> some View {
         content
             .frame(height: PaguroMetric.Toolbar.height)
             .background(WindowDragHandle())
-            .paguroMaterialBackground(.regularMaterial)
+            // The window supplies the glass. A second material darkens this band.
+            .background(PaguroColor.shellCanvas(intensity: glassIntensity))
     }
 }
 
 extension View {
-    func railBarSurface() -> some View {
-        modifier(RailBarSurface())
+    func railBarSurface(glassIntensity: Double) -> some View {
+        modifier(RailBarSurface(glassIntensity: glassIntensity))
     }
 }
 
@@ -115,7 +118,7 @@ struct HorizontalRailView<SpaceHeader: View, WorkspaceLabel: View, ServiceCell: 
             WebContentActions(webViewState: appState.webViewState)
                 .padding(.trailing, 10)
         }
-        .railBarSurface()
+        .railBarSurface(glassIntensity: appState.liquidGlassIntensity)
         .overlayPreferenceValue(RailTabTooltipKey.self) { tooltip in
             tabTooltip(tooltip)
         }
