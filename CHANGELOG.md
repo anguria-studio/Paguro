@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-09-22
+
+Version 1.0.7, build 16.
+
 - Add Service uses a solid neutral background inside the rounded browser frame
   so the catalog stays readable with Liquid Glass enabled.
 
@@ -232,7 +236,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.6...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.7...main
+[1.0.7]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.7
 [1.0.6]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.6
 [1.0.5]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.5
 [1.0.4]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.4
