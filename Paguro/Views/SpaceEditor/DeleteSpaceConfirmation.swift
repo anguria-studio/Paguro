@@ -18,21 +18,21 @@ struct DeleteSpaceConfirmation: ViewModifier {
                 get: { space != nil },
                 set: { if !$0 { space = nil } }
             ),
-            titleVisibility: .visible
-        ) {
+            titleVisibility: .visible,
+            presenting: space
+        ) { target in
             Button("Delete", role: .destructive) {
-                if let space { onDelete(space) }
+                onDelete(target)
                 space = nil
             }
             .buttonStyle(.borderedProminent)
             .tint(.red)
-        } message: {
-            Text(message)
+        } message: { target in
+            Text(message(for: target))
         }
     }
 
-    private var message: String {
-        guard let space else { return "" }
+    private func message(for space: Space) -> String {
         return WorkspaceDeletionMessage.text(
             orphanedServiceCount: appState.orphanedServiceCount(byDeletingSpace: space.id)
         )

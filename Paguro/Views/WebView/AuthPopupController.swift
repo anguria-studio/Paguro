@@ -3,7 +3,7 @@ import PaguroCore
 import Foundation
 import WebKit
 
-/// Owns the window and lifecycle of one authentication or new-window popup.
+/// Owns a popup and any child popups that depend on its opener.
 @MainActor
 final class AuthPopupController: NSObject, NSWindowDelegate {
     private var popupWebView: WKWebView?
@@ -13,6 +13,18 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
     private var openerFallbackURL: URL?
     private var openedAtAuthenticationHost = false
     private var crashTimestamps: [Date] = []
+    private var childController: AuthPopupController?
+    private let presentWindow: (NSWindow) -> Void
+    private let managesServiceCompletion: Bool
+
+    init(managesServiceCompletion: Bool = true, presentWindow: @escaping (NSWindow) -> Void = {
+        $0.center()
+        $0.makeKeyAndOrderFront(nil)
+    }) {
+        self.presentWindow = presentWindow
+        self.managesServiceCompletion = managesServiceCompletion
+        super.init()
+    }
 
     deinit {
         titleObservation?.invalidate()
@@ -34,6 +46,18 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
         navigationDelegate: any WKNavigationDelegate,
         uiDelegate: any WKUIDelegate
     ) -> WKWebView? {
+        // A child keeps the live window.opener that owns the sign-in callback.
+        if isPopup(opener) {
+            let child = childController ?? AuthPopupController(
+                managesServiceCompletion: false, presentWindow: presentWindow
+            )
+            childController = child
+            return child.createWebView(
+                with: configuration, for: navigationAction, windowFeatures: windowFeatures,
+                opener: opener, fallbackURL: nil,
+                navigationDelegate: navigationDelegate, uiDelegate: uiDelegate
+            )
+        }
         // Real same-service links can reuse the current view. Programmatic
         // window.open calls need a real window handle or sign-in flows can
         // mistake the request for a blocked popup.
@@ -75,8 +99,7 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
         window.delegate = self
         window.contentView = popup
         window.title = navigationAction.request.url?.host ?? "Paguro"
-        window.center()
-        window.makeKeyAndOrderFront(nil)
+        presentWindow(window)
 
         popupWebView = popup
         popupWindow = window
@@ -85,13 +108,15 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
     }
 
     func isPopup(_ webView: WKWebView) -> Bool {
-        webView === popupWebView
+        webView === popupWebView || childController?.isPopup(webView) == true
     }
 
     /// Handles a completed popup navigation and closes a returned sign-in flow.
     /// Returns true when the web view is the managed popup.
     func handleNavigationFinished(_ webView: WKWebView) -> Bool {
-        guard isPopup(webView) else { return false }
+        if childController?.handleNavigationFinished(webView) == true { return true }
+        guard webView === popupWebView else { return false }
+        guard managesServiceCompletion else { return true }
         if WebRoutingPolicy.shouldCloseAuthenticationPopup(
             openedAtAuthenticationHost: openedAtAuthenticationHost,
             landedHost: webView.url?.host,
@@ -113,12 +138,15 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
         within window: TimeInterval,
         shouldAutoReload: ([Date], Date) -> Bool
     ) -> Bool {
-        guard isPopup(webView) else { return false }
+        if childController?.handleProcessTermination(
+            webView, at: now, within: window, shouldAutoReload: shouldAutoReload
+        ) == true { return true }
+        guard webView === popupWebView else { return false }
         crashTimestamps.append(now)
         crashTimestamps = crashTimestamps.filter { now.timeIntervalSince($0) <= window }
 
         guard shouldAutoReload(crashTimestamps, now) else {
-            AppLogger.webView.error("OAuth popup WebContent terminated repeatedly — closing popup")
+            AppLogger.webView.error("OAuth popup WebContent terminated repeatedly; closing popup")
             cleanup()
             return true
         }
@@ -128,7 +156,8 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
 
     /// Handles a popup that closes itself with JavaScript.
     func handleWebViewDidClose(_ webView: WKWebView) -> Bool {
-        guard isPopup(webView) else { return false }
+        if childController?.handleWebViewDidClose(webView) == true { return true }
+        guard webView === popupWebView else { return false }
         reloadOpener(selfClosed: true)
         cleanup()
         return true
@@ -152,7 +181,7 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
     }
 
     private func reloadOpener(selfClosed: Bool) {
-        guard WebRoutingPolicy.shouldReloadOpener(
+        guard managesServiceCompletion, WebRoutingPolicy.shouldReloadOpener(
             selfClosed: selfClosed,
             openedAtAuthenticationHost: openedAtAuthenticationHost
         ), let opener = openerWebView else { return }
@@ -170,6 +199,8 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
     }
 
     private func cleanup(closeWindow: Bool = true) {
+        childController?.cleanup()
+        childController = nil
         titleObservation?.invalidate()
         titleObservation = nil
         popupWebView?.navigationDelegate = nil

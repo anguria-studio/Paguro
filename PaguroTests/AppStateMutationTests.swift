@@ -258,6 +258,59 @@ final class WorkspaceStoreMutationTests: XCTestCase {
     }
 
     @MainActor
+    func testRemovingLastMembershipDeletesOnlyThatService() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let space = Space(name: "Personal", emoji: "")
+        let removed = ServiceInstance(label: "Removed", url: "https://removed.example")
+        let retained = ServiceInstance(label: "Retained", url: "https://retained.example")
+        context.insert(space)
+        context.insert(removed)
+        context.insert(retained)
+        let link = ModelFixtures.link(removed, to: space, sortOrder: 0, in: context)
+        ModelFixtures.link(retained, to: space, sortOrder: 1, in: context)
+        try context.save()
+        let removedID = removed.id
+        let dataStoreID = removed.dataStoreIdentifier
+        let store = makeStore(context: context)
+
+        let outcome = try XCTUnwrap(store.removeLink(link.id))
+
+        XCTAssertEqual(outcome.serviceID, removedID)
+        XCTAssertEqual(outcome.orphanedDataStoreIdentifier, dataStoreID)
+        XCTAssertEqual(store.allServices().map(\.id), [retained.id])
+        XCTAssertEqual(try store.liveLinks().map { $0.service.id }, [retained.id])
+        let saved = ModelContext(container)
+        XCTAssertEqual(try saved.fetch(FetchDescriptor<ServiceInstance>()).map(\.id), [retained.id])
+        XCTAssertEqual(try saved.fetchCount(FetchDescriptor<SpaceServiceLink>()), 1)
+    }
+
+    @MainActor
+    func testRemovingSharedMembershipPreservesTheAccountInItsOtherWorkspace() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let context = container.mainContext
+        let first = Space(name: "Personal", emoji: "")
+        let second = Space(name: "Work", emoji: "")
+        let service = ServiceInstance(label: "Shared", url: "https://shared.example")
+        context.insert(first)
+        context.insert(second)
+        context.insert(service)
+        let removed = ModelFixtures.link(service, to: first, sortOrder: 0, in: context)
+        let retained = ModelFixtures.link(service, to: second, sortOrder: 0, in: context)
+        try context.save()
+        let store = makeStore(context: context)
+
+        let outcome = try XCTUnwrap(store.removeLink(removed.id))
+
+        XCTAssertNil(outcome.orphanedDataStoreIdentifier)
+        XCTAssertEqual(store.allServices().map(\.id), [service.id])
+        XCTAssertEqual(try store.liveLinks().map(\.id), [retained.id])
+        let saved = ModelContext(container)
+        XCTAssertEqual(try saved.fetchCount(FetchDescriptor<ServiceInstance>()), 1)
+        XCTAssertEqual(try saved.fetch(FetchDescriptor<SpaceServiceLink>()).map(\.id), [retained.id])
+    }
+
+    @MainActor
     func testMuteMutationsReturnAffectedServicesAndPersist() throws {
         let container = try ModelFixtures.groupingContainer()
         let context = container.mainContext

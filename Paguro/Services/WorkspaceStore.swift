@@ -405,8 +405,11 @@ final class WorkspaceStore {
         let dataStoreIdentifier = service.dataStoreIdentifier
         let hasOtherLinks = links.contains { $0.id != linkID && $0.service.id == serviceID }
 
-        context.delete(link.link)
-        if !hasOtherLinks {
+        if hasOtherLinks {
+            context.delete(link.link)
+        } else {
+            // The service cascade removes its last membership. Deleting that
+            // link first can leave SwiftData inspecting an invalidated child.
             context.delete(service)
         }
         guard context.saveOrRollback(reason: "remove service link") else { return nil }

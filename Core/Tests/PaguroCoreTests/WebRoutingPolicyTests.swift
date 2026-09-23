@@ -91,9 +91,13 @@ final class WebRoutingPolicyTests: XCTestCase {
             selfClosed: false,
             openedAtAuthenticationHost: false
         ))
-        XCTAssertTrue(WebRoutingPolicy.shouldReloadOpener(
+        XCTAssertFalse(WebRoutingPolicy.shouldReloadOpener(
             selfClosed: true,
             openedAtAuthenticationHost: false
+        ))
+        XCTAssertFalse(WebRoutingPolicy.shouldReloadOpener(
+            selfClosed: true,
+            openedAtAuthenticationHost: true
         ))
         XCTAssertTrue(WebRoutingPolicy.shouldReloadOpener(
             selfClosed: false,
