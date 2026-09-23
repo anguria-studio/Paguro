@@ -78,14 +78,18 @@ Closing a window does not stop badge polling or notification detection.
 On a fresh install, Paguro appears in both the Dock and menu bar and shows the
 unread badge on its Dock icon. Existing saved choices remain unchanged.
 
-The "Show Paguro in" setting has three modes:
+Settings exposes two switches:
 
-- Dock only: Paguro removes the menu-bar item and keeps the Dock icon.
-- Menu bar only: Paguro hides the Dock icon after the last window closes.
-- Both: Paguro shows the Dock icon and the menu-bar item.
+- Show in menu bar adds or removes the menu-bar item.
+- Hide Dock icon when the window is closed appears only while the menu-bar
+  item is enabled. It hides the Dock icon after the last window closes.
+  Opening a window restores the Dock icon.
 
-When the user drags the item off the menu bar, Paguro changes the mode to
-"Dock only" so the app stays reachable.
+Existing saved modes remain compatible. Dock only turns the first switch off.
+Both turns only the first switch on. Menu bar only turns both switches on.
+Turning off Show in menu bar also keeps the Dock icon visible so the app stays
+reachable. Turning it back on leaves Dock hiding off until the user enables it.
+Dragging the item off the menu bar applies the same safe behavior.
 
 The menu-bar item uses the Paguro shell template. macOS supplies its tint for
 light and dark menu bars. The vector has thin transparent spiral seams on a
@@ -96,7 +100,7 @@ An empty service list alone does not dim the icon.
 The menu-bar item opens a native status window. The window can select a
 service, toggle global notification mute, lock Paguro, open the main window,
 or open Settings. This window is the complete application route
-while Paguro runs in Menu bar only mode.
+while Paguro runs with its Dock icon hidden.
 
 ## First run
 

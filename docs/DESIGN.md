@@ -143,10 +143,13 @@ All main-window headers use the shared shell canvas tint over the window
 backdrop. Horizontal service and workspace rails must not add a second material
 layer. Switching layouts keeps the same glass appearance.
 
-Settings uses the native opaque window background and grouped forms. It follows
+Settings uses the native opaque window background and grouped forms. Window glass
+uses a native menu, consistent with the adjacent appearance controls. Settings follows
 the app's light or dark appearance independently of the shell glass preset.
 Paguro-owned sheets use the opaque solid canvas through `PaguroSecondarySurface`.
-Keep native controls and sheet geometry. Workspace, service, custom website,
+Keep native controls and sheet geometry. In Edit service, use a native menu for
+Web appearance so its label and chosen value fit on one row.
+Workspace, service, custom website,
 import, recovery, and quick-switcher sheets share this treatment. System alerts,
 file panels, and website windows keep their own surfaces.
 

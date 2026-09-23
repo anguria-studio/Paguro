@@ -62,15 +62,21 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section("Dock & Menu Bar") {
-                Picker("Show Paguro in", selection: Binding(
-                    get: { appModel.presenceController.mode },
-                    set: { mode in
-                        appModel.setPresenceMode(mode)
+                Toggle("Show in menu bar", isOn: Binding(
+                    get: { appModel.presenceController.mode.showsMenuBarItem },
+                    set: { enabled in
+                        appModel.setPresenceMode(enabled ? .both : .dock)
                     }
-                )) {
-                    Text("Dock only").tag(AppPresenceMode.dock)
-                    Text("Menu bar only").tag(AppPresenceMode.menuBar)
-                    Text("Both").tag(AppPresenceMode.both)
+                ))
+
+                if appModel.presenceController.mode.showsMenuBarItem {
+                    Toggle("Hide Dock icon when the window is closed", isOn: Binding(
+                        get: { !appModel.presenceController.mode.showsDockIcon },
+                        set: { hidden in
+                            appModel.setPresenceMode(hidden ? .menuBar : .both)
+                        }
+                    ))
+                    .help("Paguro keeps running in the menu bar. The Dock icon returns when you open a window.")
                 }
 
                 Toggle("Show badge count on Dock icon", isOn: Binding(
@@ -98,7 +104,7 @@ struct GeneralSettingsView: View {
                             Text(style.displayName).tag(style)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     .help("Choose a preset for the Paguro shell. Web pages stay unchanged.")
                 }
 

@@ -495,9 +495,9 @@ Global mute, quiet hours, or all-service mute hide the counter and show the
 muted bell in its place. Unmuting restores the counter from the retained counts.
 
 The Dock icon must be present for the badge.
-The Settings picker "Show Paguro in" controls the Dock icon.
-In "Menu bar only" mode the Dock icon goes away after the last window closes,
-so the Dock can show no badge in that mode.
+The Settings switch "Hide Dock icon when the window is closed" controls this
+behavior. When enabled, the Dock icon goes away after the last window closes,
+so the Dock can show no badge until a window opens again.
 
 `BadgeManager` writes one log line for each change of the badge.
 Use this command to read the current state:

@@ -122,7 +122,7 @@ struct EditServiceSheet: View {
                             Text(mode.displayName).tag(mode)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     .help("Paguro sends this color scheme to websites that support it. Paguro does not recolor the page.")
 
                     if let errorMessage {
@@ -211,8 +211,6 @@ struct EditServiceSheet: View {
                 appState.clearSession(for: service.id)
                 dismiss()
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
         } message: {
             Text("This clears this service's cookies and storage on this Mac. You'll need to sign in again.")
         }

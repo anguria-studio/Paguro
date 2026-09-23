@@ -242,29 +242,9 @@ struct UnifiedRailView: View {
         .sheet(item: $editingSpace) { space in
             SpaceEditorSheet(editingSpace: space, selectedSpaceID: $selectedSpaceID)
         }
-        .confirmationDialog(
-            "Delete \(confirmingDelete?.service.label ?? "service")?",
-            isPresented: Binding(
-                get: { confirmingDelete != nil },
-                set: { if !$0 { confirmingDelete = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: confirmingDelete
-        ) { link in
-            // SwiftUI can clear presentation state before it runs the action.
-            let serviceID = link.service.id
-            Button("Delete", role: .destructive) {
-                appState.deleteService(serviceID)
-                confirmingDelete = nil
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-        } message: { _ in
-            Text("This will permanently remove the service and all its data.")
+        .deleteServiceConfirmation(link: $confirmingDelete) { serviceID in
+            appState.deleteService(serviceID)
         }
-        // Kept on the outside of the service dialog above rather than beside it:
-        // two confirmation dialogs bound to one view can race when both are
-        // attached at the same level, and only one of these is ever up.
         .deleteSpaceConfirmation(space: $confirmingDeleteSpace) { space in
             appState.deleteSpace(space.id)
         }

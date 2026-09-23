@@ -94,13 +94,13 @@ date. Include compatibility changes and any required user action. Keep an
 Use the released section as the source for the GitHub release notes.
 
 Use the `bin` directory from the official pinned Sparkle distribution.
-This example names the 1.0.8 candidate. For a new release, use its approved
+This example names the 1.0.9 candidate. For a new release, use its approved
 version, a higher unused build number, and a new output directory:
 
 ```sh
 python3 scripts/build_release.py \
-  --version 1.0.8 --build 17 \
-  --output .project/releases/1.0.8-17 \
+  --version 1.0.9 --build 18 \
+  --output .project/releases/1.0.9-18 \
   --sparkle-tools .project/sparkle-tools/bin
 ```
 
@@ -118,7 +118,7 @@ app, release manifest, DMG, signed appcast, and checksums. Only files under
 `assets` are release downloads. Increase the build number for each update.
 
 The `assets` directory holds two copies of the disk image. The versioned name,
-for example `Paguro-1.0.8-17.dmg`, is the address that the update feed and a
+for example `Paguro-1.0.9-18.dmg`, is the address that the update feed and a
 package manager use, because its content never changes. `Paguro.dmg` is the
 same file under a fixed name. It gives the website one permanent link:
 `https://github.com/anguria-studio/Paguro/releases/latest/download/Paguro.dmg`.

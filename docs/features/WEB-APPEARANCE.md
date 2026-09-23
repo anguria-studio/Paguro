@@ -13,7 +13,8 @@ Automatic is the default.
 It follows the effective Paguro window appearance.
 Therefore, a service starts dark when Paguro is dark.
 
-The service editor also has Always Light and Always Dark overrides.
+The service editor uses a native Web appearance menu with Follow Paguro,
+Always Light, and Always Dark. The compact menu keeps the label on one row.
 The content header does not show an appearance action.
 A persistent header action would imply that Paguro can recolor every service,
 but many services ignore or override the browser preference.

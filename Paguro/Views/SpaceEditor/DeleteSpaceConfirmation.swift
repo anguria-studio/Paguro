@@ -25,8 +25,6 @@ struct DeleteSpaceConfirmation: ViewModifier {
                 onDelete(target)
                 space = nil
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
         } message: { target in
             Text(message(for: target))
         }

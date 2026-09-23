@@ -4,6 +4,19 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-09-23
+
+Version 1.0.9, build 18. Direct download release only.
+
+- Replace Show Paguro in with clear switches for menu-bar visibility and hiding
+  the Dock icon when the window is closed, preserving existing preferences.
+- Use a native Window glass menu in Settings to keep appearance controls compact.
+- Use a compact Web appearance menu in Edit service so its label stays readable.
+- Keep the service Log Out confirmation action available on macOS 15 by using
+  native button styling.
+- Restore service and workspace deletion actions on macOS 15 by using native
+  confirmation buttons without custom styling.
+
 ## [1.0.8] - 2026-09-23
 
 Version 1.0.8, build 17. Direct download release only.
@@ -248,7 +261,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.8...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.9...main
+[1.0.9]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.9
 [1.0.8]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.8
 [1.0.7]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.7
 [1.0.6]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.6

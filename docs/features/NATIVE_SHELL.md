@@ -844,7 +844,8 @@ The native web view is the browser surface.
 Its host clips all four corners with a 14 point continuous radius.
 
 Each service control uses its own native circular surface.
-The Window glass selector has four presets and no separate transparency slider:
+Settings uses a native Window glass menu, with four presets and no separate
+transparency slider:
 
 | Preset | Native material | Extra backdrop frost | Protective tint |
 | --- | --- | --- | --- |
@@ -943,7 +944,7 @@ Lock closes the menu and uses the same app-lock route as File > Lock Now. It
 is hidden when App Lock is off or Paguro is already locked.
 The app name and shell mark open the main window, including
 when no services exist. The window has no footer. These routes remain available
-in Menu bar only mode. macOS supplies the native MenuBarExtra window background,
+with the Dock icon hidden. macOS supplies the native MenuBarExtra window background,
 light or dark appearance, and accessibility treatment. The window does not use
 Paguro's Window glass preset or app theme. Do not replace the container background
 with shell tint or another glass layer. Header controls use a circular semantic
@@ -986,8 +987,11 @@ Each cell then moves directly to its new position.
 
 ## Service removal
 
-Service and workspace deletion confirmations capture their target when the
-dialog is presented. Dismissing the dialog must not clear the target before
+Service and workspace deletion confirmations use unmodified native buttons.
+Do not apply button styles or tint modifiers inside the dialog action builder:
+macOS 15 can discard those actions and show an OK-only fallback dialog.
+The destructive role supplies the native appearance. Confirmations capture
+their target when the dialog is presented. Dismissing the dialog must not clear the target before
 the confirmed action runs. Removing the last service membership deletes the
 service and lets SwiftData cascade to its links in one save. Removing a shared
 membership preserves the account in its other workspaces. WebKit data cleanup
