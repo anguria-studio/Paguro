@@ -52,12 +52,8 @@ final class ServiceInstance {
     var cameraPolicyRaw: String?
     var microphonePolicyRaw: String?
 
-    /// Open a link that leaves this service in an in-app Paguro window instead of
-    /// the system browser. Only affects links that no other Paguro service owns —
-    /// a link matching another service still switches to it. Optional for
-    /// SwiftData lightweight migration; nil is treated as off (today's behaviour:
-    /// external links open in the default browser). Read via
-    /// `opensExternalLinksInAppEffective`.
+    /// Overrides the global destination for links that no configured service owns.
+    /// nil follows the global setting. Explicit values keep the account choice.
     var openExternalLinksInApp: Bool?
 
     /// Report the page as focused even while Paguro is in the background, so a
@@ -124,8 +120,8 @@ final class ServiceInstance {
         set { microphonePolicyRaw = newValue.rawValue }
     }
 
-    /// Materialises the storage-optional in-app-links flag (nil → false), so
-    /// existing services keep opening external links in the system browser.
+    /// Compatibility value for configuration archives. Runtime routing resolves
+    /// the optional override through LinkOpeningSettings instead.
     var opensExternalLinksInAppEffective: Bool { openExternalLinksInApp ?? false }
 
     /// Materialises the storage-optional stay-active flag (nil → false), so a

@@ -109,11 +109,8 @@ extension UnifiedRailView {
                 movingToNewSpace = link
             }
         }
-        Button("Remove from this workspace") {
-            removeFromSpace(link: link)
-        }
         Divider()
-        Button("Delete service entirely", role: .destructive) {
+        Button("Remove this service", role: .destructive) {
             confirmingDelete = link
         }
     }
@@ -140,13 +137,5 @@ extension UnifiedRailView {
             memberSpaceIDs: memberIDs
         ))
         return spaces.filter { eligible.contains($0.id) }
-    }
-
-    /// Fixes selection before `AppState` removes the membership.
-    private func removeFromSpace(link: LiveSpaceServiceLink) {
-        if selectedServiceID == link.service.id && selectedSpaceID == link.space.id {
-            selectedServiceID = nil
-        }
-        appState.removeLink(link.id)
     }
 }

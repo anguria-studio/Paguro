@@ -204,6 +204,13 @@ struct GeneralSettingsView: View {
             }
 
             Section("Web Content") {
+                Toggle("Open outside links in Paguro", isOn: Binding(
+                    get: { appState.linkOpeningSettings.opensInPaguro },
+                    set: { appState.linkOpeningSettings.setOpensInPaguro($0) }
+                ))
+                Text("Open links that no configured service handles in a Paguro window instead of your default browser. Individual services can override this setting.")
+                    .settingsCaption()
+
                 Toggle("Accept cookie banners automatically", isOn: Binding(
                     get: { appState.preferencesStore.autoDismissCookieBanners },
                     set: { appState.setAutoDismissCookieBanners($0) }

@@ -30,6 +30,25 @@ struct ConfigurationArchiveTests {
         #expect(try ConfigurationArchiveCodec.decode(ConfigurationArchiveCodec.encode(archive)) == archive)
     }
 
+    @Test func linkPreferencesRoundTripAndOlderFilesDecode() throws {
+        var archive = fixture()
+        archive.preferences.openExternalLinksInApp = true
+        archive.services[0].followsGlobalLinkOpening = true
+        let data = try ConfigurationArchiveCodec.encode(archive)
+        #expect(try ConfigurationArchiveCodec.decode(data) == archive)
+        var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var preferences = try #require(json["preferences"] as? [String: Any])
+        preferences.removeValue(forKey: "openExternalLinksInApp")
+        json["preferences"] = preferences
+        var services = try #require(json["services"] as? [[String: Any]])
+        services[0].removeValue(forKey: "followsGlobalLinkOpening")
+        json["services"] = services
+        let older = try ConfigurationArchiveCodec.decode(JSONSerialization.data(withJSONObject: json))
+        #expect(older.preferences.openExternalLinksInApp == nil)
+        #expect(older.services[0].followsGlobalLinkOpening == nil)
+        #expect(!older.services[0].openExternalLinksInApp)
+    }
+
     @Test func unsupportedVersionIsRejected() {
         var archive = fixture()
         archive.version = 2

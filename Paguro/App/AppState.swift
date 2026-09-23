@@ -12,6 +12,7 @@ final class AppState {
     let workspaceStore: WorkspaceStore
     @ObservationIgnored private let shellDefaults: UserDefaults
     private(set) var shellPreferences: ShellPreferences
+    let linkOpeningSettings: LinkOpeningSettings
     let mediaPermissions: MediaPermissionCoordinator
     let storeRecovery: StoreRecoveryCoordinator
     let websiteDataReclaimer: WebsiteDataReclaimer
@@ -190,6 +191,7 @@ final class AppState {
         let loadedContainer = preparedStore.container
         self.modelContainer = loadedContainer
         self.shellDefaults = preparedStore.defaults
+        self.linkOpeningSettings = LinkOpeningSettings(defaults: preparedStore.defaults)
         let preferencesStore = PreferencesStore(context: loadedContainer.mainContext)
         self.preferencesStore = preferencesStore
         let workspaceStore = WorkspaceStore(
@@ -386,11 +388,9 @@ final class AppState {
             return
         }
 
-        // No Paguro service owns this link. Open it in an in-app window when the
-        // source service opted into that; otherwise hand it to the browser.
-        let optedIn = sourceServiceID
-            .flatMap { fetchService(id: $0) }?
-            .opensExternalLinksInAppEffective ?? false
+        let serviceOverride = sourceServiceID
+            .flatMap { fetchService(id: $0) }?.openExternalLinksInApp
+        let optedIn = linkOpeningSettings.opensInPaguro(serviceOverride: serviceOverride)
         if WebViewCoordinator.shouldOpenInAppBrowser(sourceOptedIn: optedIn, url: url) {
             InAppBrowserWindow.open(url)
         } else {
@@ -1307,6 +1307,7 @@ extension AppState {
             defaults: shellDefaults, preferencesStore: preferencesStore
         )
         shellPreferences.applyConfiguration(value, defaults: shellDefaults)
+        linkOpeningSettings.setOpensInPaguro(value.openExternalLinksInApp ?? false)
         userScriptManager.autoDismissCookieBanners = preferencesStore.autoDismissCookieBanners
         defaultZoom = preferencesStore.defaultZoom
         for service in workspaceStore.allServices() where service.pageZoom == nil {

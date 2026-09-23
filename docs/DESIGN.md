@@ -45,6 +45,15 @@ The catalog pane uses the opaque neutral canvas in both appearances, with the
 browser surface's 14 point continuous corners. Its tint covers the search,
 service grid, and footer. Keep the surrounding header and sidebar on window glass.
 
+General settings place Open outside links in Paguro under Web Content. The
+service editor places an Open outside links menu above Mobile view, with Follow
+global setting, In Paguro, and In default browser choices.
+
+The service editor shows visible descriptions below Mobile view and Always
+appear active. Explain that mobile view depends on website support and can
+require a new sign-in. Explain that active status depends on the website and
+can suppress notifications. Use the shared settings caption style.
+
 ## First run
 
 A window with no service shows a three-step wizard on the window glass.

@@ -357,6 +357,7 @@ extension AppModel {
         guard !appState.isLocked else { throw ConfigurationArchiveError.invalid("Unlock Paguro first.") }
         var archive = try appState.workspaceStore.exportConfiguration()
         appState.shellPreferences.addToConfiguration(&archive.preferences)
+        archive.preferences.openExternalLinksInApp = appState.linkOpeningSettings.opensInPaguro
         archive.preferences.systemNotifications = notificationRouteSettings.isSystemRouteEnabled
         archive.preferences.islandNotifications = notificationRouteSettings.isIslandRouteEnabled
         return try ConfigurationArchiveCodec.encode(archive)
