@@ -4,6 +4,15 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-09-23
+
+Version 1.0.8, build 17. Direct download release only.
+
+- Preserve sign-in handoffs when a popup closes, and keep parent sign-in
+  windows open when they create a child popup.
+- Keep deletion targets available while confirmation dialogs dismiss, and
+  avoid deleting the last service membership twice during account removal.
+
 - The menu-bar panel uses the standard macOS background and system appearance,
   independently of the main window's theme and Liquid Glass preset.
 
@@ -239,7 +248,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.7...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.8...main
+[1.0.8]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.8
 [1.0.7]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.7
 [1.0.6]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.6
 [1.0.5]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.5

@@ -248,17 +248,18 @@ struct UnifiedRailView: View {
                 get: { confirmingDelete != nil },
                 set: { if !$0 { confirmingDelete = nil } }
             ),
-            titleVisibility: .visible
-        ) {
+            titleVisibility: .visible,
+            presenting: confirmingDelete
+        ) { link in
+            // SwiftUI can clear presentation state before it runs the action.
+            let serviceID = link.service.id
             Button("Delete", role: .destructive) {
-                if let link = confirmingDelete {
-                    appState.deleteService(link.service.id)
-                }
+                appState.deleteService(serviceID)
                 confirmingDelete = nil
             }
             .buttonStyle(.borderedProminent)
             .tint(.red)
-        } message: {
+        } message: { _ in
             Text("This will permanently remove the service and all its data.")
         }
         // Kept on the outside of the service dialog above rather than beside it:

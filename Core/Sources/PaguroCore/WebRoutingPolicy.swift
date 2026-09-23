@@ -91,7 +91,9 @@ public enum WebRoutingPolicy {
         selfClosed: Bool,
         openedAtAuthenticationHost: Bool
     ) -> Bool {
-        selfClosed || openedAtAuthenticationHost
+        // A self-closing page owns its callback. Reloading can cancel the
+        // opener's asynchronous session request after a postMessage handoff.
+        !selfClosed && openedAtAuthenticationHost
     }
 
     /// Returns whether an authentication popup has returned to its service.

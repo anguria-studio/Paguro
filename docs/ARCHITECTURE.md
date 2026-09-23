@@ -173,7 +173,8 @@ badge polling. SwiftUI views do not start or stop polling.
 `WebViewCoordinator` handles navigation, redirects, external links, media
 requests, and web process failure. It forwards component-specific work:
 
-- `AuthPopupController` owns new-window and sign-in popup lifecycle;
+- `AuthPopupController` owns each sign-in popup and its dependent child windows.
+  Page-owned close callbacks preserve the opener so its session handoff can finish;
 - `WebDialogPresenter` owns upload pickers and page dialogs;
 - `WebDownloadHandler` owns downloads after navigation handoff and reports
   each one to `DownloadTracker`;

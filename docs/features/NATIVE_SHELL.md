@@ -984,6 +984,15 @@ Reduce Motion removes the animated sidebar transition.
 Reduce Motion keeps the service reorder and removes its lift and its spring.
 Each cell then moves directly to its new position.
 
+## Service removal
+
+Service and workspace deletion confirmations capture their target when the
+dialog is presented. Dismissing the dialog must not clear the target before
+the confirmed action runs. Removing the last service membership deletes the
+service and lets SwiftData cascade to its links in one save. Removing a shared
+membership preserves the account in its other workspaces. WebKit data cleanup
+starts only after that save succeeds.
+
 ## Configuration transfer
 
 Settings > General > Configuration transfers workspaces, services, and portable
