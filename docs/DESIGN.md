@@ -213,9 +213,16 @@ that names the reason.
 
 ## App and menu-bar icons
 
-The app icon uses the layered Paguro shell. Default appearance has a light
-purple gradient. Dark appearance has a lavender shell over the standard black
-gradient. Keep the editable layers in `Paguro/AppIcon.icon`.
+The app icon uses pearl-shell raster artwork in `Paguro/AppIcon.icon`.
+Default appearance uses a light purple gradient. Dark appearance uses a black
+gradient. The dark raster layer uses an appearance-specific opacity override
+above the default artwork. Keep glass effects off on these raster layers because
+the artwork already includes highlights and shading. Hidden vector layers remain
+in the Composer file for editing reference.
+Export the shared `brand-notification-test` light and dark images from this
+Composer source when the app icon changes. Onboarding, the Paguro catalog entry,
+and its service rows use that asset. Refresh `docs/images/paguro-icon.png` for
+the README at the same time.
 
 The menu-bar shell uses a 20 point vector template with thin transparent spiral
 seams. macOS supplies its light or dark tint. The menu-bar window uses the same
