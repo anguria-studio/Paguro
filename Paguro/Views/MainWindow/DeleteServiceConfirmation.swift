@@ -16,12 +16,11 @@ struct DeleteServiceConfirmation: ViewModifier {
             presenting: link
         ) { target in
             let serviceID = target.service.id
+            // macOS 15 only extracts an unmodified Button as a dialog action.
             Button("Delete", role: .destructive) {
                 onDelete(serviceID)
                 link = nil
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
         } message: { _ in
             Text("This will permanently remove the service and all its data.")
         }

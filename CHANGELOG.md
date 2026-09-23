@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Restore service and workspace deletion actions on macOS 15 by using native
+  confirmation buttons without custom styling.
+
 ## [1.0.8] - 2026-09-23
 
 Version 1.0.8, build 17. Direct download release only.

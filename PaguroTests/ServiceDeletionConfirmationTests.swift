@@ -108,38 +108,12 @@ final class ServiceDeletionConfirmationTests: XCTestCase {
 
         func button(named title: String) async throws -> NSButton {
             for _ in 0..<150 {
-                if let sheet = confirmationWindow, let content = sheet.contentView,
+                if let sheet = window.attachedSheet, let content = sheet.contentView,
                    let button = findButton(in: content, title: title) { return button }
                 try await Task.sleep(for: .milliseconds(20))
             }
             throw NSError(domain: "ServiceDeletionConfirmationTests", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "No native \(title) button appeared. \(windowDiagnostics)"])
-        }
-
-        private var confirmationWindow: NSWindow? {
-            if let sheet = window.attachedSheet { return sheet }
-            // Older macOS versions can present confirmation dialogs in their
-            // own window instead of attaching a sheet to the hosting window.
-            return NSApp.windows.first { candidate in
-                candidate !== window && candidate.isVisible
-                    && candidate.contentView.map { containsLabel(in: $0) } == true
-            }
-        }
-
-        private func containsLabel(in view: NSView) -> Bool {
-            if let field = view as? NSTextField, field.stringValue.contains(serviceLabel) { return true }
-            return view.subviews.contains { containsLabel(in: $0) }
-        }
-
-        private var windowDiagnostics: String {
-            NSApp.windows.map { candidate in
-                "window: \(candidate.title), visible: \(candidate.isVisible), sheet: \(candidate.isSheet), views: \(candidate.contentView.map { viewDescription($0) } ?? "none")"
-            }.joined(separator: "; ")
-        }
-
-        private func viewDescription(_ view: NSView) -> String {
-            let title = (view as? NSButton)?.title ?? (view as? NSTextField)?.stringValue ?? ""
-            return "\(type(of: view))(\(title))[\(view.subviews.map { viewDescription($0) }.joined(separator: ","))]"
+                          userInfo: [NSLocalizedDescriptionKey: "No native \(title) button appeared"])
         }
 
         private func findButton(in view: NSView, title: String) -> NSButton? {
@@ -149,7 +123,7 @@ final class ServiceDeletionConfirmationTests: XCTestCase {
 
         func waitForDismissal() async throws {
             for _ in 0..<150 {
-                if confirmationWindow == nil && state.pending == nil { return }
+                if window.attachedSheet == nil && state.pending == nil { return }
                 try await Task.sleep(for: .milliseconds(20))
             }
             XCTFail("The confirmation sheet did not dismiss")

@@ -245,9 +245,6 @@ struct UnifiedRailView: View {
         .deleteServiceConfirmation(link: $confirmingDelete) { serviceID in
             appState.deleteService(serviceID)
         }
-        // Kept on the outside of the service dialog above rather than beside it:
-        // two confirmation dialogs bound to one view can race when both are
-        // attached at the same level, and only one of these is ever up.
         .deleteSpaceConfirmation(space: $confirmingDeleteSpace) { space in
             appState.deleteSpace(space.id)
         }

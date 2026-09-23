@@ -986,8 +986,11 @@ Each cell then moves directly to its new position.
 
 ## Service removal
 
-Service and workspace deletion confirmations capture their target when the
-dialog is presented. Dismissing the dialog must not clear the target before
+Service and workspace deletion confirmations use unmodified native buttons.
+Do not apply button styles or tint modifiers inside the dialog action builder:
+macOS 15 can discard those actions and show an OK-only fallback dialog.
+The destructive role supplies the native appearance. Confirmations capture
+their target when the dialog is presented. Dismissing the dialog must not clear the target before
 the confirmed action runs. Removing the last service membership deletes the
 service and lets SwiftData cascade to its links in one save. Removing a shared
 membership preserves the account in its other workspaces. WebKit data cleanup
