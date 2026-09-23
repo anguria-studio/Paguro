@@ -536,6 +536,7 @@ extension WorkspaceStore {
             item.cameraPolicy = service.cameraPolicyRaw
             item.microphonePolicy = service.microphonePolicyRaw
             item.openExternalLinksInApp = service.opensExternalLinksInAppEffective
+            item.followsGlobalLinkOpening = service.openExternalLinksInApp == nil
             item.stayActiveInBackground = service.staysActiveInBackgroundEffective
             item.hibernationPolicy = service.hibernationPolicyEffective.rawValue
             item.hibernateAfterMinutes = service.hibernateAfterMinutesEffective
@@ -594,7 +595,7 @@ extension WorkspaceStore {
                     pageZoom: item.pageZoom, osNotificationsEnabled: item.osNotificationsEnabled,
                     customCSS: item.customCSS, darkModeRaw: item.appearance,
                     cameraPolicyRaw: item.cameraPolicy, microphonePolicyRaw: item.microphonePolicy,
-                    openExternalLinksInApp: item.openExternalLinksInApp,
+                    openExternalLinksInApp: item.followsGlobalLinkOpening == true ? nil : item.openExternalLinksInApp,
                     stayActiveInBackground: item.stayActiveInBackground,
                     hibernationPolicyRaw: item.hibernationPolicy,
                     hibernateAfterMinutes: item.hibernateAfterMinutes

@@ -19,7 +19,10 @@ presence, external-link, and hibernation settings also transfer.
 
 App preferences include appearance, rail settings, Dock and menu-bar presence,
 notification routes, and quiet hours. App-lock settings, content blocking, icon
-fallback, media defaults, and hibernation defaults also transfer.
+fallback, media defaults, and hibernation defaults also transfer. The global
+outside-link default and each service’s inheritance or explicit override transfer.
+Older files retain their explicit service choices and default the global option
+to off when app preferences are applied.
 
 The file does not contain cookies, passwords, WebKit storage identifiers,
 cache, browsing history, fetched icons, notification history, or unread counts.

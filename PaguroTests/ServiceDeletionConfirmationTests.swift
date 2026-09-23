@@ -7,11 +7,11 @@ import XCTest
 
 @MainActor
 final class ServiceDeletionConfirmationTests: XCTestCase {
-    func testDeleteButtonRemovesServiceFromPersistentStore() async throws {
+    func testRemoveButtonDeletesOnlySelectedAccountFromPersistentStore() async throws {
         let fixture = try Fixture(testCase: self)
         defer { fixture.close() }
         fixture.state.pending = fixture.target
-        let button = try await fixture.button(named: "Delete")
+        let button = try await fixture.button(named: "Remove")
         button.performClick(nil)
         try await fixture.waitForDismissal()
 
@@ -35,7 +35,7 @@ final class ServiceDeletionConfirmationTests: XCTestCase {
         XCTAssertEqual(try fixture.container.mainContext.fetchCount(FetchDescriptor<ServiceInstance>()), 2)
 
         fixture.state.pending = fixture.target
-        let delete = try await fixture.button(named: "Delete")
+        let delete = try await fixture.button(named: "Remove")
         delete.performClick(nil)
         try await fixture.waitForDismissal()
         XCTAssertEqual(fixture.state.deletedIDs, [fixture.serviceID])
@@ -87,8 +87,8 @@ final class ServiceDeletionConfirmationTests: XCTestCase {
             ])
             let context = container.mainContext
             let workspace = Space(name: "Personal")
-            let service = ModelFixtures.service(label: serviceLabel, catalogID: nil)
-            let survivor = ModelFixtures.service(label: "Keep", catalogID: nil)
+            let service = ModelFixtures.service(label: serviceLabel, catalogID: "gmail")
+            let survivor = ModelFixtures.service(label: "Keep", catalogID: "gmail")
             context.insert(workspace)
             context.insert(service)
             context.insert(survivor)

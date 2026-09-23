@@ -407,9 +407,10 @@ The workspace editor can leave the emoji empty. Paguro then shows the workspace
 name without a replacement symbol or leading space. The collapsed workspace
 rail is the one exception, because it has no name to show.
 
-Removing a service from a workspace keeps the service when it is also in
-another workspace. When that workspace was its last one, Paguro saves the
-change and then deletes the service and its sign-in data.
+The service menu has one removal action: Remove this service. Confirmation
+removes the selected account instance from Paguro and clears its local sign-in
+data. Separate instances of the same provider remain unchanged. If the selected
+instance has links in several workspaces, those links are removed together.
 Deleting a workspace asks for confirmation. The message states how many
 services exist only in that workspace. Paguro deletes those services and their
 sign-in data with the workspace. Services that are also in other workspaces
@@ -985,6 +986,13 @@ Reduce Motion removes the animated sidebar transition.
 Reduce Motion keeps the service reorder and removes its lift and its spring.
 Each cell then moves directly to its new position.
 
+## Service setting explanations
+
+Mobile view and Always appear active have visible text below their toggles in
+the service editor. Mobile view requests an iPhone layout, reloads on save, and
+can require another sign-in. Always appear active reports focus in the
+background. The website still controls presence and may suppress notifications.
+
 ## Service removal
 
 Service and workspace deletion confirmations use unmodified native buttons.
@@ -992,9 +1000,8 @@ Do not apply button styles or tint modifiers inside the dialog action builder:
 macOS 15 can discard those actions and show an OK-only fallback dialog.
 The destructive role supplies the native appearance. Confirmations capture
 their target when the dialog is presented. Dismissing the dialog must not clear the target before
-the confirmed action runs. Removing the last service membership deletes the
-service and lets SwiftData cascade to its links in one save. Removing a shared
-membership preserves the account in its other workspaces. WebKit data cleanup
+the confirmed action runs. Confirmed service removal deletes the selected
+service and lets SwiftData cascade to its links in one save. WebKit data cleanup
 starts only after that save succeeds.
 
 ## Configuration transfer

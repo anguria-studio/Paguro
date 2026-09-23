@@ -7,7 +7,7 @@ struct DeleteServiceConfirmation: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            "Delete \(link?.service.label ?? "service")?",
+            "Remove \(link?.service.label ?? "service")?",
             isPresented: Binding(
                 get: { link != nil },
                 set: { if !$0 { link = nil } }
@@ -17,12 +17,12 @@ struct DeleteServiceConfirmation: ViewModifier {
         ) { target in
             let serviceID = target.service.id
             // macOS 15 only extracts an unmodified Button as a dialog action.
-            Button("Delete", role: .destructive) {
+            Button("Remove", role: .destructive) {
                 onDelete(serviceID)
                 link = nil
             }
         } message: { _ in
-            Text("This will permanently remove the service and all its data.")
+            Text("This removes this service from Paguro and clears its local sign-in data. Other services and your online account are not affected.")
         }
     }
 }

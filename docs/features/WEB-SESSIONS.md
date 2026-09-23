@@ -287,6 +287,17 @@ Microphone capture remains under the separate capture controls.
 The coordinator converts WebKit values to the Core request and performs the result.
 The result can stay in the service, open in another Paguro service, or open outside Paguro.
 
+Settings > General > Web Content provides the Open outside links in Paguro
+default, initially off. The service editor offers Follow global setting,
+In Paguro, and In default browser. A service without an override follows the
+current global value. Existing explicit choices remain overrides. Changes apply
+to the next link click without reloading the service.
+
+Links that match a configured service still switch to that service first.
+Only unmatched HTTP and HTTPS links use the chosen browser destination.
+`LinkOpeningPolicy` in PaguroCore resolves inheritance. `LinkOpeningSettings`
+persists the global value in the launch-specific UserDefaults domain.
+
 An unknown custom scheme opens only after an explicit rule accepts it.
 Paguro must not pass an untrusted scheme to the system without review.
 

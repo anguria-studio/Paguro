@@ -4,6 +4,15 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-23
+
+Version 1.1.0, build 19. Direct download and App Store editions.
+
+- Add a global outside-link setting with per-service overrides.
+- Simplify the service menu to one Remove this service action. Removing one
+  account leaves separately added accounts unchanged.
+- Explain Mobile view and Always appear active below their service settings,
+  including possible sign-in and notification effects.
 - Refresh the Paguro pearl-shell icon with purple and black backgrounds for
   light and dark appearance, including onboarding and the Paguro catalog entry.
 
@@ -264,7 +273,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.0.9...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.0...main
+[1.1.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.0
 [1.0.9]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.9
 [1.0.8]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.8
 [1.0.7]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.7

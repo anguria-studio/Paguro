@@ -19,7 +19,7 @@ struct EditServiceSheet: View {
     @State private var hibernationPolicy: HibernationPolicy = .followGlobal
     @State private var hibernateAfterMinutes: Int = 10
     @State private var mobileView: Bool = false
-    @State private var openLinksInApp: Bool = false
+    @State private var linkOpeningPolicy: LinkOpeningPolicy = .followGlobal
     @State private var stayActive: Bool = false
     @State private var webAppearance: ServiceAppearanceMode = .automatic
     @State private var notify: Bool = true
@@ -108,14 +108,25 @@ struct EditServiceSheet: View {
                         }
                     }
 
-                    Toggle("Mobile view", isOn: $mobileView)
-                        .help("Loads this service as if on an iPhone, so it serves its mobile web layout. Applied on save.")
+                    Picker("Open outside links", selection: $linkOpeningPolicy) {
+                        Text("Follow global setting").tag(LinkOpeningPolicy.followGlobal)
+                        Text("In Paguro").tag(LinkOpeningPolicy.paguro)
+                        Text("In default browser").tag(LinkOpeningPolicy.browser)
+                    }
+                    .pickerStyle(.menu)
+                    .help("Applies to links that no configured service handles. Follow global setting uses Settings > General > Web Content.")
 
-                    Toggle("Open outside links in Paguro", isOn: $openLinksInApp)
-                        .help("When a link in this service points somewhere no Paguro service covers, open it in a Paguro window instead of your browser. Links that another service does cover still switch to that service.")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("Mobile view", isOn: $mobileView)
+                        Text("Requests the website’s iPhone layout. Useful in narrow windows if the site supports it. Reloads on save and may require you to sign in again.")
+                            .settingsCaption()
+                    }
 
-                    Toggle("Always appear active", isOn: $stayActive)
-                        .help("Keeps this service from showing you as away or idle while Paguro is in the background, so your status stays active even when you work in other apps. Useful for Microsoft Teams. May hold back some of this service's notifications, since it now thinks you're looking at it.")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("Always appear active", isOn: $stayActive)
+                        Text("Tells the website you’re still viewing it when you switch services or apps. May prevent Away status, but each site decides. Some notifications may be suppressed.")
+                            .settingsCaption()
+                    }
 
                     Picker("Web appearance", selection: $webAppearance) {
                         ForEach(ServiceAppearanceMode.allCases, id: \.self) { mode in
@@ -181,7 +192,7 @@ struct EditServiceSheet: View {
             hibernateAfterMinutes = service.hibernateAfterMinutesEffective
             mobileView = service.userAgent == UserAgentProvider.mobileSafari
             initialUserAgent = service.userAgent
-            openLinksInApp = service.opensExternalLinksInAppEffective
+            linkOpeningPolicy = LinkOpeningPolicy(override: service.openExternalLinksInApp)
             stayActive = service.staysActiveInBackgroundEffective
             webAppearance = service.webAppearance
             notify = !service.isMuted
@@ -354,7 +365,7 @@ struct EditServiceSheet: View {
             service.osNotificationsEnabled = osNotify
             service.showBadge = badge
             // Read fresh at each link click, so no rebuild is needed.
-            service.openExternalLinksInApp = openLinksInApp
+            service.openExternalLinksInApp = linkOpeningPolicy.override
             service.stayActiveInBackground = stayActive
             // Pin a camera/mic policy only if the user actually changed it, so
             // opening the sheet to edit something else doesn't stop the service

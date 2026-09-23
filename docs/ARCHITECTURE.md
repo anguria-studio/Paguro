@@ -71,6 +71,8 @@ The main services and startup adapters are:
 - `PreferencesStore` for the single loaded preferences row and typed commits.
 - `WorkspaceStore` for workspace and service queries, mutations and selection persistence.
 - `ServiceIconDraft` for cancellable icon previews in the add-service form.
+- `LinkOpeningSettings` for the persisted global outside-link default.
+  `PaguroCore.LinkOpeningPolicy` resolves each service override against it.
 - `PasskeyNoticeController` for the app-wide explanation and its saved seen state.
 - `ShellPreferences` for normalized window appearance and rail settings.
   `PaguroCore.ShellGlassStyle` defines presets and their fixed tint and frost values; the

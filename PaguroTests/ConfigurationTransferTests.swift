@@ -38,6 +38,25 @@ final class ConfigurationTransferTests: XCTestCase {
         return archive
     }
 
+    func testLinkOpeningInheritanceAndOverridesSurviveTransfer() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let store = WorkspaceStore(context: context, preferencesStore: PreferencesStore(context: context))
+        var archive = fixture()
+        archive.services[0].followsGlobalLinkOpening = true
+        archive.services[1].openExternalLinksInApp = true
+        _ = try store.importConfiguration(archive, applyPreferences: false)
+        XCTAssertNil(try XCTUnwrap(store.allServices().first { $0.label == "Mail" }).openExternalLinksInApp)
+        XCTAssertEqual(try XCTUnwrap(store.allServices().first { $0.label == "Chat" }).openExternalLinksInApp, true)
+        let exported = try store.exportConfiguration()
+        XCTAssertEqual(try XCTUnwrap(exported.services.first { $0.label == "Mail" }).followsGlobalLinkOpening, true)
+        XCTAssertEqual(try XCTUnwrap(exported.services.first { $0.label == "Chat" }).followsGlobalLinkOpening, false)
+
+        archive.services[0].followsGlobalLinkOpening = nil
+        _ = try store.importConfiguration(archive, applyPreferences: false)
+        XCTAssertTrue(store.allServices().contains { $0.label == "Mail" && $0.openExternalLinksInApp == false })
+    }
+
     func testImportPreservesOrderAndSharedAccountsWithFreshSessions() throws {
         let container = try makeContainer()
         let context = container.mainContext

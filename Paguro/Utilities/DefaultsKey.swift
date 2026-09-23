@@ -2,6 +2,7 @@
 ///
 /// Do not change these strings. Existing installations use their current names.
 enum DefaultsKey {
+    static let openExternalLinksInApp = "Paguro.openExternalLinksInApp"
     static let liquidGlassStyle = "Paguro.liquidGlassStyle"
     static let liquidGlassIntensity = "Paguro.liquidGlassIntensity"
     static let iconRailBaseSize = "Paguro.iconRailBaseSize"

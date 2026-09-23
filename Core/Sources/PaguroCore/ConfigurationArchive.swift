@@ -41,6 +41,7 @@ public struct ConfigurationService: Codable, Equatable, Sendable {
     public var cameraPolicy: String? = nil
     public var microphonePolicy: String? = nil
     public var openExternalLinksInApp: Bool = false
+    public var followsGlobalLinkOpening: Bool? = nil
     public var stayActiveInBackground: Bool = false
     public var hibernationPolicy: String = "followGlobal"
     public var hibernateAfterMinutes: Int = 10
@@ -48,6 +49,7 @@ public struct ConfigurationService: Codable, Equatable, Sendable {
 }
 
 public struct ConfigurationPreferences: Codable, Equatable, Sendable {
+    public var openExternalLinksInApp: Bool? = nil
     public var appPresenceMode: String = "both"
     public var showBadgeCountInDock: Bool = true
     public var autoDismissCookieBanners: Bool = false
