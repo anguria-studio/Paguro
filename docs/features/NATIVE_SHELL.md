@@ -844,7 +844,8 @@ The native web view is the browser surface.
 Its host clips all four corners with a 14 point continuous radius.
 
 Each service control uses its own native circular surface.
-The Window glass selector has four presets and no separate transparency slider:
+Settings uses a native Window glass menu, with four presets and no separate
+transparency slider:
 
 | Preset | Native material | Extra backdrop frost | Protective tint |
 | --- | --- | --- | --- |
@@ -943,7 +944,7 @@ Lock closes the menu and uses the same app-lock route as File > Lock Now. It
 is hidden when App Lock is off or Paguro is already locked.
 The app name and shell mark open the main window, including
 when no services exist. The window has no footer. These routes remain available
-in Menu bar only mode. macOS supplies the native MenuBarExtra window background,
+with the Dock icon hidden. macOS supplies the native MenuBarExtra window background,
 light or dark appearance, and accessibility treatment. The window does not use
 Paguro's Window glass preset or app theme. Do not replace the container background
 with shell tint or another glass layer. Header controls use a circular semantic
