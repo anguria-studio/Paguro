@@ -1,123 +1,136 @@
 {
-  "fill": {
-    "linear-gradient": [
-      "extended-srgb:0.62745,0.42353,0.70196,1.00000",
-      "extended-srgb:0.34118,0.19216,0.42745,1.00000"
-    ],
-    "orientation": {
-      "start": {
-        "x": 0.5,
-        "y": 0
-      },
-      "stop": {
-        "x": 0.5,
-        "y": 1
-      }
-    }
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.30908,0.25415,0.35986,1.00000",
+      "display-p3:0.15637,0.12537,0.18762,1.00000"
+    ]
   },
-  "groups": [
+  "groups" : [
     {
-      "layers": [
+      "layers" : [
         {
-          "glass": false,
-          "image-name": "07-Inner-opening.svg",
-          "name": "07-Inner-opening",
-          "fill-specializations": [
+          "blend-mode" : "normal",
+          "glass" : false,
+          "hidden" : false,
+          "image-name-specializations" : [
             {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.53333,0.38039,0.62353,1.00000"
-              }
+              "value" : "exec-d4a96221-fba1-490f-a5ba-a258b08015f0.png"
+            },
+            {
+              "idiom" : "square",
+              "value" : "paguro-dark-black.png"
+            }
+          ],
+          "name" : "paguro-dark-black",
+          "opacity-specializations" : [
+            {
+              "value" : 0
+            },
+            {
+              "appearance" : "dark",
+              "value" : 1
             }
           ]
         },
         {
-          "image-name": "06-Front-ribbon.svg",
-          "name": "06-Front-ribbon",
-          "fill-specializations": [
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.82745,0.68627,0.91373,1.00000"
-              }
-            }
-          ]
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "exec-46e51d35-f0c4-4ceb-9c43-b5f72061a749.png",
+          "name" : "exec-46e51d35-f0c4-4ceb-9c43-b5f72061a749"
         },
         {
-          "image-name": "05-Body-dome.svg",
-          "name": "05-Body-dome",
-          "fill-specializations": [
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.75294,0.60784,0.86667,1.00000"
-              }
-            }
-          ]
+          "fill" : {
+            "linear-gradient" : [
+              "extended-srgb:0.54902,0.09804,0.23137,1.00000",
+              "extended-srgb:1.00000,0.56863,0.65098,1.00000"
+            ]
+          },
+          "glass" : false,
+          "hidden" : true,
+          "image-name" : "07-Inner-opening.svg",
+          "name" : "07-Inner-opening"
         },
         {
-          "image-name": "04-Middle-whorl.svg",
-          "name": "04-Middle-whorl",
-          "fill-specializations": [
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.85882,0.75294,0.92941,1.00000"
-              }
-            }
-          ]
+          "fill" : {
+            "linear-gradient" : [
+              "extended-srgb:1.00000,0.61176,0.68235,1.00000",
+              "extended-srgb:1.00000,0.32157,0.44706,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "06-Front-ribbon.svg",
+          "name" : "06-Front-ribbon"
         },
         {
-          "image-name": "03-Upper-whorl.svg",
-          "name": "03-Upper-whorl",
-          "fill-specializations": [
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.78039,0.65882,0.88627,1.00000"
-              }
-            }
-          ]
+          "fill" : {
+            "linear-gradient" : [
+              "extended-srgb:1.00000,0.32157,0.44706,1.00000",
+              "display-p3:0.97172,0.68117,0.79745,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "05-Body-dome.svg",
+          "name" : "05-Body-dome"
         },
         {
-          "image-name": "02-Apex.svg",
-          "name": "02-Apex",
-          "fill-specializations": [
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.89412,0.80392,0.94902,1.00000"
-              }
-            }
-          ]
+          "fill" : {
+            "linear-gradient" : [
+              "extended-srgb:1.00000,0.70588,0.74902,1.00000",
+              "extended-srgb:1.00000,0.32157,0.44706,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "04-Middle-whorl.svg",
+          "name" : "04-Middle-whorl"
         },
         {
-          "image-name": "01-Rear-shell.svg",
-          "name": "01-Rear-shell",
-          "fill-specializations": [
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "extended-srgb:0.61176,0.48235,0.74118,1.00000"
-              }
-            }
-          ]
+          "fill" : {
+            "linear-gradient" : [
+              "extended-srgb:1.00000,0.61176,0.68235,1.00000",
+              "extended-srgb:1.00000,0.32157,0.44706,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "03-Upper-whorl.svg",
+          "name" : "03-Upper-whorl"
+        },
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.98989,0.53235,0.64738,1.00000",
+              "extended-srgb:1.00000,0.47059,0.56471,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "02-Apex.svg",
+          "name" : "02-Apex"
+        },
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "extended-srgb:1.00000,0.32157,0.44706,1.00000",
+              "extended-srgb:0.72549,0.15294,0.30588,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "01-Rear-shell.svg",
+          "name" : "01-Rear-shell"
         }
       ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
       },
-      "translucency": {
-        "enabled": true,
-        "value": 0.5
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
       }
     }
   ],
-  "supported-platforms": {
-    "circles": [
+  "supported-platforms" : {
+    "circles" : [
       "watchOS"
     ],
-    "squares": "shared"
+    "squares" : "shared"
   }
 }

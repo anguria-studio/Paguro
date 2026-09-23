@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Refresh the Paguro pearl-shell icon with purple and black backgrounds for
+  light and dark appearance, including onboarding and the Paguro catalog entry.
+
 ## [1.0.9] - 2026-09-23
 
 Version 1.0.9, build 18. Direct download release only.
