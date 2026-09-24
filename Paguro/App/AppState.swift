@@ -356,10 +356,11 @@ final class AppState {
         await Task.yield()
     }
 
-    /// Wires the WebViewPool's external-link handler so that cross-domain
-    /// target=_blank navigations route through `handleExternalLink(_:)` —
-    /// which prefers switching to a matching Paguro service over opening the
-    /// default browser, but falls back to NSWorkspace when no service matches.
+    /// Wires the WebViewPool's external-link handler so that links which leave
+    /// a service route through `handleExternalLink(_:from:)`. This includes
+    /// clicked links, `target=_blank` links, and `window.open` requests that
+    /// are not sign-in popups. The handler prefers a matching Paguro service,
+    /// then applies the outside-link preference.
     private func setupExternalLinkRouting() {
         webViewPool.externalLinkHandler = { [weak self] url, sourceServiceID in
             self?.handleExternalLink(url, from: sourceServiceID)
@@ -370,8 +371,9 @@ final class AppState {
     /// and which targets a different origin. If any other Paguro service owns
     /// that domain (same registrable domain, or the exact host for
     /// shared-umbrella domains like google.com) we switch to it (preserving
-    /// auth/space context) and navigate to the deep URL. Otherwise we hand off
-    /// to the system default browser.
+    /// auth/space context) and navigate to the deep URL. Otherwise the global
+    /// or per-service preference chooses an in-app browser window or the
+    /// system default browser.
     ///
     /// Multi-account aware: when several services match the same host (e.g.
     /// personal + work Notion), we prefer the match in the current space so
