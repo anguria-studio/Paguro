@@ -4,6 +4,8 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Make the icon rail magnification follow the pointer smoothly. The icons no
+  longer stop and then jump at the edge between two icons.
 - Tell each open website that it becomes hidden before Paguro quits, so it can
   save its state. Paguro reports websites as always visible, so they did not
   get this signal before. This is a likely cause of the WhatsApp Web sign-outs

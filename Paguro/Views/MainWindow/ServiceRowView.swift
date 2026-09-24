@@ -86,6 +86,10 @@ struct ServiceRowView: View {
         isDockItem ? isDockHovered : isHovering
     }
 
+    private var hoverAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.1)
+    }
+
     /// A muted service is silent, so it never shows the speaker. The pool ends
     /// the exemption on mute as well; this keeps the drawing right even during
     /// the one frame between the two.
@@ -132,6 +136,7 @@ struct ServiceRowView: View {
                                 lineWidth: 2
                             )
                     }
+                    .animation(hoverAnimation, value: presentsHover)
                     // The fill sits behind a resting tile. A magnified icon
                     // has left it, in size and in place, so it goes with the
                     // effect and comes back with it: both changes belong to
@@ -155,10 +160,12 @@ struct ServiceRowView: View {
         .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
             content.offset(y: offset)
         }
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.1),
-            value: presentsHover
-        )
+        // A Dock item leaves this out. The hover moves to the next icon while
+        // the pointer is still moving, and an animation here would also take
+        // the scale and the move. The two icons would then follow the
+        // animation, not the pointer, and snap back when it ends. The tile and
+        // the tooltip fade by their own animation instead.
+        .animation(hoverAnimation, value: !isDockItem && presentsHover)
         .onHover { hovering in
             isHovering = hovering
             if isDockItem {
@@ -349,7 +356,11 @@ struct ServiceRowView: View {
                 // a brief color change.
                 dockTooltip
                     .offset(x: dockTooltipLeadingOffset)
-                    .opacity(presentsHover ? 1 : 0)
+                    // The offset follows the icon size, so only the fade
+                    // takes the animation.
+                    .animation(hoverAnimation) { tooltip in
+                        tooltip.opacity(presentsHover ? 1 : 0)
+                    }
             }
     }
 

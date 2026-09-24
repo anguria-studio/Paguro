@@ -387,9 +387,13 @@ struct UnifiedRailView: View {
                 // The rail measures the pointer, not its cells: a cell reports
                 // a position inside a cell the pointer has already resized,
                 // which feeds the size back into its own input. This frame
-                // does not resize, so the reading stays stable.
-                .onContinuousHover(coordinateSpace: .local) { phase in
-                    updatePointer(phase, viewportHeight: geometry.size.height)
+                // does not resize, so the reading stays stable. See
+                // `RailPointerTracker` for why this is not `onContinuousHover`.
+                .overlay {
+                    RailPointerTracker { phase in
+                        updatePointer(phase, viewportHeight: geometry.size.height)
+                    }
+                    .allowsHitTesting(false)
                 }
             }
             .clipShape(VerticalRailClipShape())
