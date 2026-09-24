@@ -63,6 +63,21 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// "Unable to connect".
     private var errorPageLoadInFlight = false
 
+    /// Set while one of Paguro's error or recovery pages is on screen. The
+    /// next web-page navigation in the main frame is its Try Again action.
+    private var showsErrorPage = false
+
+    /// Reports a main-frame navigation or reload that Paguro starts itself,
+    /// for the chat app diagnostics. Set by `WebViewPool`.
+    var onAppInitiatedNavigation: ((UUID, AppInitiatedNavigationReason) -> Void)?
+
+    override init() {
+        super.init()
+        authPopupController.onOpenerReload = { [weak self] in
+            self?.noteAppInitiatedNavigation(.signInPopupClosed)
+        }
+    }
+
     /// Resolves a camera/microphone capture request to a WebKit decision. Set by
     /// `WebViewPool` (supplied by `AppState`), which owns the per-service policy
     /// and the "ask" prompt. Nil ⇒ deny (fail closed).
@@ -163,6 +178,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .allow:
             break
         }
+
+        noteErrorPageRetryIfNeeded(url: url, webView: webView, navigationAction: navigationAction)
 
         #if DEBUG
         // A live service test needs the navigation boundary, but it must not
@@ -277,11 +294,15 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
             // the recovery page's own load must not report it healthy.
             if let instanceID { onHealthEvent?(instanceID, .failed) }
             errorPageLoadInFlight = true
+            showsErrorPage = true
+            noteAppInitiatedNavigation(.crashRecoveryPage)
             webView.loadHTMLString(html, baseURL: nil)
             return
         }
 
         AppLogger.webView.warning("WebContent process terminated — reloading")
+        showsErrorPage = false
+        noteAppInitiatedNavigation(.crashRecoveryReload)
         if webView.url != nil {
             webView.reload()
         } else if let fallback = fallbackURL {
@@ -332,7 +353,32 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
             retryURLString: failingURL
         )
         errorPageLoadInFlight = true
+        showsErrorPage = true
+        noteAppInitiatedNavigation(.errorPage)
         webView.loadHTMLString(html, baseURL: nil)
+    }
+
+    private func noteAppInitiatedNavigation(_ reason: AppInitiatedNavigationReason) {
+        guard let instanceID else { return }
+        onAppInitiatedNavigation?(instanceID, reason)
+    }
+
+    /// Reports the Try Again action of an error or recovery page.
+    ///
+    /// The page itself loads with `loadHTMLString`, so its own navigation is
+    /// not a web page. The first web-page navigation in the main frame after
+    /// it is the retry.
+    private func noteErrorPageRetryIfNeeded(
+        url: URL,
+        webView: WKWebView,
+        navigationAction: WKNavigationAction
+    ) {
+        guard showsErrorPage,
+              navigationAction.targetFrame?.isMainFrame ?? true,
+              !authPopupController.isPopup(webView),
+              WebViewPool.resumeURLString(from: url) != nil else { return }
+        showsErrorPage = false
+        noteAppInitiatedNavigation(.errorPageRetry)
     }
 
     // MARK: - Crash backoff

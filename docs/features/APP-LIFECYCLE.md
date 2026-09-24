@@ -159,10 +159,129 @@ Shutdown is idempotent. It performs these actions:
 3. Stop network and content-blocker work.
 4. Cancel every download in progress, including downloads from a web view
    that hibernation already removed.
-5. Stop and release every live web view.
-6. Remove notification observers.
-7. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
+5. Tell each live page that it becomes hidden, so it can save its state.
+   The next section describes this handoff.
+6. Stop and release every live web view.
+7. Remove notification observers.
+8. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
    record the store content.
+9. Flush recent website storage, as described below.
+
+### Visibility handoff at quit
+
+During the life of the app, the visibility override script
+(`UserScriptManager.makeVisibilityOverrideScript()`) makes each page read
+visible and blocks each `visibilitychange` event. Many web apps save their
+state when the page becomes hidden, because a browser sends that event before
+a tab closes or the browser quits. With the override, a page never gets this
+save point. WhatsApp Web kept its session after a quit and reopen in Safari,
+but not in Paguro.
+
+The maintainer confirmed the cause and the fix on hardware on September 24,
+2026, with a Debug build on macOS 27. Before the handoff, a plain quit and
+reopen signed WhatsApp out. With the handoff and the storage flush below,
+WhatsApp stayed signed in across several `Command-Q` quits and reopens, with
+content blocking on and off.
+
+The script defines a release function with a long, non-enumerable name
+(`UserScriptManager.visibilityReleaseFunctionName`). The function makes the
+page read hidden, stops the block, and sends `visibilitychange` to the
+document and `pagehide` (not persisted) to the window. The native side can
+only call the main frame. So the function then calls the same function in each
+same-origin child frame, and each child frame does the same for its own
+children. A cross-origin frame blocks the access, so it does not get the
+event.
+
+Before the teardown, `AppState.shutdown()` calls `QuitVisibilityHandoff.run`:
+
+- It calls the release function in every live web view, in parallel.
+- It stops waiting after 300 ms, even if a page does not answer.
+- When at least one page accepted the call, it waits at least 150 ms in
+  total, because a save handler can start asynchronous IndexedDB writes.
+- A page that throws or has no release function, such as an error page, does
+  not count as accepted.
+- It does not wait when no web view is live.
+
+`QuitVisibilityHandoffPolicy` in PaguroCore holds the limits.
+`BoundedParallelRace` runs the calls against a deadline, and the storage flush
+uses the same type. The override stays on for the whole life of the app.
+Hibernation does not use the handoff.
+
+The deadline timer runs off the main actor. In an early version the timer ran
+on the main actor, so a busy main thread delayed it three times. It delayed
+the start of its sleep, its wake-up, and the return to the caller. On hardware, a
+300 ms cap ended after 556 ms. Now the race decides at the deadline, and only
+the return to the caller waits for the main thread. Nothing can shorten that
+last wait, because AppKit must get its reply on the main thread.
+
+Paguro writes one line at the notice level in the `WebView` category:
+
+```text
+Quit visibility handoff: views=<n> accepted=<n> timedOut=<bool> elapsedMs=<n>
+```
+
+When the main thread holds the return for 50 ms or more, a second line
+follows:
+
+```text
+Quit visibility handoff delayed by the main thread: delayMs=<n>
+```
+
+### Website storage flush at quit
+
+A test on macOS 27 found that a quick exit directly after the web-view
+teardown can lose the last local storage writes of a page. Cookies and
+IndexedDB kept their writes in the same runs, so the stores of one site did
+not agree after the next launch. The flush protects the writes that the
+visibility handoff starts.
+
+Before the teardown, `WebViewPool.persistentDataStoresForQuitFlush()` collects
+the persistent data store of each live web view, each store once. The pool
+skips non-persistent stores, such as the stores of the first-run preview.
+After the teardown, `AppState.shutdown()` calls `QuitStorageFlush.run`:
+
+- It asks each store for its data records of all types, in parallel. In the
+  test, this fetch waited for the pending writes. A cookie fetch did not.
+- It stops waiting after 500 ms, even if a store does not answer.
+- It waits at least 50 ms after the teardown, also when all stores answer
+  sooner.
+- It does not wait when no web view was live.
+
+`QuitStorageFlushPolicy` in PaguroCore holds the limits and the store
+selection. The flush reduces the risk of lost website storage at quit. It does
+not guarantee that a site keeps its session.
+
+Paguro writes one line at the notice level in the `DataStore` category:
+
+```text
+Quit storage flush: stores=<n> completed=<n> timedOut=<bool> elapsedMs=<n>
+```
+
+The 500 ms timeout starts when the fetches start. The elapsed time starts at
+the teardown, so it also contains the steps between the teardown and the
+fetches. When the main thread holds the return for 50 ms or more, a second
+line follows:
+
+```text
+Quit storage flush delayed by the main thread: delayMs=<n>
+```
+
+### Exit paths
+
+These exit paths go through `applicationShouldTerminate`, so they include the
+flush:
+
+- `Command-Q`, the Quit menu items, and the Dock Quit action.
+- Logout, restart, and shutdown. macOS sends a quit Apple event, and AppKit
+  accepts the `terminateLater` reply.
+- Sparkle Install and Relaunch. The Sparkle installer sends a quit Apple event
+  (`NSRunningApplication.terminate`) and waits for the process to exit.
+- The relaunch after a store restore. `AppRelauncher.quit()` calls
+  `NSApp.terminate`.
+
+Paguro does not call `exit` and does not opt in to sudden or automatic
+termination. A crash, a force quit, or a `SIGTERM` or `SIGKILL` signal ends the
+process without the flush.
 
 The quiet-hours timer checks cancellation and shutdown after each wait. A wait
 can finish before cancellation while its continuation is still queued. That

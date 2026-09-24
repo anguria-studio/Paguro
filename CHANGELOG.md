@@ -6,6 +6,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 - Make the icon rail magnification follow the pointer smoothly. The icons no
   longer stop and then jump at the edge between two icons.
+- Fix WhatsApp signing out after you quit and reopen Paguro. Paguro kept
+  websites marked as visible, so WhatsApp never got the signal to save its
+  session before the app quit. Now every open website gets that signal and a
+  short moment to save when you quit.
 
 ## [1.1.1] - 2026-09-24
 

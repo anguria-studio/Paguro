@@ -96,8 +96,10 @@ final class NotificationRuntime {
         self.dndStartMinutes = preferencesStore.dndStartMinutes
         self.dndEndMinutes = preferencesStore.dndEndMinutes
         self.loadNotificationDestination = { [weak webViewPool] service, url in
-            let webView = webViewPool?.webView(for: service)
-            webView?.load(URLRequest(url: url))
+            guard let webViewPool else { return }
+            let webView = webViewPool.webView(for: service)
+            webViewPool.noteAppInitiatedNavigation(.notificationDestination, for: service.id)
+            webView.load(URLRequest(url: url))
         }
         self.dispatchNotificationPageClick = { [weak webViewPool] serviceID, token in
             guard let webView = webViewPool?.liveWebView(for: serviceID) else {

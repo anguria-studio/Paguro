@@ -384,6 +384,20 @@ final class UserScriptManager {
     })()
     """
 
+    /// The name of the page function that ends the visibility override. It is
+    /// long and has a random suffix, so a page is unlikely to use the same name.
+    nonisolated static let visibilityReleaseFunctionName = "__paguroReleaseVisibility_5c1e8b27"
+
+    /// JavaScript that ends the visibility override in the main frame and in
+    /// its same-origin child frames. It returns the number of frames that
+    /// released, or 0 when the page has no override, for example an error page.
+    nonisolated static let visibilityReleaseCallJS = """
+    (function() {
+        var release = window['\(visibilityReleaseFunctionName)'];
+        return typeof release === 'function' ? release() : 0;
+    })()
+    """
+
     /// Reports the page as visible even when its web view is preloaded/off-screen,
     /// so services that gate their unread-count title updates on Page Visibility
     /// (WhatsApp, Messenger, Discord, …) still surface the count for the badge.
@@ -391,24 +405,67 @@ final class UserScriptManager {
     /// Deliberately does NOT fake `document.hasFocus()` — it stays false for a
     /// background view — so apps that gate desktop notifications on *focus* keep
     /// firing them, preserving Paguro's `window.Notification` forwarding.
+    ///
+    /// The override also blocks the `visibilitychange` event that a page uses
+    /// as its save point before a quit. So the script defines a release
+    /// function (`visibilityReleaseFunctionName`) that the quit path calls. The
+    /// function makes the page read hidden, stops the block, and sends
+    /// `visibilitychange` and `pagehide` to the page. Then it calls the same
+    /// function in each same-origin child frame, because the native side can
+    /// only reach the main frame. A cross-origin frame blocks the access, and
+    /// the function skips that frame.
     static func makeVisibilityOverrideScript() -> String {
         return """
         (function() {
             try {
+                var released = false;
                 Object.defineProperty(document, 'visibilityState', {
                     configurable: true,
-                    get: function() { return 'visible'; }
+                    get: function() { return released ? 'hidden' : 'visible'; }
                 });
                 Object.defineProperty(document, 'hidden', {
                     configurable: true,
-                    get: function() { return false; }
+                    get: function() { return released; }
                 });
                 // Swallow real visibilitychange events so a page can't react to
                 // the view actually going off-screen and revert to "hidden"
                 // behavior; the overridden getters keep reporting visible.
-                document.addEventListener('visibilitychange', function(e) {
+                var swallow = function(e) {
                     e.stopImmediatePropagation();
-                }, true);
+                };
+                document.addEventListener('visibilitychange', swallow, true);
+
+                var name = '\(visibilityReleaseFunctionName)';
+                var release = function() {
+                    if (!released) {
+                        released = true;
+                        document.removeEventListener('visibilitychange', swallow, true);
+                        try {
+                            document.dispatchEvent(new Event('visibilitychange'));
+                        } catch (e) {}
+                        try {
+                            window.dispatchEvent(
+                                new PageTransitionEvent('pagehide', { persisted: false })
+                            );
+                        } catch (e) {}
+                    }
+                    var count = 1;
+                    try {
+                        for (var i = 0; i < window.frames.length; i++) {
+                            try {
+                                var child = window.frames[i][name];
+                                if (typeof child === 'function') { count += child(); }
+                            } catch (e) {}
+                        }
+                    } catch (e) {}
+                    return count;
+                };
+                Object.defineProperty(window, name, {
+                    configurable: false,
+                    enumerable: false,
+                    writable: false,
+                    value: release
+                });
             } catch (e) {}
         })();
         """

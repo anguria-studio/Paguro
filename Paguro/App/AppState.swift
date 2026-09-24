@@ -341,7 +341,17 @@ final class AppState {
         contentBlocker.stop()
         downloadTracker.stop()
         downloadFlights.stop()
+        // Let each page save its state before the teardown. The visibility
+        // override blocks the hidden event that pages use as a save point.
+        let handoff = await QuitVisibilityHandoff.run(
+            views: webViewPool.liveWebViewsForQuitHandoff,
+            release: QuitVisibilityHandoff.releaseVisibility(in:)
+        )
+        QuitVisibilityHandoff.log(handoff)
+        // Read the stores before the teardown releases the web views.
+        let storesToFlush = webViewPool.persistentDataStoresForQuitFlush()
         webViewPool.shutdown()
+        let teardownFinishedAt = ContinuousClock.now
 
         for token in systemObserverTokens {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
@@ -354,6 +364,16 @@ final class AppState {
         saveWindowState()
         storeRecovery.recordContent()
         await Task.yield()
+
+        // WebKit can lose the most recent local storage writes when the
+        // process exits directly after the teardown. The flush is bounded, so
+        // a store that never answers cannot hold the quit.
+        let flush = await QuitStorageFlush.run(
+            stores: storesToFlush,
+            teardownFinishedAt: teardownFinishedAt,
+            fetch: QuitStorageFlush.fetchAllRecords
+        )
+        QuitStorageFlush.log(flush)
     }
 
     /// Wires the WebViewPool's external-link handler so that links which leave
@@ -418,6 +438,7 @@ final class AppState {
         // marks the service active and handles soft-hibernation of whatever
         // was previously displayed.
         let webView = webViewPool.webView(for: service)
+        webViewPool.noteAppInitiatedNavigation(.linkRouting, for: service.id)
         webView.load(URLRequest(url: url))
     }
 
@@ -432,6 +453,7 @@ final class AppState {
     func reloadActiveService() {
         guard let id = webViewPool.activeServiceID,
               let webView = webViewPool.liveWebView(for: id) else { return }
+        webViewPool.noteAppInitiatedNavigation(.userReload, for: id)
         WebViewCoordinator.reload(webView, fallbackURL: workspaceStore.service(id: id).flatMap { URL(string: $0.url) })
     }
 
@@ -561,6 +583,7 @@ final class AppState {
             let types = WKWebsiteDataStore.allWebsiteDataTypes()
             await store.removeData(ofTypes: types, modifiedSince: .distantPast)
             if let webView = pool.liveWebView(for: serviceID) {
+                pool.noteAppInitiatedNavigation(.clearSession, for: serviceID)
                 if let homeURL = target.homeURL {
                     webView.load(URLRequest(url: homeURL))
                 } else {
