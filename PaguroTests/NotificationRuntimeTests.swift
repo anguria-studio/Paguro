@@ -885,11 +885,14 @@ final class NotificationRuntimeTests: XCTestCase {
         let context = fixture.container.mainContext
         let chat = ServiceInstance(label: "WhatsApp", url: "https://web.whatsapp.com/", catalogEntryID: "whatsapp")
         let mail = ServiceInstance(label: "Gmail", url: "https://mail.google.com/", catalogEntryID: "gmail")
+        let customChat = ServiceInstance(label: "Team chat", url: "https://chat.example/", isChatAppOverride: true)
         context.insert(chat)
         context.insert(mail)
+        context.insert(customChat)
         try context.save()
         XCTAssertTrue(chat.isNotificationCritical)
         XCTAssertFalse(mail.isNotificationCritical)
+        XCTAssertTrue(customChat.isNotificationCritical)
 
         fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
         fixture.runtime.startTransientBadgeFetcher()

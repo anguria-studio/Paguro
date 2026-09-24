@@ -359,12 +359,13 @@ final class WebViewPool {
     /// soft hibernation (media pause) and full eviction.
     private var neverHibernateIDs: Set<UUID> = []
 
-    /// Services that must stay live for real-time notifications (the Messaging
-    /// catalog category). Exempt from FULL hibernation in both sweeps — the idle
-    /// timer and the LRU cap sweep — so a chat app is never torn down and can
-    /// keep firing instant alerts. The category lives in the catalog, which the
-    /// pool doesn't own, so `HibernationScheduler` classifies through
-    /// `isNotificationCritical` and the pool caches the result here at load time.
+    /// Chat apps: services that must stay live for real-time notifications.
+    /// Exempt from full hibernation in both sweeps (the idle timer and the LRU
+    /// cap sweep), so a chat app is never torn down and can keep posting instant
+    /// alerts. The pool does not own the service record, so
+    /// `HibernationScheduler` classifies through `isNotificationCritical`. The
+    /// pool caches the result here at load time, and `setNotificationCritical`
+    /// updates it when the user changes the setting.
     private var notificationCriticalIDs: Set<UUID> = []
 
     /// Services pinned by external callers (e.g. the selected service
@@ -465,7 +466,7 @@ final class WebViewPool {
     var onServiceRemoved: ((UUID) -> Void)?
 
     /// Classifies whether a service must stay live for real-time notifications
-    /// (Messaging category). Set by `HibernationScheduler` and read at load time
+    /// (a chat app). Set by `HibernationScheduler` and read at load time
     /// to populate `notificationCriticalIDs`. Defaults to "not critical" when
     /// unset, so the pool never over-exempts.
     var isNotificationCritical: ((UUID) -> Bool)?
@@ -864,6 +865,16 @@ final class WebViewPool {
             neverHibernateIDs.insert(id)
         } else {
             neverHibernateIDs.remove(id)
+        }
+    }
+
+    /// Updates the cached chat app flag after the user changes the setting, so
+    /// both hibernation sweeps follow it without a relaunch.
+    func setNotificationCritical(_ value: Bool, for id: UUID) {
+        if value {
+            notificationCriticalIDs.insert(id)
+        } else {
+            notificationCriticalIDs.remove(id)
         }
     }
 

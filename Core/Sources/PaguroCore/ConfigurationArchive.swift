@@ -45,6 +45,9 @@ public struct ConfigurationService: Codable, Equatable, Sendable {
     public var stayActiveInBackground: Bool = false
     public var hibernationPolicy: String = "followGlobal"
     public var hibernateAfterMinutes: Int = 10
+    /// The user's chat app value. nil follows the catalog category, and an
+    /// older file without this key decodes as nil.
+    public var isChatApp: Bool? = nil
     public init() {}
 }
 

@@ -154,7 +154,7 @@ The data store keeps cookies and local storage separate from other accounts.
 
 `WebViewPool` targets `WebViewPoolCapacity`, currently 15 live web views.
 Above that number it releases eligible least recently used services, even when
-idle hibernation is off. Active, messaging, pinned, and Keep Loaded services are
+idle hibernation is off. Active, chat app, pinned, and Keep Loaded services are
 exempt. Protected views can keep the total above the target.
 It can hibernate an inactive service when policy permits this action.
 It must not hibernate a service during a call or while the camera or

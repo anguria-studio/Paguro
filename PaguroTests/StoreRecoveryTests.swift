@@ -107,7 +107,8 @@ final class StoreRecoveryTests: XCTestCase {
         let schemas: [(String, Schema)] = [
             ("V1_5_11", Schema(versionedSchema: PaguroSchemaV1_5_11.self)),
             ("V1_5_12", Schema(versionedSchema: PaguroSchemaV1_5_12.self)),
-            ("VCurrent", Schema(versionedSchema: PaguroSchemaVCurrent.self)),
+            ("V1_5_19", Schema(versionedSchema: PaguroSchemaV1_5_19.self)),
+            ("VCurrent",Schema(versionedSchema: PaguroSchemaVCurrent.self)),
         ]
         for (label, schema) in schemas {
             let names = Set(schema.entities.map(\.name))
@@ -152,7 +153,8 @@ final class StoreRecoveryTests: XCTestCase {
                 "dataStoreIdentifier", "pageZoom", "osNotificationsEnabled", "customCSS",
                 "forceDarkMode", "darkModeRaw", "cameraPolicyRaw", "microphonePolicyRaw",
                 "openExternalLinksInApp", "stayActiveInBackground", "hasSeenPasskeyNotice",
-                "hibernationPolicyRaw", "hibernateAfterMinutes", "createdAt", "lastAccessedAt",
+                "hibernationPolicyRaw", "hibernateAfterMinutes", "isChatAppOverride",
+                "createdAt", "lastAccessedAt",
             ],
             "ServiceInstance stored attributes changed without a new schema version"
         )
@@ -1806,6 +1808,53 @@ final class StoreRecoveryTests: XCTestCase {
         XCTAssertEqual(service.hibernationPolicyRaw, "never")
         XCTAssertEqual(service.hibernateAfterMinutes, 42)
         XCTAssertEqual(service.spaceLinks.count, 1, "the inverse must survive too")
+    }
+
+    /// The stage that adds `ServiceInstance.isChatAppOverride`. Every row must
+    /// carry across, and the new field must open as nil so each service still
+    /// follows its catalog category.
+    @MainActor
+    func testMigratesFrom1_5_19WithTheChatAppSettingUnset() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appending(path: "paguro-migr-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "default.store")
+
+        let serviceID = UUID(), spaceID = UUID(), linkID = UUID()
+
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: PaguroSchemaV1_5_19.self)
+            let config = ModelConfiguration(schema: schema, url: url)
+            let container = try ModelContainer(for: schema, configurations: [config])
+            let ctx = container.mainContext
+            let space = PaguroSchemaV1_5_19.Space(id: spaceID, name: "Work", emoji: "🏢", sortOrder: 2)
+            let service = PaguroSchemaV1_5_19.ServiceInstance(id: serviceID, label: "Slack", url: "https://slack.com")
+            service.catalogEntryID = "slack"
+            service.hibernationPolicyRaw = "after"
+            let link = PaguroSchemaV1_5_19.SpaceServiceLink(id: linkID, sortOrder: 4, space: space, service: service)
+            ctx.insert(space); ctx.insert(service); ctx.insert(link)
+            try ctx.save()
+        }
+
+        let schema = Schema(versionedSchema: PaguroSchemaVCurrent.self)
+        let config = ModelConfiguration(schema: schema, url: url)
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: PaguroMigrationPlan.self,
+            configurations: [config]
+        )
+        let ctx = container.mainContext
+
+        let service = try XCTUnwrap(try ctx.fetch(FetchDescriptor<ServiceInstance>()).first)
+        XCTAssertEqual(service.id, serviceID)
+        XCTAssertEqual(service.hibernationPolicyRaw, "after")
+        XCTAssertNil(service.isChatAppOverride)
+        XCTAssertTrue(service.isNotificationCritical, "an unset value follows the catalog")
+        let link = try XCTUnwrap(try ctx.fetch(FetchDescriptor<SpaceServiceLink>()).first)
+        XCTAssertEqual(link.id, linkID)
+        XCTAssertEqual(link.space?.id, spaceID)
+        XCTAssertEqual(link.service?.id, serviceID)
     }
 
     /// Deleting either end of a link must not trap, on any OS.

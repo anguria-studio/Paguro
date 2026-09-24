@@ -57,6 +57,25 @@ final class ConfigurationTransferTests: XCTestCase {
         XCTAssertTrue(store.allServices().contains { $0.label == "Mail" && $0.openExternalLinksInApp == false })
     }
 
+    func testChatAppValueSurvivesTransfer() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let store = WorkspaceStore(context: context, preferencesStore: PreferencesStore(context: context))
+        var archive = fixture()
+        archive.services[1].isChatApp = true
+        _ = try store.importConfiguration(archive, applyPreferences: false)
+        let chat = try XCTUnwrap(store.allServices().first { $0.label == "Chat" })
+        let mail = try XCTUnwrap(store.allServices().first { $0.label == "Mail" })
+        XCTAssertEqual(chat.isChatAppOverride, true)
+        XCTAssertTrue(chat.isNotificationCritical)
+        XCTAssertNil(mail.isChatAppOverride)
+        XCTAssertFalse(mail.isNotificationCritical)
+
+        let exported = try store.exportConfiguration()
+        XCTAssertEqual(try XCTUnwrap(exported.services.first { $0.label == "Chat" }).isChatApp, true)
+        XCTAssertNil(try XCTUnwrap(exported.services.first { $0.label == "Mail" }).isChatApp)
+    }
+
     func testImportPreservesOrderAndSharedAccountsWithFreshSessions() throws {
         let container = try makeContainer()
         let context = container.mainContext

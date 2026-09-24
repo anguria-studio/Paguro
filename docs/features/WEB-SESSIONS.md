@@ -83,8 +83,8 @@ provisional until a memory measurement confirms it.
 This limit is separate from idle hibernation. Above the limit, the pool
 releases the least recently used services, even when the user turns idle
 hibernation off. The same exemptions apply: the active service, a pinned
-service, a service with the "Keep Loaded" policy, and a messaging service stay
-live.
+service, a service with the "Keep Loaded" policy, and a chat app stay
+live. The "Chat app setting" section of `NOTIFICATIONS.md` defines a chat app.
 
 The first release of an app run shows a floating notice card above the web
 content. The card names the service, states the number of services that stay

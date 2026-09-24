@@ -9,6 +9,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 - Stop the background badge check from loading messaging services such as
   WhatsApp in a hidden page. A second hidden copy could sign WhatsApp Web out
   after an update or leave sign-in stuck on the loading screen.
+- Add a Chat app toggle in Edit service and in the custom website sheet. A chat
+  app stays loaded, also in other workspaces, never hibernates, and is not
+  checked in a hidden page. Catalog messaging services are on by default.
+  Configuration files keep the setting.
 
 ## [1.1.0] - 2026-09-23
 

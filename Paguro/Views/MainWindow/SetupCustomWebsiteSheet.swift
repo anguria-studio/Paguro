@@ -11,6 +11,7 @@ struct SetupCustomWebsiteSheet: View {
     @State private var label = ""
     @State private var url = ""
     @State private var error: String?
+    @State private var isChatApp = false
     @State private var iconDraft = ServiceIconDraft()
     @FocusState private var nameIsFocused: Bool
 
@@ -48,6 +49,7 @@ struct SetupCustomWebsiteSheet: View {
                             .font(.paguroCaption)
                             .foregroundStyle(.secondary)
                     }
+                    ChatAppToggle(isOn: $isChatApp)
                     if let message = error ?? iconDraft.errorMessage {
                         Text(message).font(.paguroCaption).foregroundStyle(.red)
                     }
@@ -94,7 +96,8 @@ struct SetupCustomWebsiteSheet: View {
             onChoose(ServiceSetupDraft(
                 label: label, url: url,
                 customIconData: iconDraft.customIconData,
-                fetchedIconData: iconDraft.fetchedIcon(for: url)
+                fetchedIconData: iconDraft.fetchedIcon(for: url),
+                isChatApp: isChatApp
             ))
         }
     }

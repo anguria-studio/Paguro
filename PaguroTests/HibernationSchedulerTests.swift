@@ -362,6 +362,37 @@ final class HibernationSchedulerTests: XCTestCase {
         XCTAssertTrue(fixture.pool.isHibernated(capturing.id))
     }
 
+    /// The pool caches the chat app flag when it loads a service. A change in
+    /// Edit service must reach that cache on save, without a relaunch, the same
+    /// way the hibernation policy does.
+    @MainActor
+    func testChatAppChangeReachesThePoolOnSave() throws {
+        let fixture = try makeFixture()
+        defer { fixture.pool.shutdown() }
+        let context = fixture.container.mainContext
+        let custom = service(label: "Team chat", policy: .after, afterMinutes: 1, url: "about:blank")
+        context.insert(custom)
+        try context.save()
+
+        let scheduler = HibernationScheduler(context: context, webViewPool: fixture.pool)
+        defer { scheduler.shutdown() }
+        scheduler.start(globalEnabled: false, globalIdleMinutes: 10, isLocked: { false })
+        fixture.pool.preload(custom)
+        let now = Date().addingTimeInterval(3_600)
+        XCTAssertTrue(fixture.pool.idleCandidates(now: now).contains { $0.id == custom.id })
+
+        custom.isChatAppOverride = true
+        scheduler.servicePolicyDidChange(custom.id)
+        XCTAssertFalse(
+            fixture.pool.idleCandidates(now: now).contains { $0.id == custom.id },
+            "a service marked as a chat app is exempt at once"
+        )
+
+        custom.isChatAppOverride = nil
+        scheduler.servicePolicyDidChange(custom.id)
+        XCTAssertTrue(fixture.pool.idleCandidates(now: now).contains { $0.id == custom.id })
+    }
+
     @MainActor
     private func makeFixture() throws -> (container: ModelContainer, pool: WebViewPool) {
         let container = try ModelContainer(
