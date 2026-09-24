@@ -455,6 +455,9 @@ It clips vertical overflow and permits vertical scrolling when items do not fit.
 It keeps horizontal overflow visible for magnification and tooltips.
 Icon sizes follow the pointer position along the rail, on a continuous curve
 that is level at both of its ends. A pointer move carries no animation. The
+hover fade of a cell animates its tile and its label only. It must not animate
+the scale or the move, because the hover passes to the next icon while the
+pointer moves. Those two icons would then pause and snap at each boundary. The
 effect fades in when the pointer enters the rail and out when it leaves, so an
 icon never appears at its magnified size.
 
@@ -467,7 +470,10 @@ cell reports only whether the pointer remains on horizontal overflow. This
 report holds the effect and its last position until the pointer leaves.
 
 A cell moves in the drawing alone. One fixed spatial pointer surface covers the
-rail viewport. A pointer event resolves the item from the drawn stack once,
+rail viewport. It is an AppKit tracking area (`RailPointerTracker`), not
+SwiftUI `onContinuousHover`. SwiftUI hover sent no event in the top padding of
+each row, so the icons stopped and then jumped when the pointer moved down.
+The tracking area gets every move and takes no clicks. A pointer event resolves the item from the drawn stack once,
 when the event arrives. The resolver does not change a hit shape. Keyboard and
 VoiceOver activation keep the cell's semantic identity. A cell forwards only a
 click on horizontal icon overflow that lies outside the rail surface.

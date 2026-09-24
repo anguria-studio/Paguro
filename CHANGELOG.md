@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Make the icon rail magnification follow the pointer smoothly. The icons no
+  longer stop and then jump at the edge between two icons.
+
 ## [1.1.1] - 2026-09-24
 
 Version 1.1.1, build 20. Direct download release only.

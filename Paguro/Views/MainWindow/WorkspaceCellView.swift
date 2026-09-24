@@ -34,6 +34,10 @@ struct WorkspaceCellView: View {
         isDockItem ? isDockHovered : isHovering
     }
 
+    private var hoverAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.1)
+    }
+
     private var emoji: String? {
         WorkspaceEmoji.displayValue(space.emoji)
     }
@@ -72,6 +76,7 @@ struct WorkspaceCellView: View {
                                 .opacity(adaptiveProgress)
                         }
                     }
+                    .animation(hoverAnimation, value: presentsHover)
                     // See `ServiceRowView`: the fill belongs to a resting
                     // tile, so it leaves and returns with the effect.
                     .opacity(isDockItem && !dockTransform.isResting ? 0 : 1)
@@ -89,7 +94,9 @@ struct WorkspaceCellView: View {
         .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
             content.offset(y: offset)
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: presentsHover)
+        // See `ServiceRowView`: a Dock item must not animate its scale and
+        // move when the hover passes to the next icon.
+        .animation(hoverAnimation, value: !isDockItem && presentsHover)
         .onHover { hovering in
             isHovering = hovering
             if isDockItem {
@@ -164,7 +171,9 @@ struct WorkspaceCellView: View {
                     glassIntensity: glassIntensity
                 )
                 .offset(x: dockTooltipLeadingOffset)
-                .opacity(presentsHover ? 1 : 0)
+                .animation(hoverAnimation) { tooltip in
+                    tooltip.opacity(presentsHover ? 1 : 0)
+                }
             }
     }
 
