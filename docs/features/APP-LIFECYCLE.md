@@ -174,9 +174,14 @@ During the life of the app, the visibility override script
 visible and blocks each `visibilitychange` event. Many web apps save their
 state when the page becomes hidden, because a browser sends that event before
 a tab closes or the browser quits. With the override, a page never gets this
-save point. WhatsApp Web keeps its session after a quit and reopen in Safari,
-but not in Paguro. A missing save at quit is a likely cause of these
-sign-outs. It is not confirmed.
+save point. WhatsApp Web kept its session after a quit and reopen in Safari,
+but not in Paguro.
+
+The maintainer confirmed the cause and the fix on hardware on September 24,
+2026, with a Debug build on macOS 27. Before the handoff, a plain quit and
+reopen signed WhatsApp out. With the handoff and the storage flush below,
+WhatsApp stayed signed in across several `Command-Q` quits and reopens, with
+content blocking on and off.
 
 The script defines a release function with a long, non-enumerable name
 (`UserScriptManager.visibilityReleaseFunctionName`). The function makes the
@@ -227,8 +232,8 @@ Quit visibility handoff delayed by the main thread: delayMs=<n>
 A test on macOS 27 found that a quick exit directly after the web-view
 teardown can lose the last local storage writes of a page. Cookies and
 IndexedDB kept their writes in the same runs, so the stores of one site did
-not agree after the next launch. A lost local storage write is one possible
-cause of a sign-out after quit and reopen, for example in WhatsApp Web.
+not agree after the next launch. The flush protects the writes that the
+visibility handoff starts.
 
 Before the teardown, `WebViewPool.persistentDataStoresForQuitFlush()` collects
 the persistent data store of each live web view, each store once. The pool

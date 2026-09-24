@@ -526,10 +526,12 @@ cookies and website database markers. Do not copy a real account's session into
 test builds. A passing synthetic test does not rule out provider-specific issues.
 
 A service that keeps its session in Safari but not in Paguro points to
-something that Paguro adds. The visibility override is one example: it blocks
-the hidden event that many web apps use to save their state. At quit, Paguro
-now sends that event first. A sign-out after quit that remains with
-`accepted` above zero in the handoff line points to another cause.
+something that Paguro adds. The visibility override caused the WhatsApp Web
+sign-outs after quit and reopen. It blocked the hidden event that many web
+apps use to save their state. At quit, Paguro now sends that event
+first. The maintainer confirmed the fix on hardware on September 24, 2026,
+with a Debug build on macOS 27. A new sign-out after quit with `accepted`
+above zero in the handoff line points to another cause.
 
 Paguro writes these lines at the notice level, so `log show` can read them
 after the event. They contain only fixed reason strings, counts, Booleans, and
