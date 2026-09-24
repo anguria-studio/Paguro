@@ -381,7 +381,109 @@ enum PaguroSchemaV1_5_13: VersionedSchema {
     }
 }
 
-// MARK: - Current (1.5.19: `SpaceServiceLink`'s two ends become optional)
+// MARK: - V1.5.19 (the shape before `ServiceInstance.isChatAppOverride`)
+//
+// Frozen on 2026-09-24. `SpaceServiceLink`'s two ends are optional here, the
+// fix that the 1.5.13 comment describes. The next shape adds only the optional
+// `ServiceInstance.isChatAppOverride`.
+
+enum PaguroSchemaV1_5_19: VersionedSchema {
+    static let versionIdentifier = Schema.Version(1, 5, 19)
+
+    // Reuses V1.5.11's frozen AppPreferences (unchanged since); the triangle is
+    // this namespace's own so the relationships point at THIS ServiceInstance.
+    static var models: [any PersistentModel.Type] {
+        [ServiceInstance.self, Space.self, SpaceServiceLink.self, PaguroSchemaV1_5_11.AppPreferences.self]
+    }
+
+    @Model
+    final class ServiceInstance {
+        @Attribute(.unique) var id: UUID
+        var label: String
+        var url: String
+        var customIconData: Data?
+        var fetchedIconData: Data?
+        var faviconFetchedAt: Date?
+        var catalogEntryID: String?
+        var isMuted: Bool
+        var showBadge: Bool
+        var neverHibernate: Bool
+        var userAgent: String?
+        var dataStoreIdentifier: UUID
+        var pageZoom: Double?
+        var osNotificationsEnabled: Bool?
+        var customCSS: String?
+        var forceDarkMode: Bool?
+        var darkModeRaw: String?
+        var cameraPolicyRaw: String?
+        var microphonePolicyRaw: String?
+        var openExternalLinksInApp: Bool?
+        var stayActiveInBackground: Bool?
+        var hasSeenPasskeyNotice: Bool?
+        var hibernationPolicyRaw: String?
+        var hibernateAfterMinutes: Int?
+
+        @Relationship(deleteRule: .cascade, inverse: \SpaceServiceLink.service)
+        var spaceLinks: [SpaceServiceLink]
+
+        var createdAt: Date
+        var lastAccessedAt: Date
+
+        init(id: UUID = UUID(), label: String = "", url: String = "") {
+            self.id = id
+            self.label = label
+            self.url = url
+            self.isMuted = false
+            self.showBadge = true
+            self.neverHibernate = false
+            self.dataStoreIdentifier = UUID()
+            self.spaceLinks = []
+            self.createdAt = Date()
+            self.lastAccessedAt = Date()
+        }
+    }
+
+    @Model
+    final class Space {
+        @Attribute(.unique) var id: UUID
+        var name: String
+        var emoji: String
+        var sortOrder: Int
+        var isMuted: Bool?
+
+        @Relationship(deleteRule: .cascade, inverse: \SpaceServiceLink.space)
+        var serviceLinks: [SpaceServiceLink]
+
+        var createdAt: Date
+
+        init(id: UUID = UUID(), name: String = "", emoji: String = "", sortOrder: Int = 0) {
+            self.id = id
+            self.name = name
+            self.emoji = emoji
+            self.sortOrder = sortOrder
+            self.serviceLinks = []
+            self.createdAt = Date()
+        }
+    }
+
+    @Model
+    final class SpaceServiceLink {
+        @Attribute(.unique) var id: UUID
+        var sortOrder: Int
+
+        @Relationship var space: Space?
+        @Relationship var service: ServiceInstance?
+
+        init(id: UUID = UUID(), sortOrder: Int = 0, space: Space, service: ServiceInstance) {
+            self.id = id
+            self.sortOrder = sortOrder
+            self.space = space
+            self.service = service
+        }
+    }
+}
+
+// MARK: - Current (adds the optional `ServiceInstance.isChatAppOverride`)
 //
 // Reuses the live top-level model types — today's model files are the single
 // source of truth for the shipping shape. When a stored property changes, freeze
@@ -393,11 +495,11 @@ enum PaguroSchemaVCurrent: VersionedSchema {
     // version, and these numbers are Chorus's shape history rather than Paguro's
     // own. Bump it only when the stored shape changes — and to a value not
     // already used by a different shape (do not blindly mint the next number).
-    // (1,5,13) now belongs to the frozen `PaguroSchemaV1_5_13`, which is the
-    // shape Paguro inherited; this one is (1,5,19) because making
-    // `SpaceServiceLink.space` and `.service` optional is a new shape, and
-    // upstream Chorus first shipped it under that number.
-    static let versionIdentifier = Schema.Version(1, 5, 19)
+    // (1,5,13) and (1,5,19) now belong to the frozen shapes of those names.
+    // This shape adds `ServiceInstance.isChatAppOverride`, which is Paguro's
+    // own change. It starts a new major number so that it cannot collide with
+    // a 1.x number that upstream Chorus used for a different shape.
+    static let versionIdentifier = Schema.Version(2, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [ServiceInstance.self, Space.self, SpaceServiceLink.self, AppPreferences.self]
@@ -408,7 +510,10 @@ enum PaguroSchemaVCurrent: VersionedSchema {
 
 enum PaguroMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [PaguroSchemaV1_5_11.self, PaguroSchemaV1_5_12.self, PaguroSchemaV1_5_13.self, PaguroSchemaVCurrent.self]
+        [
+            PaguroSchemaV1_5_11.self, PaguroSchemaV1_5_12.self, PaguroSchemaV1_5_13.self,
+            PaguroSchemaV1_5_19.self, PaguroSchemaVCurrent.self,
+        ]
     }
 
     static var stages: [MigrationStage] {
@@ -417,11 +522,13 @@ enum PaguroMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: PaguroSchemaV1_5_11.self, toVersion: PaguroSchemaV1_5_12.self),
             // 1.5.12 → 1.5.13: adds ServiceInstance.hibernationPolicyRaw + hibernateAfterMinutes (optional).
             .lightweight(fromVersion: PaguroSchemaV1_5_12.self, toVersion: PaguroSchemaV1_5_13.self),
-            // 1.5.13 → current: relaxes SpaceServiceLink.space and .service to
+            // 1.5.13 → 1.5.19: relaxes SpaceServiceLink.space and .service to
             // optional. Lightweight because it only drops a constraint: every
             // existing row already has both ends set, so nothing has to be
             // rewritten and no row can fail to satisfy the looser shape.
-            .lightweight(fromVersion: PaguroSchemaV1_5_13.self, toVersion: PaguroSchemaVCurrent.self),
+            .lightweight(fromVersion: PaguroSchemaV1_5_13.self, toVersion: PaguroSchemaV1_5_19.self),
+            // 1.5.19 → current: adds ServiceInstance.isChatAppOverride (optional).
+            .lightweight(fromVersion: PaguroSchemaV1_5_19.self, toVersion: PaguroSchemaVCurrent.self),
         ]
     }
 }

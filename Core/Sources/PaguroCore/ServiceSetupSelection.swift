@@ -9,6 +9,9 @@ public struct ServiceSetupDraft: Equatable, Sendable, Identifiable {
     public let userAgent: String?
     public let customIconData: Data?
     public let fetchedIconData: Data?
+    /// True when the user marked a custom website as a chat app. False
+    /// leaves the catalog category in charge (see `ChatAppRule`).
+    public let isChatApp: Bool
 
     public init(
         id: String = UUID().uuidString,
@@ -17,7 +20,8 @@ public struct ServiceSetupDraft: Equatable, Sendable, Identifiable {
         catalogEntryID: String? = nil,
         userAgent: String? = nil,
         customIconData: Data? = nil,
-        fetchedIconData: Data? = nil
+        fetchedIconData: Data? = nil,
+        isChatApp: Bool = false
     ) {
         self.id = id
         self.label = label
@@ -26,6 +30,7 @@ public struct ServiceSetupDraft: Equatable, Sendable, Identifiable {
         self.userAgent = userAgent
         self.customIconData = customIconData
         self.fetchedIconData = fetchedIconData
+        self.isChatApp = isChatApp
     }
 }
 

@@ -613,6 +613,44 @@ A lightweight badge probe can update unread state for some services.
 It must use the same service data store.
 It must not create a second account session.
 
+`TransientBadgeFetcher` is this probe. It starts 4 seconds after launch and
+then runs every 180 seconds. It checks each service that has no live web view,
+is not muted, and shows its badge. It loads that page in a hidden web view,
+reads the count for up to 20 seconds, and then removes the view.
+
+The probe never loads a chat app (a notification-critical service).
+`TransientBadgeFetchPolicy` in `PaguroCore` holds this rule. A hidden page is a
+second client on the same session. WhatsApp Web allows one live client for
+each session and keeps its device keys in IndexedDB. A hidden copy that starts
+next to the live view, or that stops during a write, can sign the service out.
+Launch preload keeps chat apps live, and both hibernation sweeps exempt them,
+so their live view supplies the badge. A chat app without a live view shows no
+new badge until the user opens it. This occurs after a manual hibernation, or
+when more than 5 chat apps are outside the active workspace.
+
+Each sweep writes one `badges` log line with the target count and the number
+of skipped chat apps. The line contains no names or URLs.
+
+### Chat app setting
+
+A chat app stays live so that its messages arrive at once. Paguro applies
+these rules to a chat app:
+
+- it never auto-hibernates, from the idle sweep or the capacity sweep;
+- launch preload also loads it from other workspaces, up to 5 services;
+- the transient badge probe skips it.
+
+Each service has a "Chat app" toggle in Edit service. The custom website sheet
+has the same toggle, off by default. `ChatAppRule` in `PaguroCore` decides the
+value. The user's value wins. Without a value, the catalog category decides:
+a service in the Messaging category is a chat app, and a custom website is not.
+`ServiceInstance.isChatAppOverride` stores the value, and nil means "follow the
+catalog". Configuration files carry it as `isChatApp`. An older file without
+this key imports as nil.
+
+A change applies to both hibernation sweeps and to the badge probe when the
+user saves. Launch preload reads the value at the next launch.
+
 When Paguro starts, it first records an unread baseline.
 It must not present old unread items as new alerts.
 

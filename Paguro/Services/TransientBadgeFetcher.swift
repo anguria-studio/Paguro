@@ -9,6 +9,10 @@ import PaguroCore
 /// page's JavaScript to write its unread count into the title or a DOM badge,
 /// reads it, then tears the web view down to reclaim memory.
 ///
+/// Chat (notification-critical) services are never fetched here. Their live
+/// view supplies the badge, and a hidden second copy can end a single-session
+/// client such as WhatsApp Web. `TransientBadgeFetchPolicy` holds the rule.
+///
 /// Why render at all: a plain HTTP fetch of the page returns the server HTML,
 /// whose `<title>` has no count (Gmail 302-redirects to a login host, WhatsApp
 /// ships an empty SPA shell, Facebook serves a "Redirecting…" stub, Slack/Discord

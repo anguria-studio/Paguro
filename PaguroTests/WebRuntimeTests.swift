@@ -431,6 +431,19 @@ final class WebRuntimeTests: XCTestCase {
         XCTAssertFalse(ServiceInstance(label: "Custom", url: "https://custom.example").isNotificationCritical)
     }
 
+    func testChatAppSettingOverridesTheCatalogCategory() {
+        XCTAssertTrue(ServiceInstance(label: "Custom", url: "https://custom.example", isChatAppOverride: true).isNotificationCritical)
+        XCTAssertFalse(ServiceInstance(label: "Slack", url: "https://slack.example", catalogEntryID: "slack", isChatAppOverride: false).isNotificationCritical)
+        XCTAssertTrue(ServiceInstance(label: "Slack", url: "https://slack.example", catalogEntryID: "slack", isChatAppOverride: nil).isNotificationCritical)
+    }
+
+    func testEditSheetStoresAChatAppValueOnlyWhenItDiffersFromTheCatalog() {
+        XCTAssertNil(EditServiceSheet.chatAppOverride(true, catalogCategory: "Messaging"))
+        XCTAssertEqual(EditServiceSheet.chatAppOverride(false, catalogCategory: "Messaging"), false)
+        XCTAssertEqual(EditServiceSheet.chatAppOverride(true, catalogCategory: nil), true)
+        XCTAssertNil(EditServiceSheet.chatAppOverride(false, catalogCategory: nil))
+    }
+
     // MARK: - Dark mode
 
     func testForceDarkModeDefaultsOff() {

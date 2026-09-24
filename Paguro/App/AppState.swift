@@ -1090,8 +1090,10 @@ final class AppState {
         // Chat services in OTHER spaces have to come up too. A service only
         // posts notification banners through the `paguroNotification` handler on
         // a live web view; the transient badge fetcher deliberately omits that
-        // handler, so a service with no web view is silent — its badge moves on
-        // the 180s sweep and nothing else. Preloading only the selected space
+        // handler, so a service with no web view is silent. The sweep also skips
+        // chat services (a hidden copy can end a WhatsApp Web session), so a
+        // chat service with no web view gets no badge either until it is
+        // opened. Preloading only the selected space
         // therefore made "chat apps stay live so their messages arrive at once"
         // true only inside the space you happened to be looking at, which is why
         // Slack in another space went quiet until it was visited.

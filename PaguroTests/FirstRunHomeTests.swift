@@ -150,6 +150,27 @@ final class FirstRunHomeTests: XCTestCase {
     }
 
     @MainActor
+    func testBatchSaveCarriesTheChatAppSettingFromTheDraft() throws {
+        let container = try ModelFixtures.groupingContainer()
+        let store = makeStore(context: container.mainContext)
+        let ids = try XCTUnwrap(store.addServices([
+            ServiceSetupDraft(label: "Team chat", url: "https://chat.example", isChatApp: true),
+            ServiceSetupDraft(label: "Notes", url: "https://notes.example"),
+            ServiceSetupDraft(label: "Slack", url: "https://slack.com", catalogEntryID: "slack")
+        ], to: nil))
+        let verification = makeStore(context: ModelContext(container))
+        let chat = try XCTUnwrap(verification.service(id: ids[0]))
+        let notes = try XCTUnwrap(verification.service(id: ids[1]))
+        let slack = try XCTUnwrap(verification.service(id: ids[2]))
+        XCTAssertEqual(chat.isChatAppOverride, true)
+        XCTAssertTrue(chat.isNotificationCritical)
+        XCTAssertNil(notes.isChatAppOverride)
+        XCTAssertFalse(notes.isNotificationCritical)
+        XCTAssertNil(slack.isChatAppOverride, "an unset draft leaves the catalog in charge")
+        XCTAssertTrue(slack.isNotificationCritical)
+    }
+
+    @MainActor
     func testBatchFailureRollsBackEveryServiceAndHome() throws {
         enum Failure: Error { case save }
         let container = try ModelFixtures.groupingContainer()

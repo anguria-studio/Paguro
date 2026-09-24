@@ -135,8 +135,9 @@ final class HibernationScheduler {
     /// Synchronizes pool exemptions and timers after a service policy edit.
     func servicePolicyDidChange(_ serviceID: UUID) {
         guard !hasShutDown else { return }
-        let policy = service(serviceID)?.hibernationPolicyEffective
-        webViewPool.setNeverHibernate(policy == .never, for: serviceID)
+        let edited = service(serviceID)
+        webViewPool.setNeverHibernate(edited?.hibernationPolicyEffective == .never, for: serviceID)
+        webViewPool.setNotificationCritical(edited?.isNotificationCritical ?? false, for: serviceID)
         cancelImmediateHibernation(serviceID)
         refreshIdleSweepTask()
     }

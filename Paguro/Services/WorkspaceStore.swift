@@ -206,7 +206,9 @@ final class WorkspaceStore {
             let service = ServiceInstance(
                 label: draft.label, url: draft.url,
                 customIconData: draft.customIconData,
-                catalogEntryID: draft.catalogEntryID, userAgent: draft.userAgent
+                catalogEntryID: draft.catalogEntryID, userAgent: draft.userAgent,
+                // Off stores nil, so the catalog category still decides.
+                isChatAppOverride: draft.isChatApp ? true : nil
             )
             context.insert(service)
             if let icon = draft.fetchedIconData {
@@ -540,6 +542,7 @@ extension WorkspaceStore {
             item.stayActiveInBackground = service.staysActiveInBackgroundEffective
             item.hibernationPolicy = service.hibernationPolicyEffective.rawValue
             item.hibernateAfterMinutes = service.hibernateAfterMinutesEffective
+            item.isChatApp = service.isChatAppOverride
             return item
         }
         archive.preferences = preferencesStore.configurationPreferences()
@@ -598,7 +601,8 @@ extension WorkspaceStore {
                     openExternalLinksInApp: item.followsGlobalLinkOpening == true ? nil : item.openExternalLinksInApp,
                     stayActiveInBackground: item.stayActiveInBackground,
                     hibernationPolicyRaw: item.hibernationPolicy,
-                    hibernateAfterMinutes: item.hibernateAfterMinutes
+                    hibernateAfterMinutes: item.hibernateAfterMinutes,
+                    isChatAppOverride: item.isChatApp
                 )
                 context.insert(service)
                 services[item.id] = service

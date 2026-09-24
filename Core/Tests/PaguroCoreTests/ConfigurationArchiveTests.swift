@@ -49,6 +49,23 @@ struct ConfigurationArchiveTests {
         #expect(!older.services[0].openExternalLinksInApp)
     }
 
+    @Test func chatAppValueRoundTripsAndOlderFilesDecode() throws {
+        var archive = fixture()
+        archive.services[0].isChatApp = true
+        let data = try ConfigurationArchiveCodec.encode(archive)
+        #expect(try ConfigurationArchiveCodec.decode(data) == archive)
+
+        archive.services[0].isChatApp = false
+        #expect(try ConfigurationArchiveCodec.decode(ConfigurationArchiveCodec.encode(archive)) == archive)
+
+        var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var services = try #require(json["services"] as? [[String: Any]])
+        services[0].removeValue(forKey: "isChatApp")
+        json["services"] = services
+        let older = try ConfigurationArchiveCodec.decode(JSONSerialization.data(withJSONObject: json))
+        #expect(older.services[0].isChatApp == nil)
+    }
+
     @Test func unsupportedVersionIsRejected() {
         var archive = fixture()
         archive.version = 2

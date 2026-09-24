@@ -21,6 +21,7 @@ struct EditServiceSheet: View {
     @State private var mobileView: Bool = false
     @State private var linkOpeningPolicy: LinkOpeningPolicy = .followGlobal
     @State private var stayActive: Bool = false
+    @State private var chatApp: Bool = false
     @State private var webAppearance: ServiceAppearanceMode = .automatic
     @State private var notify: Bool = true
     @State private var osNotify: Bool = true
@@ -84,6 +85,8 @@ struct EditServiceSheet: View {
                         websiteURL: $iconWebsiteURL
                     )
 
+                    ChatAppToggle(isOn: $chatApp)
+
                     VStack(alignment: .leading, spacing: 6) {
                         Picker("Hibernate", selection: $hibernationPolicy) {
                             Text("Follow global setting").tag(HibernationPolicy.followGlobal)
@@ -92,16 +95,16 @@ struct EditServiceSheet: View {
                             Text("Never (keep loaded)").tag(HibernationPolicy.never)
                         }
                         .help("Paguro frees a service's memory and CPU while it runs in the background. The one you're viewing always stays loaded. \"Never\" also keeps calls and notifications working in the background, at the cost of more memory.")
-                        .disabled(service.isNotificationCritical)
+                        .disabled(chatApp)
 
-                        if hibernationPolicy == .after && !service.isNotificationCritical {
+                        if hibernationPolicy == .after && !chatApp {
                             Stepper(value: $hibernateAfterMinutes, in: 1...120) {
                                 Text("Idle for \(hibernateAfterMinutes) minute\(hibernateAfterMinutes == 1 ? "" : "s")")
                             }
                             .accessibilityLabel("Hibernate after \(hibernateAfterMinutes) minutes idle")
                         }
 
-                        if service.isNotificationCritical {
+                        if chatApp {
                             Text("Chat apps stay loaded so their messages reach you the instant they arrive. This setting won't hibernate this one.")
                                 .font(.paguroCaption)
                                 .foregroundStyle(.secondary)
@@ -194,6 +197,7 @@ struct EditServiceSheet: View {
             initialUserAgent = service.userAgent
             linkOpeningPolicy = LinkOpeningPolicy(override: service.openExternalLinksInApp)
             stayActive = service.staysActiveInBackgroundEffective
+            chatApp = service.isNotificationCritical
             webAppearance = service.webAppearance
             notify = !service.isMuted
             osNotify = service.notifiesOSEffective
@@ -367,6 +371,9 @@ struct EditServiceSheet: View {
             // Read fresh at each link click, so no rebuild is needed.
             service.openExternalLinksInApp = linkOpeningPolicy.override
             service.stayActiveInBackground = stayActive
+            service.isChatAppOverride = Self.chatAppOverride(
+                chatApp, catalogCategory: service.catalogCategory
+            )
             // Pin a camera/mic policy only if the user actually changed it, so
             // opening the sheet to edit something else doesn't stop the service
             // from inheriting the global default. No rebuild needed — the value is
@@ -388,4 +395,25 @@ struct EditServiceSheet: View {
             dismiss()
         }
     }
+
+    /// Stores nil when the toggle matches the catalog default, so the service
+    /// keeps following its category. Only a real difference is stored.
+    nonisolated static func chatAppOverride(_ isOn: Bool, catalogCategory: String?) -> Bool? {
+        isOn == ChatAppRule.isChatApp(override: nil, catalogCategory: catalogCategory) ? nil : isOn
+    }
+}
+
+/// The "Chat app" setting, shared by Edit service and the custom website sheet.
+struct ChatAppToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Chat app", isOn: $isOn)
+            Text(Self.caption)
+                .settingsCaption()
+        }
+    }
+
+    static let caption = "Keeps this service loaded, even in other workspaces, so messages arrive right away. Chat apps never hibernate, which uses more memory."
 }

@@ -80,6 +80,11 @@ final class ServiceInstance {
     /// which clamps to 1...120 (nil → 10). Ignored for the other policies.
     var hibernateAfterMinutes: Int?
 
+    /// The user's "Chat app" setting. nil follows the catalog category, so a
+    /// catalog messaging service is a chat app and a custom website is not.
+    /// Read via `isNotificationCritical`.
+    var isChatAppOverride: Bool?
+
     @Relationship(deleteRule: .cascade, inverse: \SpaceServiceLink.service)
     var spaceLinks: [SpaceServiceLink]
 
@@ -128,20 +133,19 @@ final class ServiceInstance {
     /// service only fakes focus when the user has explicitly opted in.
     var staysActiveInBackgroundEffective: Bool { stayActiveInBackground ?? false }
 
-    /// Catalog categories whose services must never auto-hibernate (chat apps).
-    /// A hibernated web app can only refresh its badge on the periodic sweep, not
-    /// fire an instant alert, so chat apps stay live even when a per-service timer
-    /// is set — you need to hear from them the moment a message lands.
-    static let notificationCriticalCategories: Set<String> = ["Messaging"]
+    /// The catalog category of this service, or nil for a custom website.
+    var catalogCategory: String? {
+        catalogEntryID.flatMap { ServiceCatalog.shared.entry(for: $0) }?.category
+    }
 
-    /// True when this service must stay live for real-time notifications, decided
-    /// by its catalog category. Custom (non-catalog) services aren't covered —
-    /// use the `.never` hibernation policy for those.
+    /// True when this service is a chat app and must stay live for real-time
+    /// notifications. A hibernated page cannot post an instant alert, so a chat
+    /// app never auto-hibernates, launch preload also loads it from other
+    /// workspaces, and the hidden badge fetch skips it. The user's "Chat app"
+    /// setting wins. Without it, the catalog category decides, so a custom
+    /// website is a chat app only when the user turns the setting on.
     var isNotificationCritical: Bool {
-        guard let catalogEntryID,
-              let entry = ServiceCatalog.shared.entry(for: catalogEntryID)
-        else { return false }
-        return Self.notificationCriticalCategories.contains(entry.category)
+        ChatAppRule.isChatApp(override: isChatAppOverride, catalogCategory: catalogCategory)
     }
 
     /// The effective hibernation policy. An explicit `hibernationPolicyRaw` wins;
@@ -200,7 +204,8 @@ final class ServiceInstance {
         openExternalLinksInApp: Bool? = nil,
         stayActiveInBackground: Bool? = nil,
         hibernationPolicyRaw: String? = nil,
-        hibernateAfterMinutes: Int? = nil
+        hibernateAfterMinutes: Int? = nil,
+        isChatAppOverride: Bool? = nil
     ) {
         self.id = id
         self.label = label
@@ -226,6 +231,7 @@ final class ServiceInstance {
         self.stayActiveInBackground = stayActiveInBackground
         self.hibernationPolicyRaw = hibernationPolicyRaw
         self.hibernateAfterMinutes = hibernateAfterMinutes
+        self.isChatAppOverride = isChatAppOverride
         self.spaceLinks = []
         self.createdAt = Date()
         self.lastAccessedAt = Date()
