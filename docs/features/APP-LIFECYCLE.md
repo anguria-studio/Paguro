@@ -198,14 +198,28 @@ Before the teardown, `AppState.shutdown()` calls `QuitVisibilityHandoff.run`:
 - It does not wait when no web view is live.
 
 `QuitVisibilityHandoffPolicy` in PaguroCore holds the limits.
-`BoundedParallelRace` runs the calls against the timer, and the storage flush
+`BoundedParallelRace` runs the calls against a deadline, and the storage flush
 uses the same type. The override stays on for the whole life of the app.
 Hibernation does not use the handoff.
+
+The deadline timer runs off the main actor. In an early version the timer ran
+on the main actor, so a busy main thread delayed it three times. It delayed
+the start of its sleep, its wake-up, and the return to the caller. On hardware, a
+300 ms cap ended after 556 ms. Now the race decides at the deadline, and only
+the return to the caller waits for the main thread. Nothing can shorten that
+last wait, because AppKit must get its reply on the main thread.
 
 Paguro writes one line at the notice level in the `WebView` category:
 
 ```text
 Quit visibility handoff: views=<n> accepted=<n> timedOut=<bool> elapsedMs=<n>
+```
+
+When the main thread holds the return for 50 ms or more, a second line
+follows:
+
+```text
+Quit visibility handoff delayed by the main thread: delayMs=<n>
 ```
 
 ### Website storage flush at quit
@@ -236,6 +250,15 @@ Paguro writes one line at the notice level in the `DataStore` category:
 
 ```text
 Quit storage flush: stores=<n> completed=<n> timedOut=<bool> elapsedMs=<n>
+```
+
+The 500 ms timeout starts when the fetches start. The elapsed time starts at
+the teardown, so it also contains the steps between the teardown and the
+fetches. When the main thread holds the return for 50 ms or more, a second
+line follows:
+
+```text
+Quit storage flush delayed by the main thread: delayMs=<n>
 ```
 
 ### Exit paths

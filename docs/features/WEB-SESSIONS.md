@@ -539,6 +539,7 @@ durations. They never contain a service name, URL, or page title.
 | --- | --- | --- |
 | `WebView` | `Quit visibility handoff: views=<n> accepted=<n> timedOut=<bool> elapsedMs=<n>` | Each quit, before the teardown. See [App lifecycle](APP-LIFECYCLE.md#visibility-handoff-at-quit). |
 | `DataStore` | `Quit storage flush: stores=<n> completed=<n> timedOut=<bool> elapsedMs=<n>` | Each quit. See [App lifecycle](APP-LIFECYCLE.md#website-storage-flush-at-quit). |
+| `WebView`, `DataStore` | `Quit visibility handoff delayed by the main thread: delayMs=<n>`, `Quit storage flush delayed by the main thread: delayMs=<n>` | A busy main thread held the quit for 50 ms or more after the step ended. |
 | `WebView` | `Chat app web view torn down: reason=<reason> isChatApp=true` | Paguro releases a chat app web view for a reason other than quit: `idleHibernation`, `capacityEviction`, `manualHibernation`, `rebuild`, or `removal`. |
 | `WebView` | `Chat app navigation started by Paguro: reason=<reason> isChatApp=true` | Paguro starts a main-frame load or reload in a chat app. `AppInitiatedNavigationReason` in PaguroCore lists the reasons, for example `initialLoad`, `wakeFromHibernation`, `crashRecoveryReload`, and `errorPageRetry`. |
 

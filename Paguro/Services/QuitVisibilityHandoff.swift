@@ -18,6 +18,9 @@ enum QuitVisibilityHandoff {
         var acceptedCount: Int
         var timedOut: Bool
         var elapsed: Duration
+        /// The time from the end of the release calls to the moment the
+        /// caller could run again on the main thread.
+        var mainThreadDelay: Duration = .zero
     }
 
     /// The production release. A page without the function (an error page),
@@ -40,24 +43,28 @@ enum QuitVisibilityHandoff {
     ) async -> Outcome {
         let clock = ContinuousClock()
         let start = clock.now
+        // The cap and the elapsed time use the same start.
         let race = BoundedParallelRace(items: views, work: release)
         let result = await race.run(
-            timeout: QuitVisibilityHandoffPolicy.releaseTimeout(viewCount: views.count, cap: cap)
+            until: start + QuitVisibilityHandoffPolicy.releaseTimeout(viewCount: views.count, cap: cap)
         )
+        let now = clock.now
+        let mainThreadDelay = views.isEmpty ? .zero : now - result.decidedAt
         let remaining = QuitVisibilityHandoffPolicy.remainingGrace(
-            elapsed: clock.now - start,
+            elapsed: now - start,
             acceptedCount: result.acceptedCount,
             minimumGrace: minimumGrace,
             cap: cap
         )
         if remaining > .zero {
-            try? await Task.sleep(for: remaining)
+            try? await Task.sleep(until: now + remaining, tolerance: .milliseconds(2), clock: .continuous)
         }
         return Outcome(
             viewCount: views.count,
             acceptedCount: result.acceptedCount,
             timedOut: result.timedOut,
-            elapsed: clock.now - start
+            elapsed: clock.now - start,
+            mainThreadDelay: mainThreadDelay
         )
     }
 
@@ -66,5 +73,11 @@ enum QuitVisibilityHandoff {
         AppLogger.webView.notice(
             "Quit visibility handoff: views=\(outcome.viewCount, privacy: .public) accepted=\(outcome.acceptedCount, privacy: .public) timedOut=\(outcome.timedOut, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)"
         )
+        if QuitStorageFlushPolicy.isNotableMainThreadDelay(outcome.mainThreadDelay) {
+            let delayMs = QuitStorageFlushPolicy.milliseconds(outcome.mainThreadDelay)
+            AppLogger.webView.notice(
+                "Quit visibility handoff delayed by the main thread: delayMs=\(delayMs, privacy: .public)"
+            )
+        }
     }
 }

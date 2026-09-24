@@ -59,6 +59,14 @@ struct QuitStorageFlushPolicyTests {
     }
 
     @Test
+    func onlyAMainThreadDelayOf50MillisecondsOrMoreIsLogged() {
+        #expect(!QuitStorageFlushPolicy.isNotableMainThreadDelay(.zero))
+        #expect(!QuitStorageFlushPolicy.isNotableMainThreadDelay(.milliseconds(49)))
+        #expect(QuitStorageFlushPolicy.isNotableMainThreadDelay(.milliseconds(50)))
+        #expect(QuitStorageFlushPolicy.isNotableMainThreadDelay(.milliseconds(256)))
+    }
+
+    @Test
     func onlyChatAppTeardownsOtherThanQuitAreLogged() {
         for reason in WebViewTeardownReason.allCases {
             #expect(!WebViewTeardownReason.isLogged(reason, isChatApp: false))

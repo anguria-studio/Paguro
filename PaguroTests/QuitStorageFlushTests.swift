@@ -39,6 +39,34 @@ final class QuitStorageFlushTests: XCTestCase {
         XCTAssertLessThan(waited, .seconds(2), "the timeout must end the flush")
     }
 
+    /// The timeout holds while other work keeps the main thread busy. See
+    /// `QuitVisibilityHandoffTests.testCapHoldsWhileTheMainThreadIsBusy`.
+    func testTimeoutHoldsWhileTheMainThreadIsBusy() async {
+        let timeout = Duration.milliseconds(150)
+        let busy = MainThreadBusyLoop(blockLength: .milliseconds(80))
+        busy.start()
+        defer { busy.stop() }
+        let start = ContinuousClock.now
+
+        let outcome = await QuitStorageFlush.run(
+            stores: [FakeStore()],
+            teardownFinishedAt: start,
+            timeout: timeout,
+            minimumWait: .milliseconds(10)
+        ) { _ in
+            try? await Task.sleep(for: .seconds(30))
+        }
+        let waited = ContinuousClock.now - start
+
+        XCTAssertTrue(outcome.timedOut)
+        XCTAssertGreaterThanOrEqual(waited, timeout)
+        // The race decides at the deadline off the main thread. Only the
+        // caller's return waits for the main thread, and the outcome reports
+        // that wait on its own.
+        XCTAssertLessThan(waited - outcome.mainThreadDelay, timeout + .milliseconds(50), "the deadline must not wait for the main thread")
+        XCTAssertLessThan(waited, .seconds(2))
+    }
+
     func testFastStoresStillWaitTheMinimumAfterTeardown() async {
         let start = ContinuousClock.now
 

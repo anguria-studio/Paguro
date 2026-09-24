@@ -31,6 +31,42 @@ final class QuitVisibilityHandoffTests: XCTestCase {
         XCTAssertLessThan(waited, .seconds(2), "the cap must end the handoff")
     }
 
+    /// Models the hardware run that ended 256 ms after its 300 ms cap: pages
+    /// that answer late while other work keeps the main thread busy.
+    ///
+    /// A main-actor task runs 80 ms blocks of work and yields between them, so
+    /// each main-actor job waits for up to one block. A timer on the main actor
+    /// needed up to three turns there: to start its sleep, to wake up, and to
+    /// resume the caller. It ended 190 to 250 ms after the cap in this test.
+    /// The timer off the main actor decides at the cap, and only the caller's
+    /// own turn waits for the main thread. Other tests can also keep the main
+    /// thread busy, so the test checks the decision, not the caller's turn.
+    func testCapHoldsWhileTheMainThreadIsBusy() async {
+        let cap = Duration.milliseconds(150)
+        let busy = MainThreadBusyLoop(blockLength: .milliseconds(80))
+        busy.start()
+        defer { busy.stop() }
+        let start = ContinuousClock.now
+
+        let outcome = await QuitVisibilityHandoff.run(
+            views: [FakePage()],
+            cap: cap,
+            minimumGrace: .milliseconds(100)
+        ) { _ in
+            try? await Task.sleep(for: .seconds(30))
+            return true
+        }
+        let waited = ContinuousClock.now - start
+
+        XCTAssertTrue(outcome.timedOut)
+        XCTAssertGreaterThanOrEqual(waited, cap)
+        // The race decides at the deadline off the main thread. Only the
+        // caller's return waits for the main thread, and the outcome reports
+        // that wait on its own.
+        XCTAssertLessThan(waited - outcome.mainThreadDelay, cap + .milliseconds(50), "the deadline must not wait for the main thread")
+        XCTAssertLessThan(waited, .seconds(2))
+    }
+
     func testAcceptedPageGetsTheMinimumGrace() async {
         let start = ContinuousClock.now
 

@@ -17,6 +17,9 @@ enum QuitStorageFlush {
         var timedOut: Bool
         /// The time from the teardown to the end of the flush.
         var elapsed: Duration
+        /// The time from the end of the fetches to the moment the caller
+        /// could run again on the main thread.
+        var mainThreadDelay: Duration = .zero
     }
 
     /// The production fetch. `cookies` alone did not work as a barrier in the
@@ -51,19 +54,22 @@ enum QuitStorageFlush {
             await fetch(store)
             return true
         }
-        let result = await race.run(timeout: timeout)
+        let result = await race.run(until: clock.now + timeout)
+        let now = clock.now
+        let mainThreadDelay = now - result.decidedAt
         let remaining = QuitStorageFlushPolicy.remainingMinimumWait(
-            elapsed: clock.now - teardownFinishedAt,
+            elapsed: now - teardownFinishedAt,
             minimumWait: minimumWait
         )
         if remaining > .zero {
-            try? await Task.sleep(for: remaining)
+            try? await Task.sleep(until: now + remaining, tolerance: .milliseconds(2), clock: .continuous)
         }
         return Outcome(
             storeCount: stores.count,
             completedCount: result.answeredCount,
             timedOut: result.timedOut,
-            elapsed: clock.now - teardownFinishedAt
+            elapsed: clock.now - teardownFinishedAt,
+            mainThreadDelay: mainThreadDelay
         )
     }
 
@@ -72,5 +78,11 @@ enum QuitStorageFlush {
         AppLogger.dataStore.notice(
             "Quit storage flush: stores=\(outcome.storeCount, privacy: .public) completed=\(outcome.completedCount, privacy: .public) timedOut=\(outcome.timedOut, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)"
         )
+        if QuitStorageFlushPolicy.isNotableMainThreadDelay(outcome.mainThreadDelay) {
+            let delayMs = QuitStorageFlushPolicy.milliseconds(outcome.mainThreadDelay)
+            AppLogger.dataStore.notice(
+                "Quit storage flush delayed by the main thread: delayMs=\(delayMs, privacy: .public)"
+            )
+        }
     }
 }

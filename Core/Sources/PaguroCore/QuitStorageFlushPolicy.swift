@@ -38,6 +38,12 @@ public enum QuitStorageFlushPolicy {
         }
     }
 
+    /// Whether a quit step logs how long the busy main thread held its
+    /// caller. A shorter delay is normal and gets no line.
+    public static func isNotableMainThreadDelay(_ delay: Duration) -> Bool {
+        delay >= .milliseconds(50)
+    }
+
     /// The whole milliseconds in `duration`, for a log line.
     public static func milliseconds(_ duration: Duration) -> Int {
         let components = duration.components
