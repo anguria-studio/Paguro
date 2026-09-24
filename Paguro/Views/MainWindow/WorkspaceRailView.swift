@@ -155,8 +155,11 @@ struct WorkspaceRailView: View {
                 }
                 // Measured by the rail rather than by its cells, which the
                 // pointer has already resized. See `UnifiedRailView`.
-                .onContinuousHover(coordinateSpace: .local) { phase in
-                    updatePointer(phase, viewportHeight: geometry.size.height)
+                .overlay {
+                    RailPointerTracker { phase in
+                        updatePointer(phase, viewportHeight: geometry.size.height)
+                    }
+                    .allowsHitTesting(false)
                 }
             }
             .clipShape(WorkspaceRailClipShape())
