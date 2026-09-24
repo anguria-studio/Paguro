@@ -6,6 +6,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 - Apply the outside-link setting to links that a service opens in a new
   window, such as a Linear link in Slack. Sign-in popups still open in Paguro.
+- Stop the background badge check from loading messaging services such as
+  WhatsApp in a hidden page. A second hidden copy could sign WhatsApp Web out
+  after an update or leave sign-in stuck on the loading screen.
 
 ## [1.1.0] - 2026-09-23
 

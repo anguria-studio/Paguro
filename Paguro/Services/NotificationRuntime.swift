@@ -212,11 +212,22 @@ final class NotificationRuntime {
                 AppLogger.badges.error("Badge sweep fetch failed: \(error.localizedDescription)")
                 return []
             }
-            return services.compactMap { service in
-                guard !self.webViewPool.hasWebView(for: service.id),
-                      !service.isEffectivelyMuted,
-                      service.showBadge
-                else { return nil }
+            // Chat services never go into the sweep. A hidden second copy of
+            // WhatsApp Web on the same data store competes with the live
+            // client and can log the session out. See TransientBadgeFetchPolicy.
+            var skippedCritical = 0
+            let targets = services.compactMap { service -> TransientBadgeFetcher.Target? in
+                let hasLiveWebView = self.webViewPool.hasWebView(for: service.id)
+                let isCritical = service.isNotificationCritical
+                guard TransientBadgeFetchPolicy.shouldFetch(
+                    hasLiveWebView: hasLiveWebView,
+                    isMuted: service.isEffectivelyMuted,
+                    showsBadge: service.showBadge,
+                    isNotificationCritical: isCritical
+                ) else {
+                    if isCritical && !hasLiveWebView { skippedCritical += 1 }
+                    return nil
+                }
                 let badgeJS = service.catalogEntryID
                     .flatMap { ServiceCatalog.shared.entry(for: $0) }?.badgeJS
                 return TransientBadgeFetcher.Target(
@@ -227,6 +238,14 @@ final class NotificationRuntime {
                     badgeJS: badgeJS
                 )
             }
+            // Copy to plain Ints first. Logger captures interpolations in a
+            // Sendable autoclosure.
+            let targetCount = targets.count
+            let skippedCount = skippedCritical
+            AppLogger.badges.info(
+                "Badge sweep: \(targetCount) target(s), skipped \(skippedCount) chat service(s) without a live view"
+            )
+            return targets
         }
         transientBadgeFetcher.hasLiveWebView = { [weak self] in
             self?.webViewPool.hasWebView(for: $0) ?? false

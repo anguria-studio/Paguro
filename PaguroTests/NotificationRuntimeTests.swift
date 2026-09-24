@@ -875,6 +875,29 @@ final class NotificationRuntimeTests: XCTestCase {
         XCTAssertEqual(fixture.badgeManager.rawCount(for: service.id), 0)
     }
 
+    /// A hidden second copy of WhatsApp Web on the same data store competes
+    /// with the live client and can log the session out. The sweep must leave
+    /// chat services to their live view and still fetch other services.
+    @MainActor
+    func testTransientBadgeSweepSkipsChatServicesAndKeepsOthers() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.shutdown() }
+        let context = fixture.container.mainContext
+        let chat = ServiceInstance(label: "WhatsApp", url: "https://web.whatsapp.com/", catalogEntryID: "whatsapp")
+        let mail = ServiceInstance(label: "Gmail", url: "https://mail.google.com/", catalogEntryID: "gmail")
+        context.insert(chat)
+        context.insert(mail)
+        try context.save()
+        XCTAssertTrue(chat.isNotificationCritical)
+        XCTAssertFalse(mail.isNotificationCritical)
+
+        fixture.runtime.start(currentSpaceID: { nil }, selectService: { _, _ in })
+        fixture.runtime.startTransientBadgeFetcher()
+        let targets = try XCTUnwrap(fixture.transientBadgeFetcher.targetsProvider?())
+
+        XCTAssertEqual(targets.map(\.id), [mail.id])
+    }
+
     @MainActor
     func testShutdownRemovesEveryOwnedCallbackAndObserver() async throws {
         let fixture = try makeFixture()

@@ -613,6 +613,25 @@ A lightweight badge probe can update unread state for some services.
 It must use the same service data store.
 It must not create a second account session.
 
+`TransientBadgeFetcher` is this probe. It starts 4 seconds after launch and
+then runs every 180 seconds. It checks each service that has no live web view,
+is not muted, and shows its badge. It loads that page in a hidden web view,
+reads the count for up to 20 seconds, and then removes the view.
+
+The probe never loads a messaging (notification-critical) service.
+`TransientBadgeFetchPolicy` in `PaguroCore` holds this rule. A hidden page is a
+second client on the same session. WhatsApp Web allows one live client for
+each session and keeps its device keys in IndexedDB. A hidden copy that starts
+next to the live view, or that stops during a write, can sign the service out.
+Launch preload keeps messaging services live, and both hibernation sweeps
+exempt them, so their live view supplies the badge. A messaging service without
+a live view shows no new badge until the user opens it. This occurs after a
+manual hibernation, or when more than 5 messaging services are outside the
+active space.
+
+Each sweep writes one `badges` log line with the target count and the number
+of skipped messaging services. The line contains no names or URLs.
+
 When Paguro starts, it first records an unread baseline.
 It must not present old unread items as new alerts.
 
