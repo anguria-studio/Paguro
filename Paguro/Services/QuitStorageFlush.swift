@@ -47,7 +47,10 @@ enum QuitStorageFlush {
             )
         }
 
-        let race = FetchRace(stores: stores, fetch: fetch)
+        let race = BoundedParallelRace(items: stores) { store in
+            await fetch(store)
+            return true
+        }
         let result = await race.run(timeout: timeout)
         let remaining = QuitStorageFlushPolicy.remainingMinimumWait(
             elapsed: clock.now - teardownFinishedAt,
@@ -58,7 +61,7 @@ enum QuitStorageFlush {
         }
         return Outcome(
             storeCount: stores.count,
-            completedCount: result.completedCount,
+            completedCount: result.answeredCount,
             timedOut: result.timedOut,
             elapsed: clock.now - teardownFinishedAt
         )
@@ -69,63 +72,5 @@ enum QuitStorageFlush {
         AppLogger.dataStore.notice(
             "Quit storage flush: stores=\(outcome.storeCount, privacy: .public) completed=\(outcome.completedCount, privacy: .public) timedOut=\(outcome.timedOut, privacy: .public) elapsedMs=\(elapsedMs, privacy: .public)"
         )
-    }
-}
-
-/// Races the store fetches against one timer.
-///
-/// A task group cannot do this: it awaits every child before it returns, and a
-/// fetch is not cancellable, so one store that never answers would hold the
-/// quit. The fetches run as unstructured tasks instead. The first of "all
-/// answered" and "timer ended" resumes the caller, and a late fetch only
-/// increments a counter that nobody reads.
-@MainActor
-private final class FetchRace<Store: AnyObject> {
-    struct Result {
-        var completedCount: Int
-        var timedOut: Bool
-    }
-
-    private let stores: [Store]
-    private let fetch: @MainActor (Store) async -> Void
-    private var completedCount = 0
-    private var continuation: CheckedContinuation<Result, Never>?
-    private var timer: Task<Void, Never>?
-
-    init(stores: [Store], fetch: @escaping @MainActor (Store) async -> Void) {
-        self.stores = stores
-        self.fetch = fetch
-    }
-
-    func run(timeout: Duration) async -> Result {
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            for index in stores.indices {
-                Task { @MainActor in
-                    await self.fetch(self.stores[index])
-                    self.storeDidAnswer()
-                }
-            }
-            timer = Task { @MainActor in
-                try? await Task.sleep(for: timeout)
-                guard !Task.isCancelled else { return }
-                self.finish(timedOut: true)
-            }
-        }
-    }
-
-    private func storeDidAnswer() {
-        completedCount += 1
-        if completedCount == stores.count {
-            finish(timedOut: false)
-        }
-    }
-
-    private func finish(timedOut: Bool) {
-        guard let continuation else { return }
-        self.continuation = nil
-        timer?.cancel()
-        timer = nil
-        continuation.resume(returning: Result(completedCount: completedCount, timedOut: timedOut))
     }
 }

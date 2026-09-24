@@ -159,11 +159,54 @@ Shutdown is idempotent. It performs these actions:
 3. Stop network and content-blocker work.
 4. Cancel every download in progress, including downloads from a web view
    that hibernation already removed.
-5. Stop and release every live web view.
-6. Remove notification observers.
-7. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
+5. Tell each live page that it becomes hidden, so it can save its state.
+   The next section describes this handoff.
+6. Stop and release every live web view.
+7. Remove notification observers.
+8. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
    record the store content.
-8. Flush recent website storage, as described below.
+9. Flush recent website storage, as described below.
+
+### Visibility handoff at quit
+
+During the life of the app, the visibility override script
+(`UserScriptManager.makeVisibilityOverrideScript()`) makes each page read
+visible and blocks each `visibilitychange` event. Many web apps save their
+state when the page becomes hidden, because a browser sends that event before
+a tab closes or the browser quits. With the override, a page never gets this
+save point. WhatsApp Web keeps its session after a quit and reopen in Safari,
+but not in Paguro. A missing save at quit is a likely cause of these
+sign-outs. It is not confirmed.
+
+The script defines a release function with a long, non-enumerable name
+(`UserScriptManager.visibilityReleaseFunctionName`). The function makes the
+page read hidden, stops the block, and sends `visibilitychange` to the
+document and `pagehide` (not persisted) to the window. The native side can
+only call the main frame. So the function then calls the same function in each
+same-origin child frame, and each child frame does the same for its own
+children. A cross-origin frame blocks the access, so it does not get the
+event.
+
+Before the teardown, `AppState.shutdown()` calls `QuitVisibilityHandoff.run`:
+
+- It calls the release function in every live web view, in parallel.
+- It stops waiting after 300 ms, even if a page does not answer.
+- When at least one page accepted the call, it waits at least 150 ms in
+  total, because a save handler can start asynchronous IndexedDB writes.
+- A page that throws or has no release function, such as an error page, does
+  not count as accepted.
+- It does not wait when no web view is live.
+
+`QuitVisibilityHandoffPolicy` in PaguroCore holds the limits.
+`BoundedParallelRace` runs the calls against the timer, and the storage flush
+uses the same type. The override stays on for the whole life of the app.
+Hibernation does not use the handoff.
+
+Paguro writes one line at the notice level in the `WebView` category:
+
+```text
+Quit visibility handoff: views=<n> accepted=<n> timedOut=<bool> elapsedMs=<n>
+```
 
 ### Website storage flush at quit
 

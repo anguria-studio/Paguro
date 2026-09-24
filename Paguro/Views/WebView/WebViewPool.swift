@@ -726,6 +726,11 @@ final class WebViewPool {
         snapshots.removeValue(forKey: instanceID)
     }
 
+    /// The live web views, for the visibility handoff before the quit teardown.
+    var liveWebViewsForQuitHandoff: [WKWebView] {
+        Array(webViews.values)
+    }
+
     /// The persistent data stores of the live web views, each one once.
     ///
     /// Read this before `shutdown()`, which releases the web views. The quit

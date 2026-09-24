@@ -341,6 +341,13 @@ final class AppState {
         contentBlocker.stop()
         downloadTracker.stop()
         downloadFlights.stop()
+        // Let each page save its state before the teardown. The visibility
+        // override blocks the hidden event that pages use as a save point.
+        let handoff = await QuitVisibilityHandoff.run(
+            views: webViewPool.liveWebViewsForQuitHandoff,
+            release: QuitVisibilityHandoff.releaseVisibility(in:)
+        )
+        QuitVisibilityHandoff.log(handoff)
         // Read the stores before the teardown releases the web views.
         let storesToFlush = webViewPool.persistentDataStoresForQuitFlush()
         webViewPool.shutdown()

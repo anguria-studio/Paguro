@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Tell each open website that it becomes hidden before Paguro quits, so it can
+  save its state. Paguro reports websites as always visible, so they did not
+  get this signal before. This is a likely cause of the WhatsApp Web sign-outs
+  after quit and reopen, but the fix is not confirmed yet.
 - Wait for website storage to reach the disk when Paguro quits, for at most
   half a second. A quick exit could lose the most recent website storage
   writes. This can be one cause of the WhatsApp Web sign-outs after quit and
