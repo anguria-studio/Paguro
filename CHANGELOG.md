@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-24
+
+Version 1.1.1, build 20. Direct download release only.
+
 - Apply the outside-link setting to links that a service opens in a new
   window, such as a Linear link in Slack. Sign-in popups still open in Paguro.
 - Stop the background badge check from loading messaging services such as
@@ -283,7 +287,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.0...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.1...main
+[1.1.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.1
 [1.1.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.0
 [1.0.9]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.9
 [1.0.8]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.8
