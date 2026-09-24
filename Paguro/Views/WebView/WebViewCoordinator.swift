@@ -158,11 +158,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
             Self.openExternally(url)
             return .cancel
         case .openExternally(.matchingServiceOrSystem):
-            if let handler = externalLinkHandler {
-                handler(url, instanceID)
-            } else {
-                Self.openExternally(url)
-            }
+            routeOutsideLink(url)
             return .cancel
         case .allow:
             break
@@ -362,7 +358,30 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        authPopupController.createWebView(
+        // WebKit asks `decidePolicyFor` about a clicked `target=_blank` link
+        // before it gets here, but not about `window.open`. A new popup has no
+        // URL yet, so its own navigation check cannot see the service either.
+        // Apply the outside-link route here, or the link opens in a Paguro popup.
+        let url = navigationAction.request.url
+        let openerIsPopup = authPopupController.isPopup(webView)
+        let requestsWindowSize = windowFeatures.width != nil || windowFeatures.height != nil
+        let routesOutside = WebRoutingPolicy.shouldRouteNewWindowExternally(
+            targetURL: url,
+            openerHost: webView.url?.host,
+            openerIsPopup: openerIsPopup,
+            requestsWindowSize: requestsWindowSize
+        )
+        logNewWindowDecision(
+            navigationAction, url: url, openerHost: webView.url?.host,
+            openerIsPopup: openerIsPopup, requestsWindowSize: requestsWindowSize,
+            routesOutside: routesOutside
+        )
+        if routesOutside, let url {
+            routeOutsideLink(url)
+            return nil
+        }
+
+        return authPopupController.createWebView(
             with: configuration,
             for: navigationAction,
             windowFeatures: windowFeatures,
@@ -375,6 +394,38 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webViewDidClose(_ webView: WKWebView) {
         _ = authPopupController.handleWebViewDidClose(webView)
+    }
+
+    /// Sends a link that leaves the service to AppState, which switches to a
+    /// matching service or applies the outside-link preference.
+    private func routeOutsideLink(_ url: URL) {
+        if let externalLinkHandler {
+            externalLinkHandler(url, instanceID)
+        } else {
+            Self.openExternally(url)
+        }
+    }
+
+    /// Records which new-window path a real service takes. The line contains
+    /// only Boolean values, never a URL, host, or title.
+    private func logNewWindowDecision(
+        _ navigationAction: WKNavigationAction,
+        url: URL?,
+        openerHost: String?,
+        openerIsPopup: Bool,
+        requestsWindowSize: Bool,
+        routesOutside: Bool
+    ) {
+        let targetHost = url?.host
+        let crossService = targetHost.flatMap { target in
+            openerHost.map { !WebRoutingPolicy.belongsToService(target, serviceHost: $0) }
+        } ?? false
+        let authHost = targetHost.map(WebRoutingPolicy.isAuthenticationHost) ?? false
+        let linkActivated = navigationAction.navigationType == .linkActivated
+        let hasTargetHost = targetHost != nil
+        AppLogger.webView.debug(
+            "New-window link decision: linkActivated=\(linkActivated, privacy: .public) hasTargetHost=\(hasTargetHost, privacy: .public) crossService=\(crossService, privacy: .public) authHost=\(authHost, privacy: .public) sizedWindow=\(requestsWindowSize, privacy: .public) openerIsPopup=\(openerIsPopup, privacy: .public) routedOutside=\(routesOutside, privacy: .public)"
+        )
     }
 
     // MARK: - File Upload Picker

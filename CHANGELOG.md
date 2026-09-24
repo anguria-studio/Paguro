@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Apply the outside-link setting to links that a service opens in a new
+  window, such as a Linear link in Slack. Sign-in popups still open in Paguro.
+
 ## [1.1.0] - 2026-09-23
 
 Version 1.1.0, build 19. Direct download and App Store editions.

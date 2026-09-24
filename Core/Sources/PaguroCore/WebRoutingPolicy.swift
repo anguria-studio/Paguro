@@ -86,6 +86,29 @@ public enum WebRoutingPolicy {
         return belongsToService(targetHost, serviceHost: openerHost)
     }
 
+    /// Returns whether a new-window request from a service must use the
+    /// outside-link route instead of a Paguro popup.
+    ///
+    /// A click is not required. Services often open outside links with
+    /// `window.open`, which WebKit reports as a programmatic request. Sign-in
+    /// popups stay in Paguro because they need a live opener: a known sign-in
+    /// host always stays, and a request for a window size marks a probable
+    /// sign-in popup from another provider. Child popups also stay.
+    public static func shouldRouteNewWindowExternally(
+        targetURL: URL?,
+        openerHost: String?,
+        openerIsPopup: Bool,
+        requestsWindowSize: Bool
+    ) -> Bool {
+        guard !openerIsPopup, !requestsWindowSize,
+              let targetURL, let scheme = targetURL.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let targetHost = targetURL.host,
+              let openerHost, !openerHost.isEmpty else { return false }
+        return !belongsToService(targetHost, serviceHost: openerHost)
+            && !isAuthenticationHost(targetHost)
+    }
+
     /// Returns whether closing a popup should reload its opener.
     public static func shouldReloadOpener(
         selfClosed: Bool,

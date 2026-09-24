@@ -295,6 +295,15 @@ to the next link click without reloading the service.
 
 Links that match a configured service still switch to that service first.
 Only unmatched HTTP and HTTPS links use the chosen browser destination.
+
+The same route applies to a new-window request from a service, including
+`window.open`, when the target host is outside the service. WebKit does not
+ask the navigation check about `window.open`, so the coordinator applies
+`WebRoutingPolicy.shouldRouteNewWindowExternally` before it creates a popup.
+Some requests still open a Paguro popup. These are a known sign-in host, a
+request that sets a window size (a probable sign-in popup), and a request from
+a popup. A request with no HTTP or HTTPS host, such as `about:blank`, also
+opens a popup.
 `LinkOpeningPolicy` in PaguroCore resolves inheritance. `LinkOpeningSettings`
 persists the global value in the launch-specific UserDefaults domain.
 
