@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-24
+
+Version 1.1.2, build 21. Direct download release only.
+
 - Make the icon rail magnification follow the pointer smoothly. The icons no
   longer stop and then jump at the edge between two icons.
 - Fix WhatsApp signing out after you quit and reopen Paguro. Paguro kept
@@ -294,7 +298,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.1...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.2...main
+[1.1.2]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.2
 [1.1.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.1
 [1.1.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.0
 [1.0.9]: https://github.com/anguria-studio/Paguro/releases/tag/v1.0.9
