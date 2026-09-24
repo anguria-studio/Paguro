@@ -4,6 +4,14 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Wait for website storage to reach the disk when Paguro quits, for at most
+  half a second. A quick exit could lose the most recent website storage
+  writes. This can be one cause of the WhatsApp Web sign-outs after quit and
+  reopen, but it is not confirmed as the cause.
+- Record quit, chat app release, and chat app reload events in the system log
+  to help find the cause of a sign-out. The lines contain no service names or
+  addresses.
+
 ## [1.1.1] - 2026-09-24
 
 Version 1.1.1, build 20. Direct download release only.

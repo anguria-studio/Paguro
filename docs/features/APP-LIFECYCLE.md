@@ -163,6 +163,54 @@ Shutdown is idempotent. It performs these actions:
 6. Remove notification observers.
 7. Save the selected space and service, then ask `StoreRecoveryCoordinator` to
    record the store content.
+8. Flush recent website storage, as described below.
+
+### Website storage flush at quit
+
+A test on macOS 27 found that a quick exit directly after the web-view
+teardown can lose the last local storage writes of a page. Cookies and
+IndexedDB kept their writes in the same runs, so the stores of one site did
+not agree after the next launch. A lost local storage write is one possible
+cause of a sign-out after quit and reopen, for example in WhatsApp Web.
+
+Before the teardown, `WebViewPool.persistentDataStoresForQuitFlush()` collects
+the persistent data store of each live web view, each store once. The pool
+skips non-persistent stores, such as the stores of the first-run preview.
+After the teardown, `AppState.shutdown()` calls `QuitStorageFlush.run`:
+
+- It asks each store for its data records of all types, in parallel. In the
+  test, this fetch waited for the pending writes. A cookie fetch did not.
+- It stops waiting after 500 ms, even if a store does not answer.
+- It waits at least 50 ms after the teardown, also when all stores answer
+  sooner.
+- It does not wait when no web view was live.
+
+`QuitStorageFlushPolicy` in PaguroCore holds the limits and the store
+selection. The flush reduces the risk of lost website storage at quit. It does
+not guarantee that a site keeps its session.
+
+Paguro writes one line at the notice level in the `DataStore` category:
+
+```text
+Quit storage flush: stores=<n> completed=<n> timedOut=<bool> elapsedMs=<n>
+```
+
+### Exit paths
+
+These exit paths go through `applicationShouldTerminate`, so they include the
+flush:
+
+- `Command-Q`, the Quit menu items, and the Dock Quit action.
+- Logout, restart, and shutdown. macOS sends a quit Apple event, and AppKit
+  accepts the `terminateLater` reply.
+- Sparkle Install and Relaunch. The Sparkle installer sends a quit Apple event
+  (`NSRunningApplication.terminate`) and waits for the process to exit.
+- The relaunch after a store restore. `AppRelauncher.quit()` calls
+  `NSApp.terminate`.
+
+Paguro does not call `exit` and does not opt in to sudden or automatic
+termination. A crash, a force quit, or a `SIGTERM` or `SIGKILL` signal ends the
+process without the flush.
 
 The quiet-hours timer checks cancellation and shutdown after each wait. A wait
 can finish before cancellation while its continuation is still queued. That

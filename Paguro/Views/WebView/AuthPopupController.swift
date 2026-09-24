@@ -17,6 +17,10 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
     private let presentWindow: (NSWindow) -> Void
     private let managesServiceCompletion: Bool
 
+    /// Called just before the controller reloads the service page after a
+    /// sign-in popup closes. The coordinator uses it for diagnostics.
+    var onOpenerReload: (() -> Void)?
+
     init(managesServiceCompletion: Bool = true, presentWindow: @escaping (NSWindow) -> Void = {
         $0.center()
         $0.makeKeyAndOrderFront(nil)
@@ -192,8 +196,10 @@ final class AuthPopupController: NSObject, NSWindowDelegate {
                openerHost: opener.url?.host,
                serviceHost: openerFallbackURL.host
            ) {
+            onOpenerReload?()
             opener.load(URLRequest(url: openerFallbackURL))
         } else if opener.url != nil {
+            onOpenerReload?()
             opener.reload()
         }
     }

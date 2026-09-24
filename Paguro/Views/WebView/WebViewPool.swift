@@ -16,6 +16,9 @@ final class WebViewPool {
     private let maxLoaded: Int = WebViewPoolCapacity.maxLoaded
     private var hasShutDown = false
     private var softHibernatedIDs: Set<UUID> = []
+    /// Services whose web view `recreateWebView` released. The next web view
+    /// for such a service logs its first load as a rebuild.
+    private var rebuiltIDs: Set<UUID> = []
     private var appliedMediaSuspension: [UUID: Bool] = [:]
 
     /// Reads current global, workspace, and service mute, including before launch finishes.
@@ -559,7 +562,8 @@ final class WebViewPool {
         activeServiceID = instance.id
 
         // Wake from full hibernation if needed
-        if hibernatedServiceIDs.contains(instance.id) {
+        let wasHibernated = hibernatedServiceIDs.contains(instance.id)
+        if wasHibernated {
             hibernatedServiceIDs.remove(instance.id)
             onServiceWoke?(instance.id)
         }
@@ -592,6 +596,13 @@ final class WebViewPool {
         // Falls back to the service home URL on first creation or when no
         // suspended URL is recorded.
         let resumeURLString = suspendedURLs.removeValue(forKey: instance.id) ?? instance.url
+        noteAppInitiatedNavigation(
+            .forNewWebView(
+                wasHibernated: wasHibernated,
+                wasRebuilt: rebuiltIDs.remove(instance.id) != nil
+            ),
+            for: instance.id
+        )
         if let url = URL(string: resumeURLString), !resumeURLString.isEmpty {
             webView.load(URLRequest(url: url))
         } else if let homeURL = URL(string: instance.url) {
@@ -658,7 +669,9 @@ final class WebViewPool {
             notificationCriticalIDs.remove(instance.id)
         }
 
+        rebuiltIDs.remove(instance.id)
         if let url = URL(string: instance.url) {
+            noteAppInitiatedNavigation(.preload, for: instance.id)
             webView.load(URLRequest(url: url))
         }
 
@@ -692,8 +705,9 @@ final class WebViewPool {
     }
 
     func removeWebView(for instanceID: UUID) {
-        teardownWebView(instanceID)
+        teardownWebView(instanceID, reason: .removal)
         suspendedURLs.removeValue(forKey: instanceID)
+        rebuiltIDs.remove(instanceID)
         hibernatedServiceIDs.remove(instanceID)
         // Permanent removal (deletion, not hibernation): drop every trace of
         // the service so stale IDs can't dangle. The active pointer must be
@@ -712,6 +726,18 @@ final class WebViewPool {
         snapshots.removeValue(forKey: instanceID)
     }
 
+    /// The persistent data stores of the live web views, each one once.
+    ///
+    /// Read this before `shutdown()`, which releases the web views. The quit
+    /// flush then waits for these stores to write their recent data.
+    func persistentDataStoresForQuitFlush() -> [WKWebsiteDataStore] {
+        QuitStorageFlushPolicy.storesToFlush(
+            webViews.values.map { $0.configuration.websiteDataStore },
+            identifier: \.identifier,
+            isPersistent: \.isPersistent
+        )
+    }
+
     /// Stops every live page, cancels every download, and releases all WebKit
     /// delegates during process termination. The persistent website data
     /// stores remain on disk.
@@ -721,7 +747,7 @@ final class WebViewPool {
         WebDownloadHandler.cancelAllDownloads()
         let serviceIDs = Array(webViews.keys)
         for serviceID in serviceIDs {
-            teardownWebView(serviceID)
+            teardownWebView(serviceID, reason: .quit)
             userScriptManager.removeHandler(for: serviceID)
         }
         // Command-Q stops all Paguro work, so the audio poll ends with the rest.
@@ -731,6 +757,7 @@ final class WebViewPool {
         pendingAudioChecks.removeAll()
         lastAudibleMediaCounts.removeAll()
         suspendedURLs.removeAll()
+        rebuiltIDs.removeAll()
         hibernatedServiceIDs.removeAll()
         pinnedIDs.removeAll()
         neverHibernateIDs.removeAll()
@@ -784,10 +811,11 @@ final class WebViewPool {
     /// Manually hibernate a service — fully destroys the web view to reclaim all memory.
     /// The service resumes at its last web page, or at its home URL when it
     /// showed an error page.
-    func hibernate(_ instanceID: UUID) {
+    func hibernate(_ instanceID: UUID, reason: WebViewTeardownReason = .manualHibernation) {
         guard let webView = webViews[instanceID] else { return }
         rememberResumeURL(for: instanceID, of: webView)
-        teardownWebView(instanceID)
+        rebuiltIDs.remove(instanceID)
+        teardownWebView(instanceID, reason: reason)
         hibernatedServiceIDs.insert(instanceID)
         onServiceHibernated?(instanceID)
         AppLogger.webView.info("Fully hibernated service \(instanceID)")
@@ -882,7 +910,9 @@ final class WebViewPool {
     /// service's URL so the open page follows the change. No-op if the service
     /// has no live web view (it will load the new URL when next opened).
     func navigate(_ id: UUID, to url: URL) {
-        webViews[id]?.load(URLRequest(url: url))
+        guard let webView = webViews[id] else { return }
+        noteAppInitiatedNavigation(.serviceURLChange, for: id)
+        webView.load(URLRequest(url: url))
     }
 
     /// Update a live web view's user agent (e.g. the Mobile view toggle) and
@@ -891,6 +921,7 @@ final class WebViewPool {
     func setUserAgent(_ userAgent: String?, for id: UUID) {
         guard let webView = webViews[id] else { return }
         webView.customUserAgent = userAgent ?? UserAgentProvider.safariDefault
+        noteAppInitiatedNavigation(.userAgentChange, for: id)
         webView.reload()
     }
 
@@ -907,7 +938,29 @@ final class WebViewPool {
         } else {
             suspendedURLs.removeValue(forKey: instanceID)
         }
-        teardownWebView(instanceID)
+        teardownWebView(instanceID, reason: .rebuild)
+        rebuiltIDs.insert(instanceID)
+    }
+
+    // MARK: - Chat app diagnostics
+
+    /// Whether the service is a chat app. The cached set covers a service that
+    /// the store already removed; the callback covers a service whose setting
+    /// changed after its web view was built.
+    private func isChatApp(_ id: UUID) -> Bool {
+        notificationCriticalIDs.contains(id) || isNotificationCritical?(id) == true
+    }
+
+    /// Records a main-frame navigation or reload that Paguro starts itself.
+    ///
+    /// Only a chat app gets the line, so one reproduction can show whether
+    /// Paguro touched the page before a sign-out. The line contains no name,
+    /// URL, or title.
+    func noteAppInitiatedNavigation(_ reason: AppInitiatedNavigationReason, for id: UUID) {
+        guard isChatApp(id) else { return }
+        AppLogger.webView.notice(
+            "Chat app navigation started by Paguro: reason=\(reason.rawValue, privacy: .public) isChatApp=true"
+        )
     }
 
     // MARK: - Soft Hibernate (resource offloading without destroying the web view)
@@ -1052,7 +1105,13 @@ final class WebViewPool {
         mediaCaptureStates[id] = state
     }
 
-    private func teardownWebView(_ instanceID: UUID) {
+    private func teardownWebView(_ instanceID: UUID, reason: WebViewTeardownReason) {
+        if webViews[instanceID] != nil,
+           WebViewTeardownReason.isLogged(reason, isChatApp: isChatApp(instanceID)) {
+            AppLogger.webView.notice(
+                "Chat app web view torn down: reason=\(reason.rawValue, privacy: .public) isChatApp=true"
+            )
+        }
         softHibernatedIDs.remove(instanceID)
         appliedMediaSuspension.removeValue(forKey: instanceID)
         // The page is going away, so there is no audio left to keep.
@@ -1092,6 +1151,9 @@ final class WebViewPool {
         }
         coordinator.onHealthEvent = { [weak self] id, event in
             self?.applyHealthEvent(event, to: id)
+        }
+        coordinator.onAppInitiatedNavigation = { [weak self] id, reason in
+            self?.noteAppInitiatedNavigation(reason, for: id)
         }
         return coordinator
     }
@@ -1243,7 +1305,10 @@ final class WebViewPool {
     /// JavaScript probe sees only WebRTC calls, so a live camera or microphone
     /// outside a call — a voice memo, a video preview — must keep the page too.
     @discardableResult
-    func hibernateIfStillIdle(_ id: UUID) async -> Bool {
+    func hibernateIfStillIdle(
+        _ id: UUID,
+        reason: WebViewTeardownReason = .idleHibernation
+    ) async -> Bool {
         guard HibernationGate.permits(hibernationFacts(id)) else { return false }
 
         evictionInFlight.insert(id)
@@ -1257,7 +1322,7 @@ final class WebViewPool {
             return false
         }
 
-        hibernate(id)
+        hibernate(id, reason: reason)
         return true
     }
 
@@ -1281,7 +1346,7 @@ final class WebViewPool {
             // hibernateIfStillIdle) may have already hibernated views, and a
             // stale target would evict past the cap, dropping below maxLoaded.
             guard webViews.count > maxLoaded else { break }
-            if await hibernateIfStillIdle(id) {
+            if await hibernateIfStillIdle(id, reason: .capacityEviction) {
                 onServiceEvictedForCapacity?(id)
             }
         }
