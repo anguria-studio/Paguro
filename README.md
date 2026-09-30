@@ -11,92 +11,29 @@
 
 <p align="center">
   <a href="#install-on-a-mac">Install</a> &middot;
-  <a href="#what-paguro-provides">Features</a> &middot;
+  <a href="#features-at-a-glance">Features</a> &middot;
   <a href="#your-data">Privacy</a> &middot;
   <a href="CHANGELOG.md">Changelog</a> &middot;
   <a href="#build-the-app">Build</a> &middot;
-  <a href="docs/ARCHITECTURE.md">Docs</a> &middot;
+  <a href="docs/README.md">Docs</a> &middot;
   <a href="https://github.com/anguria-studio/Paguro/issues">Issues</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml"><img src="https://github.com/anguria-studio/Paguro/actions/workflows/code-quality.yml/badge.svg?branch=main&amp;event=push" alt="Code quality status"></a>
-  <a href="https://github.com/anguria-studio/Paguro/releases/latest"><img src="https://img.shields.io/github/v/release/anguria-studio/Paguro?label=release&amp;color=8a5fa8" alt="Latest release"></a>
-  <a href="https://github.com/anguria-studio/Paguro/releases/latest"><img src="https://img.shields.io/badge/download-DMG-black" alt="Download DMG"></a>
-  <a href="#install-on-a-mac"><img src="https://img.shields.io/badge/macOS-15%2B%20Apple%20silicon%20or%20Intel-black" alt="macOS 15 and newer, Apple silicon or Intel"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a5fa8" alt="MIT License"></a>
+  <a href="https://github.com/anguria-studio/Paguro/releases/latest"><img src="https://img.shields.io/github/v/release/anguria-studio/Paguro?label=release&amp;color=8a5fa8&amp;style=flat" alt="Latest release"></a>
+  <a href="#install-on-a-mac"><img src="https://img.shields.io/badge/Apple-notarized-black?style=flat&amp;logo=apple" alt="Apple notarized"></a>
+  <a href="#your-data"><img src="https://img.shields.io/badge/app%20telemetry-none-8a5fa8?style=flat" alt="No app telemetry"></a>
+  <a href="#install-on-a-mac"><img src="https://img.shields.io/badge/macOS-15%2B%20Apple%20silicon%20or%20Intel-black?style=flat" alt="macOS 15 and newer, Apple silicon or Intel"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8a5fa8?style=flat" alt="MIT License"></a>
 </p>
 
 <p align="center">
   <img src="docs/images/paguro-demo.webp" width="860" alt="Paguro on macOS: the sidebar opens to show services grouped into Personal and Work workspaces, then closes again">
 </p>
 
-Chat, mail, calendars, the sites you leave open all day: one sidebar switches
-between them, and each account keeps its own login session. Workspaces group
-them, native notifications land in Notification Center, and an optional island
-near the notch shows what just arrived. No account, no telemetry, no
-subscription, and every feature is free.
-
-Third-party services can require their own accounts or subscriptions.
-Bundled data and dependencies have their own licenses; see
-[Third-party notices](THIRD_PARTY_NOTICES.md).
-
-Paguro is a free, open-source fork of [Chorus](https://github.com/nicojan/Chorus),
-created by [Nico Jan](https://github.com/nicojan). See [Credits](#credits) for
-the full attribution.
-
-## Release status
-
-**Paguro** is available as a signed, notarized download for Apple silicon
-and Intel Macs. Get the [latest release](https://github.com/anguria-studio/Paguro/releases/latest).
-
-## What Paguro provides
-
-- **A separate session for every service.** Each service gets its own
-  `WKWebsiteDataStore`. A personal and a work account for the same site stay
-  signed in side by side and share no cookies.
-- **Workspaces.** Group services into workspaces, and keep a service in more
-  than one. Sessions stay isolated per instance.
-- **Badges and notifications.** Unread counts reach the Dock and the menu bar.
-  Mute a single service, a whole workspace, or everything at once, and set
-  quiet hours for the times you do not want interrupting.
-- **The notch island.** An optional strip near the MacBook notch shows what
-  just arrived.
-- **Memory-aware hibernation.** Idle services release memory and wake where you
-  left them. Each service picks its own policy: follow the global setting, never
-  hibernate, hibernate on switching away, or hibernate after an idle wait.
-- **Ad and tracker blocking.** The HaGezi and Fanboy lists block known ad and
-  tracking domains across your services. This leaves the ads a site serves from
-  its own domain.
-- **Camera and microphone control.** Video calls work where you need them. Set a
-  policy per service or a default for all of them, and mute every microphone
-  with **⇧⌘M**.
-- **App lock.** Touch ID or your Mac password locks the app, and Paguro hides
-  notification contents while the lock holds.
-- **Keyboard control.** Switch services with **⌘K**, search a page with **⌘F**,
-  reload with **⌘R**, and move between services with **⌃Tab**.
-- **Per-service appearance.** Send a native light or dark signal to each
-  service, and apply your own CSS where a site needs it.
-- **Configuration export and import**, carrying your setup to another Mac
-  without carrying login sessions.
-- **Signed updates** in the direct-download build.
-
-Paguro ships 73 website presets plus a Notification Test entry. You can also
-add a custom website by its URL.
-Third-party websites control their own features and sign-in requirements.
-Paguro does not guarantee support for every website feature.
-
-## Install on a Mac
-
-Paguro requires **macOS 15 or later**, on Apple silicon or Intel.
-Liquid Glass requires macOS 26; earlier systems use the fallback appearance.
-You do not need Xcode to use a downloaded release.
-
-1. Open the [Paguro releases page](https://github.com/anguria-studio/Paguro/releases).
-2. Download the `.dmg` attached to the latest stable release.
-3. Open the disk image and drag **Paguro.app** into **Applications**.
-4. Open Paguro from Applications and follow the setup prompts.
-5. Add your services and sign in to each account.
+**[Download Paguro for macOS](https://github.com/anguria-studio/Paguro/releases/latest)**
+ · macOS 15+ · Apple silicon and Intel · Signed and notarized
 
 Or install with [Homebrew](https://brew.sh):
 
@@ -104,18 +41,93 @@ Or install with [Homebrew](https://brew.sh):
 brew install --cask anguria-studio/tap/paguro
 ```
 
-The cask installs the same disk image. Use the full name as shown; Homebrew
-then needs no extra step to trust the tap.
+## Why Paguro?
 
-Direct releases use Developer ID signing and Apple notarization.
+Chat, mail, calendars, and the sites you leave open all day, together in one window.
+
+- **Keep accounts separate.** Work and personal accounts stay signed in side by side, with separate cookies and sessions.
+- **Organize your day.** Group services into workspaces and switch between them from one sidebar.
+- **Stay informed.** Get native notifications, unread badges, and optional alerts near the MacBook notch.
+- **Keep control.** No Paguro account, no app telemetry, and no subscription. Every feature is free.
+
+Paguro is a fork of [Chorus](https://github.com/nicojan/Chorus), created by
+[Nico Jan](https://github.com/nicojan). See [Credits](#credits).
+
+## Features at a glance
+
+### 🗂️ Accounts and workspaces
+
+| Feature | What you can do |
+| --- | --- |
+| Separate sessions | Use several accounts for the same site without sharing cookies. |
+| Workspaces | Group services and keep a service in more than one workspace. |
+| Website catalog | Choose from 73 website presets, or add a custom URL. A Notification Test entry is also available. |
+| Configuration transfer | Export and import your setup without copying login sessions. |
+
+### 🔔 Notifications and focus
+
+| Feature | What you can do |
+| --- | --- |
+| Native notifications | See alerts in Notification Center and unread counts in the Dock and menu bar. |
+| Mute and quiet hours | Mute one service, a workspace, or everything. Schedule quiet hours. |
+| Optional island | See incoming alerts in a strip near the MacBook notch. |
+| App lock | Lock with Touch ID or your Mac password. Notification contents stay hidden while locked. |
+
+### ⚙️ Everyday controls
+
+| Feature | What you can do |
+| --- | --- |
+| Memory-aware hibernation | Release memory from idle services. Choose a global policy or one for each service. |
+| Ad and tracker blocking | Block known ad and tracking domains with HaGezi and Fanboy lists. Ads from a site's own domain remain. |
+| Camera and microphone | Set access policies for each service or a default for all services. |
+| Appearance | Set light or dark appearance for each service and add custom CSS. |
+| Signed updates | Check for updates from the direct-download build. |
+
+Third-party websites control their features and sign-in requirements, and can
+require their own accounts or subscriptions. Paguro does not guarantee every
+website feature.
+
+<details>
+<summary><strong>Keyboard shortcuts</strong></summary>
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘K | Switch services |
+| ⌃Tab | Move between services |
+| ⌘F | Search the current page |
+| ⌘R | Reload the current page |
+| ⇧⌘M | Mute every microphone |
+| ⌘, | Open Settings |
+| ⌘Q | Quit Paguro and stop service activity |
+
+</details>
+
+## Install on a Mac
+
+Requires **macOS 15 or later**, on Apple silicon or Intel. You do not need Xcode.
+Liquid Glass requires macOS 26; earlier systems use the fallback appearance.
+
+1. Download the `.dmg` from the [latest release](https://github.com/anguria-studio/Paguro/releases/latest).
+2. Open the disk image and drag **Paguro.app** into **Applications**.
+3. Open Paguro, choose your services, and sign in to each account.
+
+The Homebrew command above installs the same signed, notarized disk image.
+Use the full cask name as shown to select the correct tap.
+
 Allow notifications if you want macOS banners. Services ask for camera or
-microphone access when needed. Paguro itself does not need an account.
+microphone access when needed.
 
-For updates, choose **Paguro → Check for Updates…**. You can enable automatic
-checks in **Settings → About**. Builds made before Sparkle integration need
-one manual installation of a newer DMG.
+<details>
+<summary><strong>Updates</strong></summary>
 
-## Set up Paguro
+Choose **Paguro → Check for Updates…**. Enable automatic checks in
+**Settings → About**. Builds made before Sparkle integration need one manual
+installation of a newer DMG.
+
+</details>
+
+<details>
+<summary><strong>First launch, workspaces, and appearance</strong></summary>
 
 The welcome step offers notifications and, on the selected notched display,
 island alerts. Choose your services, name the workspace (Personal by default),
@@ -131,18 +143,23 @@ Window glass offers Follow system on macOS 27, plus Off, Clear, and Regular.
 macOS 26 offers the three manual presets. macOS 15 uses the solid palette.
 Settings and editor sheets stay opaque and follow the app's light or dark theme.
 
+</details>
+
 ## Your data
 
-Service sessions stay in separate WebKit stores on your Mac. Paguro does not
-sync login sessions or send app telemetry. The websites you open connect to
-their providers and follow those providers' privacy policies.
-Closing the main window keeps Paguro running in the menu bar. Choose
-**Paguro → Quit Paguro** or press **⌘Q** to stop service activity.
+- **Sessions stay on your Mac.** Each service account has a separate WebKit data store. Paguro does not sync login sessions.
+- **No app telemetry.** The websites you open connect to their providers and follow their privacy policies.
+- **You control background activity.** Closing the window keeps Paguro in the menu bar. Press **⌘Q** to stop all service activity.
 
-Read the [full privacy policy](https://anguria.studio/paguro/privacy/) for details
-about local storage, website connections, permissions, and updates.
+Read the [full privacy policy](https://anguria.studio/paguro/privacy/) for local
+storage, website connections, permissions, and updates.
 
-## Build requirements
+## Build the app
+
+<details>
+<summary><strong>Requirements, build commands, and tests</strong></summary>
+
+### Requirements
 
 - Xcode 26 or later, with Swift 6
 - macOS 26 for building the Icon Composer app icon
@@ -151,7 +168,7 @@ about local storage, website connections, permissions, and updates.
 The built app supports macOS 15 and later. Vale is optional for local writing
 checks; GitHub Actions checks documentation on pull requests.
 
-## Build the app
+### Build and test
 
 ```sh
 git clone https://github.com/anguria-studio/Paguro.git
@@ -188,27 +205,18 @@ xcodebuild \
   test
 ```
 
-## Documentation
+</details>
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Design choices](docs/DESIGN.md)
-- [Dependency policy](docs/DEPENDENCIES.md)
-- [Native shell](docs/features/NATIVE_SHELL.md)
-- [Application lifecycle](docs/features/APP-LIFECYCLE.md)
-- [Notification system](docs/features/NOTIFICATIONS.md)
-- [Island and notch support](docs/features/ISLAND.md)
-- [Web sessions](docs/features/WEB-SESSIONS.md)
-- [Web appearance](docs/features/WEB-APPEARANCE.md)
-- [Service icons](docs/features/SERVICE-ICONS.md)
-- [Compatibility fixture](docs/features/COMPATIBILITY.md)
-- [Configuration transfer](docs/features/CONFIGURATION.md)
-- [Performance comparisons](docs/features/PERFORMANCE.md)
-- [Distribution](docs/features/DISTRIBUTION.md)
+## Documentation and contributing
 
-## Contributing
-
-Bug reports and pull requests are welcome. See [Contributing](CONTRIBUTING.md)
-to get set up.
+| Start here | What you will find |
+| --- | --- |
+| [Documentation](docs/README.md) | All feature guides and technical references |
+| [Architecture](docs/ARCHITECTURE.md) | App structure and service boundaries |
+| [Design](docs/DESIGN.md) | Visual rules and native macOS behavior |
+| [Contributing](CONTRIBUTING.md) | Development setup, checks, and pull requests |
+| [Changelog](CHANGELOG.md) | Changes in each release |
+| [Issues](https://github.com/anguria-studio/Paguro/issues) | Bug reports and feature requests |
 
 ## Credits
 
@@ -224,3 +232,6 @@ See [LICENSE](LICENSE).
 
 Service names and logos belong to their respective owners.
 Paguro uses them only to identify a service.
+
+Bundled data and dependencies have their own licenses. See
+[Third-party notices](THIRD_PARTY_NOTICES.md).
