@@ -4,6 +4,10 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-01
+
+Version 1.1.3, build 22. Direct download release only.
+
 - Keep sidebar icons visible as they resize and move during collapse and
   expansion. Service and workspace labels fade within the changing row width.
 
@@ -301,7 +305,8 @@ by Nico Jan. Version 1.0.0, build 4.
 - Earlier development builds use a different app identity. Export and import
   your configuration, then sign in to each service again.
 
-[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.2...main
+[Unreleased]: https://github.com/anguria-studio/Paguro/compare/v1.1.3...main
+[1.1.3]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.3
 [1.1.2]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.2
 [1.1.1]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.1
 [1.1.0]: https://github.com/anguria-studio/Paguro/releases/tag/v1.1.0
