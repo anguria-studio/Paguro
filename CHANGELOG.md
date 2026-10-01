@@ -4,6 +4,9 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Keep sidebar icons visible as they resize and move during collapse and
+  expansion. Service and workspace labels fade within the changing row width.
+
 ## [1.1.2] - 2026-09-24
 
 Version 1.1.2, build 21. Direct download release only.

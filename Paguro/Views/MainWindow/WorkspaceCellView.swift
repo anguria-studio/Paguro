@@ -86,17 +86,14 @@ struct WorkspaceCellView: View {
         .buttonStyle(.plain)
         // See `ServiceRowView`: this is stable semantic geometry. The rail's
         // fixed surface owns Dock mouse events.
-        .frame(height: isDockItem ? dockRowHeight : nil)
-        .frame(maxWidth: isDockItem ? .infinity : nil)
+        .frame(height: isDockItem ? dockRowHeight : PaguroMetric.Sidebar.rowHeight)
+        .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         // The move is drawn, not laid out. The rail resolves the drawing only
         // when a pointer event arrives.
         .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
             content.offset(y: offset)
         }
-        // See `ServiceRowView`: a Dock item must not animate its scale and
-        // move when the hover passes to the next icon.
-        .animation(hoverAnimation, value: !isDockItem && presentsHover)
         .onHover { hovering in
             isHovering = hovering
             if isDockItem {
@@ -114,19 +111,31 @@ struct WorkspaceCellView: View {
         .accessibilityAddTraits([.isButton, isSelected ? .isSelected : []])
     }
 
-    @ViewBuilder
     private var content: some View {
-        if isDockItem {
-            dockContent
-        } else {
-            rowContent
+        SidebarItemContent(
+            isCollapsed: isDockItem,
+            dockIconSize: dockIconSize,
+            dockItemSize: dockItemSize
+        ) {
+            sidebarIcon
+        } label: {
+            rowLabel
+        }
+        .overlay(alignment: .leading) {
+            RailTooltipView(
+                text: space.name,
+                glassStyle: glassStyle,
+                glassIntensity: glassIntensity
+            )
+            .offset(x: dockTooltipLeadingOffset)
+            .animation(hoverAnimation) { tooltip in
+                tooltip.opacity(isDockItem && presentsHover ? 1 : 0)
+            }
         }
     }
 
-    private var rowContent: some View {
+    private var rowLabel: some View {
         HStack(spacing: 8) {
-            icon(size: PaguroMetric.Sidebar.expandedIconSize)
-
             Text(space.name)
                 .font(isSelected ? .paguroSidebarLabelSelected : .paguroSidebarLabel)
                 .lineLimit(1)
@@ -143,38 +152,24 @@ struct WorkspaceCellView: View {
                 BadgeCountView(count: badgeCount)
             }
         }
-        .padding(.horizontal, 8)
-        .frame(width: ServiceRowView.rowWidth, height: PaguroMetric.Sidebar.rowHeight)
     }
 
-    private var dockContent: some View {
-        icon(size: dockIconSize)
+    private var sidebarIcon: some View {
+        icon(size: isDockItem ? dockIconSize : PaguroMetric.Sidebar.expandedIconSize)
             .overlay(alignment: .topLeading) {
-                if isMuted {
+                if isDockItem && isMuted {
                     MutedNotificationGlyph()
                         .offset(x: -5, y: -5)
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if badgeCount > 0 {
+                if isDockItem && badgeCount > 0 {
                     BadgeCountView(count: badgeCount)
                         .scaleEffect(0.86)
                         .offset(x: 7, y: -6)
                 }
             }
-            .scaleEffect(dockTransform.scale, anchor: .leading)
-            .frame(width: dockItemSize, height: dockItemSize)
-            .overlay(alignment: .leading) {
-                RailTooltipView(
-                    text: space.name,
-                    glassStyle: glassStyle,
-                    glassIntensity: glassIntensity
-                )
-                .offset(x: dockTooltipLeadingOffset)
-                .animation(hoverAnimation) { tooltip in
-                    tooltip.opacity(presentsHover ? 1 : 0)
-                }
-            }
+            .scaleEffect(isDockItem ? dockTransform.scale : 1, anchor: .leading)
     }
 
     /// The workspace emoji, or the folder that stands in for a workspace
@@ -199,18 +194,12 @@ struct WorkspaceCellView: View {
             }
         }
 
-        if isDockItem {
-            RoundedRectangle(cornerRadius: PaguroRadius.icon, style: .continuous)
-                .fill(PaguroColor.Fill.quietSurface)
-                .frame(width: size, height: size)
-                .overlay { glyph }
-                .accessibilityHidden(true)
-        } else {
-            Color.clear
-                .frame(width: size, height: size)
-                .overlay { glyph }
-                .accessibilityHidden(true)
-        }
+        RoundedRectangle(cornerRadius: PaguroRadius.icon, style: .continuous)
+            .fill(PaguroColor.Fill.quietSurface)
+            .opacity(isDockItem ? 1 : 0)
+            .frame(width: size, height: size)
+            .overlay { glyph }
+            .accessibilityHidden(true)
     }
 
     private var nameColor: Color {

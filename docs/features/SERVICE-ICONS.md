@@ -6,6 +6,8 @@ Status: active
 
 Each service has one icon across the sidebar, collapsed rail, top bar, quick
 switcher, menu-bar list, and native notification attachment.
+Sidebar transitions resize the existing icon. Custom and fetched images keep
+their opacity while the frame animates, even if the view decodes the image again.
 
 The main icon in a macOS notification is always the Paguro app icon. macOS uses
 that icon to identify the sending application. Paguro supplies the service icon

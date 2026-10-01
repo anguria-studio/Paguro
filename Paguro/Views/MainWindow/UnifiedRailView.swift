@@ -497,7 +497,7 @@ struct UnifiedRailView: View {
             uniqueKeysWithValues: dockLinks.enumerated().map { ($0.element.id, $0.offset) }
         )
 
-        if showsAllWorkspaces && sidebarPresentation == .expanded {
+        if showsAllWorkspaces {
             let groups = workspaceGroups
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 workspaceSection(
@@ -509,25 +509,6 @@ struct UnifiedRailView: View {
                         ? 0
                         : PaguroMetric.Sidebar.workspaceSectionTopSpacing
                 )
-            }
-        } else if showsAllWorkspaces && sidebarPresentation == .collapsed {
-            let separatorAfterIndices = dockSeparatorAfterIndices
-            ForEach(Array(dockWorkspaceGroups.enumerated()), id: \.element.id) { index, group in
-                if index > 0, separatorAfterIndices.indices.contains(index - 1) {
-                    DockWorkspaceDividerView(
-                        afterIndex: separatorAfterIndices[index - 1],
-                        dockSizing: dockSizing,
-                        dockMagnification: dockMagnification
-                    )
-                }
-                ForEach(group.links) { link in
-                    serviceRow(
-                        for: link,
-                        workspaceLinks: group.links,
-                        dockSizing: dockSizing,
-                        dockIndex: dockIndexes[link.id] ?? 0
-                    )
-                }
             }
         } else {
             let links = filteredLinks
@@ -563,44 +544,56 @@ struct UnifiedRailView: View {
             ? appState.badgeManager.aggregateCount(for: group.links.map { $0.service.id })
             : 0
 
-        WorkspaceSectionHeaderView(
-            workspaceName: space.name,
-            emoji: space.emoji,
-            badgeCount: badgeCount,
-            isMuted: showsMutedState,
-            isExpanded: isExpanded
-        ) {
-            // The header and the reorder gesture see the same mouse events. A
-            // release that ends a drag must not also fold the section.
-            guard !workspaceReorder.consumesClick(for: space.id) else { return }
-            if isExpanded {
-                collapsedWorkspaceIDs.insert(space.id)
-            } else {
-                collapsedWorkspaceIDs.remove(space.id)
+        if sidebarPresentation == .expanded {
+            WorkspaceSectionHeaderView(
+                workspaceName: space.name,
+                emoji: space.emoji,
+                badgeCount: badgeCount,
+                isMuted: showsMutedState,
+                isExpanded: isExpanded
+            ) {
+                // The header and the reorder gesture see the same mouse events. A
+                // release that ends a drag must not also fold the section.
+                guard !workspaceReorder.consumesClick(for: space.id) else { return }
+                if isExpanded {
+                    collapsedWorkspaceIDs.insert(space.id)
+                } else {
+                    collapsedWorkspaceIDs.remove(space.id)
+                }
             }
-        }
-        .padding(.top, isDraggingWorkspace ? 0 : topSpacing)
-        .railReorder(
-            itemID: space.id,
-            siblingIDs: siblingIDs,
-            groupID: Self.workspaceReorderGroupID,
-            axis: .vertical,
-            railSpacing: verticalRailSpacing,
-            fallbackLength: PaguroMetric.Sidebar.headerHeight,
-            railReorder: workspaceReorder,
-            commit: { commit in
-                appState.reorderSpace(
-                    droppedSpaceID: commit.linkID,
-                    relativeTo: commit.targetLinkID,
-                    placement: commit.placement
-                )
+            .padding(.top, isDraggingWorkspace ? 0 : topSpacing)
+            .railReorder(
+                itemID: space.id,
+                siblingIDs: siblingIDs,
+                groupID: Self.workspaceReorderGroupID,
+                axis: .vertical,
+                railSpacing: verticalRailSpacing,
+                fallbackLength: PaguroMetric.Sidebar.headerHeight,
+                railReorder: workspaceReorder,
+                commit: { commit in
+                    appState.reorderSpace(
+                        droppedSpaceID: commit.linkID,
+                        relativeTo: commit.targetLinkID,
+                        placement: commit.placement
+                    )
+                }
+            )
+            .contextMenu {
+                workspaceContextMenu(for: space)
             }
-        )
-        .contextMenu {
-            workspaceContextMenu(for: space)
+        } else if let firstLink = group.links.first,
+                  let firstIndex = dockIndexes[firstLink.id],
+                  firstIndex > 0 {
+            DockWorkspaceDividerView(
+                afterIndex: firstIndex - 1,
+                dockSizing: dockSizing,
+                dockMagnification: dockMagnification
+            )
         }
 
-        if isExpanded {
+        // Keep this ForEach at one structural location in both presentations.
+        // Only a folded workspace in the expanded sidebar hides its rows.
+        if sidebarPresentation == .collapsed || isExpanded {
             ForEach(group.links) { link in
                 serviceRow(
                     for: link,

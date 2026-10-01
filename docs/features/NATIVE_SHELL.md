@@ -307,6 +307,12 @@ height, and the bar keeps one height in every state.
 The selected service, drag order, badge count, health state, media state,
 keyboard focus, context menu, tooltip, and VoiceOver label remain available in
 both states.
+Expansion and collapse retain each icon view and animate its size and position
+with the sidebar. Labels reveal and fade within the changing row width.
+Keep the same service-row hierarchy in All workspaces mode. Workspace headers
+and dividers can change without replacing the service rows below them.
+The workspace rail uses the same continuous icon transition. Reduce Motion
+applies the new layout immediately.
 Manual global mute adds a barred bell to every visible service in both states.
 It does not hide unread badges.
 A service that keeps playing audio after a switch shows a speaker mark in both
