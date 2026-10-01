@@ -67,9 +67,7 @@ struct ServiceIconSquare: View {
     private var content: some View {
         if let data = instance.customIconData,
            let nsImage = ServiceIconImageProcessor.displayImage(from: data) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
+            decodedImage(nsImage)
         } else if let brand = brandAssetName {
             // Bundled brand mark. Monochrome logos are template assets and tint
             // to .primary so they stay visible in dark mode; colored logos are
@@ -80,9 +78,7 @@ struct ServiceIconSquare: View {
                 .foregroundStyle(.primary)
         } else if let data = instance.fetchedIconData,
                   let nsImage = ServiceIconImageProcessor.displayImage(from: data) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
+            decodedImage(nsImage)
         } else {
             Text(ServiceIconPalette.initial(for: instance.label))
                 .font(.system(size: size * 0.44, weight: .semibold, design: .rounded))
@@ -90,6 +86,15 @@ struct ServiceIconSquare: View {
                 .frame(width: size, height: size)
                 .background(ServiceIconPalette.color(for: instance.label))
         }
+    }
+
+    private func decodedImage(_ image: NSImage) -> some View {
+        Image(nsImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            // Resizing can decode the image again. Animate the outer frame,
+            // without crossfading between copies of the same artwork.
+            .transaction { $0.animation = nil }
     }
 
     /// The bundled brand asset for this service (`brand-<catalogEntryID>`), or

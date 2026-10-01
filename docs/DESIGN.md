@@ -275,6 +275,12 @@ card or button has hover or keyboard focus. Respect Reduce Motion.
 Movement reports a change that the user did not see happen. It never carries
 information of its own, and Reduce Motion always keeps that information.
 
+Sidebar icons stay mounted when the sidebar expands or collapses. Their size
+and position change with the rail. Labels fade and reveal within the available
+row width. Keep service rows in the same workspace group during this movement,
+so the transition does not replace or crossfade the icons. Workspace icons
+follow the same rule. Reduce Motion changes the layout without animation.
+
 ## Service marks
 
 A rail cell carries at most one mark in each corner, so a new state reuses a

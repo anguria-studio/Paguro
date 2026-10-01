@@ -150,34 +150,25 @@ struct ServiceRowView: View {
         // The row keeps its exact resting height: the pointer is converted to
         // a position in the stack through that height, so a row of any other
         // height puts every icon somewhere the pointer does not agree with.
-        .frame(height: isDockItem ? dockRowHeight : nil)
+        .frame(height: axis == .vertical ? (isDockItem ? dockRowHeight : Self.rowHeight) : nil)
         // The semantic control keeps the complete resting width. The Dock's
         // mouse surface is the fixed rail viewport, not this cell frame.
-        .frame(maxWidth: isDockItem ? .infinity : nil)
+        .frame(maxWidth: axis == .vertical ? .infinity : nil)
         .contentShape(Rectangle())
         // The move is drawn and nothing else. The rail pointer surface stays
         // fixed while its event-time resolver follows this drawing.
         .visualEffect { [offset = isDockItem ? dockTransform.verticalOffset : 0] content, _ in
             content.offset(y: offset)
         }
-        // A Dock item leaves this out. The hover moves to the next icon while
-        // the pointer is still moving, and an animation here would also take
-        // the scale and the move. The two icons would then follow the
-        // animation, not the pointer, and snap back when it ends. The tile and
-        // the tooltip fade by their own animation instead.
-        .animation(hoverAnimation, value: !isDockItem && presentsHover)
         .onHover { hovering in
             isHovering = hovering
             if isDockItem {
                 onDockHoverChange(hovering)
             }
         }
-        .modifier(
-            ServiceHelpModifier(
-                label: contextualName,
-                isEnabled: !isDockItem && !hidesLabel
-            )
-        )
+        // Keep the modifier in place. A conditional wrapper replaces the row
+        // when the sidebar changes presentation, even if its icon stays put.
+        .help(isDockItem || hidesLabel ? "" : contextualName)
         .zIndex((isDockItem || hidesLabel) && presentsHover ? 10 : 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ServiceAccessibility.label(
@@ -196,12 +187,12 @@ struct ServiceRowView: View {
 
     @ViewBuilder
     private var content: some View {
-        if isDockItem {
-            dockContent
+        if axis == .vertical {
+            sidebarContent
         } else if hidesLabel {
             iconOnlyContent
         } else {
-            labelledContent
+            labelledTabContent
         }
     }
 
@@ -247,13 +238,9 @@ struct ServiceRowView: View {
             }
     }
 
-    private var labelledContent: some View {
+    private var labelledTabContent: some View {
         HStack(spacing: Self.gutter) {
-            serviceIcon(
-                size: axis == .vertical
-                    ? PaguroMetric.Sidebar.expandedIconSize
-                    : PaguroMetric.Sidebar.barIconSize
-            )
+            serviceIcon(size: PaguroMetric.Sidebar.barIconSize)
 
             Text(instance.label)
                 .font(isSelected ? .paguroSidebarLabelSelected : .paguroSidebarLabel)
@@ -261,20 +248,10 @@ struct ServiceRowView: View {
                 .truncationMode(.tail)
                 .foregroundStyle(serviceNameColor)
 
-            if axis == .vertical {
-                // Pushes the accessories to the trailing edge of the fixed-width
-                // row. The horizontal tab has no fixed width to push against, so
-                // it leaves this out and the accessories sit after the name.
-                Spacer(minLength: 0)
-            }
-
             accessories
         }
         .padding(.horizontal, Self.gutter)
-        .frame(
-            width: axis == .vertical ? Self.rowWidth : nil,
-            height: axis == .vertical ? Self.rowHeight : Self.tabHeight
-        )
+        .frame(height: Self.tabHeight)
         // The tab takes exactly the width its label needs and no more. Left
         // free to grow rather than capped: a cap only bites when something
         // proposes an unbounded width, which the horizontal scroll view does,
@@ -282,7 +259,7 @@ struct ServiceRowView: View {
         // trimming the long ones. `ViewThatFits` in the strip already hands
         // overflow to that scroll view, so a wide tab costs scrolling, not
         // layout.
-        .fixedSize(horizontal: axis == .horizontal, vertical: false)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// Each rail hovers against its own ground, so each takes its own fill.
@@ -309,34 +286,56 @@ struct ServiceRowView: View {
             : PaguroColor.Fill.sidebarSelectedTint
     }
 
+    private var sidebarContent: some View {
+        SidebarItemContent(
+            isCollapsed: isDockItem,
+            dockIconSize: dockIconSize,
+            dockItemSize: dockItemSize
+        ) {
+            sidebarIcon
+        } label: {
+            HStack(spacing: Self.gutter) {
+                Text(instance.label)
+                    .font(isSelected ? .paguroSidebarLabelSelected : .paguroSidebarLabel)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(serviceNameColor)
+                Spacer(minLength: 0)
+                accessories
+            }
+        }
+        .overlay(alignment: .leading) {
+            // Keep the glass surface alive so hover never exposes its first sample.
+            dockTooltip
+                .offset(x: dockTooltipLeadingOffset)
+                .animation(hoverAnimation) { tooltip in
+                    tooltip.opacity(isDockItem && presentsHover ? 1 : 0)
+                }
+        }
+    }
 
-    /// The collapsed sidebar keeps only the service icon and its live marks.
-    /// The label remains available through the tooltip and accessibility text.
-    ///
-    /// The tile lays out at its resting size and the pointer scales it from
-    /// there. A scale changes no frame, so the stack and the scroll view around
-    /// it do not measure themselves again for every step of the pointer. The
-    /// tooltip stays outside the scale: it is a label, not part of the icon.
-    private var dockContent: some View {
-        serviceIcon(size: dockIconSize)
+    private var sidebarIcon: some View {
+        let size = isDockItem ? dockIconSize : PaguroMetric.Sidebar.expandedIconSize
+
+        return serviceIcon(size: size)
             .overlay(alignment: .topLeading) {
-                if isMuted {
+                if isDockItem && isMuted {
                     MutedNotificationGlyph()
                         .offset(x: -5, y: -5)
-                } else if isPlayingAudio {
+                } else if isDockItem && isPlayingAudio {
                     BackgroundAudioGlyph()
                         .offset(x: -5, y: -5)
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if badgeCount > 0 && instance.showBadge {
+                if isDockItem && badgeCount > 0 && instance.showBadge {
                     BadgeCountView(count: badgeCount)
                         .scaleEffect(0.86)
                         .offset(x: 7, y: -6)
                 }
             }
             .overlay(alignment: .bottomLeading) {
-                if cameraActive || micActive || micMuted {
+                if isDockItem && (cameraActive || micActive || micMuted) {
                     MediaIndicatorGlyph(
                         cameraActive: cameraActive,
                         micActive: micActive,
@@ -345,23 +344,7 @@ struct ServiceRowView: View {
                     .offset(x: -5, y: 5)
                 }
             }
-            .scaleEffect(dockTransform.scale, anchor: .leading)
-            .frame(
-                width: dockItemSize,
-                height: dockItemSize
-            )
-            .overlay(alignment: .leading) {
-                // Keep the native glass surface alive before hover. Creating it
-                // on pointer entry exposes the first background sample as
-                // a brief color change.
-                dockTooltip
-                    .offset(x: dockTooltipLeadingOffset)
-                    // The offset follows the icon size, so only the fade
-                    // takes the animation.
-                    .animation(hoverAnimation) { tooltip in
-                        tooltip.opacity(presentsHover ? 1 : 0)
-                    }
-            }
+            .scaleEffect(isDockItem ? dockTransform.scale : 1, anchor: .leading)
     }
 
     private var dockTooltip: some View {
@@ -514,20 +497,6 @@ private struct DockTooltipSurfaceModifier: ViewModifier {
                     )
                 )
             }
-        }
-    }
-}
-
-private struct ServiceHelpModifier: ViewModifier {
-    let label: String
-    let isEnabled: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content.help(label)
-        } else {
-            content
         }
     }
 }
