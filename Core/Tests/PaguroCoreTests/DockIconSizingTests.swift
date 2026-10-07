@@ -20,9 +20,42 @@ final class DockIconSizingTests: XCTestCase {
     }
 
     func testMagnifiedSizeNeverFallsBelowTheBaseSize() {
-        XCTAssertEqual(DockIconSizing.magnifiedSize(10, baseSize: 24), 32)
+        XCTAssertEqual(DockIconSizing.magnifiedSize(10, baseSize: 24), 24)
+        XCTAssertEqual(DockIconSizing.magnifiedSize(24.5, baseSize: 24), 24.5)
         XCTAssertEqual(DockIconSizing.magnifiedSize(32, baseSize: 44), 44)
         XCTAssertEqual(DockIconSizing.magnifiedSize(80, baseSize: 24), 72)
+    }
+
+    func testNonFiniteMagnifiedSizesStayWithinTheBaseAndPeak() {
+        XCTAssertEqual(DockIconSizing.magnifiedSize(.nan, baseSize: 22), 22)
+        XCTAssertEqual(DockIconSizing.magnifiedSize(-.infinity, baseSize: 22), 22)
+        XCTAssertEqual(DockIconSizing.magnifiedSize(.infinity, baseSize: 22), 72)
+    }
+
+    func testEveryMagnificationStepReachesTheDrawnIcon() {
+        for base in [14.0, 22.0, 30.0, 44.0] {
+            var previousSize = base
+            for step in 0...100 {
+                let peak = DockIconSizing.peakSize(
+                    baseSize: base,
+                    magnification: Double(step) / 100
+                )
+                let displayed = DockIconSizing.displayedSize(
+                    baseSize: base,
+                    magnifiedSize: peak,
+                    magnificationEnabled: true,
+                    itemIndex: 2,
+                    pointerRows: 2
+                )
+
+                XCTAssertEqual(displayed, peak, accuracy: 0.000_001)
+                if step > 0 {
+                    XCTAssertGreaterThan(displayed, previousSize)
+                    XCTAssertLessThan(displayed - previousSize, 0.6)
+                }
+                previousSize = displayed
+            }
+        }
     }
 
     func testZeroBasedMagnificationMapsToThePeakSize() {

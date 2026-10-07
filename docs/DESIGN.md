@@ -19,6 +19,14 @@ Light appearance uses 14 percent black; dark appearance uses 20 percent white.
 Keep this fill across glass presets. Increase Contrast raises it to 22 and 30
 percent respectively. Expanded rows retain their existing fill and bold label.
 
+Icon rail magnification starts at the chosen base icon size and increases in
+one-percent slider steps toward a 72 point peak. Zero turns the effect off.
+Do not impose a larger minimum hover size. Small settings must produce small
+size changes and remain unchanged after an app restart.
+When magnification is off, collapsed service and workspace icons show the
+sidebar hover background. Keep the selected background on a selected icon.
+Hide these backgrounds while an icon grows or moves with magnification.
+
 The custom-service form discovers the website icon while the user enters the
 address. Place its compact preview beside the name and address, with a native
 Change Icon menu. Keep manual URL overrides in the service editor. Adding a

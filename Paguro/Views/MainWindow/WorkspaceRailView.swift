@@ -452,7 +452,6 @@ struct WorkspaceRailView: View {
 
     private func updatePointer(_ phase: HoverPhase, viewportHeight: CGFloat) {
         guard isCollapsed,
-              appState.iconRailMagnificationEnabled,
               !railReorder.isDragging
         else {
             dockMagnification.endPointerTracking(reduceMotion: reduceMotion)

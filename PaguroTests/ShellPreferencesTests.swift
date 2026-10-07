@@ -96,7 +96,7 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.iconRailBaseSize, DockIconSizing.minimumBaseSize)
         XCTAssertEqual(
             preferences.iconRailMagnifiedSize,
-            DockIconSizing.minimumMagnifiedSize
+            DockIconSizing.minimumBaseSize
         )
         XCTAssertEqual(preferences.iconRailPosition, DockRailPosition.defaultPosition)
         XCTAssertEqual(preferences.workspaceViewMode, WorkspaceViewMode.defaultMode)
@@ -154,6 +154,33 @@ final class ShellPreferencesTests: XCTestCase {
         XCTAssertEqual(store.railLayout, .topBars)
         XCTAssertEqual(store.appearanceMode, .dark)
         XCTAssertTrue(defaults.bool(forKey: DefaultsKey.railBarIconsOnly))
+    }
+
+    @MainActor
+    func testLowMagnificationAndOffSurviveReloadAtEveryBaseSize() throws {
+        let sandbox = try StoreSandbox(testCase: self, label: "shell-low-magnification")
+        let fixture = try makePreferencesStore(AppPreferences())
+        defer { withExtendedLifetime(fixture.container) {} }
+        var preferences = ShellPreferences.load(
+            defaults: sandbox.defaults,
+            preferencesStore: fixture.store
+        )
+
+        for base in [14.0, 22.0, 30.0, 44.0] {
+            preferences.setIconRailBaseSize(base, defaults: sandbox.defaults)
+            for amount in [0.0, 0.01, 0.02, 0.05, 0.1, 0.19, 0.2, 0.26, 1.0] {
+                preferences.setIconRailMagnification(amount, defaults: sandbox.defaults)
+                let reloaded = ShellPreferences.load(
+                    defaults: sandbox.defaults,
+                    preferencesStore: fixture.store
+                )
+
+                XCTAssertEqual(reloaded, preferences)
+                XCTAssertEqual(reloaded.iconRailMagnification, amount, accuracy: 0.000_001)
+                XCTAssertEqual(reloaded.iconRailMagnificationEnabled, amount > 0)
+                preferences = reloaded
+            }
+        }
     }
 
     @MainActor

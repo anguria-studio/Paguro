@@ -262,13 +262,12 @@ struct ServiceRowView: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
-    /// Each rail hovers against its own ground, so each takes its own fill.
-    /// The Dock item keeps the shared one: it hovers over service artwork.
+    /// Collapsed icons and expanded rows share the sidebar hover fill.
     private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
         if mark.fill == .selected, isDockItem {
             return AnyShapeStyle(PaguroColor.Fill.dockSelection)
         }
-        guard mark.fill == .hover, !isDockItem else { return mark.fillStyle }
+        guard mark.fill == .hover else { return mark.fillStyle }
         return AnyShapeStyle(
             axis == .vertical
                 ? PaguroColor.Fill.railRowHover

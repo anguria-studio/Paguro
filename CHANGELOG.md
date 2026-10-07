@@ -4,6 +4,11 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Fix low icon rail magnification settings. Each one-percent slider step now
+  produces a small size change, and small settings persist after a restart.
+- Show a hover background behind collapsed sidebar icons when magnification
+  is off, for both services and workspaces.
+
 ## [1.1.3] - 2026-10-01
 
 Version 1.1.3, build 22. Direct download release only.

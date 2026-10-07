@@ -9,7 +9,6 @@ public enum DockIconSizing {
     public static let maximumBaseSize = 44.0
     public static let defaultBaseSize = 22.0
 
-    public static let minimumMagnifiedSize = 32.0
     public static let maximumMagnifiedSize = 72.0
     public static let defaultMagnification = 0.26
     public static let defaultMagnifiedSize = 35.0
@@ -25,9 +24,10 @@ public enum DockIconSizing {
         min(maximumBaseSize, max(minimumBaseSize, value))
     }
 
+    /// Use the base size as the floor so small slider values stay distinct.
     public static func magnifiedSize(_ value: Double, baseSize: Double) -> Double {
         let base = self.baseSize(baseSize)
-        return max(base, min(maximumMagnifiedSize, max(minimumMagnifiedSize, value)))
+        return min(maximumMagnifiedSize, max(base, value))
     }
 
     public static func magnification(_ value: Double) -> Double {
