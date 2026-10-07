@@ -887,7 +887,6 @@ struct UnifiedRailView: View {
     /// magnification does not change, so sizes taken from it cannot oscillate.
     private func updatePointer(_ phase: HoverPhase, viewportHeight: CGFloat) {
         guard sidebarPresentation == .collapsed,
-              appState.iconRailMagnificationEnabled,
               !railReorder.isDragging
         else {
             dockMagnification.endPointerTracking(reduceMotion: reduceMotion)

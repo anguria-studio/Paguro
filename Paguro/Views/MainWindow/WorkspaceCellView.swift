@@ -212,7 +212,7 @@ struct WorkspaceCellView: View {
     }
 
     private func fillStyle(for mark: RowMark) -> AnyShapeStyle {
-        guard mark.fill == .hover, !isDockItem else { return mark.fillStyle }
+        guard mark.fill == .hover else { return mark.fillStyle }
         return AnyShapeStyle(PaguroColor.Fill.railRowHover)
     }
 }

@@ -439,12 +439,19 @@ The Icon Rail settings follow the macOS Dock control model.
 The Size slider controls the base icon size.
 The Magnification slider controls the complete effect.
 Zero turns magnification off. Higher values increase the peak size smoothly.
+Each one-percent step adds one percent of the distance from the base size to
+the 72 point maximum. At the default 22 point base size, the first step draws
+a 22.5 point peak. There is no separate minimum hover size. Loading saved
+preferences preserves these small values.
 The nearest two icons on each side receive a smaller part of the effect.
 Affected rows grow to move neighboring icons apart.
 The hovered icon keeps its original vertical center. Icons above it move up,
 and icons below it move down.
 Icons grow toward the right and can extend over the web content edge.
 Paguro hides dock selection and hover tiles while magnification is active.
+With magnification off, pointer tracking still identifies the hovered service
+or workspace. Its icon shows the same neutral hover fill as an expanded row.
+A selected icon keeps its selection fill when hovered.
 Hovering an icon shows its service name in a material label on the right.
 The label keeps a 12 point gap after the rail or the magnified icon.
 It uses the current Window glass preset.
