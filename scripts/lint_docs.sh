@@ -13,6 +13,7 @@ vale \
   README.md \
   CHANGELOG.md \
   CONTRIBUTING.md \
+  SECURITY.md \
   AGENTS.md \
   THIRD_PARTY_NOTICES.md \
   docs

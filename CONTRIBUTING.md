@@ -3,6 +3,7 @@
 Thank you for your interest in Paguro.
 
 Paguro is an early project.
+For security vulnerabilities, follow the [security policy](SECURITY.md).
 Open an [issue](https://github.com/anguria-studio/Paguro/issues) before you make a large change.
 This step helps contributors avoid duplicate work.
 
