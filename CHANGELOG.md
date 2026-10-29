@@ -4,6 +4,11 @@ Changes that affect Paguro users appear here, with the newest release first.
 
 ## [Unreleased]
 
+- Add an opt-in browser extension prototype for macOS 15.4 and later. Install
+  Firefox extensions from an Add-ons link and pick the services that get them.
+  Each service keeps its own copy, storage, and permissions. A puzzle button
+  opens extension actions and popups. It is off unless you launch with
+  `--paguro-browser-extensions`, and the App Store build leaves it out.
 - Fix low icon rail magnification settings. Each one-percent slider step now
   produces a small size change, and small settings persist after a restart.
 - Show a hover background behind collapsed sidebar icons when magnification

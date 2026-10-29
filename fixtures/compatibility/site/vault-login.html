@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paguro vault fixture</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/vault-login.js" defer></script>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Local password-manager test</p>
+    <h1>Paguro vault fixture</h1>
+    <p>Use a disposable vault and the dummy login below. Keep real credentials out of this page.</p>
+  </header>
+  <main>
+    <section>
+      <h2>Save and autofill</h2>
+      <p>Add a Login item for this page in the disposable vault, then use the extension to fill this form.</p>
+      <p>Dummy username: <code>paguro-fixture</code></p>
+      <p>Dummy password: <code>Paguro-fixture-only-2026!</code></p>
+      <form id="vault-login">
+        <label for="username">Dummy username</label>
+        <input id="username" name="username" autocomplete="username" maxlength="128" required>
+        <label for="password">Dummy password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+        <button type="submit">Check dummy login</button>
+        <button id="clear-login" type="button">Clear fields</button>
+      </form>
+      <p id="vault-result" role="status">Waiting for the dummy login.</p>
+      <p>Values are checked in this page and are not sent anywhere.</p>
+    </section>
+  </main>
+</body>
+</html>

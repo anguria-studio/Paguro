@@ -21,6 +21,7 @@ final class AppState {
     let webViewPool: WebViewPool
     let contentBlocker: ContentBlockerManager
     let dataStoreManager: DataStoreManager
+    let browserExtensionFeature = BrowserExtensionFeature()
     let userScriptManager: UserScriptManager
     let badgeManager: BadgeManager
 
@@ -134,6 +135,7 @@ final class AppState {
     var isLocked = false {
         didSet {
             notificationManager.setAppLocked(isLocked)
+            browserExtensionFeature.host?.setLocked(isLocked)
             onLockChanged?(isLocked)
         }
     }
@@ -260,6 +262,7 @@ final class AppState {
         self.webViewPool = webViewPool
 
         loadAppPreferences()
+        connectBrowserExtensionPrototype()
     }
 
     /// Connects process-lifetime work after AppKit finishes launching.
@@ -285,6 +288,7 @@ final class AppState {
             }
         )
         setupExternalLinkRouting()
+        startBrowserExtensionPrototype()
         webViewPool.downloadTracker = downloadTracker
         // The download list is global, so each record captures the name of its
         // service as the transfer begins. The tracker reads no store, so the
@@ -653,6 +657,42 @@ final class AppState {
             globalEnabled: autoHibernateIdleEnabled,
             globalIdleMinutes: autoHibernateIdleMinutes
         )
+    }
+
+    /// Runs from `init`, because SwiftUI can create a service view before
+    /// `start()`. Saved assignments must reach that first view.
+    private func connectBrowserExtensionPrototype() {
+        webViewPool.browserExtensions = browserExtensionFeature.host
+        browserExtensionFeature.host?.setLocked(isLocked)
+        #if !APP_STORE
+        if #available(macOS 15.4, *), let manager = browserExtensionFeature.manager {
+            manager.assignableServiceIDs = { [weak self] in
+                Set(self?.workspaceStore.allServices().map(\.id) ?? [])
+            }
+            manager.canRebuild = { [weak self] ids in
+                guard let self, !self.isLocked else { return false }
+                return ids.allSatisfy {
+                    !self.webViewPool.isCapturingMedia($0) && !self.webViewPool.isPlayingBackgroundAudio($0)
+                }
+            }
+            manager.onAssignmentsChanged = { [weak self] ids in
+                guard let self else { return }
+                for id in ids where self.webViewPool.hasWebView(for: id) {
+                    self.webViewPool.recreateWebView(for: id)
+                }
+                self.webViewRebuildToken &+= 1
+            }
+            // A failure here repeats in `start()`, which reports it in Settings.
+            try? manager.loadLibrary()
+        }
+        #endif
+    }
+
+    /// Verifies saved packages and attaches them to the open service views.
+    private func startBrowserExtensionPrototype() {
+        #if !APP_STORE
+        if #available(macOS 15.4, *) { browserExtensionFeature.manager?.start() }
+        #endif
     }
 
     // MARK: - App lock

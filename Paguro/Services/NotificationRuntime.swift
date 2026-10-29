@@ -446,7 +446,7 @@ final class NotificationRuntime {
 
     private func restartPollingAfterResume() {
         let activeID = webViewPool.activeServiceID
-        for serviceID in webViewPool.liveServiceIDs {
+        for serviceID in webViewPool.assignableServiceIDs {
             guard let webView = webViewPool.liveWebView(for: serviceID) else { continue }
             startPolling(
                 for: serviceID,
@@ -455,7 +455,7 @@ final class NotificationRuntime {
             )
         }
         AppLogger.general.info(
-            "Restarted polling after wake or reconnect for \(self.webViewPool.liveServiceIDs.count) service(s)"
+            "Restarted polling after wake or reconnect for \(self.webViewPool.assignableServiceIDs.count) service(s)"
         )
     }
 

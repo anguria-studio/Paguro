@@ -8,7 +8,7 @@ final class DataStoreManagerTests: XCTestCase {
     func testManagerUsesAndCachesTheAccountIdentifier() async throws {
         let identifier = UUID()
         exerciseManagerCache(identifier: identifier)
-        try await WKWebsiteDataStore.remove(forIdentifier: identifier)
+        try await removeStore(identifier)
     }
 
     private func exerciseManagerCache(identifier: UUID) {
@@ -44,12 +44,12 @@ final class DataStoreManagerTests: XCTestCase {
 
         var cleanupError: Error?
         do {
-            try await WKWebsiteDataStore.remove(forIdentifier: accountAIdentifier)
+            try await removeStore(accountAIdentifier)
         } catch {
             cleanupError = error
         }
         do {
-            try await WKWebsiteDataStore.remove(forIdentifier: accountBIdentifier)
+            try await removeStore(accountBIdentifier)
         } catch {
             cleanupError = cleanupError ?? error
         }
@@ -108,6 +108,22 @@ final class DataStoreManagerTests: XCTestCase {
         firstManager.evict(identifier: accountBIdentifier)
         relaunchedManager.evict(identifier: accountAIdentifier)
         relaunchedManager.evict(identifier: accountBIdentifier)
+    }
+
+    /// WebKit closes a released store's session in the background and writes
+    /// its last files then. A removal during that write fails with "Failed to
+    /// delete files on disk". No public API reports the end of that teardown,
+    /// so retry for a short bounded time, as `WebsiteDataReclaimer` retries in
+    /// the app. A store that never becomes removable still fails the test.
+    private func removeStore(_ identifier: UUID) async throws {
+        for attempt in 1...10 {
+            do {
+                try await WKWebsiteDataStore.remove(forIdentifier: identifier)
+                return
+            } catch where attempt < 10 {
+                try await Task.sleep(for: .milliseconds(200))
+            }
+        }
     }
 
     private static func markerCookie(name: String, value: String) -> HTTPCookie? {

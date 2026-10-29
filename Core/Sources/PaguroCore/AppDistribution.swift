@@ -6,4 +6,5 @@ public enum AppDistribution: Sendable {
 
     public var supportsSelfUpdates: Bool { self == .directDownload }
     public var supportsGoogleIconFallback: Bool { self != .appStore }
+    public var supportsExperimentalBrowserExtensions: Bool { self != .appStore }
 }

@@ -14,6 +14,7 @@ final class WebViewPool {
     /// The live-view limit. It lives in `PaguroCore` so the rule, the tests,
     /// and the user-facing documents all state one number.
     private let maxLoaded: Int = WebViewPoolCapacity.maxLoaded
+    var browserExtensions: (any BrowserExtensionHosting)?
     private var hasShutDown = false
     private var softHibernatedIDs: Set<UUID> = []
     /// Services whose web view `recreateWebView` released. The next web view
@@ -523,7 +524,7 @@ final class WebViewPool {
     /// Snapshot of all service IDs whose WKWebViews are currently alive.
     /// Used after system wake to restart polling for everything that survived
     /// the sleep cycle.
-    var liveServiceIDs: [UUID] {
+    var assignableServiceIDs: [UUID] {
         Array(webViews.keys)
     }
 
@@ -571,6 +572,7 @@ final class WebViewPool {
         if let existing = webViews[instance.id] {
             lastAccessTimes[instance.id] = Date()
             wakeService(instance.id)
+            browserExtensions?.didActivate(instance.id)
             onServiceActivated?(instance.id, existing)
             return existing
         }
@@ -579,7 +581,7 @@ final class WebViewPool {
         let webView = WKWebView(frame: .zero, configuration: config)
         applyWebAppearance(to: webView, for: instance)
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = instance.userAgent ?? UserAgentProvider.safariDefault
+        webView.customUserAgent = resolvedUserAgent(instance.userAgent, for: instance.id)
 
         let coordinator = makeCoordinator(for: instance)
         webView.navigationDelegate = coordinator
@@ -587,6 +589,7 @@ final class WebViewPool {
         coordinators[instance.id] = coordinator
 
         webViews[instance.id] = webView
+        browserExtensions?.didCreate(webView, for: instance.id)
         applyMediaPlaybackPolicy(for: instance.id)
         lastAccessTimes[instance.id] = Date()
         observeCaptureState(webView, id: instance.id)
@@ -614,6 +617,7 @@ final class WebViewPool {
             await self.evictIfNeeded()
         }
 
+        browserExtensions?.didActivate(instance.id)
         onServiceActivated?(instance.id, webView)
         return webView
     }
@@ -625,6 +629,7 @@ final class WebViewPool {
         guard let activeServiceID else { return }
         softHibernateService(activeServiceID)
         self.activeServiceID = nil
+        browserExtensions?.didActivate(nil)
     }
 
     /// Preloads a web view for a service in the background without making it active.
@@ -641,7 +646,7 @@ final class WebViewPool {
         let webView = WKWebView(frame: .zero, configuration: config)
         applyWebAppearance(to: webView, for: instance)
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = instance.userAgent ?? UserAgentProvider.safariDefault
+        webView.customUserAgent = resolvedUserAgent(instance.userAgent, for: instance.id)
 
         let coordinator = makeCoordinator(for: instance)
         webView.navigationDelegate = coordinator
@@ -649,6 +654,7 @@ final class WebViewPool {
         coordinators[instance.id] = coordinator
 
         webViews[instance.id] = webView
+        browserExtensions?.didCreate(webView, for: instance.id)
         applyMediaPlaybackPolicy(for: instance.id)
         lastAccessTimes[instance.id] = Date()
         observeCaptureState(webView, id: instance.id)
@@ -755,6 +761,7 @@ final class WebViewPool {
             teardownWebView(serviceID, reason: .quit)
             userScriptManager.removeHandler(for: serviceID)
         }
+        browserExtensions?.shutdown()
         // Command-Q stops all Paguro work, so the audio poll ends with the rest.
         backgroundAudioPoll?.cancel()
         backgroundAudioPoll = nil
@@ -925,9 +932,15 @@ final class WebViewPool {
     /// view — the new agent applies when the view is next created.
     func setUserAgent(_ userAgent: String?, for id: UUID) {
         guard let webView = webViews[id] else { return }
-        webView.customUserAgent = userAgent ?? UserAgentProvider.safariDefault
+        webView.customUserAgent = resolvedUserAgent(userAgent, for: id)
         noteAppInitiatedNavigation(.userAgentChange, for: id)
         webView.reload()
+    }
+
+    private func resolvedUserAgent(_ value: String?, for serviceID: UUID) -> String? {
+        let standard = value ?? UserAgentProvider.safariDefault
+        guard let browserExtensions else { return standard }
+        return browserExtensions.customUserAgent(defaultValue: standard, for: serviceID)
     }
 
     /// Rebuilds a service's web view so configuration-time settings — the
@@ -1138,6 +1151,7 @@ final class WebViewPool {
         lastAccessTimes.removeValue(forKey: instanceID)
         coordinators.removeValue(forKey: instanceID)
         snapshots.removeValue(forKey: instanceID)
+        browserExtensions?.release(instanceID)
         onServiceTornDown?(instanceID)
     }
 
@@ -1152,6 +1166,7 @@ final class WebViewPool {
         coordinator.externalLinkHandler = externalLinkHandler
         coordinator.mediaCapturePolicyProvider = mediaCapturePolicyProvider
         coordinator.onNavigationFinished = { [weak self] id in
+            self?.browserExtensions?.didNavigate(id)
             self?.onNavigationFinished?(id)
         }
         coordinator.onHealthEvent = { [weak self] id, event in
@@ -1166,6 +1181,7 @@ final class WebViewPool {
     private func makeConfiguration(for instance: ServiceInstance) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = dataStoreManager.dataStore(for: instance)
+        browserExtensions?.configure(config, for: instance)
         let prefs = WKWebpagePreferences()
         prefs.allowsContentJavaScript = true
         config.defaultWebpagePreferences = prefs

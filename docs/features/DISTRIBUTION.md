@@ -58,6 +58,10 @@ feature, but cannot override the distribution boundary.
 Compile-time guards still exclude unavailable request paths and Sparkle types;
 the direct specification alone adds the Sparkle dependency. Add new edition
 rules to the central matrix and cover them with tests.
+The opt-in [browser extension prototype](BROWSER-EXTENSIONS.md) is available only
+in development and direct builds on macOS 15.4 or later. `APP_STORE` excludes its
+downloader, runtime, and controls. The prototype scheme uses a separate sandbox
+identity and does not change the normal launch behavior.
 
 ## Updates
 

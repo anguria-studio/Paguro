@@ -7,6 +7,7 @@ import Sparkle
 #endif
 
 struct SettingsView: View {
+    @Environment(AppState.self) private var appState
     #if DIRECT_DISTRIBUTION
     let updater: SPUUpdater
 
@@ -33,6 +34,13 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Privacy", systemImage: "lock")
                 }
+
+            #if !APP_STORE
+            if #available(macOS 15.4, *), let manager = appState.browserExtensionFeature.manager {
+                BrowserExtensionSettingsView(manager: manager)
+                    .tabItem { Label("Extensions", systemImage: "puzzlepiece.extension") }
+            }
+            #endif
 
             aboutTab
                 .tabItem {

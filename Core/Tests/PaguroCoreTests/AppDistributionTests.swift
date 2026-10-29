@@ -10,6 +10,7 @@ final class AppDistributionTests: XCTestCase {
         ] {
             XCTAssertEqual(distribution.supportsSelfUpdates, updates)
             XCTAssertEqual(distribution.supportsGoogleIconFallback, google)
+            XCTAssertEqual(distribution.supportsExperimentalBrowserExtensions, distribution != .appStore)
         }
     }
 }

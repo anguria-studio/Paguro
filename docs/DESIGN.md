@@ -62,6 +62,34 @@ appear active. Explain that mobile view depends on website support and can
 require a new sign-in. Explain that active status depends on the website and
 can suppress notifications. Use the shared settings caption style.
 
+## Browser extensions
+
+The opt-in extension prototype follows these visual rules:
+
+- **Toolbar.** One puzzle button sits before Downloads, Back, and Forward,
+  with the same size and surface. Show it only when the active service has
+  extensions. Its native menu lists each extension with its icon. Extensions
+  with an options page get a Settings submenu.
+- **Popup.** Put a 32 point native row with Keep open and Close above the
+  page. Keep open starts off for each opening. Crop 2 points from each page
+  edge under one 14 point rounded surface, with no padding. Keep the top
+  origin fixed and resize without animation. Keep at least 160 points of width.
+- **Status dots.** Orange means runtime diagnostics. Blue means an update is
+  available and wins over orange. The accessible label states both.
+- **Diagnostics.** Never block or close a popup because of them. Show details
+  on request in a native popover, and collapsed in Settings by service. Keep
+  package and loading failures visible as errors.
+- **Permission sheet.** Attach it to the requesting service's window. Name the
+  extension and service and list the exact access. Cancel is the default.
+- **Extension pages.** Use a native window titled with the extension and
+  service, with a visible address, Back, and Reload.
+- **Settings.** Leave 6 points around checkbox groups so focus rings are not
+  clipped. Show update check failures as secondary text.
+
+Opening a popup first activates Paguro, then gives the popup keyboard focus.
+Switching service, locking, or quitting closes popups, sheets, and pages.
+See [Browser extensions](features/BROWSER-EXTENSIONS.md).
+
 ## First run
 
 A window with no service shows a three-step wizard on the window glass.

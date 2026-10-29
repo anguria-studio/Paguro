@@ -37,6 +37,7 @@ struct EditServiceSheet: View {
     @State private var initialUserAgent: String?
     @State private var errorMessage: String?
     @State private var confirmingClearSession = false
+    @State private var showsExtensions = false
 
     private var defaultCSS: String {
         ServiceCSSDefaults.css(forCatalogID: service.catalogEntryID) ?? ""
@@ -155,6 +156,16 @@ struct EditServiceSheet: View {
                     cameraMicrophoneSection
 
                     Divider()
+
+                    #if !APP_STORE
+                    if #available(macOS 15.4, *), let manager = appState.browserExtensionFeature.manager {
+                        Button("Manage extensions for this service") { showsExtensions = true }
+                            .sheet(isPresented: $showsExtensions) {
+                                ServiceExtensionsSheet(manager: manager, service: service)
+                            }
+                        Divider()
+                    }
+                    #endif
 
                     customCSSSection
 

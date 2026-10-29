@@ -12,7 +12,12 @@ options:
 configs:
   Debug: debug
   Compatibility: debug
+  ExtensionsPrototype: debug
   Release: release
+
+settings:
+  base:
+    PAGURO_EXTENSION_PROBE_SLUG: bitwarden-password-manager
 
 packages:
   PaguroCore:
@@ -25,6 +30,7 @@ targets:
     configFiles:
       Debug: Configuration/PaguroDebug.xcconfig
       Compatibility: Configuration/PaguroDebug.xcconfig
+      ExtensionsPrototype: Configuration/PaguroDebug.xcconfig
     sources:
       - path: Paguro
         excludes:
@@ -68,6 +74,8 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: $(PAGURO_DEBUG_BUNDLE_IDENTIFIER)
         Compatibility:
           PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro.compatibility
+        ExtensionsPrototype:
+          PRODUCT_BUNDLE_IDENTIFIER: studio.anguria.paguro.extensions-prototype
     scheme:
       testTargets:
         - PaguroTests
@@ -78,6 +86,7 @@ targets:
     configFiles:
       Debug: Configuration/PaguroDebug.xcconfig
       Compatibility: Configuration/PaguroDebug.xcconfig
+      ExtensionsPrototype: Configuration/PaguroDebug.xcconfig
     sources:
       - path: PaguroTests
     dependencies:
@@ -134,3 +143,27 @@ schemes:
       config: Debug
       targets:
         - PaguroTests
+
+  Paguro Extensions Prototype:
+    build:
+      targets:
+        Paguro: all
+    run:
+      config: ExtensionsPrototype
+      commandLineArguments:
+        "--paguro-browser-extensions": true
+
+  Paguro Extension Compatibility:
+    build:
+      targets:
+        Paguro: all
+    test:
+      config: Debug
+      targets:
+        - name: PaguroTests
+          selectedTests:
+            - BrowserExtensionCompatibilityTests
+            - ExtensionSourceComparisonTests
+      environmentVariables:
+        PAGURO_EXTENSION_LIVE_PROBES: "1"
+        PAGURO_EXTENSION_PROBE_SLUG: "$(PAGURO_EXTENSION_PROBE_SLUG)"

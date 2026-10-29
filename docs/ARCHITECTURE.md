@@ -83,6 +83,11 @@ The main services and startup adapters are:
 - `WebsiteDataReclaimer` for durable, deferred removal of unused WebKit stores.
 - `HibernationScheduler` for idle sweeps and immediate-hibernation grace tasks.
 - `WebViewPool` for live and hibernated web views.
+- `BrowserExtensionManager` for the opt-in extension prototype: the package
+  library, reviews, assignments, and update checks. `ServiceExtensionSession`
+  owns one extension controller per live service, bound to that service's data
+  store. The App Store build excludes this runtime. The pure rules live in
+  PaguroCore. See [Browser extensions](features/BROWSER-EXTENSIONS.md).
 - `WebViewCoordinator` for navigation and UI delegate routing.
 - `AuthPopupController` for popup windows and sign-in completion.
 - `WebDialogPresenter` for file pickers and page dialogs.
@@ -304,6 +309,10 @@ edition-specific release settings.
 `PaguroTests` test application services and WebKit adapters.
 Native view tests use AppKit hosts and simulated screen geometry. Debug preview
 schemes support manual onboarding, island, and notification checks.
+
+The opt-in extension compatibility tests use throwaway accounts and test-only
+observers, including a test-only Chrome package reader. See
+[Extension compatibility](features/EXTENSION-COMPATIBILITY.md).
 
 The local HTTPS fixture exercises notifications, frames, downloads, media, and
 session persistence. Live service results remain dated evidence in the private

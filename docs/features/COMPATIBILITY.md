@@ -19,6 +19,13 @@ The fixture provides these controls:
 - a persistent session marker;
 - a simulated WebKit process failure.
 
+The separate `/vault-login.html` page provides a dummy username and password
+for extension save and autofill checks. Its form compares values locally and
+sends no credentials to the server. Use a disposable vault. Do not enter real
+credentials on that page. For two-account checks, open this address in two
+separate Paguro accounts. Confirm that one account cannot read the other's
+extension login or vault items. See [Extension compatibility](EXTENSION-COMPATIBILITY.md).
+
 ## Safety boundary
 
 The server listens only on `127.0.0.1`.

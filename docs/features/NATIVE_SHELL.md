@@ -576,11 +576,18 @@ The content header is 52 points high.
 It shows the active service name on the leading edge.
 The trailing edge holds the service controls in this order:
 
-1. The download indicator.
-2. Back.
-3. Forward.
-4. Reload.
-5. Global notification mute.
+1. Extensions, when the opt-in prototype is enabled and this service has extensions.
+2. The download indicator.
+3. Back.
+4. Forward.
+5. Reload.
+6. Global notification mute.
+
+Extensions uses a single puzzle icon. Its native menu lists the assigned
+extensions by name, with icons when available. Choosing an entry runs its action or opens its
+native WebKit popup, such as Dark Reader's dark and light controls. An extension
+without an available action stays listed but disabled. A service without
+extensions has no puzzle button. See [Browser extensions](BROWSER-EXTENSIONS.md).
 
 Each control uses its own circular Liquid Glass surface. Their hover fills use
 the same circular shape.

@@ -67,9 +67,9 @@ struct SidebarToggleButton: View {
 /// The persistent controls for the active web service.
 ///
 /// The service page owns its own layout and appearance. Paguro keeps only the
-/// controls that a page cannot supply: the download report, page history,
-/// reload, and the global notification mute. They sit at the trailing end of
-/// the header in that order.
+/// controls that a page cannot supply: extensions, the download report, page
+/// history, reload, and the global notification mute. They sit at the trailing
+/// end of the header in that order.
 struct WebContentActions: View {
     let webViewState: WebViewState
 
@@ -87,6 +87,12 @@ struct WebContentActions: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            #if !APP_STORE
+            if #available(macOS 15.4, *), let manager = appState.browserExtensionFeature.manager,
+               let id = appState.selectedServiceID, !appState.showAddService, !appState.isLocked {
+                BrowserExtensionActions(manager: manager, serviceID: id)
+            }
+            #endif
             if downloadState.isVisible {
                 DownloadIndicatorButton(
                     state: downloadState,

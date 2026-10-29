@@ -14,6 +14,8 @@ Major features have separate documents:
 - [Notification system](features/NOTIFICATIONS.md)
 - [Island and notch support](features/ISLAND.md)
 - [Web sessions](features/WEB-SESSIONS.md)
+- [Browser extension prototype](features/BROWSER-EXTENSIONS.md)
+- [Extension compatibility investigations](features/EXTENSION-COMPATIBILITY.md)
 - [Web appearance](features/WEB-APPEARANCE.md)
 - [Service icons](features/SERVICE-ICONS.md)
 - [Compatibility fixture](features/COMPATIBILITY.md)

@@ -19,6 +19,8 @@ WebKit keeps the store data on disk after the app quits.
 
 One service account must not use another account data store.
 This rule also applies to temporary badge probes.
+The opt-in [browser extension prototype](BROWSER-EXTENSIONS.md) applies the same
+rule to extension controllers, background content, and cookie access.
 
 Tests must create two accounts on the same origin.
 The tests must prove that both sessions stay separate after a relaunch.
