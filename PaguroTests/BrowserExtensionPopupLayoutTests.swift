@@ -138,13 +138,17 @@ final class BrowserExtensionPopupLayoutTests: XCTestCase {
         return view.subviews.lazy.compactMap { self.button(identifier, in: $0) }.first
     }
 
+    /// A text view's mouse-down tracks the mouse until a mouse-up arrives in the
+    /// event queue. Queue the mouse-up first, or the test waits forever on a
+    /// machine with no real mouse input, such as CI.
     private func clickPage(_ window: NSWindow) throws {
-        for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
-            let event = try XCTUnwrap(NSEvent.mouseEvent(with: type, location: NSPoint(x: 50, y: 50),
+        func event(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: NSPoint(x: 50, y: 50),
                 modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                 context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
-            NSApp.sendEvent(event)
         }
+        NSApp.postEvent(try event(.leftMouseUp), atStart: false)
+        NSApp.sendEvent(try event(.leftMouseDown))
     }
 
     func testPopupCropsOnlyThePageEdgeUnderOneRoundedSurface() throws {

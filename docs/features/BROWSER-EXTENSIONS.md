@@ -96,7 +96,8 @@ WebKit can report runtime errors from an extension. Paguro never blocks the
 extension because of them. An orange dot on the puzzle button means the active
 service has diagnostics. The extension's menu and Settings show the details.
 An error does not prove the extension is broken, and no errors does not prove
-it works.
+it works. Some WebKit versions do not report extension runtime errors at all.
+In our CI they were missing on macOS 15 and 26 and present on macOS 27.
 
 ## How it works
 

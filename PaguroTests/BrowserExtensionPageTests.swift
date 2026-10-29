@@ -103,6 +103,7 @@ final class BrowserExtensionPageTests: XCTestCase {
         var updates = 0
         fixture.session.onIssuesChanged = { updates += 1 }
         _ = try await popup.evaluateJavaScript("setTimeout(() => { throw new Error('Paguro synthetic startup failure'); }, 0); true;")
+        try await requireEngineReport("Paguro synthetic startup failure", in: context)
         for _ in 0..<250 {
             if fixture.session.runtimeIssues[fixture.id]?.contains(where: { $0.contains("Paguro synthetic startup failure") }) == true { break }
             try await Task.sleep(for: .milliseconds(20))
@@ -154,11 +155,26 @@ final class BrowserExtensionPageTests: XCTestCase {
         XCTAssertFalse(popover.isShown, "An inactive account cannot reopen its popup")
     }
 
+    /// Some WebKit versions do not list extension runtime errors in
+    /// `WKWebExtensionContext.errors` (seen on macOS 15 and 26, not on 27).
+    /// Paguro cannot show what the engine does not report, so skip there.
+    /// When the engine does report it, Paguro must pass it on, and the test checks that.
+    @available(macOS 15.4, *)
+    private func requireEngineReport(_ message: String, in context: WKWebExtensionContext) async throws {
+        for _ in 0..<250 {
+            if context.errors.contains(where: { $0.localizedDescription.contains(message) }) { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw XCTSkip("This WebKit does not report extension runtime errors, so there is nothing to show.")
+    }
+
     @available(macOS 15.4, *)
     private func reportDiagnostic(_ message: String, in popup: WKWebView, fixture: Fixture) async throws {
         // Messages are fixed synthetic strings, with no account or page content.
         let literal = String(decoding: try JSONEncoder().encode(message), as: UTF8.self)
         _ = try await popup.evaluateJavaScript("setTimeout(() => { throw new Error(\(literal)); }, 0); true;")
+        let context = try XCTUnwrap(fixture.session.contexts[fixture.id])
+        try await requireEngineReport(message, in: context)
         for _ in 0..<150 {
             if fixture.session.runtimeIssues[fixture.id]?.contains(where: { $0.contains(message) }) == true { return }
             try await Task.sleep(for: .milliseconds(20))
