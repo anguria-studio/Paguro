@@ -150,8 +150,40 @@ service-worker backgrounds.
   connections do not work.
 - No context menus, browser windows, or full tabs model.
 - No Chrome Web Store or Safari extension installation.
-- Each selected service runs its own extension background. Measure the memory
-  cost before you enable an extension in many services.
+- Each selected service runs its own extension background, so memory grows
+  with every service you add. See the next section.
+
+## Memory cost
+
+Every service keeps its own copy of an extension, so nothing is shared between
+services. The cost grows in a straight line with the number of services:
+
+| Extension | Extra memory per service |
+| --- | --- |
+| Bitwarden 2026.10.0 | about 105 MiB |
+| Dark Reader 4.9.134 | about 35 MiB |
+| Simple Translate 3.1.0 | about 17 MiB |
+
+So Bitwarden in 10 services costs about 1 GB. Dark Reader in 10 services
+costs about 350 MB. These figures come from 5 and 10 throwaway services on a
+16 GB Apple silicon Mac with macOS 27.2, on 29 October 2026. Bitwarden was
+signed out, and the pages were small synthetic ones, so real use costs more.
+A hibernated service frees its copy.
+
+This is the price of keeping accounts separate, and it is why the installer
+asks you to pick services instead of installing everywhere. A heavy extension
+belongs in the few services that need it.
+
+To measure again, run:
+
+```sh
+scripts/measure_extension_memory.py
+```
+
+It downloads the public packages, opens throwaway accounts in the test host,
+and measures only the processes each phase starts, with `footprint`. The Debug
+test host also runs the services saved in its own store, and their processes
+come and go. Runs with one service are therefore noisy; trust 5 and 10.
 
 See [Extension compatibility](EXTENSION-COMPATIBILITY.md) for how we test real
 extensions and what we found.
