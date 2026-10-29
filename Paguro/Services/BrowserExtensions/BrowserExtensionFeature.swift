@@ -26,7 +26,7 @@ final class BrowserExtensionFeature {
         #if !APP_STORE
         if #available(macOS 15.4, *), arguments.contains("--paguro-browser-extensions"),
            AppCapabilities.distribution.supportsExperimentalBrowserExtensions,
-           !arguments.contains("--paguro-first-run-preview") {
+           !Self.isFirstRunPreview(arguments) {
             #if DEBUG
             let parent = "Paguro-debug"
             #else
@@ -39,6 +39,16 @@ final class BrowserExtensionFeature {
         }
         #endif
         host = nil
+    }
+
+    /// The first-run preview exists only in Debug builds. Release builds must
+    /// not contain its launch argument, so the check compiles away there.
+    private static func isFirstRunPreview(_ arguments: [String]) -> Bool {
+        #if DEBUG
+        FirstRunPreviewConfiguration.isEnabled(arguments: arguments)
+        #else
+        false
+        #endif
     }
 
     #if !APP_STORE
