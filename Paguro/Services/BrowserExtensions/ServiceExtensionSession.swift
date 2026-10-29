@@ -127,12 +127,12 @@ final class ServiceExtensionSession: NSObject, WKWebExtensionControllerDelegate,
 
     func webExtensionController(_ controller: WKWebExtensionController,
                                 openWindowsFor context: WKWebExtensionContext) -> [any WKWebExtensionWindow] {
-        serviceWebView == nil ? [] : [self] + pages
+        hasLiveTab ? [self] + pages : []
     }
 
     func webExtensionController(_ controller: WKWebExtensionController,
                                 focusedWindowFor context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
-        isActive ? (pages.first { $0.window?.isKeyWindow == true } ?? self) : nil
+        isActive && hasLiveTab ? (pages.first { $0.window?.isKeyWindow == true } ?? self) : nil
     }
 
     func webExtensionController(_ controller: WKWebExtensionController,
@@ -280,12 +280,17 @@ final class ServiceExtensionSession: NSObject, WKWebExtensionControllerDelegate,
         isActive && permissionEpoch == epoch && contexts.values.contains(where: { $0 === context })
     }
 
-    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { serviceWebView == nil ? [] : [self] }
-    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? { isActive ? self : nil }
+    /// WebKit requires a window with tabs to name one of them as its active
+    /// tab, focused or not. Focus is reported separately, by `focusedWindow`.
+    /// Every answer about the account's tab derives from this one value.
+    private var hasLiveTab: Bool { hasOpenTab && serviceWebView != nil }
+
+    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { hasLiveTab ? [self] : [] }
+    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? { hasLiveTab ? self : nil }
     func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { self }
     func indexInWindow(for context: WKWebExtensionContext) -> Int { 0 }
     func webView(for context: WKWebExtensionContext) -> WKWebView? { serviceWebView }
-    func isSelected(for context: WKWebExtensionContext) -> Bool { isActive }
+    func isSelected(for context: WKWebExtensionContext) -> Bool { hasLiveTab }
     func shouldGrantPermissionsOnUserGesture(for context: WKWebExtensionContext) -> Bool { false }
 }
 #endif
