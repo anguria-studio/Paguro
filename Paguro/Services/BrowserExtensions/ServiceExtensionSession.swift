@@ -97,6 +97,15 @@ final class ServiceExtensionSession: NSObject, WKWebExtensionControllerDelegate,
             .sorted { $0.action.label.localizedStandardCompare($1.action.label) == .orderedAscending }
     }
 
+    /// Items the extension registered with `menus.create` for its toolbar
+    /// button and for the tab. WebKit leaves showing them to the app. It adds
+    /// page items to the page's own context menu by itself. The items can
+    /// change at any time, so fetch them right before a menu opens.
+    func menuItems(_ id: UUID) -> [NSMenuItem] {
+        guard isActive, serviceWebView != nil, let context = contexts[id] else { return [] }
+        return (context.action(for: self)?.menuItems ?? []) + context.menuItems(for: self)
+    }
+
     func perform(_ id: UUID, from anchor: NSView) {
         guard isActive, serviceWebView != nil, let context = contexts[id] else { return }
         actionAnchor = anchor

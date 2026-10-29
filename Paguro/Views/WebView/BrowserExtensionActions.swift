@@ -17,7 +17,9 @@ struct BrowserExtensionActions: View {
         let hasDiagnostics = entries.contains(where: \.hasDiagnostics)
         if !entries.isEmpty {
             Button {
-                presenter.show(entries, openOptions: { id, anchor in
+                presenter.show(entries, extensionMenuItems: { id in
+                    manager.extensionMenuItems(id, for: serviceID)
+                }, openOptions: { id, anchor in
                     manager.openOptions(id, for: serviceID, from: anchor)
                 }, showDiagnostics: { id, anchor in
                     manager.showDiagnostics(id, for: serviceID, from: anchor)
@@ -109,14 +111,18 @@ final class BrowserExtensionMenuPresenter: NSObject {
         self.trackMenu = trackMenu
     }
 
-    func show(_ entries: [BrowserExtensionMenuEntry], openOptions: (UUID, NSView) -> Void = { _, _ in },
+    func show(_ entries: [BrowserExtensionMenuEntry],
+              extensionMenuItems: (UUID) -> [NSMenuItem] = { _ in [] },
+              openOptions: (UUID, NSView) -> Void = { _, _ in },
               showDiagnostics: (UUID, NSView) -> Void = { _, _ in },
               reviewUpdate: (UUID) -> Void = { _ in },
               perform: (UUID, NSView) -> Void) {
         guard activeMenu == nil, !entries.isEmpty, let anchor, anchor.window != nil else { return }
         let menu = NSMenu(title: "Extensions")
         menu.autoenablesItems = false
-        for entry in entries { menu.addItem(makeEntryItem(entry)) }
+        for entry in entries {
+            menu.addItem(makeEntryItem(entry, extensionItems: extensionMenuItems(entry.id)))
+        }
 
         activeMenu = menu
         selection = nil
@@ -138,12 +144,16 @@ final class BrowserExtensionMenuPresenter: NSObject {
         activeMenu?.cancelTracking()
     }
 
-    private func makeEntryItem(_ entry: BrowserExtensionMenuEntry) -> NSMenuItem {
+    /// `extensionItems` come from WebKit and keep their own targets, so they
+    /// run when chosen. Paguro's own items run after the menu closes.
+    private func makeEntryItem(_ entry: BrowserExtensionMenuEntry, extensionItems: [NSMenuItem]) -> NSMenuItem {
         let item = makeItem(entry.name, .perform(entry.id), isEnabled: entry.isEnabled)
         item.toolTip = entry.help
         item.image = entry.image?.copy() as? NSImage
         item.image?.size = NSSize(width: 16, height: 16)
-        guard entry.hasOptions || entry.hasDiagnostics || entry.updateVersion != nil else { return item }
+        let needsSubmenu = entry.hasOptions || entry.hasDiagnostics || entry.updateVersion != nil
+            || !extensionItems.isEmpty
+        guard needsSubmenu else { return item }
 
         // The submenu keeps Diagnostics and Review update reachable when the action is unavailable.
         let submenu = NSMenu(title: entry.name)
@@ -159,6 +169,10 @@ final class BrowserExtensionMenuPresenter: NSObject {
             let update = makeItem("Review update to \(version)…", .update(entry.id), symbol: "arrow.down.circle")
             update.toolTip = "Opens the update review in Paguro Settings > Extensions."
             submenu.addItem(update)
+        }
+        if !extensionItems.isEmpty {
+            submenu.addItem(.separator())
+            extensionItems.forEach(submenu.addItem)
         }
         item.submenu = submenu
         item.isEnabled = true

@@ -473,6 +473,11 @@ final class BrowserExtensionManager: BrowserExtensionHosting {
         sessions[serviceID]?.openOptions(id, from: anchor)
     }
 
+    func extensionMenuItems(_ id: UUID, for serviceID: UUID) -> [NSMenuItem] {
+        guard !isStopped, !isLocked else { return [] }
+        return sessions[serviceID]?.menuItems(id) ?? []
+    }
+
     func performAction(_ id: UUID, for serviceID: UUID, from anchor: NSView) {
         guard !isStopped, !isLocked else { return }
         sessions[serviceID]?.perform(id, from: anchor)

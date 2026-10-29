@@ -33,6 +33,31 @@ final class BrowserExtensionMenuTests: XCTestCase {
         XCTAssertEqual(received, second)
     }
 
+    func testExtensionMenuItemsAppearInTheSubmenuAndRunTheirOwnAction() {
+        let window = makeWindow()
+        defer { window.close() }
+        let id = UUID()
+        final class Target: NSObject {
+            var count = 0
+            @objc func run(_ sender: Any?) { count += 1 }
+        }
+        let target = Target()
+        let extensionItem = NSMenuItem(title: "Translate this page", action: #selector(Target.run(_:)), keyEquivalent: "")
+        extensionItem.target = target
+        let presenter = BrowserExtensionMenuPresenter { menu, _ in
+            let items = menu.items[0].submenu!.items
+            XCTAssertEqual(items.map { $0.isSeparatorItem ? "---" : $0.title },
+                           ["Open extension", "---", "Translate this page"])
+            _ = NSApp.sendAction(items[2].action!, to: items[2].target, from: items[2])
+        }
+        presenter.anchor = window.contentView
+        presenter.show([BrowserExtensionMenuEntry(id: id, name: "Probe")],
+                       extensionMenuItems: { requested in requested == id ? [extensionItem] : [] }) { _, _ in
+            XCTFail("An extension menu item must not run the toolbar action")
+        }
+        XCTAssertEqual(target.count, 1)
+    }
+
     func testSettingsSubmenuRunsAfterNativeTrackingEnds() {
         let window = makeWindow()
         defer { window.close() }
